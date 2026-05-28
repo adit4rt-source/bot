@@ -235,8 +235,13 @@ function catchFish(guildId, userId) {
     let adjustedTiers = FISH_TIERS.map(t => {
         let adj = t.chance;
         if (t.tier === 'Trash') adj = Math.max(2, t.chance - rareBonus);
-        else if (t.tier === 'Common') adj = Math.max(5, t.chance - rareBonus * 0.5);
-        else if (['Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'].includes(t.tier)) adj = t.chance + rareBonus * 0.8;
+        else if (t.tier === 'Common') adj = Math.max(8, t.chance - rareBonus * 0.5);
+        else if (t.tier === 'Rare') adj = t.chance + rareBonus * 0.8;
+        else if (t.tier === 'Epic') adj = t.chance + rareBonus * 0.6;
+        else if (t.tier === 'Legendary') adj = Math.min(6, t.chance + rareBonus * 0.3);
+        else if (t.tier === 'Mythic') adj = Math.min(2.5, t.chance + rareBonus * 0.15);
+        else if (t.tier === 'Secret') adj = Math.min(0.8, t.chance + rareBonus * 0.05);
+        else adj = t.chance + rareBonus * 0.5;
         return { ...t, chance: adj };
     });
     // Normalize
@@ -747,7 +752,7 @@ const commands = [
     new SlashCommandBuilder()
         .setName('fishing')
         .setDescription('Sistem Memancing')
-        .addSubcommand(sub => sub.setName('inventory').setDescription('Lihat ikan yang kamu punya'))
+        .addSubcommand(sub => sub.setName('inventory').setDescription('Lihat ikan yang kamu punya').addIntegerOption(opt => opt.setName('page').setDescription('Halaman (default: 1)').setRequired(false)))
         .addSubcommand(sub => sub.setName('shop').setDescription('Beli joran dan umpan'))
         .addSubcommand(sub => sub.setName('stats').setDescription('Statistik memancingmu'))
         .addSubcommand(sub => sub.setName('equip').setDescription('Lihat perlengkapan saat ini'))
@@ -1068,7 +1073,7 @@ client.on(Events.InteractionCreate, async interaction => {
         if (command === 'slot') {
             const slotCdKey = `slot_${guildId}_${interaction.user.id}`;
             if (fishCooldowns.has(slotCdKey) && Date.now() < fishCooldowns.get(slotCdKey)) { const remaining = Math.ceil((fishCooldowns.get(slotCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Mesin slot masih panas! Tunggu **${remaining} detik**.`, ephemeral: true }); }
-            fishCooldowns.set(slotCdKey, Date.now() + 5000);
+            fishCooldowns.set(slotCdKey, Date.now() + 7000);
             const bet = interaction.options.getInteger('taruhan');
             if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
             userData.balance -= bet;
@@ -1214,14 +1219,39 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (command === 'fishing') {
             if (subCmd === 'inventory') {
-                const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? ORDER BY weight DESC LIMIT 20').all(guildId, interaction.user.id);
-                const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM fish_inventory WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id).cnt;
-                const lockedCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 1').get(guildId, interaction.user.id).c;
+                const tierOrder = { 'Secret': 0, 'Mythic': 1, 'Legendary': 2, 'Epic': 3, 'Rare': 4, 'Uncommon': 5, 'Common': 6, 'Trash': 7 };
+                const allInventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ?').all(guildId, interaction.user.id);
+                const totalCount = allInventory.length;
+                const lockedCount = allInventory.filter(i => i.locked === 1).length;
                 if (totalCount === 0) return interaction.reply({ content: '🎒 Inventory kosong! Gunakan `/fish` untuk memancing.', ephemeral: true });
+                
+                // Sort by rarity (Secret first) then by weight desc
+                const sorted = allInventory.sort((a, b) => {
+                    const fishA = FISH_DATA.find(f => f.id === a.fishId);
+                    const fishB = FISH_DATA.find(f => f.id === b.fishId);
+                    const tierA = fishA ? (tierOrder[fishA.tier] ?? 99) : 99;
+                    const tierB = fishB ? (tierOrder[fishB.tier] ?? 99) : 99;
+                    if (tierA !== tierB) return tierA - tierB;
+                    return b.weight - a.weight;
+                });
+                
+                // Pagination - 10 per page
+                const page = interaction.options.getInteger('page') || 1;
+                const perPage = 10;
+                const totalPages = Math.ceil(totalCount / perPage);
+                const currentPage = Math.min(Math.max(1, page), totalPages);
+                const start = (currentPage - 1) * perPage;
+                const pageItems = sorted.slice(start, start + perPage);
+                
                 let desc = `🎒 **Total: ${totalCount} ikan** (🔒 Locked: ${lockedCount})\n\n`;
-                inventory.forEach((item) => { const fd = FISH_DATA.find(f => f.id === item.fishId); const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null; const lockIcon = item.locked ? '🔒 ' : ''; desc += `**ID #${item.id}** ${lockIcon}${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg *(${fd ? fd.tier : '?'})*\n`; });
-                if (totalCount > 20) desc += `\n*...dan ${totalCount - 20} ikan lainnya*`;
-                desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> \`/fishing sell\` — Jual semua (kecuali locked)\n> \`/fishing lock <id>\` — Kunci ikan\n> \`/fishing collection\` — Lihat pokedex`;
+                pageItems.forEach((item) => {
+                    const fd = FISH_DATA.find(f => f.id === item.fishId);
+                    const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null;
+                    const lockIcon = item.locked ? '🔒 ' : '';
+                    const tierTag = fd ? `*(${fd.tier})*` : '';
+                    desc += `**ID #${item.id}** ${lockIcon}${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg ${tierTag}\n`;
+                });
+                desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 📄 Halaman **${currentPage}** / **${totalPages}**\n> \`/fishing inventory page:<nomor>\` untuk halaman lain\n> \`/fishing sell\` — Jual semua (kecuali locked)\n> \`/fishing lock <id>\` — Kunci ikan`;
                 return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)] });
             }
             if (subCmd === 'equip') {
