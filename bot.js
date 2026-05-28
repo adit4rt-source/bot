@@ -757,7 +757,7 @@ const commands = [
     new SlashCommandBuilder().setName('profile').setDescription('Lihat kartu informasi lengkap akun member').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('inventory').setDescription('🎒 Lihat item yang kamu punya'),
-    new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).addChoices(...[{name:'Mystery Box', value:'mystery_box'},{name:'Daily Doubler', value:'daily_doubler'},{name:'Lucky Spin Token', value:'lucky_spin_token'}])),
+    new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).addChoices({name:'XP Booster 2x', value:'xp_booster_2x'},{name:'XP Booster 3x', value:'xp_booster_3x'},{name:'Streak Shield', value:'streak_shield'},{name:'Lucky Charm', value:'lucky_charm'},{name:'Money Magnet', value:'money_magnet'},{name:'Daily Doubler', value:'daily_doubler'},{name:'Tax-Free Voucher', value:'tax_free_voucher'},{name:'Lucky Spin Token', value:'lucky_spin_token'},{name:'Mystery Box', value:'mystery_box'})),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -964,6 +964,12 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.guild) return interaction.reply({content: 'Hanya di Server!', ephemeral: true});
     const guildId = interaction.guild.id;
+
+    // Block command usage in restricted channels
+    const blockedChannels = ['1347190409402650736'];
+    if (interaction.isChatInputCommand() && blockedChannels.includes(interaction.channelId)) {
+        return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
+    }
 
     if (interaction.isChatInputCommand()) {
         const command = interaction.commandName, subCmd = interaction.options.getSubcommand(false), group = interaction.options.getSubcommandGroup(false);
@@ -1273,12 +1279,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (command === 'use') {
             const useCdKey = `use_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(useCdKey) && Date.now() < fishCooldowns.get(useCdKey)) { return interaction.reply({ content: `⏳ Tunggu sebentar sebelum menggunakan item lagi.`, ephemeral: true }); }
+            if (fishCooldowns.has(useCdKey) && Date.now() < fishCooldowns.get(useCdKey)) { return interaction.reply({ content: '⏳ Tunggu sebentar sebelum menggunakan item lagi.', ephemeral: true }); }
             fishCooldowns.set(useCdKey, Date.now() + 3000);
+
             const itemId = interaction.options.getString('item');
             const itemDef = ITEMS.find(i => i.id === itemId);
             if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
-            if (getItemCount(guildId, interaction.user.id, itemId) <= 0) return interaction.reply({ content: '❌ Kamu tidak punya item ini!', ephemeral: true });
+            if (getItemCount(guildId, interaction.user.id, itemId) <= 0) return interaction.reply({ content: '❌ Kamu tidak punya item ini! Beli di `/shop`.', ephemeral: true });
             
             if (itemId === 'mystery_box') {
                 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
@@ -1286,13 +1293,12 @@ client.on(Events.InteractionCreate, async interaction => {
                 if (usedToday >= 5) return interaction.reply({ content: '❌ Kamu sudah membuka 5 Mystery Box hari ini! Tunggu besok.', ephemeral: true });
                 removeItem(guildId, interaction.user.id, itemId);
                 incrementUserStat(guildId, interaction.user.id, `mbox_${today}`);
-                // Weighted reward: mostly low, rarely high
                 let reward;
                 const roll = Math.random();
-                if (roll < 0.50) reward = getRandomInt(50, 200);       // 50% chance: 50-200
-                else if (roll < 0.80) reward = getRandomInt(200, 500); // 30% chance: 200-500
-                else if (roll < 0.95) reward = getRandomInt(500, 1000);// 15% chance: 500-1000
-                else reward = getRandomInt(1000, 2000);                 // 5% chance: 1000-2000
+                if (roll < 0.50) reward = getRandomInt(50, 200);
+                else if (roll < 0.80) reward = getRandomInt(200, 500);
+                else if (roll < 0.95) reward = getRandomInt(500, 1000);
+                else reward = getRandomInt(1000, 2000);
                 userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle('📦 Mystery Box Dibuka!').setDescription(`Kamu mendapatkan 🪙 **${reward.toLocaleString('id-ID')} Money**!\n\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
@@ -1300,14 +1306,48 @@ client.on(Events.InteractionCreate, async interaction => {
             if (itemId === 'daily_doubler') {
                 removeItem(guildId, interaction.user.id, itemId);
                 incrementUserStat(guildId, interaction.user.id, 'daily_doubler_active', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! /money daily berikutnya akan x2.` });
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! /money daily berikutnya akan x2.`, ephemeral: false });
             }
             if (itemId === 'lucky_spin_token') {
                 removeItem(guildId, interaction.user.id, itemId);
                 incrementUserStat(guildId, interaction.user.id, 'lucky_spin_active', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! Slot berikutnya dijamin 2 simbol sama.` });
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! Slot berikutnya dijamin 2 simbol sama.`, ephemeral: false });
             }
-            return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** — Item ini aktif secara otomatis saat dibutuhkan.`, ephemeral: true });
+            if (itemId === 'xp_booster_2x') {
+                removeItem(guildId, interaction.user.id, itemId);
+                const expiry = Date.now() + 3600000; // 1 hour
+                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'xp_boost_2x_until', expiry);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **XP Booster 2x** aktif selama **1 jam**! Semua XP yang kamu dapat akan x2.`, ephemeral: false });
+            }
+            if (itemId === 'xp_booster_3x') {
+                removeItem(guildId, interaction.user.id, itemId);
+                const expiry = Date.now() + 3600000; // 1 hour
+                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'xp_boost_3x_until', expiry);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **XP Booster 3x** aktif selama **1 jam**! Semua XP yang kamu dapat akan x3.`, ephemeral: false });
+            }
+            if (itemId === 'streak_shield') {
+                removeItem(guildId, interaction.user.id, itemId);
+                incrementUserStat(guildId, interaction.user.id, 'streak_shield_count', 1);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **Streak Shield** diaktifkan! Jika kamu lupa chat 1 hari, streak akan otomatis terlindungi.`, ephemeral: false });
+            }
+            if (itemId === 'lucky_charm') {
+                removeItem(guildId, interaction.user.id, itemId);
+                const expiry = Date.now() + 3600000; // 1 hour
+                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'lucky_charm_until', expiry);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **Lucky Charm** aktif selama **1 jam**! +15% chance menang di semua game.`, ephemeral: false });
+            }
+            if (itemId === 'money_magnet') {
+                removeItem(guildId, interaction.user.id, itemId);
+                const expiry = Date.now() + 3600000; // 1 hour
+                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'money_magnet_until', expiry);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **Money Magnet** aktif selama **1 jam**! +50% money dari semua sumber.`, ephemeral: false });
+            }
+            if (itemId === 'tax_free_voucher') {
+                removeItem(guildId, interaction.user.id, itemId);
+                incrementUserStat(guildId, interaction.user.id, 'tax_free_voucher', 1);
+                return interaction.reply({ content: `✅ ${itemDef.emoji} **Tax-Free Voucher** diaktifkan! Gift berikutnya tanpa pajak 10%.`, ephemeral: false });
+            }
+            return interaction.reply({ content: '❌ Item tidak bisa digunakan langsung.', ephemeral: true });
         }
 
         if (command === 'fishing') {
