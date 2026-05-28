@@ -21,6 +21,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS temp_voices (channelId TEXT PRIMARY KEY, guildId TEXT, ownerId TEXT);
   CREATE TABLE IF NOT EXISTS achievements (guildId TEXT, userId TEXT, achievementId TEXT, unlockedAt INTEGER, PRIMARY KEY(guildId, userId, achievementId));
   CREATE TABLE IF NOT EXISTS user_stats (guildId TEXT, userId TEXT, stat_key TEXT, stat_value INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, stat_key));
+  CREATE TABLE IF NOT EXISTS fish_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, fishId TEXT, weight REAL, caughtAt INTEGER);
+  CREATE TABLE IF NOT EXISTS fish_equipment (guildId TEXT, userId TEXT, rod TEXT DEFAULT 'basic', bait TEXT DEFAULT 'none', bait_count INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId));
 `);
 
 
@@ -37,6 +39,163 @@ function incrementUserStat(guildId, userId, key, amount = 1) {
     const current = getUserStat(guildId, userId, key);
     db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, current + amount);
     return current + amount;
+}
+
+// ================= SISTEM FISHING =================
+const FISH_TIERS = [
+    { tier: 'Trash', emoji: '🗑️', chance: 15, minWeight: 0.01, maxWeight: 0.5, minValue: 1, maxValue: 5 },
+    { tier: 'Common', emoji: '🐟', chance: 30, minWeight: 0.1, maxWeight: 5, minValue: 5, maxValue: 50 },
+    { tier: 'Uncommon', emoji: '🐠', chance: 22, minWeight: 0.5, maxWeight: 15, minValue: 30, maxValue: 150 },
+    { tier: 'Rare', emoji: '🐡', chance: 15, minWeight: 1, maxWeight: 50, minValue: 100, maxValue: 500 },
+    { tier: 'Epic', emoji: '🦈', chance: 10, minWeight: 5, maxWeight: 200, minValue: 300, maxValue: 1500 },
+    { tier: 'Legendary', emoji: '🐉', chance: 6, minWeight: 50, maxWeight: 1000, minValue: 1000, maxValue: 4000 },
+    { tier: 'Mythic', emoji: '🌈', chance: 2, minWeight: 100, maxWeight: 5000, minValue: 3000, maxValue: 6000 }
+];
+
+const FISH_DATA = [
+    // TRASH (8)
+    { id: 'boot', name: 'Sepatu Bekas', tier: 'Trash', emoji: '👢' },
+    { id: 'can', name: 'Kaleng Berkarat', tier: 'Trash', emoji: '🥫' },
+    { id: 'tire', name: 'Ban Bocor', tier: 'Trash', emoji: '⭕' },
+    { id: 'bottle', name: 'Botol Plastik', tier: 'Trash', emoji: '🍶' },
+    { id: 'seaweed', name: 'Rumput Laut Busuk', tier: 'Trash', emoji: '🌿' },
+    { id: 'plastic_bag', name: 'Kantong Plastik', tier: 'Trash', emoji: '🛍️' },
+    { id: 'broken_rod', name: 'Pancing Patah', tier: 'Trash', emoji: '🪝' },
+    { id: 'old_shoe', name: 'Sandal Jepit', tier: 'Trash', emoji: '🩴' },
+    // COMMON (12)
+    { id: 'sardine', name: 'Ikan Sarden', tier: 'Common', emoji: '🐟' },
+    { id: 'anchovy', name: 'Ikan Teri', tier: 'Common', emoji: '🐟' },
+    { id: 'tilapia', name: 'Ikan Nila', tier: 'Common', emoji: '🐟' },
+    { id: 'catfish', name: 'Ikan Lele', tier: 'Common', emoji: '🐟' },
+    { id: 'carp', name: 'Ikan Mas', tier: 'Common', emoji: '🐟' },
+    { id: 'guppy', name: 'Ikan Guppy', tier: 'Common', emoji: '🐟' },
+    { id: 'mujair', name: 'Ikan Mujair', tier: 'Common', emoji: '🐟' },
+    { id: 'gurami_kecil', name: 'Gurami Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'bandeng', name: 'Ikan Bandeng', tier: 'Common', emoji: '🐟' },
+    { id: 'patin', name: 'Ikan Patin', tier: 'Common', emoji: '🐟' },
+    { id: 'belanak', name: 'Ikan Belanak', tier: 'Common', emoji: '🐟' },
+    { id: 'kembung', name: 'Ikan Kembung', tier: 'Common', emoji: '🐟' },
+    // UNCOMMON (12)
+    { id: 'trout', name: 'Ikan Trout', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'bass', name: 'Ikan Bass', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'snapper', name: 'Ikan Kakap', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'mackerel', name: 'Ikan Tenggiri', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'bawal', name: 'Ikan Bawal', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'gurami', name: 'Ikan Gurami Besar', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tongkol', name: 'Ikan Tongkol', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kerapu', name: 'Ikan Kerapu', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'gabus', name: 'Ikan Gabus', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'pari_kecil', name: 'Ikan Pari Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'baronang', name: 'Ikan Baronang', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tuna_kecil', name: 'Tuna Sirip Kuning', tier: 'Uncommon', emoji: '🐠' },
+    // RARE (10)
+    { id: 'salmon', name: 'Ikan Salmon', tier: 'Rare', emoji: '🐡' },
+    { id: 'tuna', name: 'Ikan Tuna Besar', tier: 'Rare', emoji: '🐡' },
+    { id: 'swordfish', name: 'Ikan Pedang', tier: 'Rare', emoji: '🐡' },
+    { id: 'barramundi', name: 'Ikan Barramundi', tier: 'Rare', emoji: '🐡' },
+    { id: 'arwana_silver', name: 'Arwana Silver', tier: 'Rare', emoji: '🐡' },
+    { id: 'marlin_kecil', name: 'Marlin Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'napoleon', name: 'Ikan Napoleon', tier: 'Rare', emoji: '🐡' },
+    { id: 'giant_catfish', name: 'Lele Raksasa', tier: 'Rare', emoji: '🐡' },
+    { id: 'piranha', name: 'Piranha', tier: 'Rare', emoji: '🐡' },
+    { id: 'electric_eel', name: 'Belut Listrik', tier: 'Rare', emoji: '🐡' },
+    // EPIC (9)
+    { id: 'shark', name: 'Hiu Putih', tier: 'Epic', emoji: '🦈' },
+    { id: 'manta_ray', name: 'Pari Manta', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_tuna', name: 'Tuna Raksasa', tier: 'Epic', emoji: '🦈' },
+    { id: 'marlin', name: 'Blue Marlin', tier: 'Epic', emoji: '🦈' },
+    { id: 'arwana_gold', name: 'Arwana Emas', tier: 'Epic', emoji: '🦈' },
+    { id: 'whale_shark', name: 'Hiu Paus', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_grouper', name: 'Kerapu Raksasa', tier: 'Epic', emoji: '🦈' },
+    { id: 'hammerhead', name: 'Hiu Martil', tier: 'Epic', emoji: '🦈' },
+    { id: 'stingray', name: 'Pari Beracun', tier: 'Epic', emoji: '🦈' },
+    // LEGENDARY (9)
+    { id: 'megalodon', name: 'Megalodon', tier: 'Legendary', emoji: '🐉' },
+    { id: 'leviathan', name: 'Leviathan', tier: 'Legendary', emoji: '🐉' },
+    { id: 'golden_koi', name: 'Koi Emas Legendaris', tier: 'Legendary', emoji: '🐉' },
+    { id: 'ancient_coelacanth', name: 'Coelacanth Purba', tier: 'Legendary', emoji: '🐉' },
+    { id: 'dragon_fish', name: 'Naga Laut', tier: 'Legendary', emoji: '🐉' },
+    { id: 'king_salmon', name: 'Raja Salmon', tier: 'Legendary', emoji: '🐉' },
+    { id: 'ghost_shark', name: 'Hiu Hantu', tier: 'Legendary', emoji: '🐉' },
+    { id: 'abyssal_angler', name: 'Angler Abyssal', tier: 'Legendary', emoji: '🐉' },
+    { id: 'thunder_eel', name: 'Belut Petir', tier: 'Legendary', emoji: '🐉' },
+    // MYTHIC (5)
+    { id: 'poseidon_trident_fish', name: 'Ikan Trisula Poseidon', tier: 'Mythic', emoji: '🌈' },
+    { id: 'kraken_baby', name: 'Bayi Kraken', tier: 'Mythic', emoji: '🌈' },
+    { id: 'celestial_whale', name: 'Paus Langit', tier: 'Mythic', emoji: '🌈' },
+    { id: 'rainbow_serpent', name: 'Naga Pelangi', tier: 'Mythic', emoji: '🌈' },
+    { id: 'void_leviathan', name: 'Leviathan Kegelapan', tier: 'Mythic', emoji: '🌈' }
+];
+
+const BAIT_TYPES = [
+    { id: 'none', name: 'Tanpa Umpan', emoji: '❌', price: 0, rareBonus: 0 },
+    { id: 'cacing', name: 'Cacing Tanah', emoji: '🪱', price: 50, rareBonus: 0 },
+    { id: 'udang', name: 'Udang Segar', emoji: '🦐', price: 150, rareBonus: 5 },
+    { id: 'emas', name: 'Umpan Emas', emoji: '✨', price: 500, rareBonus: 12 },
+    { id: 'berlian', name: 'Umpan Berlian', emoji: '💎', price: 1500, rareBonus: 20 }
+];
+
+const ROD_TYPES = [
+    { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 30, rareBonus: 0 },
+    { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 25, rareBonus: 3 },
+    { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 20, rareBonus: 7 },
+    { id: 'pro', name: 'Joran Pro Titanium', emoji: '🏆', price: 25000, cooldown: 15, rareBonus: 12 },
+    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 80000, cooldown: 10, rareBonus: 18 }
+];
+
+const fishCooldowns = new Map();
+
+function getEquipment(guildId, userId) {
+    let eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!eq) { db.prepare('INSERT INTO fish_equipment (guildId, userId) VALUES (?, ?)').run(guildId, userId); eq = { rod: 'basic', bait: 'none', bait_count: 0 }; }
+    return eq;
+}
+
+function catchFish(guildId, userId) {
+    const eq = getEquipment(guildId, userId);
+    const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
+    const bait = BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0];
+    const rareBonus = rod.rareBonus + bait.rareBonus;
+
+    // Consume bait
+    if (eq.bait !== 'none' && eq.bait_count > 0) {
+        const newCount = eq.bait_count - 1;
+        if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
+        else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+    }
+
+    // Determine tier with bonus
+    let roll = Math.random() * 100;
+    let selectedTier = FISH_TIERS[0];
+    // Shift probability: reduce trash/common chance, increase rare+ chance
+    let adjustedTiers = FISH_TIERS.map(t => {
+        let adj = t.chance;
+        if (t.tier === 'Trash') adj = Math.max(2, t.chance - rareBonus);
+        else if (t.tier === 'Common') adj = Math.max(5, t.chance - rareBonus * 0.5);
+        else if (['Rare', 'Epic', 'Legendary', 'Mythic'].includes(t.tier)) adj = t.chance + rareBonus * 0.8;
+        return { ...t, chance: adj };
+    });
+    // Normalize
+    const totalChance = adjustedTiers.reduce((s, t) => s + t.chance, 0);
+    let cumulative = 0;
+    const normalized = adjustedTiers.map(t => { cumulative += (t.chance / totalChance) * 100; return { ...t, cumChance: cumulative }; });
+    for (const t of normalized) { if (roll <= t.cumChance) { selectedTier = t; break; } }
+
+    // Pick random fish from tier
+    const tierFish = FISH_DATA.filter(f => f.tier === selectedTier.tier);
+    const fish = tierFish[Math.floor(Math.random() * tierFish.length)];
+
+    // Generate weight
+    const weight = parseFloat((Math.random() * (selectedTier.maxWeight - selectedTier.minWeight) + selectedTier.minWeight).toFixed(2));
+
+    // Calculate sell value based on weight ratio
+    const weightRatio = (weight - selectedTier.minWeight) / (selectedTier.maxWeight - selectedTier.minWeight);
+    const value = Math.floor(selectedTier.minValue + weightRatio * (selectedTier.maxValue - selectedTier.minValue));
+
+    // Save to inventory
+    db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish.id, weight, Date.now());
+
+    return { fish, tier: selectedTier, weight, value };
 }
 
 // ================= SISTEM ACHIEVEMENT / BADGE =================
@@ -92,6 +251,21 @@ const ACHIEVEMENTS = [
     { id: 'redeem_first', name: 'Voucher Hunter', emoji: '🎟️', desc: 'Pertama kali redeem voucher', category: 'Special', reward: 50 },
     { id: 'custom_role', name: 'Fashionista', emoji: '🎨', desc: 'Membuat Custom Role', category: 'Special', reward: 200 },
     { id: 'all_quest_day', name: 'Perfect Day', emoji: '✨', desc: 'Selesaikan semua quest dalam 1 hari', category: 'Special', reward: 500 },
+    // --- FISHING ---
+    { id: 'fish_first', name: 'Pemancing Pemula', emoji: '🎣', desc: 'Pertama kali memancing', category: 'Fishing', reward: 50 },
+    { id: 'fish_10', name: 'Nelayan', emoji: '🚣', desc: 'Tangkap 10 ikan', category: 'Fishing', reward: 200 },
+    { id: 'fish_50', name: 'Kapten Laut', emoji: '⚓', desc: 'Tangkap 50 ikan', category: 'Fishing', reward: 500 },
+    { id: 'fish_100', name: 'Master Angler', emoji: '🏅', desc: 'Tangkap 100 ikan', category: 'Fishing', reward: 1000 },
+    { id: 'fish_500', name: 'Fishing Legend', emoji: '🐋', desc: 'Tangkap 500 ikan', category: 'Fishing', reward: 3000 },
+    { id: 'fish_rare', name: 'Rare Catch', emoji: '🐡', desc: 'Tangkap ikan Rare pertama', category: 'Fishing', reward: 300 },
+    { id: 'fish_epic', name: 'Epic Fisher', emoji: '🦈', desc: 'Tangkap ikan Epic pertama', category: 'Fishing', reward: 800 },
+    { id: 'fish_legendary', name: 'Legendary Catch', emoji: '🐉', desc: 'Tangkap ikan Legendary pertama', category: 'Fishing', reward: 2000 },
+    { id: 'fish_mythic', name: 'Mythic Hunter', emoji: '🌈', desc: 'Tangkap ikan Mythic pertama', category: 'Fishing', reward: 5000 },
+    { id: 'fish_sell_10k', name: 'Fish Merchant', emoji: '💰', desc: 'Total jual ikan senilai 10.000', category: 'Fishing', reward: 500 },
+    { id: 'fish_sell_100k', name: 'Fish Tycoon', emoji: '🤑', desc: 'Total jual ikan senilai 100.000', category: 'Fishing', reward: 2000 },
+    { id: 'fish_heavy', name: 'Monster Fish!', emoji: '🐳', desc: 'Tangkap ikan berat > 500 kg', category: 'Fishing', reward: 1500 },
+    { id: 'fish_rod_pro', name: 'Pro Equipment', emoji: '🏆', desc: 'Beli Joran Pro Titanium', category: 'Fishing', reward: 500 },
+    { id: 'fish_rod_mythic', name: 'Ultimate Gear', emoji: '🔱', desc: 'Beli Joran Mitik', category: 'Fishing', reward: 2000 },
 ];
 
 
@@ -217,6 +391,29 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'redeem') checks.push('redeem_first');
     if (context.type === 'custom_role') checks.push('custom_role');
     if (context.type === 'all_quest_day') checks.push('all_quest_day');
+    // --- FISHING ---
+    if (context.type === 'fishing') {
+        const fishCount = getUserStat(guildId, userId, 'total_fish_caught');
+        if (fishCount >= 1) checks.push('fish_first');
+        if (fishCount >= 10) checks.push('fish_10');
+        if (fishCount >= 50) checks.push('fish_50');
+        if (fishCount >= 100) checks.push('fish_100');
+        if (fishCount >= 500) checks.push('fish_500');
+        if (context.tier === 'Rare') checks.push('fish_rare');
+        if (context.tier === 'Epic') checks.push('fish_epic');
+        if (context.tier === 'Legendary') checks.push('fish_legendary');
+        if (context.tier === 'Mythic') checks.push('fish_mythic');
+        if (context.weight > 500) checks.push('fish_heavy');
+    }
+    if (context.type === 'fish_sell') {
+        const totalSold = getUserStat(guildId, userId, 'total_fish_sold_value');
+        if (totalSold >= 10000) checks.push('fish_sell_10k');
+        if (totalSold >= 100000) checks.push('fish_sell_100k');
+    }
+    if (context.type === 'fish_rod') {
+        if (context.rod === 'pro') checks.push('fish_rod_pro');
+        if (context.rod === 'mythic_rod') checks.push('fish_rod_mythic');
+    }
 
     for (const achId of checks) {
         await grantAchievement(guild, userId, achId);
@@ -382,6 +579,15 @@ const commands = [
         .addSubcommand(sub => sub.setName('set_custom_role').setDescription('Atur harga tiket Custom Role').addIntegerOption(opt => opt.setName('harga').setDescription('Harga (Ketik 0 untuk mematikan)').setRequired(true))), 
     new SlashCommandBuilder().setName('profile').setDescription('Lihat kartu informasi lengkap akun member').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
+    new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
+    new SlashCommandBuilder().setName('sell').setDescription('Jual semua ikan di inventory'),
+    new SlashCommandBuilder()
+        .setName('fishing')
+        .setDescription('Sistem Memancing')
+        .addSubcommand(sub => sub.setName('inventory').setDescription('Lihat ikan yang kamu punya'))
+        .addSubcommand(sub => sub.setName('shop').setDescription('Beli joran dan umpan'))
+        .addSubcommand(sub => sub.setName('stats').setDescription('Statistik memancingmu'))
+        .addSubcommand(sub => sub.setName('equip').setDescription('Lihat perlengkapan saat ini')),
     new SlashCommandBuilder()
         .setName('streak')
         .setDescription('Sistem Api Harian (Daily Streak)')
@@ -646,6 +852,91 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (command === 'coinflip') { if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true }); const taruhan = interaction.options.getInteger('taruhan'); if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true }); activeCoinflips.add(interaction.user.id); userData.balance -= taruhan; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_coinflips'); await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setDescription(`🪙 **Melempar koin...**\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**`)] }); setTimeout(async () => { activeCoinflips.delete(interaction.user.id); let freshData = getOrCreateUser(guildId, interaction.user.id); if (Math.random() < 0.5) { freshData.balance += (taruhan * 2); db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'coinflip_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🎉 MENANG!').setDescription(`Dapat 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } else { await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('💀 KALAH!').setDescription(`Hilang 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } }, 7000); return; }
 
+        // ================= FISHING COMMANDS =================
+        if (command === 'fish') {
+            const cdKey = `fish_${guildId}_${interaction.user.id}`;
+            const eq = getEquipment(guildId, interaction.user.id);
+            const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
+            if (fishCooldowns.has(cdKey) && Date.now() < fishCooldowns.get(cdKey)) { const remaining = Math.ceil((fishCooldowns.get(cdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true }); }
+            fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
+            const result = catchFish(guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_fish_caught');
+            const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B' };
+            const embed = new EmbedBuilder()
+                .setColor(tierColors[result.tier.tier] || '#2B2D31')
+                .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}`)
+                .setFooter({ text: `Cooldown: ${rod.cooldown}s | /sell untuk jual | /fishing inventory` });
+            if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
+            else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
+            await interaction.reply({ embeds: [embed] });
+            await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
+            return;
+        }
+
+        if (command === 'sell') {
+            const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ?').all(guildId, interaction.user.id);
+            if (inventory.length === 0) return interaction.reply({ content: '❌ Kamu tidak punya ikan untuk dijual! Gunakan `/fish` dulu.', ephemeral: true });
+            let totalValue = 0, countByTier = {};
+            for (const item of inventory) {
+                const fishDef = FISH_DATA.find(f => f.id === item.fishId);
+                const tierDef = fishDef ? FISH_TIERS.find(t => t.tier === fishDef.tier) : FISH_TIERS[0];
+                const weightRatio = tierDef ? (item.weight - tierDef.minWeight) / (tierDef.maxWeight - tierDef.minWeight) : 0;
+                const value = tierDef ? Math.floor(tierDef.minValue + Math.min(1, Math.max(0, weightRatio)) * (tierDef.maxValue - tierDef.minValue)) : 1;
+                totalValue += value;
+                const tier = fishDef ? fishDef.tier : 'Trash';
+                countByTier[tier] = (countByTier[tier] || 0) + 1;
+            }
+            const freshData = getOrCreateUser(guildId, interaction.user.id);
+            freshData.balance += totalValue;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
+            db.prepare('DELETE FROM fish_inventory WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_fish_sold_value', totalValue);
+            incrementUserStat(guildId, interaction.user.id, 'total_fish_sold_count', inventory.length);
+            let breakdown = Object.entries(countByTier).map(([t, c]) => `${(FISH_TIERS.find(ft => ft.tier === t) || {emoji:'🐟'}).emoji} ${t}: **${c}**`).join('\n');
+            const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('💰 IKAN TERJUAL!')
+                .setDescription(`Kamu menjual **${inventory.length} ikan** dan mendapatkan:\n\n🪙 **${totalValue.toLocaleString('id-ID')} Money**\n\n**Detail:**\n${breakdown}\n\n> 💳 Saldo sekarang: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`);
+            await interaction.reply({ embeds: [embed] });
+            await checkAchievements(interaction.guild, interaction.user.id, { type: 'fish_sell' });
+            return;
+        }
+
+        if (command === 'fishing') {
+            if (subCmd === 'inventory') {
+                const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? ORDER BY weight DESC LIMIT 20').all(guildId, interaction.user.id);
+                const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM fish_inventory WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id).cnt;
+                if (totalCount === 0) return interaction.reply({ content: '🎒 Inventory kosong! Gunakan `/fish` untuk memancing.', ephemeral: true });
+                let desc = `🎒 **Total: ${totalCount} ikan**\n\n`;
+                inventory.forEach((item, i) => { const fd = FISH_DATA.find(f => f.id === item.fishId); const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null; desc += `${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg *(${fd ? fd.tier : '?'})*\n`; });
+                if (totalCount > 20) desc += `\n*...dan ${totalCount - 20} ikan lainnya*`;
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc).setFooter({ text: '/sell untuk jual semua' })] });
+            }
+            if (subCmd === 'equip') {
+                const eq = getEquipment(guildId, interaction.user.id);
+                const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
+                const bait = BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0];
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('⚙️ Perlengkapan Mancing').setColor('#2B2D31').setDescription(`> 🎋 **Joran:** ${rod.emoji} ${rod.name}\n> ⏱️ Cooldown: ${rod.cooldown}s | Rare+: +${rod.rareBonus}%\n\n> 🪱 **Umpan:** ${bait.emoji} ${bait.name}\n> Sisa: **${eq.bait !== 'none' ? eq.bait_count : 0}** | Rare+: +${bait.rareBonus}%`)] });
+            }
+            if (subCmd === 'stats') {
+                const totalCaught = getUserStat(guildId, interaction.user.id, 'total_fish_caught');
+                const totalSoldValue = getUserStat(guildId, interaction.user.id, 'total_fish_sold_value');
+                const totalSoldCount = getUserStat(guildId, interaction.user.id, 'total_fish_sold_count');
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📊 Statistik Memancing').setColor('#2B2D31').setDescription(`> 🎣 **Total Tangkapan:** ${totalCaught}\n> 💰 **Total Penjualan:** 🪙 ${totalSoldValue.toLocaleString('id-ID')}\n> 📦 **Ikan Dijual:** ${totalSoldCount}\n> 🐟 **Di Inventory:** ${db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id).c}`)] });
+            }
+            if (subCmd === 'shop') {
+                let desc = '**🎋 JORAN (Beli Sekali, Pakai Selamanya)**\n\n';
+                const eq = getEquipment(guildId, interaction.user.id);
+                ROD_TYPES.forEach(r => { const owned = eq.rod === r.id || r.id === 'basic'; desc += `${r.emoji} **${r.name}** ${owned ? '*(Dimiliki)*' : `— 🪙 ${r.price.toLocaleString('id-ID')}`}\n> CD: ${r.cooldown}s | Rare+: +${r.rareBonus}%\n\n`; });
+                desc += '\n**🪱 UMPAN (Habis Pakai, per 10 buah)**\n\n';
+                BAIT_TYPES.filter(b => b.id !== 'none').forEach(b => { desc += `${b.emoji} **${b.name}** — 🪙 ${(b.price * 10).toLocaleString('id-ID')} /10pcs\n> Rare+: +${b.rareBonus}%\n\n`; });
+                const rodMenu = new StringSelectMenuBuilder().setCustomId('fishing_buy').setPlaceholder('🛒 Beli Joran atau Umpan...').addOptions(
+                    ...ROD_TYPES.filter(r => r.id !== 'basic' && r.id !== eq.rod).map(r => new StringSelectMenuOptionBuilder().setLabel(`${r.name} (🪙 ${r.price.toLocaleString('id-ID')})`).setValue(`rod_${r.id}`).setEmoji(r.emoji).setDescription(`CD: ${r.cooldown}s | Rare+${r.rareBonus}%`)),
+                    ...BAIT_TYPES.filter(b => b.id !== 'none').map(b => new StringSelectMenuOptionBuilder().setLabel(`${b.name} x10 (🪙 ${(b.price * 10).toLocaleString('id-ID')})`).setValue(`bait_${b.id}`).setEmoji(b.emoji).setDescription(`Rare+${b.rareBonus}%`))
+                );
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Shop').setColor('#2B2D31').setDescription(desc)], components: [new ActionRowBuilder().addComponents(rodMenu)] });
+            }
+        }
+
         if (command === 'admin_shop') { if (!isAdmin) return interaction.reply({content: '❌ Admin Only', ephemeral: true}); if (subCmd === 'add_item') { const nama = interaction.options.getString('nama'), harga = interaction.options.getInteger('harga'), isi = interaction.options.getString('isi').replace(/\\n/g, '\n'), jumlah = interaction.options.getInteger('jumlah') || 1; const stmt = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)'); for (let i = 0; i < jumlah; i++) stmt.run(guildId, nama, harga, isi); return interaction.reply(`✅ **${jumlah} stok** barang **${nama}** ditambah.`); } if (subCmd === 'add_role') { db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, interaction.options.getRole('role').id, interaction.options.getInteger('harga')); return interaction.reply(`✅ Role ditambah.`); } if (subCmd === 'set_custom_role') { const harga = interaction.options.getInteger('harga'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', harga.toString()); if (harga <= 0) return interaction.reply('🛑 Custom Role dimatikan.'); return interaction.reply(`✅ Harga Custom Role: 🪙 **${harga.toLocaleString('id-ID')}**.`); } if (subCmd === 'voucher_add') { const code = interaction.options.getString('kode').toUpperCase(), reward = interaction.options.getInteger('reward'), limit = interaction.options.getInteger('limit'); db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit); return interaction.reply(`🎟️ Voucher \`${code}\` dibuat!`); } if (subCmd === 'set_testimoni') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'testimoni_channel', interaction.options.getChannel('channel').id); return interaction.reply(`✅ Testimoni diatur!`); } if (subCmd === 'history') { const logs = db.prepare('SELECT * FROM logs WHERE guildId = ? ORDER BY time DESC LIMIT ?').all(guildId, Math.min(interaction.options.getInteger('jumlah') || 10, 50)); if (logs.length === 0) return interaction.reply('Kosong.'); let logTxt = '📜 **RIWAYAT TRANSAKSI**\n\n'; logs.forEach(l => { logTxt += `\`[${new Date(l.time).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}]\` <@${l.userId}> beli **${l.item}** (🪙 ${l.price.toLocaleString('id-ID')})\n`; }); return interaction.reply({ embeds: [new EmbedBuilder().setDescription(logTxt).setColor('#2B2D31')], allowedMentions: {users: []} }); } }
 
         if (command === 'shop') { const roles = db.prepare('SELECT * FROM shop_roles WHERE guildId = ?').all(guildId), items = db.prepare('SELECT name, price, COUNT(*) as stock FROM shop_items WHERE guildId = ? GROUP BY name, price').all(guildId), crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')); if (roles.length === 0 && items.length === 0 && crPrice <= 0) return interaction.reply({ content: 'Toko kosong!', ephemeral: true }); let shopDesc = 'Pilih produk:\n\n'; const componentsRows = []; if (items.length > 0) { shopDesc += '📦 **BARANG VIRTUAL**\n'; const itemMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_item').setPlaceholder('📦 Beli Barang').setMinValues(1).setMaxValues(1); items.forEach((i, idx) => { shopDesc += `**[${idx+1}] ${i.name}** - 🪙 ${i.price.toLocaleString('id-ID')} (Stok: ${i.stock})\n`; itemMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${i.name}`).setDescription(`${i.price.toLocaleString('id-ID')}`).setValue(`item_${i.name}`).setEmoji('📦')); }); componentsRows.push(new ActionRowBuilder().addComponents(itemMenu)); shopDesc += '\n'; } if (roles.length > 0) { shopDesc += '🎭 **ROLE**\n'; const roleMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_role').setPlaceholder('🎭 Beli Role').setMinValues(1).setMaxValues(1); roles.forEach((r, idx) => { const roleObj = interaction.guild.roles.cache.get(r.roleId); shopDesc += `**[${idx+1}] ${roleObj ? roleObj.name : '?'}** - 🪙 ${r.price.toLocaleString('id-ID')}\n`; roleMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${roleObj ? roleObj.name : '?'}`).setDescription(`${r.price.toLocaleString('id-ID')}`).setValue(`role_${r.roleId}`).setEmoji('🎭')); }); componentsRows.push(new ActionRowBuilder().addComponents(roleMenu)); shopDesc += '\n'; } if (crPrice > 0) { shopDesc += `🎨 **CUSTOM ROLE** - 🪙 ${crPrice.toLocaleString('id-ID')}\n`; const crMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_custom_role').setPlaceholder('🎨 Custom Role').setMinValues(1).setMaxValues(1).addOptions(new StringSelectMenuOptionBuilder().setLabel('Beli Custom Role').setDescription(`${crPrice.toLocaleString('id-ID')}`).setValue('init_cr').setEmoji('🎨')); componentsRows.push(new ActionRowBuilder().addComponents(crMenu)); } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`🛒 ${interaction.guild.name.toUpperCase()} STORE`).setColor('#2B2D31').setDescription(shopDesc)], components: componentsRows }); }
@@ -667,6 +958,32 @@ client.on(Events.InteractionCreate, async interaction => {
         if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); let desc = ''; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); desc += `${unlocked ? '✅' : '🔒'} ${ach.emoji} **${ach.name}**\n> *${ach.desc}*\n> 🪙 ${ach.reward.toLocaleString('id-ID')} Money\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`🏆 ${selectedCat}`).setColor('#FFD700').setDescription(desc || 'Kosong.')], ephemeral: true }); }
         if (interaction.customId === 'shop_buy_custom_role') { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
         if (interaction.customId === 'cr_select_color') { const selectedColor = interaction.values[0], modal = new ModalBuilder().setCustomId(`submit_cr_${selectedColor}`).setTitle('Custom Role 🎨'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_name').setLabel('Nama Role (Max 32)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32))); if (selectedColor === 'custom') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_color').setLabel('Hex (#FF0000)').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(7).setMaxLength(7).setPlaceholder('#FFFFFF'))); return interaction.showModal(modal); }
+        // --- FISHING SHOP BUY ---
+        if (interaction.customId === 'fishing_buy') {
+            const selected = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
+            if (selected.startsWith('rod_')) {
+                const rodId = selected.substring(4), rodDef = ROD_TYPES.find(r => r.id === rodId);
+                if (!rodDef) return interaction.reply({ content: '❌ Joran tidak ditemukan!', ephemeral: true });
+                if (userData.balance < rodDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${rodDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
+                userData.balance -= rodDef.price;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(rodId, guildId, interaction.user.id);
+                await checkAchievements(interaction.guild, interaction.user.id, { type: 'fish_rod', rod: rodId });
+                return interaction.reply({ content: `✅ Berhasil membeli ${rodDef.emoji} **${rodDef.name}**! Joran langsung terpasang.\n> Cooldown: ${rodDef.cooldown}s | Rare Bonus: +${rodDef.rareBonus}%` });
+            }
+            if (selected.startsWith('bait_')) {
+                const baitId = selected.substring(5), baitDef = BAIT_TYPES.find(b => b.id === baitId);
+                if (!baitDef) return interaction.reply({ content: '❌ Umpan tidak ditemukan!', ephemeral: true });
+                const totalPrice = baitDef.price * 10;
+                if (userData.balance < totalPrice) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+                userData.balance -= totalPrice;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                const eq = getEquipment(guildId, interaction.user.id);
+                const newCount = (eq.bait === baitId ? eq.bait_count : 0) + 10;
+                db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = ? WHERE guildId = ? AND userId = ?').run(baitId, newCount, guildId, interaction.user.id);
+                return interaction.reply({ content: `✅ Membeli ${baitDef.emoji} **${baitDef.name}** x10! Total umpan: **${newCount}**` });
+            }
+        }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { itemName = selected.substring(5); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? LIMIT 1').get(guildId, itemName); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** - 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjut?`, components: [row], ephemeral: true }); }
     }
 
