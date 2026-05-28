@@ -588,6 +588,16 @@ async function checkAchievements(guild, userId, context = {}) {
 
 // ================= LOGIKA MINI EVENTS =================
 const activeMiniEvents = new Map(); const guildMessageCounters = new Map(); const MINI_EVENT_TARGET = 30; 
+const FISH_EVENT_TARGET = 100;
+const guildFishEventCounters = new Map();
+const activeFishEvents = new Map();
+
+const FISH_TOURNAMENT_TYPES = [
+    { type: 'first_catch', desc: 'tangkap ikan **{tier}** pertama', tierTarget: null },
+    { type: 'heaviest', desc: 'tangkap ikan **terberat** dalam 5 menit' },
+    { type: 'most_fish', desc: 'tangkap ikan **terbanyak** dalam 5 menit' },
+    { type: 'specific_tier', desc: 'tangkap ikan **{tier}** pertama', tierTarget: null }
+];
 const poolAcakKata = ["DISCORD", "KOMPUTER", "INTERNET", "PROGRAMMER", "INDONESIA", "KEYBOARD", "LAPTOP", "MONITOR", "EKONOMI", "SERVER", "DATABASE", "JAVASCRIPT", "DEVELOPER", "APLIKASI", "INTERAKSI", "KOMUNITAS", "GAMER", "STREAMING", "MODERATOR", "ADMINISTRATOR", "HADIAH", "VOUCHER", "DOMPET", "SAHABAT", "KONTRIBUTOR"];
 function shuffleString(str) { let arr = str.split(''); for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr.join(''); }
 function getRandomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -827,6 +837,68 @@ client.on(Events.MessageCreate, async message => {
                 }, 60000); activeMiniEvents.set(guildId, eventData);
             });
         } else guildMessageCounters.set(guildId, count); 
+    }
+
+    // --- FISHING TOURNAMENT EVENT ---
+    if (!activeFishEvents.has(guildId)) {
+        let fishCount = guildFishEventCounters.get(guildId) || 0; fishCount++;
+        if (fishCount >= FISH_EVENT_TARGET) {
+            guildFishEventCounters.set(guildId, 0);
+            const eventTypes = ['first_legendary', 'first_rare', 'heaviest', 'most_fish', 'first_trash'];
+            const chosen = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+            let eventDesc = '', eventData = { channelId: message.channel.id, type: chosen, startTime: Date.now(), participants: {} };
+            
+            if (chosen === 'first_legendary') eventDesc = 'Siapa yang bisa menangkap ikan **Legendary** atau lebih tinggi pertama kali?';
+            else if (chosen === 'first_rare') eventDesc = 'Siapa yang bisa menangkap ikan **Rare** atau lebih tinggi pertama kali?';
+            else if (chosen === 'heaviest') eventDesc = 'Siapa yang bisa menangkap ikan **paling berat** dalam 5 menit?';
+            else if (chosen === 'most_fish') eventDesc = 'Siapa yang bisa menangkap ikan **paling banyak** dalam 5 menit?';
+            else if (chosen === 'first_trash') eventDesc = 'Siapa yang bisa menangkap **Sampah (Trash)** pertama kali? 🗑️';
+            
+            const reward = chosen === 'first_legendary' ? 3000 : (chosen === 'heaviest' ? 2000 : (chosen === 'most_fish' ? 2000 : 1000));
+            eventData.reward = reward;
+            
+            const embed = new EmbedBuilder()
+                .setColor('#1ABC9C')
+                .setTitle('🎣🏆 FISHING TOURNAMENT!')
+                .setDescription(`**Kompetisi memancing dimulai!**\n\n> 🎯 **Tantangan:** ${eventDesc}\n> 🎁 **Hadiah:** 🪙 **${reward.toLocaleString('id-ID')} Money**\n> ⏱️ **Durasi:** 5 menit\n\n*Gunakan \`/fish\` untuk ikut berpartisipasi!*`)
+                .setFooter({ text: 'Tournament berakhir dalam 5 menit' })
+                .setTimestamp();
+            
+            message.channel.send({ embeds: [embed] }).then(() => {
+                activeFishEvents.set(guildId, eventData);
+                // Auto-end after 5 minutes
+                setTimeout(() => {
+                    if (activeFishEvents.has(guildId)) {
+                        const ev = activeFishEvents.get(guildId);
+                        activeFishEvents.delete(guildId);
+                        let winner = null, winnerValue = 0;
+                        
+                        if (ev.type === 'heaviest') {
+                            for (const [uid, data] of Object.entries(ev.participants)) {
+                                if (data.heaviest > winnerValue) { winner = uid; winnerValue = data.heaviest; }
+                            }
+                        } else if (ev.type === 'most_fish') {
+                            for (const [uid, data] of Object.entries(ev.participants)) {
+                                if (data.count > winnerValue) { winner = uid; winnerValue = data.count; }
+                            }
+                        }
+                        // first_legendary, first_rare, first_trash are instant-win (handled in /fish)
+                        
+                        if (winner) {
+                            const winnerData = getOrCreateUser(guildId, winner);
+                            winnerData.balance += ev.reward;
+                            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner);
+                            const resultText = ev.type === 'heaviest' ? `ikan terberat: **${winnerValue} kg**` : `total tangkapan: **${winnerValue} ikan**`;
+                            const ch = message.guild.channels.cache.get(ev.channelId);
+                            if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT SELESAI!').setDescription(`Pemenang: <@${winner}>\n> ${resultText}\n\n🎁 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**`)] });
+                        } else {
+                            const ch = message.guild.channels.cache.get(ev.channelId);
+                            if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle('🏆 TOURNAMENT SELESAI').setDescription('Tidak ada pemenang. Tidak ada yang berpartisipasi!')] });
+                        }
+                    }
+                }, 300000); // 5 minutes
+            });
+        } else guildFishEventCounters.set(guildId, fishCount);
     }
 
     const streakActivated = await checkAndUpdateStreak(message);
@@ -1160,6 +1232,27 @@ client.on(Events.InteractionCreate, async interaction => {
             else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
             await interaction.reply({ embeds: [embed] });
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
+            // --- FISHING TOURNAMENT PARTICIPATION ---
+            if (activeFishEvents.has(guildId)) {
+                const ev = activeFishEvents.get(guildId);
+                if (!ev.participants[interaction.user.id]) ev.participants[interaction.user.id] = { count: 0, heaviest: 0 };
+                ev.participants[interaction.user.id].count++;
+                if (result.weight > ev.participants[interaction.user.id].heaviest) ev.participants[interaction.user.id].heaviest = result.weight;
+                
+                // Instant-win events
+                let tournamentWin = false;
+                if (ev.type === 'first_legendary' && ['Legendary', 'Mythic', 'Secret'].includes(result.tier.tier)) tournamentWin = true;
+                if (ev.type === 'first_rare' && ['Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'].includes(result.tier.tier)) tournamentWin = true;
+                if (ev.type === 'first_trash' && result.tier.tier === 'Trash') tournamentWin = true;
+                
+                if (tournamentWin) {
+                    activeFishEvents.delete(guildId);
+                    userData.balance += ev.reward;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                    const ch = interaction.guild.channels.cache.get(ev.channelId);
+                    if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT WINNER!').setDescription(`<@${interaction.user.id}> memenangkan tournament!\n> Tangkapan: ${result.tier.emoji} **${result.fish.name}** (${result.weight} kg)\n\n🎁 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**`)] });
+                }
+            }
             return;
         }
 
@@ -1225,7 +1318,6 @@ client.on(Events.InteractionCreate, async interaction => {
                 const lockedCount = allInventory.filter(i => i.locked === 1).length;
                 if (totalCount === 0) return interaction.reply({ content: '🎒 Inventory kosong! Gunakan `/fish` untuk memancing.', ephemeral: true });
                 
-                // Sort by rarity (Secret first) then by weight desc
                 const sorted = allInventory.sort((a, b) => {
                     const fishA = FISH_DATA.find(f => f.id === a.fishId);
                     const fishB = FISH_DATA.find(f => f.id === b.fishId);
@@ -1235,9 +1327,8 @@ client.on(Events.InteractionCreate, async interaction => {
                     return b.weight - a.weight;
                 });
                 
-                // Pagination - 10 per page
                 const page = interaction.options.getInteger('page') || 1;
-                const perPage = 10;
+                const perPage = 20;
                 const totalPages = Math.ceil(totalCount / perPage);
                 const currentPage = Math.min(Math.max(1, page), totalPages);
                 const start = (currentPage - 1) * perPage;
@@ -1248,11 +1339,16 @@ client.on(Events.InteractionCreate, async interaction => {
                     const fd = FISH_DATA.find(f => f.id === item.fishId);
                     const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null;
                     const lockIcon = item.locked ? '🔒 ' : '';
-                    const tierTag = fd ? `*(${fd.tier})*` : '';
+                    const tierTag = fd ? `**(${fd.tier})**` : '';
                     desc += `**ID #${item.id}** ${lockIcon}${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg ${tierTag}\n`;
                 });
-                desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 📄 Halaman **${currentPage}** / **${totalPages}**\n> \`/fishing inventory page:<nomor>\` untuk halaman lain\n> \`/fishing sell\` — Jual semua (kecuali locked)\n> \`/fishing lock <id>\` — Kunci ikan`;
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)] });
+                desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 📄 Halaman **${currentPage}** / **${totalPages}**`;
+                
+                const navRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`finv_prev_${currentPage}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary).setDisabled(currentPage <= 1),
+                    new ButtonBuilder().setCustomId(`finv_next_${currentPage}`).setLabel('▶ Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage >= totalPages)
+                );
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)], components: [navRow] });
             }
             if (subCmd === 'equip') {
                 const eq = getEquipment(guildId, interaction.user.id);
@@ -1477,6 +1573,33 @@ client.on(Events.InteractionCreate, async interaction => {
         if (interaction.customId.startsWith('tv_create_')) { const tempVoiceData = db.prepare('SELECT * FROM temp_voices WHERE ownerId = ? AND guildId = ?').get(interaction.user.id, guildId); if (tempVoiceData) return interaction.reply({ content: `❌ Sudah punya channel (<#${tempVoiceData.channelId}>)!`, ephemeral: true }); const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({ content: '❌ Belum setup!', ephemeral: true }); if (interaction.customId === 'tv_create_custom') { const modal = new ModalBuilder().setCustomId('tv_modal_custom_create').setTitle('Buat Channel'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_custom_name').setLabel('Nama:').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50))); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_custom_limit').setLabel('Limit (0=bebas):').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(2).setPlaceholder('0'))); return interaction.showModal(modal); } let limit = 0, isPrivate = false, vcName = `🔊 ${interaction.user.username}'s Room`; if (interaction.customId === 'tv_create_duo') { limit = 2; vcName = `👥 ${interaction.user.username}'s Duo`; } if (interaction.customId === 'tv_create_squad') { limit = 4; vcName = `👥 ${interaction.user.username}'s Squad`; } if (interaction.customId === 'tv_create_private') { isPrivate = true; vcName = `🔒 ${interaction.user.username}'s Private`; } await interaction.deferReply({ ephemeral: true }); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{ id: guildId, allow: isPrivate ? [] : [PermissionsBitField.Flags.ViewChannel], deny: isPrivate ? [PermissionsBitField.Flags.Connect] : [] }, { id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect] }] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ Dibuat! <#${newVc.id}> (60 detik)`); setTimeout(async () => { const ch = interaction.guild.channels.cache.get(newVc.id); if (ch && ch.members.size === 0) { await ch.delete().catch(()=>{}); db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id); } }, 60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }
 
         if (interaction.customId.startsWith('tv_') && !interaction.customId.startsWith('tv_create_')) { const voiceChannel = interaction.member.voice.channel; if (!voiceChannel) return interaction.reply({ content: '❌ Masuk VC dulu!', ephemeral: true }); const channelId = voiceChannel.id, tempVoice = db.prepare('SELECT * FROM temp_voices WHERE channelId = ? AND guildId = ?').get(channelId, guildId); if (!tempVoice) return interaction.reply({ content: '❌ Bukan temp voice.', ephemeral: true }); if (interaction.customId === 'tv_claim') { if (tempVoice.ownerId === interaction.user.id) return interaction.reply({content: '❌ Sudah owner!', ephemeral: true}); if (voiceChannel.members.has(tempVoice.ownerId)) return interaction.reply({content: '❌ Owner masih ada!', ephemeral: true}); db.prepare('UPDATE temp_voices SET ownerId = ? WHERE channelId = ?').run(interaction.user.id, channelId); await voiceChannel.permissionOverwrites.edit(tempVoice.ownerId, { ManageChannels: null, ManageRoles: null }).catch(()=>{}); await voiceChannel.permissionOverwrites.edit(interaction.user.id, { ManageChannels: true, ManageRoles: true }).catch(()=>{}); return interaction.reply({content: '👑 Kamu owner sekarang!', ephemeral: true}); } if (tempVoice.ownerId !== interaction.user.id) return interaction.reply({content: '❌ Owner only.', ephemeral: true}); if (interaction.customId === 'tv_name') { const m = new ModalBuilder().setCustomId(`tv_modal_name_${channelId}`).setTitle('Ubah Nama'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_name').setLabel('Nama:').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50))); return interaction.showModal(m); } if (interaction.customId === 'tv_limit') { const m = new ModalBuilder().setCustomId(`tv_modal_limit_${channelId}`).setTitle('Ubah Limit'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_limit').setLabel('Limit (0=unlimited):').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(2))); return interaction.showModal(m); } if (interaction.customId === 'tv_privacy') { const p = voiceChannel.permissionOverwrites.cache.get(guildId), locked = p && p.deny.has(PermissionsBitField.Flags.Connect); if (locked) { await voiceChannel.permissionOverwrites.edit(guildId, { Connect: null }).catch(()=>{}); return interaction.reply({content: '🔓 Terbuka.', ephemeral: true}); } else { await voiceChannel.permissionOverwrites.edit(guildId, { Connect: false }).catch(()=>{}); return interaction.reply({content: '🔒 Dikunci.', ephemeral: true}); } } if (interaction.customId === 'tv_hide') { const p = voiceChannel.permissionOverwrites.cache.get(guildId), hidden = p && p.deny.has(PermissionsBitField.Flags.ViewChannel); if (hidden) { await voiceChannel.permissionOverwrites.edit(guildId, { ViewChannel: null }).catch(()=>{}); return interaction.reply({content: '👁️ Terlihat.', ephemeral: true}); } else { await voiceChannel.permissionOverwrites.edit(guildId, { ViewChannel: false }).catch(()=>{}); return interaction.reply({content: '👻 Tersembunyi.', ephemeral: true}); } } if (interaction.customId === 'tv_kick') { const m = new ModalBuilder().setCustomId(`tv_modal_kick_${channelId}`).setTitle('Kick'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_kick').setLabel('User ID:').setStyle(TextInputStyle.Short).setRequired(true))); return interaction.showModal(m); } if (interaction.customId === 'tv_block') { const m = new ModalBuilder().setCustomId(`tv_modal_block_${channelId}`).setTitle('Block'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_block').setLabel('User ID:').setStyle(TextInputStyle.Short).setRequired(true))); return interaction.showModal(m); } if (interaction.customId === 'tv_unblock') { const m = new ModalBuilder().setCustomId(`tv_modal_unblock_${channelId}`).setTitle('Unblock'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_unblock').setLabel('User ID:').setStyle(TextInputStyle.Short).setRequired(true))); return interaction.showModal(m); } if (interaction.customId === 'tv_transfer') { const m = new ModalBuilder().setCustomId(`tv_modal_transfer_${channelId}`).setTitle('Transfer'); m.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tv_input_transfer').setLabel('User ID baru:').setStyle(TextInputStyle.Short).setRequired(true))); return interaction.showModal(m); } if (interaction.customId === 'tv_delete') { await voiceChannel.delete().catch(()=>{}); db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(channelId); return interaction.reply({content: '🗑️ Dihapus.', ephemeral: true}); } }
+
+        // --- FISHING INVENTORY PAGINATION ---
+        if (interaction.customId.startsWith('finv_prev_') || interaction.customId.startsWith('finv_next_')) {
+            const currentPage = parseInt(interaction.customId.split('_')[2]);
+            const newPage = interaction.customId.startsWith('finv_prev_') ? currentPage - 1 : currentPage + 1;
+            const tierOrder = { 'Secret': 0, 'Mythic': 1, 'Legendary': 2, 'Epic': 3, 'Rare': 4, 'Uncommon': 5, 'Common': 6, 'Trash': 7 };
+            const allInventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ?').all(guildId, interaction.user.id);
+            const totalCount = allInventory.length;
+            const lockedCount = allInventory.filter(i => i.locked === 1).length;
+            if (totalCount === 0) return interaction.update({ content: '🎒 Kosong!', embeds: [], components: [] });
+            const sorted = allInventory.sort((a, b) => {
+                const fishA = FISH_DATA.find(f => f.id === a.fishId); const fishB = FISH_DATA.find(f => f.id === b.fishId);
+                const tierA = fishA ? (tierOrder[fishA.tier] ?? 99) : 99; const tierB = fishB ? (tierOrder[fishB.tier] ?? 99) : 99;
+                if (tierA !== tierB) return tierA - tierB; return b.weight - a.weight;
+            });
+            const perPage = 20; const totalPages = Math.ceil(totalCount / perPage);
+            const page = Math.min(Math.max(1, newPage), totalPages);
+            const start = (page - 1) * perPage; const pageItems = sorted.slice(start, start + perPage);
+            let desc = `🎒 **Total: ${totalCount} ikan** (🔒 Locked: ${lockedCount})\n\n`;
+            pageItems.forEach((item) => { const fd = FISH_DATA.find(f => f.id === item.fishId); const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null; const lockIcon = item.locked ? '🔒 ' : ''; const tierTag = fd ? `**(${fd.tier})**` : ''; desc += `**ID #${item.id}** ${lockIcon}${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg ${tierTag}\n`; });
+            desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 📄 Halaman **${page}** / **${totalPages}**`;
+            const navRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`finv_prev_${page}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary).setDisabled(page <= 1),
+                new ButtonBuilder().setCustomId(`finv_next_${page}`).setLabel('▶ Next').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages)
+            );
+            return interaction.update({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)], components: [navRow] });
+        }
 
         if (interaction.customId === 'airdrop_claim') { if (activeMiniEvents.has(guildId)) activeMiniEvents.delete(guildId); const reward = getRandomInt(300, 600); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'event_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'event_win' }); return interaction.update({ content: `🎉 <@${interaction.user.id}> klaim Air Drop! 🪙 **${reward}**`, embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('x').setLabel(`Diklaim ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setDisabled(true))] }); }
         if (interaction.customId.startsWith('claim_quest_')) { const qi = parseInt(interaction.customId.replace('claim_quest_', '')), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!row || row.date !== today) return interaction.update({ content: '❌ Expired.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (tq.progress < tq.target || tq.claimed) return interaction.reply({content: '❌ Belum selesai!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, interaction.user.id); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_quests_done'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'quest' }); if (quests.every(q => q.claimed)) await checkAchievements(interaction.guild, interaction.user.id, { type: 'all_quest_day' }); return interaction.reply(`✅ Dapat 🪙 **${tq.reward}**!`); }
