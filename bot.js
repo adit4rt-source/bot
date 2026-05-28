@@ -757,7 +757,7 @@ const commands = [
     new SlashCommandBuilder().setName('profile').setDescription('Lihat kartu informasi lengkap akun member').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('inventory').setDescription('🎒 Lihat item yang kamu punya'),
-    new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).addChoices({name:'XP Booster 2x', value:'xp_booster_2x'},{name:'XP Booster 3x', value:'xp_booster_3x'},{name:'Streak Shield', value:'streak_shield'},{name:'Lucky Charm', value:'lucky_charm'},{name:'Money Magnet', value:'money_magnet'},{name:'Daily Doubler', value:'daily_doubler'},{name:'Tax-Free Voucher', value:'tax_free_voucher'},{name:'Lucky Spin Token', value:'lucky_spin_token'},{name:'Mystery Box', value:'mystery_box'})),
+    new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -969,6 +969,20 @@ client.on(Events.InteractionCreate, async interaction => {
     const blockedChannels = ['1347190409402650736'];
     if (interaction.isChatInputCommand() && blockedChannels.includes(interaction.channelId)) {
         return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
+    }
+
+    // Autocomplete handler for /use
+    if (interaction.isAutocomplete()) {
+        if (interaction.commandName === 'use') {
+            const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, interaction.user.id);
+            const choices = ownedItems.map(inv => {
+                const def = ITEMS.find(i => i.id === inv.itemId);
+                if (!def) return null;
+                return { name: `${def.emoji} ${def.name} (x${inv.quantity})`, value: def.id };
+            }).filter(Boolean).slice(0, 25); // Discord max 25 choices
+            return interaction.respond(choices);
+        }
+        return;
     }
 
     if (interaction.isChatInputCommand()) {
