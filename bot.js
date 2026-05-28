@@ -885,7 +885,8 @@ const commands = [
         .addSubcommand(sub => sub.setName('sell').setDescription('Jual semua hasil panen di storage'))
         .addSubcommand(sub => sub.setName('upgrade').setDescription('Upgrade lahan (tambah slot)'))
         .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen')),
+        .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen'))
+.addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman (dari /farm status)').setRequired(true))),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -1118,6 +1119,10 @@ client.on(Events.InteractionCreate, async interaction => {
             }
             if (focused.name === 'resep') {
                 const choices = FARM_RECIPES.map(r => ({ name: `${r.emoji} ${r.name} — Jual: 🪙${r.sellPrice}`, value: r.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'jenis') {
+                const choices = FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => ({ name: `${f.emoji} ${f.name} — 🪙${f.cost} | -${Math.round(f.speedBonus*100)}% waktu`, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
                 return interaction.respond(choices);
             }
         }
@@ -1777,6 +1782,33 @@ client.on(Events.InteractionCreate, async interaction => {
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
             }
 
+            if (subCmd === 'pupuk') {
+                const fertId = interaction.options.getString('jenis');
+                const slotNum = interaction.options.getInteger('slot');
+                const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
+                if (!fert || fert.id === 'none') return interaction.reply({ content: '❌ Pupuk tidak valid!', ephemeral: true });
+                if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost.toLocaleString('id-ID')}**`, ephemeral: true });
+                
+                const plots = getPlots(guildId, interaction.user.id);
+                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman! Tanam dulu dengan `/farm plant`.', ephemeral: true });
+                if (slotNum < 1 || slotNum > plots.length) return interaction.reply({ content: `❌ Slot tidak valid! Kamu punya ${plots.length} tanaman (slot 1-${plots.length}). Cek di \`/farm status\`.`, ephemeral: true });
+                
+                const plot = plots[slotNum - 1];
+                if (plot.status === 'dead') return interaction.reply({ content: '❌ Tanaman ini sudah mati! Tidak bisa dipupuk.', ephemeral: true });
+                if (plot.fertilizer !== 'none') {
+                    const existingFert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer);
+                    return interaction.reply({ content: `❌ Tanaman ini sudah diberi pupuk **${existingFert ? existingFert.emoji + ' ' + existingFert.name : ''}**! Satu tanaman hanya bisa dipupuk sekali.`, ephemeral: true });
+                }
+                
+                userData.balance -= fert.cost;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
+                
+                const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                const newTime = Math.round(crop.time * (1 - fert.speedBonus));
+                return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** diberikan ke **[Slot ${slotNum}] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}**!\n\n> ⏩ Waktu tumbuh: ~~${crop.time}m~~ → **${newTime}m**${fert.yieldBonus > 0 ? `\n> 📈 Bonus hasil: **+${Math.round(fert.yieldBonus*100)}%**` : ''}\n> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**` });
+            }
+
             if (subCmd === 'shop') {
                 const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
                 let desc = '**🌱 BIBIT TANAMAN**\n\n';
@@ -1908,14 +1940,14 @@ client.on(Events.InteractionCreate, async interaction => {
             const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
             if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
             if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost}**`, ephemeral: true });
+            // Check if there's any unfertilized plot
+            const plot = db.prepare("SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND fertilizer = 'none' AND status != 'dead' ORDER BY plantedAt ASC LIMIT 1").get(guildId, interaction.user.id);
+            if (!plot) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk! Semua sudah dipupuk atau tidak ada tanaman.\n> Gunakan `/farm pupuk` untuk pilih tanaman spesifik.', ephemeral: true });
             userData.balance -= fert.cost;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-            // Apply fertilizer to the oldest unfertilized plot
-            const plot = db.prepare("SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND fertilizer = 'none' AND status != 'dead' ORDER BY plantedAt ASC LIMIT 1").get(guildId, interaction.user.id);
-            if (!plot) { userData.balance += fert.cost; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk! Tanam dulu, atau semua sudah dipupuk.', ephemeral: true }); }
             db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** diberikan ke ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ Waktu tumbuh -${Math.round(fert.speedBonus*100)}%${fert.yieldBonus > 0 ? ` | 📈 Hasil +${Math.round(fert.yieldBonus*100)}%` : ''}` });
+            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Gunakan \`/farm pupuk\` untuk memilih tanaman spesifik!*` });
         }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); price = parseInt(parts.pop()); itemName = parts.join('_'); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, price); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** — 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjutkan pembelian?`, components: [row], ephemeral: true }); }
     }
