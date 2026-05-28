@@ -38,6 +38,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCRE
 db.exec(`CREATE TABLE IF NOT EXISTS farm_storage (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_level INTEGER DEFAULT 1, PRIMARY KEY(guildId, userId))`);
 
+// ================= MIGRASI: PROFILE CUSTOMIZATION =================
+db.exec(`CREATE TABLE IF NOT EXISTS profile_customization (guildId TEXT, userId TEXT, title TEXT DEFAULT '', bio TEXT DEFAULT '', banner_color TEXT DEFAULT '#2B2D31', frame TEXT DEFAULT 'default', PRIMARY KEY(guildId, userId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS profile_collection (guildId TEXT, userId TEXT, itemType TEXT, itemId TEXT, PRIMARY KEY(guildId, userId, itemType, itemId))`);
+
 
 function getOrCreateUser(guildId, userId) { let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); } return user; }
 function getConf(guildId, key, defaultVal) { const row = db.prepare('SELECT value FROM config WHERE guildId = ? AND key = ?').get(guildId, key); return row ? row.value : defaultVal; }
@@ -419,6 +423,80 @@ function addGiftReceivedToday(guildId, userId, amount) {
     incrementUserStat(guildId, userId, `gift_received_${today}`, amount);
 }
 
+// ================= SISTEM PROFILE CUSTOMIZATION =================
+const PROFILE_TITLES = [
+    // Free titles (auto-unlocked)
+    { id: 'newbie', name: '🌱 Newbie', cost: 0, source: 'default' },
+    // Achievement-unlocked titles
+    { id: 'social_butterfly', name: '💬 Social Butterfly', cost: 0, source: 'achievement', achievement: 'chat_1000' },
+    { id: 'master_angler', name: '🎣 Master Angler', cost: 0, source: 'achievement', achievement: 'fish_100' },
+    { id: 'green_thumb', name: '🌾 Green Thumb', cost: 0, source: 'achievement', achievement: 'farm_50' },
+    { id: 'high_roller', name: '🎰 High Roller', cost: 0, source: 'achievement', achievement: 'slot_total_100k' },
+    { id: 'eternal_flame', name: '🔥 Eternal Flame', cost: 0, source: 'achievement', achievement: 'streak_100' },
+    { id: 'millionaire', name: '💎 Millionaire', cost: 0, source: 'achievement', achievement: 'balance_1m' },
+    { id: 'completionist', name: '🏆 Completionist', cost: 0, source: 'special', condition: 'badge_50' },
+    // Shop titles
+    { id: 'dreamer', name: '✨ Dreamer', cost: 3000, source: 'shop' },
+    { id: 'sakura_princess', name: '🌸 Sakura Princess', cost: 5000, source: 'shop' },
+    { id: 'moonlight', name: '🌙 Moonlight', cost: 5000, source: 'shop' },
+    { id: 'stardust', name: '💫 Stardust', cost: 5000, source: 'shop' },
+    { id: 'butterfly', name: '🦋 Butterfly', cost: 4000, source: 'shop' },
+    { id: 'rainbow_soul', name: '🌈 Rainbow Soul', cost: 7000, source: 'shop' },
+    { id: 'royalty', name: '👑 Royalty', cost: 10000, source: 'shop' },
+    { id: 'dark_aesthetic', name: '🖤 Dark Aesthetic', cost: 5000, source: 'shop' },
+    { id: 'lucky_one', name: '🍀 Lucky One', cost: 4000, source: 'shop' },
+    { id: 'thunder', name: '⚡ Thunder', cost: 4000, source: 'shop' },
+    { id: 'kawaii', name: '🎀 Kawaii', cost: 6000, source: 'shop' },
+    { id: 'poseidon', name: '🔱 Poseidon', cost: 8000, source: 'shop' },
+    { id: 'dragon_tamer', name: '🐉 Dragon Tamer', cost: 10000, source: 'shop' },
+    { id: 'edgy_lord', name: '💀 Edgy Lord', cost: 5000, source: 'shop' },
+    { id: 'tropical_vibes', name: '🌺 Tropical Vibes', cost: 4000, source: 'shop' }
+];
+
+const PROFILE_BANNERS = [
+    { id: 'default', name: 'Default', emoji: '⬛', cost: 0, hex: '#2B2D31' },
+    { id: 'soft_pink', name: 'Soft Pink', emoji: '🩷', cost: 2000, hex: '#FFB6C1' },
+    { id: 'purple_dream', name: 'Purple Dream', emoji: '💜', cost: 2000, hex: '#9B59B6' },
+    { id: 'ocean_blue', name: 'Ocean Blue', emoji: '💙', cost: 2000, hex: '#3498DB' },
+    { id: 'mint_green', name: 'Mint Green', emoji: '💚', cost: 2000, hex: '#2ECC71' },
+    { id: 'baby_blue', name: 'Baby Blue', emoji: '🩵', cost: 2000, hex: '#87CEEB' },
+    { id: 'sunset_orange', name: 'Sunset Orange', emoji: '🧡', cost: 2000, hex: '#F39C12' },
+    { id: 'red_passion', name: 'Red Passion', emoji: '❤️', cost: 2000, hex: '#E74C3C' },
+    { id: 'dark_mode', name: 'Dark Mode', emoji: '🖤', cost: 2000, hex: '#1A1A2E' },
+    { id: 'clean_white', name: 'Clean White', emoji: '🤍', cost: 2000, hex: '#F5F5F5' },
+    { id: 'gold', name: 'Royal Gold', emoji: '🌟', cost: 5000, hex: '#FFD700' },
+    { id: 'rose_gold', name: 'Rose Gold', emoji: '🌹', cost: 5000, hex: '#B76E79' }
+];
+
+const PROFILE_FRAMES = [
+    { id: 'default', name: 'Default', cost: 0, top: '━━━━━━━━━━━━━━━━━━━━━━', bottom: '━━━━━━━━━━━━━━━━━━━━━━' },
+    { id: 'gold', name: 'Gold Border', cost: 10000, top: '═══════ ✦ ═══════', bottom: '═══════ ✦ ═══════' },
+    { id: 'star', name: 'Stardust', cost: 0, source: 'achievement_30', top: '✧･ﾟ:* ─────────── *:･ﾟ✧', bottom: '✧･ﾟ:* ─────────── *:･ﾟ✧' },
+    { id: 'sakura', name: 'Sakura Bloom', cost: 8000, top: '🌸 ─────────────── 🌸', bottom: '🌸 ─────────────── 🌸' },
+    { id: 'thunder', name: 'Thunder Strike', cost: 0, source: 'level_50', top: '⚡ ─────────────── ⚡', bottom: '⚡ ─────────────── ⚡' },
+    { id: 'fire', name: 'Eternal Fire', cost: 0, source: 'streak_60', top: '🔥 ─────────────── 🔥', bottom: '🔥 ─────────────── 🔥' },
+    { id: 'diamond', name: 'Diamond Class', cost: 0, source: 'balance_500k', top: '💎 ─────────────── 💎', bottom: '💎 ─────────────── 💎' },
+    { id: 'ocean', name: 'Ocean Wave', cost: 0, source: 'fish_200', top: '🌊 ─────────────── 🌊', bottom: '🌊 ─────────────── 🌊' },
+    { id: 'farm', name: 'Harvest Bloom', cost: 0, source: 'farm_200', top: '🌾 ─────────────── 🌾', bottom: '🌾 ─────────────── 🌾' },
+    { id: 'heart', name: 'Hearts', cost: 6000, top: '💖 ─────────────── 💖', bottom: '💖 ─────────────── 💖' },
+    { id: 'galaxy', name: 'Galaxy', cost: 9000, top: '🌌 ─────────────── 🌌', bottom: '🌌 ─────────────── 🌌' }
+];
+
+function getProfileCustom(guildId, userId) {
+    let p = db.prepare('SELECT * FROM profile_customization WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!p) { db.prepare('INSERT INTO profile_customization (guildId, userId) VALUES (?, ?)').run(guildId, userId); p = { title: '', bio: '', banner_color: '#2B2D31', frame: 'default' }; }
+    return p;
+}
+function ownsProfileItem(guildId, userId, itemType, itemId) {
+    return !!db.prepare('SELECT 1 FROM profile_collection WHERE guildId = ? AND userId = ? AND itemType = ? AND itemId = ?').get(guildId, userId, itemType, itemId);
+}
+function addProfileItem(guildId, userId, itemType, itemId) {
+    db.prepare('INSERT OR IGNORE INTO profile_collection (guildId, userId, itemType, itemId) VALUES (?, ?, ?, ?)').run(guildId, userId, itemType, itemId);
+}
+function getProfileItems(guildId, userId, itemType) {
+    return db.prepare('SELECT itemId FROM profile_collection WHERE guildId = ? AND userId = ? AND itemType = ?').all(guildId, userId, itemType).map(r => r.itemId);
+}
+
 // ================= SISTEM ACHIEVEMENT / BADGE =================
 const ACHIEVEMENTS = [
     // --- CHAT & SOCIAL ---
@@ -524,6 +602,20 @@ async function grantAchievement(guild, userId, achievementId) {
     if (!achDef) return false;
 
     db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, achievementId, Date.now());
+
+    // Auto-grant profile titles based on achievement
+    const titleMatch = PROFILE_TITLES.find(t => t.achievement === achievementId);
+    if (titleMatch) addProfileItem(guildId, userId, 'title', titleMatch.id);
+    // Auto-grant frames based on conditions
+    if (achievementId === 'level_50') addProfileItem(guildId, userId, 'frame', 'thunder');
+    if (achievementId === 'streak_60' || achievementId === 'streak_100') addProfileItem(guildId, userId, 'frame', 'fire');
+    if (achievementId === 'balance_500k' || achievementId === 'balance_1m') addProfileItem(guildId, userId, 'frame', 'diamond');
+    if (achievementId === 'fish_500') addProfileItem(guildId, userId, 'frame', 'ocean');
+    if (achievementId === 'farm_200') addProfileItem(guildId, userId, 'frame', 'farm');
+    // Check completionist
+    const totalAchUnlocked = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+    if (totalAchUnlocked >= 50) addProfileItem(guildId, userId, 'title', 'completionist');
+    if (totalAchUnlocked >= 30) addProfileItem(guildId, userId, 'frame', 'star');
     
     // Berikan reward uang
     const user = getOrCreateUser(guildId, userId);
@@ -870,7 +962,17 @@ const commands = [
         .addSubcommand(sub => sub.setName('set_testimoni').setDescription('Atur channel testimoni').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
         .addSubcommand(sub => sub.setName('history').setDescription('Lihat log transaksi').addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah history').setRequired(false)))
         .addSubcommand(sub => sub.setName('set_custom_role').setDescription('Atur harga tiket Custom Role').addIntegerOption(opt => opt.setName('harga').setDescription('Harga (Ketik 0 untuk mematikan)').setRequired(true))), 
-    new SlashCommandBuilder().setName('profile').setDescription('Lihat kartu informasi lengkap akun member').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
+    new SlashCommandBuilder()
+        .setName('profile')
+        .setDescription('Lihat & kustomisasi profil')
+        .addSubcommand(sub => sub.setName('view').setDescription('Lihat kartu profil').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
+        .addSubcommand(sub => sub.setName('shop').setDescription('Toko dekorasi profil (title, banner, frame)'))
+        .addSubcommand(sub => sub.setName('collection').setDescription('Lihat koleksi dekorasi yang dimiliki'))
+        .addSubcommand(sub => sub.setName('set-title').setDescription('Pasang title di profil').addStringOption(opt => opt.setName('title').setDescription('Pilih title').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('set-banner').setDescription('Ganti warna banner profil').addStringOption(opt => opt.setName('warna').setDescription('Pilih warna').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('set-frame').setDescription('Pasang frame profil').addStringOption(opt => opt.setName('frame').setDescription('Pilih frame').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('set-bio').setDescription('Set bio profil').addStringOption(opt => opt.setName('text').setDescription('Bio kamu (max 100 char)').setRequired(true).setMaxLength(100)))
+        .addSubcommand(sub => sub.setName('reset').setDescription('Reset semua kustomisasi ke default')),
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('inventory').setDescription('🎒 Lihat item yang kamu punya'),
     new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)),
@@ -1143,6 +1245,24 @@ client.on(Events.InteractionCreate, async interaction => {
             }).filter(Boolean).slice(0, 25);
             return interaction.respond(choices);
         }
+        if (interaction.commandName === 'profile') {
+            const focused = interaction.options.getFocused(true);
+            const owned = getProfileItems(guildId, interaction.user.id, focused.name === 'title' ? 'title' : focused.name === 'warna' ? 'banner' : 'frame');
+            // Always include the default
+            if (focused.name === 'title') {
+                const choices = PROFILE_TITLES.filter(t => t.id === 'newbie' || owned.includes(t.id)).map(t => ({ name: t.name, value: t.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'warna') {
+                const choices = PROFILE_BANNERS.filter(b => b.id === 'default' || owned.includes(b.id)).map(b => ({ name: `${b.emoji} ${b.name}`, value: b.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'frame') {
+                const choices = PROFILE_FRAMES.filter(f => f.id === 'default' || owned.includes(f.id)).map(f => ({ name: f.name, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            return interaction.respond([]);
+        }
         if (interaction.commandName === 'farm') {
             const focused = interaction.options.getFocused(true);
             if (focused.name === 'bibit') {
@@ -1270,36 +1390,124 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         if (command === 'profile') {
+            // SHOP
+            if (subCmd === 'shop') {
+                let desc = '🛍️ **TOKO DEKORASI PROFIL**\n\n';
+                desc += '🏷️ **TITLES** (yang bisa dibeli)\n';
+                PROFILE_TITLES.filter(t => t.source === 'shop').forEach(t => { const owned = ownsProfileItem(guildId, interaction.user.id, 'title', t.id); desc += `> ${t.name} — 🪙 ${t.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
+                desc += '\n🎨 **BANNER COLORS**\n';
+                PROFILE_BANNERS.filter(b => b.cost > 0).forEach(b => { const owned = ownsProfileItem(guildId, interaction.user.id, 'banner', b.id); desc += `> ${b.emoji} ${b.name} — 🪙 ${b.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
+                desc += '\n🖼️ **FRAMES**\n';
+                PROFILE_FRAMES.filter(f => f.cost > 0).forEach(f => { const owned = ownsProfileItem(guildId, interaction.user.id, 'frame', f.id); desc += `> ${f.name} — 🪙 ${f.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
+                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
+                const titleMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_title').setPlaceholder('🏷️ Beli Title...').addOptions(...PROFILE_TITLES.filter(t => t.source === 'shop' && !ownsProfileItem(guildId, interaction.user.id, 'title', t.id)).map(t => new StringSelectMenuOptionBuilder().setLabel(t.name).setValue(t.id).setDescription(`🪙 ${t.cost.toLocaleString('id-ID')}`)).slice(0, 25));
+                const bannerMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_banner').setPlaceholder('🎨 Beli Banner...').addOptions(...PROFILE_BANNERS.filter(b => b.cost > 0 && !ownsProfileItem(guildId, interaction.user.id, 'banner', b.id)).map(b => new StringSelectMenuOptionBuilder().setLabel(`${b.emoji} ${b.name}`).setValue(b.id).setDescription(`🪙 ${b.cost.toLocaleString('id-ID')} | ${b.hex}`)).slice(0, 25));
+                const frameMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_frame').setPlaceholder('🖼️ Beli Frame...').addOptions(...PROFILE_FRAMES.filter(f => f.cost > 0 && !ownsProfileItem(guildId, interaction.user.id, 'frame', f.id)).map(f => new StringSelectMenuOptionBuilder().setLabel(f.name).setValue(f.id).setDescription(`🪙 ${f.cost.toLocaleString('id-ID')}`)).slice(0, 25));
+                const components = [];
+                if (titleMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(titleMenu));
+                if (bannerMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(bannerMenu));
+                if (frameMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(frameMenu));
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('💖 Profile Decoration Shop').setColor('#FF69B4').setDescription(desc).setFooter({ text: 'Pilih dari menu | Ada juga title/frame gratis dari achievement!' })], components });
+            }
+
+            if (subCmd === 'collection') {
+                const titles = getProfileItems(guildId, interaction.user.id, 'title');
+                const banners = getProfileItems(guildId, interaction.user.id, 'banner');
+                const frames = getProfileItems(guildId, interaction.user.id, 'frame');
+                let desc = `📦 **Koleksi Dekorasi Kamu**\n\n`;
+                desc += `🏷️ **Titles (${titles.length + 1}/${PROFILE_TITLES.length})**\n`;
+                desc += `> 🌱 Newbie *(default)*\n`;
+                titles.forEach(id => { const t = PROFILE_TITLES.find(x => x.id === id); if (t) desc += `> ${t.name}\n`; });
+                desc += `\n🎨 **Banners (${banners.length + 1}/${PROFILE_BANNERS.length})**\n`;
+                desc += `> ⬛ Default\n`;
+                banners.forEach(id => { const b = PROFILE_BANNERS.find(x => x.id === id); if (b) desc += `> ${b.emoji} ${b.name}\n`; });
+                desc += `\n🖼️ **Frames (${frames.length + 1}/${PROFILE_FRAMES.length})**\n`;
+                desc += `> ━━━ Default\n`;
+                frames.forEach(id => { const f = PROFILE_FRAMES.find(x => x.id === id); if (f) desc += `> ${f.name}\n`; });
+                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📦 Profile Collection').setColor('#FF69B4').setDescription(desc).setFooter({ text: '/profile set-title /set-banner /set-frame untuk pasang' })] });
+            }
+
+            if (subCmd === 'set-title') {
+                const titleId = interaction.options.getString('title');
+                const tDef = PROFILE_TITLES.find(t => t.id === titleId);
+                if (!tDef) return interaction.reply({ content: '❌ Title tidak ditemukan!', ephemeral: true });
+                if (titleId !== 'newbie' && !ownsProfileItem(guildId, interaction.user.id, 'title', titleId)) return interaction.reply({ content: '❌ Kamu belum punya title ini! Beli di `/profile shop` atau unlock dari achievement.', ephemeral: true });
+                db.prepare('INSERT OR REPLACE INTO profile_customization (guildId, userId, title, bio, banner_color, frame) VALUES (?, ?, ?, COALESCE((SELECT bio FROM profile_customization WHERE guildId=? AND userId=?), \'\'), COALESCE((SELECT banner_color FROM profile_customization WHERE guildId=? AND userId=?), \'#2B2D31\'), COALESCE((SELECT frame FROM profile_customization WHERE guildId=? AND userId=?), \'default\'))').run(guildId, interaction.user.id, titleId, guildId, interaction.user.id, guildId, interaction.user.id, guildId, interaction.user.id);
+                return interaction.reply({ content: `✅ Title diubah menjadi **${tDef.name}**!` });
+            }
+
+            if (subCmd === 'set-banner') {
+                const bannerId = interaction.options.getString('warna');
+                const bDef = PROFILE_BANNERS.find(b => b.id === bannerId);
+                if (!bDef) return interaction.reply({ content: '❌ Banner tidak ditemukan!', ephemeral: true });
+                if (bannerId !== 'default' && !ownsProfileItem(guildId, interaction.user.id, 'banner', bannerId)) return interaction.reply({ content: '❌ Kamu belum punya banner ini! Beli di `/profile shop`.', ephemeral: true });
+                getProfileCustom(guildId, interaction.user.id);
+                db.prepare('UPDATE profile_customization SET banner_color = ? WHERE guildId = ? AND userId = ?').run(bDef.hex, guildId, interaction.user.id);
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor(bDef.hex).setDescription(`✅ Banner color diubah menjadi ${bDef.emoji} **${bDef.name}** (${bDef.hex})`)] });
+            }
+
+            if (subCmd === 'set-frame') {
+                const frameId = interaction.options.getString('frame');
+                const fDef = PROFILE_FRAMES.find(f => f.id === frameId);
+                if (!fDef) return interaction.reply({ content: '❌ Frame tidak ditemukan!', ephemeral: true });
+                if (frameId !== 'default' && !ownsProfileItem(guildId, interaction.user.id, 'frame', frameId)) return interaction.reply({ content: '❌ Kamu belum punya frame ini! Beli di `/profile shop`.', ephemeral: true });
+                getProfileCustom(guildId, interaction.user.id);
+                db.prepare('UPDATE profile_customization SET frame = ? WHERE guildId = ? AND userId = ?').run(frameId, guildId, interaction.user.id);
+                return interaction.reply({ content: `✅ Frame diubah menjadi **${fDef.name}**!\n${fDef.top}\n*Preview frame*\n${fDef.bottom}` });
+            }
+
+            if (subCmd === 'set-bio') {
+                const bio = interaction.options.getString('text');
+                getProfileCustom(guildId, interaction.user.id);
+                db.prepare('UPDATE profile_customization SET bio = ? WHERE guildId = ? AND userId = ?').run(bio, guildId, interaction.user.id);
+                return interaction.reply({ content: `✅ Bio diset menjadi:\n> *"${bio}"*` });
+            }
+
+            if (subCmd === 'reset') {
+                db.prepare('UPDATE profile_customization SET title = ?, bio = ?, banner_color = ?, frame = ? WHERE guildId = ? AND userId = ?').run('', '', '#2B2D31', 'default', guildId, interaction.user.id);
+                return interaction.reply({ content: '✅ Semua kustomisasi profil di-reset ke default!' });
+            }
+
+            // VIEW (default)
             const targetUser = interaction.options.getUser('user') || interaction.user, targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
             if (!targetMember) return interaction.reply({content: 'User tidak ditemukan.', ephemeral: true});
             const tData = getOrCreateUser(guildId, targetUser.id), targetXp = (tData.level + 1) * 100, percent = Math.min(100, Math.max(0, Math.floor((tData.xp / targetXp) * 100))), progressBar = '▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10)), roles = targetMember.roles.cache.filter(r => r.name !== '@everyone').sort((a, b) => b.position - a.position).map(r => `<@&${r.id}>`);
             let displayRoles = roles.length > 0 ? roles.slice(0, 10).join(' • ') : '*Tidak ada role*'; if (roles.length > 10) displayRoles += ` *+${roles.length - 10} lainnya*`;
             const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id), streakCount = sData ? sData.count : 0, streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
             const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ? ORDER BY unlockedAt DESC').all(guildId, targetUser.id);
-            const totalBadges = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id).cnt;
+            const totalBadges = userAchs.length;
             let badgeDisplay = '';
             if (userAchs.length > 0) {
-                badgeDisplay = userAchs.map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? `> ${def.emoji} **${def.name}** — *${def.desc}*` : ''; }).filter(Boolean).join('\n');
-            } else {
-                badgeDisplay = '> *Belum ada badge. Mulai beraktivitas!*';
-            }
+                badgeDisplay = userAchs.slice(0, 5).map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? `> ${def.emoji} **${def.name}** — *${def.desc}*` : ''; }).filter(Boolean).join('\n');
+                if (totalBadges > 5) badgeDisplay += `\n> *...+${totalBadges - 5} badge lainnya*`;
+            } else { badgeDisplay = '> *Belum ada badge.*'; }
             const fishCaught = getUserStat(guildId, targetUser.id, 'total_fish_caught');
             const slotWins = getUserStat(guildId, targetUser.id, 'slot_wins');
             const cfWins = getUserStat(guildId, targetUser.id, 'coinflip_wins');
+            const harvests = getUserStat(guildId, targetUser.id, 'total_harvests');
+
+            // Apply customization
+            const custom = getProfileCustom(guildId, targetUser.id);
+            const titleObj = PROFILE_TITLES.find(t => t.id === custom.title);
+            const titleStr = titleObj ? titleObj.name : '🌱 Newbie';
+            const frameObj = PROFILE_FRAMES.find(f => f.id === custom.frame) || PROFILE_FRAMES[0];
+            const bannerHex = custom.banner_color || '#2B2D31';
+            const bioStr = custom.bio ? `📝 *"${custom.bio}"*\n\n` : '';
 
             const profileEmbed = new EmbedBuilder()
                 .setAuthor({ name: `Kartu Profil | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
-                .setColor('#2B2D31')
+                .setColor(bannerHex)
                 .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
-                .setDescription(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+                .setDescription(`${frameObj.top}\n**${titleStr}**\n${frameObj.bottom}\n\n${bioStr}`)
                 .addFields(
                     { name: '📊 STATISTIK UTAMA', value: `> 🏅 **Level** \`${tData.level}\` — 💰 **Saldo** \`${tData.balance.toLocaleString('id-ID')}\` — ${streakEmoji} **Streak** \`${streakCount} Hari\`\n> \n> ✨ **Progress EXP**\n> \`${progressBar}\` **${percent}%** (\`${tData.xp.toLocaleString('id-ID')}/${targetXp.toLocaleString('id-ID')}\`)`, inline: false },
                     { name: `🏆 BADGE COLLECTION (${totalBadges}/${ACHIEVEMENTS.length})`, value: badgeDisplay, inline: false },
-                    { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan: **${fishCaught}** — 🎰 Slot: **${slotWins}** — 🪙 CF: **${cfWins}** — 🌾 Panen: **${getUserStat(guildId, targetUser.id, 'total_harvests')}**`, inline: false },
+                    { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan: **${fishCaught}** — 🎰 Slot: **${slotWins}** — 🪙 CF: **${cfWins}** — 🌾 Panen: **${harvests}**`, inline: false },
                     { name: '📅 INFO AKUN', value: `> 📥 Bergabung: <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D> — 📆 Dibuat: <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
                     { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
                 )
-                .setFooter({ text: `ID: ${targetUser.id} | /achievement untuk detail badge`, iconURL: interaction.guild.iconURL() })
+                .setFooter({ text: `${frameObj.bottom}\nID: ${targetUser.id} | /profile shop untuk dekorasi`, iconURL: interaction.guild.iconURL() })
                 .setTimestamp();
             return interaction.reply({ embeds: [profileEmbed] });
         }
@@ -1980,6 +2188,22 @@ client.on(Events.InteractionCreate, async interaction => {
             db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
             return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Gunakan \`/farm pupuk\` untuk memilih tanaman spesifik!*` });
+        }
+        // --- PROFILE SHOP HANDLERS ---
+        if (interaction.customId === 'profile_buy_title' || interaction.customId === 'profile_buy_banner' || interaction.customId === 'profile_buy_frame') {
+            const itemType = interaction.customId === 'profile_buy_title' ? 'title' : interaction.customId === 'profile_buy_banner' ? 'banner' : 'frame';
+            const itemId = interaction.values[0];
+            const userData = getOrCreateUser(guildId, interaction.user.id);
+            const dataArr = itemType === 'title' ? PROFILE_TITLES : itemType === 'banner' ? PROFILE_BANNERS : PROFILE_FRAMES;
+            const itemDef = dataArr.find(x => x.id === itemId);
+            if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
+            if (ownsProfileItem(guildId, interaction.user.id, itemType, itemId)) return interaction.reply({ content: '❌ Kamu sudah punya item ini!', ephemeral: true });
+            if (userData.balance < itemDef.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.cost.toLocaleString('id-ID')}**`, ephemeral: true });
+            userData.balance -= itemDef.cost;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            addProfileItem(guildId, interaction.user.id, itemType, itemId);
+            const itemName = itemType === 'banner' ? `${itemDef.emoji} ${itemDef.name}` : itemDef.name;
+            return interaction.reply({ content: `✅ Berhasil membeli **${itemName}**!\n> Pasang dengan \`/profile set-${itemType === 'banner' ? 'banner' : itemType}\`` });
         }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); price = parseInt(parts.pop()); itemName = parts.join('_'); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, price); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** — 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjutkan pembelian?`, components: [row], ephemeral: true }); }
     }
