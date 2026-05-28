@@ -1042,6 +1042,38 @@ client.on(Events.MessageCreate, async message => {
 
     const cdKey = `${guildId}_${message.author.id}`;
     if (!chatCooldowns.has(cdKey)) { await addXpAndMoney(message.member, 'chat'); chatCooldowns.add(cdKey); setTimeout(() => chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000); }
+
+    // --- FARM NOTIFICATION (setiap 5 menit per user) ---
+    const farmNotifKey = `farm_notif_${guildId}_${message.author.id}`;
+    if (!fishCooldowns.has(farmNotifKey) || Date.now() > fishCooldowns.get(farmNotifKey)) {
+        fishCooldowns.set(farmNotifKey, Date.now() + 300000); // 5 menit cooldown
+        const farmPlots = db.prepare('SELECT * FROM farm_plots WHERE guildId = ? AND userId = ?').all(guildId, message.author.id);
+        if (farmPlots.length > 0) {
+            let readyCount = 0, needWaterCount = 0, deadCount = 0;
+            for (const plot of farmPlots) {
+                const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                if (!crop) continue;
+                const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
+                const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+                const elapsed = Date.now() - plot.plantedAt;
+                const dryTime = Date.now() - plot.wateredAt;
+                const deadThreshold = growTime * 2.5;
+                
+                if (plot.status === 'dead' || dryTime > deadThreshold) { deadCount++; if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id); }
+                else if (elapsed >= growTime) readyCount++;
+                else if (dryTime > growTime * 1.2) needWaterCount++;
+            }
+            
+            let notifParts = [];
+            if (readyCount > 0) notifParts.push(`✅ **${readyCount} tanaman** siap dipanen! (\`/farm harvest\`)`);
+            if (needWaterCount > 0) notifParts.push(`💧 **${needWaterCount} tanaman** butuh disiram! (\`/farm water\`)`);
+            if (deadCount > 0) notifParts.push(`☠️ **${deadCount} tanaman** mati karena tidak disiram`);
+            
+            if (notifParts.length > 0) {
+                message.reply({ content: `🌾 <@${message.author.id}> **Farm Reminder:**\n${notifParts.join('\n')}`, allowedMentions: { users: [message.author.id] } }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
+            }
+        }
+    }
 });
 
 
