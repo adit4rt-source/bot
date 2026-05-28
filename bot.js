@@ -1039,17 +1039,7 @@ const commands = [
         .addSubcommand(sub => sub.setName('set_testimoni').setDescription('Atur channel testimoni').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
         .addSubcommand(sub => sub.setName('history').setDescription('Lihat log transaksi').addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah history').setRequired(false)))
         .addSubcommand(sub => sub.setName('set_custom_role').setDescription('Atur harga tiket Custom Role').addIntegerOption(opt => opt.setName('harga').setDescription('Harga (Ketik 0 untuk mematikan)').setRequired(true))), 
-    new SlashCommandBuilder()
-        .setName('profile')
-        .setDescription('Lihat & kustomisasi profil')
-        .addSubcommand(sub => sub.setName('view').setDescription('Lihat kartu profil').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
-        .addSubcommand(sub => sub.setName('shop').setDescription('Toko dekorasi profil (title, banner, frame)'))
-        .addSubcommand(sub => sub.setName('collection').setDescription('Lihat koleksi dekorasi yang dimiliki'))
-        .addSubcommand(sub => sub.setName('set-title').setDescription('Pasang title di profil').addStringOption(opt => opt.setName('title').setDescription('Pilih title').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('set-banner').setDescription('Ganti warna banner profil').addStringOption(opt => opt.setName('warna').setDescription('Pilih warna').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('set-frame').setDescription('Pasang frame profil').addStringOption(opt => opt.setName('frame').setDescription('Pilih frame').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('set-bio').setDescription('Set bio profil').addStringOption(opt => opt.setName('text').setDescription('Bio kamu (max 100 char)').setRequired(true).setMaxLength(100)))
-        .addSubcommand(sub => sub.setName('reset').setDescription('Reset semua kustomisasi ke default')),
+    new SlashCommandBuilder().setName('profile').setDescription('Lihat kartu profil').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('inventory').setDescription('🎒 Lihat item yang kamu punya'),
     new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)),
@@ -1066,6 +1056,19 @@ const commands = [
         .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen'))
 .addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman (dari /farm status)').setRequired(true))),
+    new SlashCommandBuilder()
+        .setName('pet')
+        .setDescription('🐾 Sistem Pet / Companion')
+        .addSubcommand(sub => sub.setName('info').setDescription('Lihat info pet aktif'))
+        .addSubcommand(sub => sub.setName('adopt').setDescription('Adopt pet baru').addStringOption(opt => opt.setName('pet').setDescription('Pilih pet').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('feed').setDescription('Kasih makan pet').addStringOption(opt => opt.setName('food').setDescription('Pilih makanan').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('play').setDescription('Bermain dengan pet'))
+        .addSubcommand(sub => sub.setName('shop').setDescription('Pet Shop - food, eggs'))
+        .addSubcommand(sub => sub.setName('egg').setDescription('Buka Pet Egg').addStringOption(opt => opt.setName('tipe').setDescription('Jenis egg').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('collection').setDescription('Lihat semua pet yang dimiliki'))
+        .addSubcommand(sub => sub.setName('swap').setDescription('Ganti pet aktif').addIntegerOption(opt => opt.setName('id').setDescription('ID pet (dari /pet collection)').setRequired(true)))
+        .addSubcommand(sub => sub.setName('rename').setDescription('Ganti nama pet').addStringOption(opt => opt.setName('nama').setDescription('Nama baru').setRequired(true).setMaxLength(20)))
+        .addSubcommand(sub => sub.setName('release').setDescription('Lepaskan pet (tidak bisa undo!)').addIntegerOption(opt => opt.setName('id').setDescription('ID pet').setRequired(true))),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -1322,24 +1325,6 @@ client.on(Events.InteractionCreate, async interaction => {
             }).filter(Boolean).slice(0, 25);
             return interaction.respond(choices);
         }
-        if (interaction.commandName === 'profile') {
-            const focused = interaction.options.getFocused(true);
-            const owned = getProfileItems(guildId, interaction.user.id, focused.name === 'title' ? 'title' : focused.name === 'warna' ? 'banner' : 'frame');
-            // Always include the default
-            if (focused.name === 'title') {
-                const choices = PROFILE_TITLES.filter(t => t.id === 'newbie' || owned.includes(t.id)).map(t => ({ name: t.name, value: t.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
-            if (focused.name === 'warna') {
-                const choices = PROFILE_BANNERS.filter(b => b.id === 'default' || owned.includes(b.id)).map(b => ({ name: `${b.emoji} ${b.name}`, value: b.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
-            if (focused.name === 'frame') {
-                const choices = PROFILE_FRAMES.filter(f => f.id === 'default' || owned.includes(f.id)).map(f => ({ name: f.name, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
-            return interaction.respond([]);
-        }
         if (interaction.commandName === 'farm') {
             const focused = interaction.options.getFocused(true);
             if (focused.name === 'bibit') {
@@ -1354,6 +1339,22 @@ client.on(Events.InteractionCreate, async interaction => {
                 const choices = FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => ({ name: `${f.emoji} ${f.name} — 🪙${f.cost} | -${Math.round(f.speedBonus*100)}% waktu`, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
                 return interaction.respond(choices);
             }
+        }
+        if (interaction.commandName === 'pet') {
+            const focused = interaction.options.getFocused(true);
+            if (focused.name === 'pet') {
+                const choices = PET_DATA.filter(p => p.price > 0).map(p => ({ name: `${p.emoji} ${p.name} (${p.tier}) — 🪙${p.price.toLocaleString('id-ID')}`, value: p.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'food') {
+                const choices = PET_FOODS.map(f => ({ name: `${f.emoji} ${f.name} — 🪙${f.price} | +${f.hunger} hunger +${f.happiness} happy`, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'tipe') {
+                const choices = PET_EGGS.map(e => ({ name: `${e.emoji} ${e.name} — 🪙${e.price.toLocaleString('id-ID')}`, value: e.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            return interaction.respond([]);
         }
         return;
     }
@@ -1467,85 +1468,6 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         if (command === 'profile') {
-            // SHOP
-            if (subCmd === 'shop') {
-                let desc = '🛍️ **TOKO DEKORASI PROFIL**\n\n';
-                desc += '🏷️ **TITLES** (yang bisa dibeli)\n';
-                PROFILE_TITLES.filter(t => t.source === 'shop').forEach(t => { const owned = ownsProfileItem(guildId, interaction.user.id, 'title', t.id); desc += `> ${t.name} — 🪙 ${t.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
-                desc += '\n🎨 **BANNER COLORS**\n';
-                PROFILE_BANNERS.filter(b => b.cost > 0).forEach(b => { const owned = ownsProfileItem(guildId, interaction.user.id, 'banner', b.id); desc += `> ${b.emoji} ${b.name} — 🪙 ${b.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
-                desc += '\n🖼️ **FRAMES**\n';
-                PROFILE_FRAMES.filter(f => f.cost > 0).forEach(f => { const owned = ownsProfileItem(guildId, interaction.user.id, 'frame', f.id); desc += `> ${f.name} — 🪙 ${f.cost.toLocaleString('id-ID')}${owned ? ' ✅' : ''}\n`; });
-                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
-                const titleMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_title').setPlaceholder('🏷️ Beli Title...').addOptions(...PROFILE_TITLES.filter(t => t.source === 'shop' && !ownsProfileItem(guildId, interaction.user.id, 'title', t.id)).map(t => new StringSelectMenuOptionBuilder().setLabel(t.name).setValue(t.id).setDescription(`🪙 ${t.cost.toLocaleString('id-ID')}`)).slice(0, 25));
-                const bannerMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_banner').setPlaceholder('🎨 Beli Banner...').addOptions(...PROFILE_BANNERS.filter(b => b.cost > 0 && !ownsProfileItem(guildId, interaction.user.id, 'banner', b.id)).map(b => new StringSelectMenuOptionBuilder().setLabel(`${b.emoji} ${b.name}`).setValue(b.id).setDescription(`🪙 ${b.cost.toLocaleString('id-ID')} | ${b.hex}`)).slice(0, 25));
-                const frameMenu = new StringSelectMenuBuilder().setCustomId('profile_buy_frame').setPlaceholder('🖼️ Beli Frame...').addOptions(...PROFILE_FRAMES.filter(f => f.cost > 0 && !ownsProfileItem(guildId, interaction.user.id, 'frame', f.id)).map(f => new StringSelectMenuOptionBuilder().setLabel(f.name).setValue(f.id).setDescription(`🪙 ${f.cost.toLocaleString('id-ID')}`)).slice(0, 25));
-                const components = [];
-                if (titleMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(titleMenu));
-                if (bannerMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(bannerMenu));
-                if (frameMenu.options.length > 0) components.push(new ActionRowBuilder().addComponents(frameMenu));
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('💖 Profile Decoration Shop').setColor('#FF69B4').setDescription(desc).setFooter({ text: 'Pilih dari menu | Ada juga title/frame gratis dari achievement!' })], components });
-            }
-
-            if (subCmd === 'collection') {
-                const titles = getProfileItems(guildId, interaction.user.id, 'title');
-                const banners = getProfileItems(guildId, interaction.user.id, 'banner');
-                const frames = getProfileItems(guildId, interaction.user.id, 'frame');
-                let desc = `📦 **Koleksi Dekorasi Kamu**\n\n`;
-                desc += `🏷️ **Titles (${titles.length + 1}/${PROFILE_TITLES.length})**\n`;
-                desc += `> 🌱 Newbie *(default)*\n`;
-                titles.forEach(id => { const t = PROFILE_TITLES.find(x => x.id === id); if (t) desc += `> ${t.name}\n`; });
-                desc += `\n🎨 **Banners (${banners.length + 1}/${PROFILE_BANNERS.length})**\n`;
-                desc += `> ⬛ Default\n`;
-                banners.forEach(id => { const b = PROFILE_BANNERS.find(x => x.id === id); if (b) desc += `> ${b.emoji} ${b.name}\n`; });
-                desc += `\n🖼️ **Frames (${frames.length + 1}/${PROFILE_FRAMES.length})**\n`;
-                desc += `> ━━━ Default\n`;
-                frames.forEach(id => { const f = PROFILE_FRAMES.find(x => x.id === id); if (f) desc += `> ${f.name}\n`; });
-                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📦 Profile Collection').setColor('#FF69B4').setDescription(desc).setFooter({ text: '/profile set-title /set-banner /set-frame untuk pasang' })] });
-            }
-
-            if (subCmd === 'set-title') {
-                const titleId = interaction.options.getString('title');
-                const tDef = PROFILE_TITLES.find(t => t.id === titleId);
-                if (!tDef) return interaction.reply({ content: '❌ Title tidak ditemukan!', ephemeral: true });
-                if (titleId !== 'newbie' && !ownsProfileItem(guildId, interaction.user.id, 'title', titleId)) return interaction.reply({ content: '❌ Kamu belum punya title ini! Beli di `/profile shop` atau unlock dari achievement.', ephemeral: true });
-                db.prepare('INSERT OR REPLACE INTO profile_customization (guildId, userId, title, bio, banner_color, frame) VALUES (?, ?, ?, COALESCE((SELECT bio FROM profile_customization WHERE guildId=? AND userId=?), \'\'), COALESCE((SELECT banner_color FROM profile_customization WHERE guildId=? AND userId=?), \'#2B2D31\'), COALESCE((SELECT frame FROM profile_customization WHERE guildId=? AND userId=?), \'default\'))').run(guildId, interaction.user.id, titleId, guildId, interaction.user.id, guildId, interaction.user.id, guildId, interaction.user.id);
-                return interaction.reply({ content: `✅ Title diubah menjadi **${tDef.name}**!` });
-            }
-
-            if (subCmd === 'set-banner') {
-                const bannerId = interaction.options.getString('warna');
-                const bDef = PROFILE_BANNERS.find(b => b.id === bannerId);
-                if (!bDef) return interaction.reply({ content: '❌ Banner tidak ditemukan!', ephemeral: true });
-                if (bannerId !== 'default' && !ownsProfileItem(guildId, interaction.user.id, 'banner', bannerId)) return interaction.reply({ content: '❌ Kamu belum punya banner ini! Beli di `/profile shop`.', ephemeral: true });
-                getProfileCustom(guildId, interaction.user.id);
-                db.prepare('UPDATE profile_customization SET banner_color = ? WHERE guildId = ? AND userId = ?').run(bDef.hex, guildId, interaction.user.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor(bDef.hex).setDescription(`✅ Banner color diubah menjadi ${bDef.emoji} **${bDef.name}** (${bDef.hex})`)] });
-            }
-
-            if (subCmd === 'set-frame') {
-                const frameId = interaction.options.getString('frame');
-                const fDef = PROFILE_FRAMES.find(f => f.id === frameId);
-                if (!fDef) return interaction.reply({ content: '❌ Frame tidak ditemukan!', ephemeral: true });
-                if (frameId !== 'default' && !ownsProfileItem(guildId, interaction.user.id, 'frame', frameId)) return interaction.reply({ content: '❌ Kamu belum punya frame ini! Beli di `/profile shop`.', ephemeral: true });
-                getProfileCustom(guildId, interaction.user.id);
-                db.prepare('UPDATE profile_customization SET frame = ? WHERE guildId = ? AND userId = ?').run(frameId, guildId, interaction.user.id);
-                return interaction.reply({ content: `✅ Frame diubah menjadi **${fDef.name}**!\n${fDef.top}\n*Preview frame*\n${fDef.bottom}` });
-            }
-
-            if (subCmd === 'set-bio') {
-                const bio = interaction.options.getString('text');
-                getProfileCustom(guildId, interaction.user.id);
-                db.prepare('UPDATE profile_customization SET bio = ? WHERE guildId = ? AND userId = ?').run(bio, guildId, interaction.user.id);
-                return interaction.reply({ content: `✅ Bio diset menjadi:\n> *"${bio}"*` });
-            }
-
-            if (subCmd === 'reset') {
-                db.prepare('UPDATE profile_customization SET title = ?, bio = ?, banner_color = ?, frame = ? WHERE guildId = ? AND userId = ?').run('', '', '#2B2D31', 'default', guildId, interaction.user.id);
-                return interaction.reply({ content: '✅ Semua kustomisasi profil di-reset ke default!' });
-            }
-
             // VIEW (default)
             const targetUser = interaction.options.getUser('user') || interaction.user, targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
             if (!targetMember) return interaction.reply({content: 'User tidak ditemukan.', ephemeral: true});
@@ -1564,27 +1486,24 @@ client.on(Events.InteractionCreate, async interaction => {
             const cfWins = getUserStat(guildId, targetUser.id, 'coinflip_wins');
             const harvests = getUserStat(guildId, targetUser.id, 'total_harvests');
 
-            // Apply customization
-            const custom = getProfileCustom(guildId, targetUser.id);
-            const titleObj = PROFILE_TITLES.find(t => t.id === custom.title);
-            const titleStr = titleObj ? titleObj.name : '🌱 Newbie';
-            const frameObj = PROFILE_FRAMES.find(f => f.id === custom.frame) || PROFILE_FRAMES[0];
-            const bannerHex = custom.banner_color || '#2B2D31';
-            const bioStr = custom.bio ? `📝 *"${custom.bio}"*\n\n` : '';
+            // Pet info for profile
+            const activePet = getPetData(guildId, targetUser.id);
+            const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level}) — *${pd.tier}*` : ''; })() : '*Belum punya pet*';
 
             const profileEmbed = new EmbedBuilder()
                 .setAuthor({ name: `Kartu Profil | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
-                .setColor(bannerHex)
+                .setColor('#2B2D31')
                 .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
-                .setDescription(`${frameObj.top}\n**${titleStr}**\n${frameObj.bottom}\n\n${bioStr}`)
+                .setDescription(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
                 .addFields(
                     { name: '📊 STATISTIK UTAMA', value: `> 🏅 **Level** \`${tData.level}\` — 💰 **Saldo** \`${tData.balance.toLocaleString('id-ID')}\` — ${streakEmoji} **Streak** \`${streakCount} Hari\`\n> \n> ✨ **Progress EXP**\n> \`${progressBar}\` **${percent}%** (\`${tData.xp.toLocaleString('id-ID')}/${targetXp.toLocaleString('id-ID')}\`)`, inline: false },
                     { name: `🏆 BADGE COLLECTION (${totalBadges}/${ACHIEVEMENTS.length})`, value: badgeDisplay, inline: false },
                     { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan: **${fishCaught}** — 🎰 Slot: **${slotWins}** — 🪙 CF: **${cfWins}** — 🌾 Panen: **${harvests}**`, inline: false },
+                    { name: '🐾 PET', value: `> ${petInfo}`, inline: false },
                     { name: '📅 INFO AKUN', value: `> 📥 Bergabung: <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D> — 📆 Dibuat: <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
                     { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
                 )
-                .setFooter({ text: `${frameObj.bottom}\nID: ${targetUser.id} | /profile shop untuk dekorasi`, iconURL: interaction.guild.iconURL() })
+                .setFooter({ text: `ID: ${targetUser.id} | /achievement untuk badge | /pet info untuk pet`, iconURL: interaction.guild.iconURL() })
                 .setTimestamp();
             return interaction.reply({ embeds: [profileEmbed] });
         }
@@ -2147,6 +2066,156 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
+        // ================= PET COMMANDS =================
+        if (command === 'pet') {
+            if (subCmd === 'info') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet! Gunakan `/pet adopt` atau `/pet egg`.', ephemeral: true });
+                const petDef = PET_DATA.find(p => p.id === pet.petId);
+                const expNeeded = pet.level <= 5 ? 50 : pet.level <= 10 ? 100 : pet.level <= 15 ? 200 : pet.level <= 20 ? 400 : pet.level <= 25 ? 600 : 1000;
+                const happyBar = '▰'.repeat(Math.floor(pet.happiness / 10)) + '▱'.repeat(10 - Math.floor(pet.happiness / 10));
+                const hungerBar = '▰'.repeat(Math.floor(pet.hunger / 10)) + '▱'.repeat(10 - Math.floor(pet.hunger / 10));
+                const expBar = '▰'.repeat(Math.min(10, Math.floor((pet.exp / expNeeded) * 10))) + '▱'.repeat(10 - Math.min(10, Math.floor((pet.exp / expNeeded) * 10)));
+                const statusEmoji = pet.status === 'sick' ? '🤒 Sakit!' : pet.happiness >= 70 ? '😊 Bahagia!' : pet.happiness >= 30 ? '😐 Biasa' : '😢 Sedih';
+                const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
+                const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
+                const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
+                const embed = new EmbedBuilder()
+                    .setTitle(`${petDef.emoji} ${pet.name} (Level ${pet.level})`)
+                    .setColor(bonusActive ? '#2ECC71' : '#E74C3C')
+                    .setDescription(`**${petDef.name}** — *${petDef.tier}*\n\n> ❤️ Happiness: \`${happyBar}\` **${pet.happiness}%**\n> 🍖 Hunger: \`${hungerBar}\` **${pet.hunger}%**\n> ✨ EXP: \`${expBar}\` **${pet.exp}/${expNeeded}**\n> 💪 Status: ${statusEmoji}\n\n🎁 **Passive Bonus** ${bonusActive ? '(AKTIF ✅)' : '(MATI ❌)'}:\n> +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')}${!bonusActive ? '\n> ⚠️ *Happiness/Hunger terlalu rendah atau pet sakit!*' : ''}`)
+                    .setFooter({ text: '/pet feed — makan | /pet play — main | Hunger/Happy turun seiring waktu' });
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subCmd === 'adopt') {
+                const petId = interaction.options.getString('pet');
+                const petDef = PET_DATA.find(p => p.id === petId);
+                if (!petDef) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
+                if (petDef.price <= 0) return interaction.reply({ content: '❌ Pet ini tidak bisa dibeli! Hanya dari Pet Egg.', ephemeral: true });
+                if (userData.balance < petDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${petDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
+                const allPets = getAllPets(guildId, interaction.user.id);
+                if (allPets.length >= 10) return interaction.reply({ content: '❌ Kamu sudah punya 10 pet (max)! Lepaskan salah satu dengan `/pet release`.', ephemeral: true });
+                userData.balance -= petDef.price;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                const isFirst = allPets.length === 0 ? 1 : 0;
+                db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, petId, petDef.name, isFirst, Date.now());
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🐾 Pet Adopted!').setDescription(`Kamu mengadopsi ${petDef.emoji} **${petDef.name}**!\n\n> Tier: **${petDef.tier}**\n> Bonus: +${petDef.bonus.value}% ${petDef.bonus.type.replace(/_/g, ' ')}\n\n${isFirst ? '✅ Pet ini langsung menjadi pet aktifmu!' : 'Gunakan `/pet swap` untuk mengaktifkan.'}`)] });
+            }
+
+            if (subCmd === 'feed') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const foodId = interaction.options.getString('food');
+                const food = PET_FOODS.find(f => f.id === foodId);
+                if (!food) return interaction.reply({ content: '❌ Makanan tidak ditemukan!', ephemeral: true });
+                if (userData.balance < food.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${food.price}**`, ephemeral: true });
+                userData.balance -= food.price;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                const newHunger = Math.min(100, pet.hunger + food.hunger);
+                const newHappy = Math.min(100, pet.happiness + food.happiness);
+                const newExp = pet.exp + 5;
+                const newStatus = pet.status === 'sick' && newHunger > 50 ? 'happy' : pet.status;
+                db.prepare('UPDATE pets SET hunger = ?, happiness = ?, exp = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newExp, newStatus, pet.id);
+                const petDef = PET_DATA.find(p => p.id === pet.petId);
+                return interaction.reply({ content: `${food.emoji} **${pet.name}** makan ${food.name}!\n\n> 🍖 Hunger: ${pet.hunger}% → **${newHunger}%**\n> ❤️ Happy: ${pet.happiness}% → **${newHappy}%**\n> ✨ +5 EXP` });
+            }
+
+            if (subCmd === 'play') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const playCdKey = `pet_play_${guildId}_${interaction.user.id}`;
+                if (fishCooldowns.has(playCdKey) && Date.now() < fishCooldowns.get(playCdKey)) { const rem = Math.ceil((fishCooldowns.get(playCdKey) - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih capek! Tunggu **${rem} menit** lagi.`, ephemeral: true }); }
+                fishCooldowns.set(playCdKey, Date.now() + 1800000);
+                const newHappy = Math.min(100, pet.happiness + 20);
+                const newHunger = Math.max(0, pet.hunger - 5);
+                const newExp = pet.exp + 10;
+                db.prepare('UPDATE pets SET happiness = ?, hunger = ?, exp = ? WHERE id = ?').run(newHappy, newHunger, newExp, pet.id);
+                // Check level up
+                const expNeeded = pet.level <= 5 ? 50 : pet.level <= 10 ? 100 : pet.level <= 15 ? 200 : pet.level <= 20 ? 400 : pet.level <= 25 ? 600 : 1000;
+                let lvlUpMsg = '';
+                if (newExp >= expNeeded && pet.level < 30) {
+                    db.prepare('UPDATE pets SET level = level + 1, exp = 0 WHERE id = ?').run(pet.id);
+                    lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${pet.name} naik ke Level ${pet.level + 1}!`;
+                }
+                const activities = ['bermain kejar-kejaran', 'bermain bola', 'bermain petak umpet', 'berguling-guling', 'melompat-lompat'];
+                const activity = activities[Math.floor(Math.random() * activities.length)];
+                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +20 → **${newHappy}%**\n> 🍖 Hunger: -5 → **${newHunger}%**\n> ✨ +10 EXP${lvlUpMsg}` });
+            }
+
+            if (subCmd === 'shop') {
+                let desc = '**🍖 MAKANAN PET**\n\n';
+                PET_FOODS.forEach(f => { desc += `> ${f.emoji} **${f.name}** — 🪙 ${f.price}\n> Hunger +${f.hunger} | Happy +${f.happiness}\n\n`; });
+                desc += '━━━━━━━━━━━━━━━━━━━━━━\n**🥚 PET EGGS (Gacha)**\n\n';
+                PET_EGGS.forEach(e => { const rates = Object.entries(e.rates).map(([t, r]) => `${t}: ${r}%`).join(', '); desc += `> ${e.emoji} **${e.name}** — 🪙 ${e.price.toLocaleString('id-ID')}\n> Rates: ${rates}\n\n`; });
+                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🐾 Pet Shop').setColor('#FF69B4').setDescription(desc).setFooter({ text: '/pet feed <food> — beri makan | /pet egg <tipe> — buka egg | /pet adopt <pet> — beli pet' })] });
+            }
+
+            if (subCmd === 'egg') {
+                const eggId = interaction.options.getString('tipe');
+                const egg = PET_EGGS.find(e => e.id === eggId);
+                if (!egg) return interaction.reply({ content: '❌ Egg tidak ditemukan!', ephemeral: true });
+                if (userData.balance < egg.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${egg.price.toLocaleString('id-ID')}**`, ephemeral: true });
+                const allPets = getAllPets(guildId, interaction.user.id);
+                if (allPets.length >= 10) return interaction.reply({ content: '❌ Slot pet penuh (max 10)! Lepaskan salah satu.', ephemeral: true });
+                userData.balance -= egg.price;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                // Roll tier
+                let roll = Math.random() * 100, cumulative = 0, selectedTier = 'Common';
+                for (const [tier, rate] of Object.entries(egg.rates)) { cumulative += rate; if (roll <= cumulative) { selectedTier = tier; break; } }
+                // Pick random pet from tier
+                const tierPets = PET_DATA.filter(p => p.tier === selectedTier);
+                const wonPet = tierPets[Math.floor(Math.random() * tierPets.length)];
+                const isFirst = allPets.length === 0 ? 1 : 0;
+                db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, wonPet.id, wonPet.name, isFirst, Date.now());
+                const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B' };
+                let title = `${egg.emoji} Egg Hatched!`;
+                if (selectedTier === 'Mythic') title = '🌟✨ MYTHIC PET!!! ✨🌟';
+                else if (selectedTier === 'Legendary') title = '⭐ LEGENDARY PET! ⭐';
+                else if (selectedTier === 'Epic') title = '💜 EPIC PET! 💜';
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor(tierColors[selectedTier] || '#2B2D31').setTitle(title).setDescription(`Kamu mendapatkan:\n\n${wonPet.emoji} **${wonPet.name}**\n> Tier: **${selectedTier}**\n> Bonus: +${wonPet.bonus.value}% ${wonPet.bonus.type.replace(/_/g, ' ')}\n\n${isFirst ? '✅ Langsung aktif!' : 'Gunakan `/pet swap` untuk mengaktifkan.'}`)] });
+            }
+
+            if (subCmd === 'collection') {
+                const allPets = getAllPets(guildId, interaction.user.id);
+                if (allPets.length === 0) return interaction.reply({ content: '🐾 Kamu belum punya pet! `/pet adopt` atau `/pet egg` untuk mulai.', ephemeral: true });
+                let desc = `🐾 **Pet Collection** (${allPets.length}/10 slot)\n\n`;
+                const tierOrder = ['Mythic', 'Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
+                const sorted = allPets.sort((a, b) => { const ta = tierOrder.indexOf(PET_DATA.find(p => p.id === a.petId)?.tier || 'Common'); const tb = tierOrder.indexOf(PET_DATA.find(p => p.id === b.petId)?.tier || 'Common'); return ta - tb; });
+                sorted.forEach(pet => { const def = PET_DATA.find(p => p.id === pet.petId); desc += `${pet.active ? '⭐' : '▪️'} **#${pet.id}** ${def ? def.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) — *${def ? def.tier : '?'}*\n`; });
+                desc += `\n> ⭐ = Pet Aktif | /pet swap <id> untuk ganti`;
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🐾 Pet Collection').setColor('#FF69B4').setDescription(desc)] });
+            }
+
+            if (subCmd === 'swap') {
+                const petDbId = interaction.options.getInteger('id');
+                const targetPet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petDbId, guildId, interaction.user.id);
+                if (!targetPet) return interaction.reply({ content: '❌ Pet tidak ditemukan! Cek ID di `/pet collection`.', ephemeral: true });
+                db.prepare('UPDATE pets SET active = 0 WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id);
+                db.prepare('UPDATE pets SET active = 1 WHERE id = ?').run(petDbId);
+                const def = PET_DATA.find(p => p.id === targetPet.petId);
+                return interaction.reply({ content: `✅ Pet aktif diganti ke ${def ? def.emoji : '🐾'} **${targetPet.name}**!` });
+            }
+
+            if (subCmd === 'rename') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+                const newName = interaction.options.getString('nama');
+                db.prepare('UPDATE pets SET name = ? WHERE id = ?').run(newName, pet.id);
+                return interaction.reply({ content: `✅ Nama pet diubah menjadi **${newName}**!` });
+            }
+
+            if (subCmd === 'release') {
+                const petDbId = interaction.options.getInteger('id');
+                const targetPet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petDbId, guildId, interaction.user.id);
+                if (!targetPet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
+                db.prepare('DELETE FROM pets WHERE id = ?').run(petDbId);
+                const def = PET_DATA.find(p => p.id === targetPet.petId);
+                return interaction.reply({ content: `👋 ${def ? def.emoji : '🐾'} **${targetPet.name}** telah dilepaskan... Selamat tinggal! 😢` });
+            }
+        }
+
         if (command === 'admin_shop') { if (!isAdmin) return interaction.reply({content: '❌ Admin Only', ephemeral: true}); if (subCmd === 'add_item') { const nama = interaction.options.getString('nama'), harga = interaction.options.getInteger('harga'), isi = interaction.options.getString('isi').replace(/\\n/g, '\n'), jumlah = interaction.options.getInteger('jumlah') || 1; const stmt = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)'); for (let i = 0; i < jumlah; i++) stmt.run(guildId, nama, harga, isi); return interaction.reply(`✅ **${jumlah} stok** barang **${nama}** ditambah.`); } if (subCmd === 'add_role') { db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, interaction.options.getRole('role').id, interaction.options.getInteger('harga')); return interaction.reply(`✅ Role ditambah.`); } if (subCmd === 'set_custom_role') { const harga = interaction.options.getInteger('harga'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', harga.toString()); if (harga <= 0) return interaction.reply('🛑 Custom Role dimatikan.'); return interaction.reply(`✅ Harga Custom Role: 🪙 **${harga.toLocaleString('id-ID')}**.`); } if (subCmd === 'voucher_add') { const code = interaction.options.getString('kode').toUpperCase(), reward = interaction.options.getInteger('reward'), limit = interaction.options.getInteger('limit'); db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit); return interaction.reply(`🎟️ Voucher \`${code}\` dibuat!`); } if (subCmd === 'set_testimoni') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'testimoni_channel', interaction.options.getChannel('channel').id); return interaction.reply(`✅ Testimoni diatur!`); } if (subCmd === 'history') { const logs = db.prepare('SELECT * FROM logs WHERE guildId = ? ORDER BY time DESC LIMIT ?').all(guildId, Math.min(interaction.options.getInteger('jumlah') || 10, 50)); if (logs.length === 0) return interaction.reply('Kosong.'); let logTxt = '📜 **RIWAYAT TRANSAKSI**\n\n'; logs.forEach(l => { logTxt += `\`[${new Date(l.time).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}]\` <@${l.userId}> beli **${l.item}** (🪙 ${l.price.toLocaleString('id-ID')})\n`; }); return interaction.reply({ embeds: [new EmbedBuilder().setDescription(logTxt).setColor('#2B2D31')], allowedMentions: {users: []} }); } }
 
         if (command === 'shop') {
@@ -2265,22 +2334,6 @@ client.on(Events.InteractionCreate, async interaction => {
             db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
             return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Gunakan \`/farm pupuk\` untuk memilih tanaman spesifik!*` });
-        }
-        // --- PROFILE SHOP HANDLERS ---
-        if (interaction.customId === 'profile_buy_title' || interaction.customId === 'profile_buy_banner' || interaction.customId === 'profile_buy_frame') {
-            const itemType = interaction.customId === 'profile_buy_title' ? 'title' : interaction.customId === 'profile_buy_banner' ? 'banner' : 'frame';
-            const itemId = interaction.values[0];
-            const userData = getOrCreateUser(guildId, interaction.user.id);
-            const dataArr = itemType === 'title' ? PROFILE_TITLES : itemType === 'banner' ? PROFILE_BANNERS : PROFILE_FRAMES;
-            const itemDef = dataArr.find(x => x.id === itemId);
-            if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
-            if (ownsProfileItem(guildId, interaction.user.id, itemType, itemId)) return interaction.reply({ content: '❌ Kamu sudah punya item ini!', ephemeral: true });
-            if (userData.balance < itemDef.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.cost.toLocaleString('id-ID')}**`, ephemeral: true });
-            userData.balance -= itemDef.cost;
-            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-            addProfileItem(guildId, interaction.user.id, itemType, itemId);
-            const itemName = itemType === 'banner' ? `${itemDef.emoji} ${itemDef.name}` : itemDef.name;
-            return interaction.reply({ content: `✅ Berhasil membeli **${itemName}**!\n> Pasang dengan \`/profile set-${itemType === 'banner' ? 'banner' : itemType}\`` });
         }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); price = parseInt(parts.pop()); itemName = parts.join('_'); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, price); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** — 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjutkan pembelian?`, components: [row], ephemeral: true }); }
     }
