@@ -959,44 +959,39 @@ client.on(Events.InteractionCreate, async interaction => {
             const categories = [...new Set(ACHIEVEMENTS.map(a => a.category))];
             const totalUnlocked = unlockedIds.length, totalAll = ACHIEVEMENTS.length;
             const percentComplete = Math.floor((totalUnlocked / totalAll) * 100);
-            const completionBar = '▰'.repeat(Math.floor(percentComplete / 10)) + '▱'.repeat(10 - Math.floor(percentComplete / 10));
 
-            let desc = `> 🏆 **${totalUnlocked}** / **${totalAll}** badge terkumpul (**${percentComplete}%**)\n> \`${completionBar}\`\n\n`;
+            let desc = `> 🏆 **${totalUnlocked}** / **${totalAll}** badge terkumpul (**${percentComplete}%**)\n\n`;
 
             for (const cat of categories) {
                 const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
                 const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
                 const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
-                // Show emoji+name for unlocked, locked symbol for locked
-                const catLine = catAchs.map(a => {
-                    if (unlockedIds.includes(a.id)) return `${a.emoji}`;
-                    return '▪️';
-                }).join(' ');
-                desc += `${catIcon} **${cat}** — \`${catUnlocked}/${catAchs.length}\`\n${catLine}\n\n`;
+                desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
+                catAchs.forEach(a => {
+                    if (unlockedIds.includes(a.id)) {
+                        desc += `> ${a.emoji} ${a.name}\n`;
+                    } else {
+                        desc += `> ▪️ ???\n`;
+                    }
+                });
+                desc += '\n';
             }
 
-            // Show 3 most recent unlocked with text
-            const recentAchs = userAchs.sort((a, b) => b.unlockedAt - a.unlockedAt).slice(0, 3);
-            if (recentAchs.length > 0) {
-                desc += `━━━━━━━━━━━━━━━━━━━━━━\n📌 **Badge Terbaru:**\n`;
-                for (const ach of recentAchs) {
-                    const def = ACHIEVEMENTS.find(d => d.id === ach.achievementId);
-                    if (def) desc += `> ${def.emoji} **${def.name}** — *${def.desc}*\n`;
-                }
-            }
+            // Discord embed 4096 char limit
+            if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n\n*...dan lainnya*';
 
             const embed = new EmbedBuilder()
                 .setAuthor({ name: `Achievement Collection | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
                 .setColor('#FFD700')
                 .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
                 .setDescription(desc)
-                .setFooter({ text: 'Pilih kategori di bawah untuk melihat detail lengkap setiap badge' })
+                .setFooter({ text: 'Pilih kategori di bawah untuk melihat detail + reward' })
                 .setTimestamp();
             const selectMenu = new StringSelectMenuBuilder().setCustomId(`ach_detail_${targetUser.id}`).setPlaceholder('📂 Lihat detail per kategori...').addOptions(categories.map(cat => {
                 const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
                 const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
                 const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-                return new StringSelectMenuOptionBuilder().setLabel(`${cat} (${catUnlocked}/${catAchs.length})`).setValue(cat).setDescription(`Lihat semua achievement ${cat}`).setEmoji(catIcon);
+                return new StringSelectMenuOptionBuilder().setLabel(`${cat} (${catUnlocked}/${catAchs.length})`).setValue(cat).setDescription(`Lihat detail achievement ${cat}`);
             }));
             return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)] });
         }
@@ -1071,6 +1066,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
         // ================= SLOT MACHINE =================
         if (command === 'slot') {
+            const slotCdKey = `slot_${guildId}_${interaction.user.id}`;
+            if (fishCooldowns.has(slotCdKey) && Date.now() < fishCooldowns.get(slotCdKey)) { const remaining = Math.ceil((fishCooldowns.get(slotCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Mesin slot masih panas! Tunggu **${remaining} detik**.`, ephemeral: true }); }
+            fishCooldowns.set(slotCdKey, Date.now() + 5000);
             const bet = interaction.options.getInteger('taruhan');
             if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
             userData.balance -= bet;
@@ -1103,6 +1101,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
         // ================= GIFT / TRANSFER =================
         if (command === 'gift') {
+            const giftCdKey = `gift_${guildId}_${interaction.user.id}`;
+            if (fishCooldowns.has(giftCdKey) && Date.now() < fishCooldowns.get(giftCdKey)) { const remaining = Math.ceil((fishCooldowns.get(giftCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Tunggu **${remaining} detik** sebelum kirim gift lagi.`, ephemeral: true }); }
+            fishCooldowns.set(giftCdKey, Date.now() + 10000);
             const targetUser = interaction.options.getUser('user');
             const amount = interaction.options.getInteger('jumlah');
             if (targetUser.id === interaction.user.id) return interaction.reply({ content: '❌ Tidak bisa kirim ke diri sendiri!', ephemeral: true });
@@ -1173,6 +1174,9 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         if (command === 'use') {
+            const useCdKey = `use_${guildId}_${interaction.user.id}`;
+            if (fishCooldowns.has(useCdKey) && Date.now() < fishCooldowns.get(useCdKey)) { return interaction.reply({ content: `⏳ Tunggu sebentar sebelum menggunakan item lagi.`, ephemeral: true }); }
+            fishCooldowns.set(useCdKey, Date.now() + 3000);
             const itemId = interaction.options.getString('item');
             const itemDef = ITEMS.find(i => i.id === itemId);
             if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
@@ -1253,6 +1257,9 @@ client.on(Events.InteractionCreate, async interaction => {
                 return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: `Saldo: ${userData.balance.toLocaleString('id-ID')} money` })], components: componentsShop });
             }
             if (subCmd === 'sell') {
+                const sellCdKey = `sell_${guildId}_${interaction.user.id}`;
+                if (fishCooldowns.has(sellCdKey) && Date.now() < fishCooldowns.get(sellCdKey)) { return interaction.reply({ content: `⏳ Tunggu sebentar sebelum menjual lagi.`, ephemeral: true }); }
+                fishCooldowns.set(sellCdKey, Date.now() + 10000);
                 const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').all(guildId, interaction.user.id);
                 if (inventory.length === 0) return interaction.reply({ content: '❌ Tidak ada ikan yang bisa dijual! (Ikan yang di-lock tidak terjual)', ephemeral: true });
                 let totalValue = 0, countByTier = {};
