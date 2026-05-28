@@ -33,6 +33,11 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId 
 // ================= MIGRASI: TABEL ITEM INVENTORY =================
 db.exec(`CREATE TABLE IF NOT EXISTS item_inventory (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 
+// ================= MIGRASI: FARMING SYSTEM =================
+db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing')`);
+db.exec(`CREATE TABLE IF NOT EXISTS farm_storage (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_level INTEGER DEFAULT 1, PRIMARY KEY(guildId, userId))`);
+
 
 function getOrCreateUser(guildId, userId) { let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); } return user; }
 function getConf(guildId, key, defaultVal) { const row = db.prepare('SELECT value FROM config WHERE guildId = ? AND key = ?').get(guildId, key); return row ? row.value : defaultVal; }
@@ -206,6 +211,93 @@ function removeItem(guildId, userId, itemId, qty = 1) {
     else db.prepare('UPDATE item_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(current - qty, guildId, userId, itemId);
     return true;
 }
+
+// ================= SISTEM FARMING =================
+const FARM_LEVELS = [
+    { level: 1, name: '🌱 Pemula', slots: 3, cost: 0 },
+    { level: 2, name: '🌿 Petani', slots: 5, cost: 5000 },
+    { level: 3, name: '🌳 Farmer Pro', slots: 8, cost: 15000 },
+    { level: 4, name: '🏡 Tuan Tanah', slots: 12, cost: 40000 },
+    { level: 5, name: '🏰 Juragan', slots: 16, cost: 100000 },
+    { level: 6, name: '👑 Raja Pertanian', slots: 20, cost: 250000 }
+];
+
+const FARM_CROPS = [
+    // COMMON (10-20 menit)
+    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 30, time: 10, minYield: 2, maxYield: 4, sellPrice: 20 },
+    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 40, time: 15, minYield: 2, maxYield: 3, sellPrice: 25 },
+    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 30, time: 10, minYield: 3, maxYield: 5, sellPrice: 15 },
+    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 50, time: 20, minYield: 2, maxYield: 4, sellPrice: 25 },
+    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 35, time: 15, minYield: 2, maxYield: 4, sellPrice: 20 },
+    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 40, time: 20, minYield: 2, maxYield: 3, sellPrice: 25 },
+    // UNCOMMON (45-90 menit)
+    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 100, time: 45, minYield: 2, maxYield: 4, sellPrice: 40 },
+    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 80, time: 45, minYield: 3, maxYield: 5, sellPrice: 30 },
+    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 120, time: 60, minYield: 2, maxYield: 3, sellPrice: 50 },
+    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 150, time: 90, minYield: 2, maxYield: 4, sellPrice: 60 },
+    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 90, time: 50, minYield: 3, maxYield: 5, sellPrice: 30 },
+    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 110, time: 60, minYield: 2, maxYield: 3, sellPrice: 50 },
+    // RARE (2-3 jam)
+    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 300, time: 120, minYield: 2, maxYield: 4, sellPrice: 80 },
+    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 350, time: 150, minYield: 1, maxYield: 2, sellPrice: 200 },
+    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 400, time: 150, minYield: 2, maxYield: 3, sellPrice: 120 },
+    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 350, time: 180, minYield: 2, maxYield: 3, sellPrice: 100 },
+    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 300, time: 120, minYield: 2, maxYield: 4, sellPrice: 90 },
+    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 500, time: 180, minYield: 1, maxYield: 3, sellPrice: 200 },
+    // EPIC (5-8 jam)
+    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 800, time: 300, minYield: 2, maxYield: 4, sellPrice: 200 },
+    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 1000, time: 360, minYield: 2, maxYield: 3, sellPrice: 300 },
+    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 1200, time: 420, minYield: 1, maxYield: 3, sellPrice: 500 },
+    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1500, time: 360, minYield: 1, maxYield: 2, sellPrice: 600 },
+    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 1000, time: 300, minYield: 2, maxYield: 3, sellPrice: 350 },
+    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 900, time: 300, minYield: 2, maxYield: 3, sellPrice: 250 },
+    // LEGENDARY (12-18 jam)
+    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 5000, time: 720, minYield: 1, maxYield: 2, sellPrice: 2000 },
+    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 4000, time: 720, minYield: 1, maxYield: 2, sellPrice: 1500 },
+    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 6000, time: 900, minYield: 1, maxYield: 1, sellPrice: 2500 },
+    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 5000, time: 780, minYield: 1, maxYield: 2, sellPrice: 2000 },
+    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 7000, time: 1080, minYield: 1, maxYield: 1, sellPrice: 3000 },
+    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 4500, time: 720, minYield: 1, maxYield: 2, sellPrice: 1800 }
+];
+
+const FARM_RECIPES = [
+    { id: 'roti', name: 'Roti', emoji: '🍞', ingredients: [{id:'gandum',qty:3}], sellPrice: 200 },
+    { id: 'salad', name: 'Salad', emoji: '🥗', ingredients: [{id:'bayam',qty:2},{id:'tomat',qty:1}], sellPrice: 350 },
+    { id: 'kentang_goreng', name: 'Kentang Goreng', emoji: '🍟', ingredients: [{id:'kentang',qty:3}], sellPrice: 250 },
+    { id: 'popcorn', name: 'Popcorn', emoji: '🍿', ingredients: [{id:'jagung',qty:4}], sellPrice: 400 },
+    { id: 'kue', name: 'Kue Strawberry', emoji: '🍰', ingredients: [{id:'gandum',qty:2},{id:'strawberry',qty:2}], sellPrice: 700 },
+    { id: 'sup', name: 'Sup Sayur', emoji: '🫕', ingredients: [{id:'wortel',qty:2},{id:'kentang',qty:2},{id:'bawang_putih',qty:1}], sellPrice: 500 },
+    { id: 'sambal', name: 'Sambal', emoji: '🌶️', ingredients: [{id:'cabai',qty:4},{id:'bawang_merah',qty:2}], sellPrice: 800 },
+    { id: 'wine', name: 'Wine', emoji: '🍷', ingredients: [{id:'anggur',qty:5}], sellPrice: 2500 },
+    { id: 'kopi_premium', name: 'Kopi Premium', emoji: '☕', ingredients: [{id:'kopi',qty:3},{id:'madu',qty:1}], sellPrice: 3000 },
+    { id: 'cokelat', name: 'Cokelat Mewah', emoji: '🍫', ingredients: [{id:'kakao',qty:3},{id:'strawberry',qty:2}], sellPrice: 2200 },
+    { id: 'buket', name: 'Buket Bunga', emoji: '💐', ingredients: [{id:'mawar',qty:2},{id:'sakura',qty:1},{id:'hibiscus',qty:1}], sellPrice: 4500 },
+    { id: 'parfum', name: 'Parfum Sakura', emoji: '🧴', ingredients: [{id:'sakura',qty:2},{id:'mawar',qty:2}], sellPrice: 6000 },
+    { id: 'minyak_zaitun', name: 'Minyak Zaitun', emoji: '🫒', ingredients: [{id:'zaitun',qty:3}], sellPrice: 5500 },
+    { id: 'ramuan', name: 'Ramuan Ajaib', emoji: '🧪', ingredients: [{id:'mystic_herb',qty:1},{id:'crystal_flower',qty:1}], sellPrice: 14000 },
+    { id: 'essence_naga', name: 'Essence Naga', emoji: '🐉', ingredients: [{id:'dragon_fruit_crop',qty:2},{id:'ice_berry',qty:1}], sellPrice: 18000 },
+    { id: 'elixir', name: 'Elixir of Life', emoji: '✨', ingredients: [{id:'mystic_herb',qty:1},{id:'lotus',qty:1},{id:'ice_berry',qty:1}], sellPrice: 22000 }
+];
+
+const FARM_FERTILIZERS = [
+    { id: 'none', name: 'Tanpa Pupuk', emoji: '❌', cost: 0, speedBonus: 0, yieldBonus: 0 },
+    { id: 'pupuk_biasa', name: 'Pupuk Biasa', emoji: '💩', cost: 50, speedBonus: 0.20, yieldBonus: 0 },
+    { id: 'pupuk_premium', name: 'Pupuk Premium', emoji: '✨', cost: 200, speedBonus: 0.40, yieldBonus: 0.20 },
+    { id: 'pupuk_ajaib', name: 'Pupuk Ajaib', emoji: '🧪', cost: 500, speedBonus: 0.60, yieldBonus: 0.30 },
+    { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '🌟', cost: 1500, speedBonus: 0.50, yieldBonus: 0.50 }
+];
+
+function getFarmData(guildId, userId) {
+    let data = db.prepare('SELECT * FROM farm_data WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!data) { db.prepare('INSERT INTO farm_data (guildId, userId) VALUES (?, ?)').run(guildId, userId); data = { farm_level: 1 }; }
+    return data;
+}
+function getFarmSlots(guildId, userId) { const data = getFarmData(guildId, userId); return FARM_LEVELS.find(l => l.level === data.farm_level)?.slots || 3; }
+function getPlots(guildId, userId) { return db.prepare('SELECT * FROM farm_plots WHERE guildId = ? AND userId = ?').all(guildId, userId); }
+function getStorage(guildId, userId) { return db.prepare('SELECT * FROM farm_storage WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId); }
+function addStorage(guildId, userId, itemId, qty) { const current = db.prepare('SELECT quantity FROM farm_storage WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId); if (current) db.prepare('UPDATE farm_storage SET quantity = quantity + ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(qty, guildId, userId, itemId); else db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, itemId, qty); }
+function removeStorage(guildId, userId, itemId, qty) { const current = db.prepare('SELECT quantity FROM farm_storage WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId); if (!current || current.quantity < qty) return false; if (current.quantity - qty <= 0) db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, itemId); else db.prepare('UPDATE farm_storage SET quantity = quantity - ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(qty, guildId, userId, itemId); return true; }
+function getStorageQty(guildId, userId, itemId) { const r = db.prepare('SELECT quantity FROM farm_storage WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId); return r ? r.quantity : 0; }
 
 const fishCooldowns = new Map();
 
@@ -758,6 +850,18 @@ const commands = [
     new SlashCommandBuilder().setName('achievement').setDescription('Lihat koleksi badge/achievement kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)),
     new SlashCommandBuilder().setName('inventory').setDescription('🎒 Lihat item yang kamu punya'),
     new SlashCommandBuilder().setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)),
+    new SlashCommandBuilder()
+        .setName('farm')
+        .setDescription('🌾 Sistem Farming / Kebun')
+        .addSubcommand(sub => sub.setName('status').setDescription('Lihat status kebun'))
+        .addSubcommand(sub => sub.setName('plant').setDescription('Tanam bibit').addStringOption(opt => opt.setName('bibit').setDescription('Pilih bibit').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('water').setDescription('Siram semua tanaman'))
+        .addSubcommand(sub => sub.setName('harvest').setDescription('Panen semua yang sudah matang'))
+        .addSubcommand(sub => sub.setName('shop').setDescription('Beli bibit & pupuk'))
+        .addSubcommand(sub => sub.setName('sell').setDescription('Jual semua hasil panen di storage'))
+        .addSubcommand(sub => sub.setName('upgrade').setDescription('Upgrade lahan (tambah slot)'))
+        .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen')),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -971,7 +1075,7 @@ client.on(Events.InteractionCreate, async interaction => {
         return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
     }
 
-    // Autocomplete handler for /use
+    // Autocomplete handler for /use and /farm
     if (interaction.isAutocomplete()) {
         if (interaction.commandName === 'use') {
             const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, interaction.user.id);
@@ -979,8 +1083,19 @@ client.on(Events.InteractionCreate, async interaction => {
                 const def = ITEMS.find(i => i.id === inv.itemId);
                 if (!def) return null;
                 return { name: `${def.emoji} ${def.name} (x${inv.quantity})`, value: def.id };
-            }).filter(Boolean).slice(0, 25); // Discord max 25 choices
+            }).filter(Boolean).slice(0, 25);
             return interaction.respond(choices);
+        }
+        if (interaction.commandName === 'farm') {
+            const focused = interaction.options.getFocused(true);
+            if (focused.name === 'bibit') {
+                const choices = FARM_CROPS.map(c => ({ name: `${c.emoji} ${c.name} (${c.tier}) — 🪙${c.cost} | ${c.time}m`, value: c.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
+            if (focused.name === 'resep') {
+                const choices = FARM_RECIPES.map(r => ({ name: `${r.emoji} ${r.name} — Jual: 🪙${r.sellPrice}`, value: r.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices);
+            }
         }
         return;
     }
@@ -1510,6 +1625,140 @@ client.on(Events.InteractionCreate, async interaction => {
                 db.prepare('UPDATE fish_inventory SET locked = 0 WHERE id = ?').run(fishDbId);
                 const fishDef = FISH_DATA.find(f => f.id === item.fishId);
                 return interaction.reply({ content: `🔓 **${fishDef ? fishDef.name : 'Ikan'}** berhasil di-unlock.` });
+            }
+        }
+
+        // ================= FARMING COMMANDS =================
+        if (command === 'farm') {
+            const farmData = getFarmData(guildId, interaction.user.id);
+            const maxSlots = getFarmSlots(guildId, interaction.user.id);
+            const plots = getPlots(guildId, interaction.user.id);
+
+            if (subCmd === 'status') {
+                const levelInfo = FARM_LEVELS.find(l => l.level === farmData.farm_level);
+                let desc = `${levelInfo.name} — Lahan **${plots.length}/${maxSlots}** terpakai\n\n`;
+                if (plots.length === 0) { desc += '*Kebun kosong! Gunakan `/farm plant` untuk menanam.*'; }
+                else {
+                    plots.forEach((plot, i) => {
+                        const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                        if (!crop) return;
+                        const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
+                        const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+                        const elapsed = Date.now() - plot.plantedAt;
+                        const needWater = (Date.now() - plot.wateredAt) > growTime * 0.6;
+                        let status = '';
+                        if (plot.status === 'dead') status = '☠️ Mati';
+                        else if (elapsed >= growTime) status = '✅ Siap Panen!';
+                        else if (needWater) status = '💧 Butuh Siram!';
+                        else { const pct = Math.min(100, Math.floor((elapsed / growTime) * 100)); status = `🌱 ${pct}%`; }
+                        desc += `**[${i+1}]** ${crop.emoji} ${crop.name} — ${status}${fert.id !== 'none' ? ` | ${fert.emoji}` : ''}\n`;
+                    });
+                }
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Kebun Kamu').setColor('#2ECC71').setDescription(desc).setFooter({ text: `/farm plant — tanam | /farm water — siram | /farm harvest — panen` })] });
+            }
+
+            if (subCmd === 'plant') {
+                if (plots.length >= maxSlots) return interaction.reply({ content: `❌ Lahan penuh! (${plots.length}/${maxSlots}) Upgrade lahan atau panen dulu.`, ephemeral: true });
+                const cropId = interaction.options.getString('bibit');
+                const crop = FARM_CROPS.find(c => c.id === cropId);
+                if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+                if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
+                userData.balance -= crop.cost;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, interaction.user.id, cropId, Date.now(), Date.now());
+                return interaction.reply({ content: `🌱 **${crop.emoji} ${crop.name}** ditanam! Siap panen dalam **${crop.time} menit**.\n> Jangan lupa siram dengan \`/farm water\`!` });
+            }
+
+            if (subCmd === 'water') {
+                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman untuk disiram!', ephemeral: true });
+                let watered = 0;
+                for (const plot of plots) { if (plot.status !== 'dead') { db.prepare('UPDATE farm_plots SET wateredAt = ? WHERE id = ?').run(Date.now(), plot.id); watered++; } }
+                return interaction.reply({ content: `💧 Berhasil menyiram **${watered} tanaman**! Tanaman kamu tumbuh dengan baik.` });
+            }
+
+            if (subCmd === 'harvest') {
+                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman!', ephemeral: true });
+                let harvested = 0, totalItems = 0, harvestDesc = '';
+                for (const plot of plots) {
+                    const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                    if (!crop) continue;
+                    const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
+                    const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+                    if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
+                        let qty = getRandomInt(crop.minYield, crop.maxYield);
+                        if (Math.random() < fert.yieldBonus) qty += getRandomInt(1, 2);
+                        addStorage(guildId, interaction.user.id, crop.id, qty);
+                        harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}\n`;
+                        harvested++; totalItems += qty;
+                        db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    }
+                }
+                if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman yang siap dipanen! Cek `/farm status`.', ephemeral: true });
+                incrementUserStat(guildId, interaction.user.id, 'total_harvests', harvested);
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.`)] });
+            }
+
+            if (subCmd === 'storage') {
+                const storage = getStorage(guildId, interaction.user.id);
+                if (storage.length === 0) return interaction.reply({ content: '📦 Gudang kosong! Panen dulu dengan `/farm harvest`.', ephemeral: true });
+                let desc = '';
+                storage.forEach(s => { const crop = FARM_CROPS.find(c => c.id === s.itemId); desc += `> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : s.itemId}** x${s.quantity}\n`; });
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📦 Farm Storage').setColor('#2B2D31').setDescription(desc).setFooter({ text: '/farm sell — jual semua | /farm craft — buat resep' })] });
+            }
+
+            if (subCmd === 'sell') {
+                const storage = getStorage(guildId, interaction.user.id);
+                if (storage.length === 0) return interaction.reply({ content: '❌ Gudang kosong!', ephemeral: true });
+                let totalMoney = 0, sellDesc = '';
+                for (const s of storage) { const crop = FARM_CROPS.find(c => c.id === s.itemId); const price = crop ? crop.sellPrice * s.quantity : 0; totalMoney += price; sellDesc += `> ${crop ? crop.emoji : '📦'} ${crop ? crop.name : '?'} x${s.quantity} = 🪙 ${price}\n`; }
+                userData.balance += totalMoney;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id);
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle('💰 Hasil Panen Terjual!').setDescription(`${sellDesc}\n**Total: 🪙 ${totalMoney.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
+            }
+
+            if (subCmd === 'upgrade') {
+                const nextLevel = FARM_LEVELS.find(l => l.level === farmData.farm_level + 1);
+                if (!nextLevel) return interaction.reply({ content: '👑 Lahan kamu sudah level maksimal!', ephemeral: true });
+                if (userData.balance < nextLevel.cost) return interaction.reply({ content: `❌ Butuh 🪙 **${nextLevel.cost.toLocaleString('id-ID')}** untuk upgrade ke ${nextLevel.name} (${nextLevel.slots} slot)`, ephemeral: true });
+                userData.balance -= nextLevel.cost;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(nextLevel.level, guildId, interaction.user.id);
+                return interaction.reply({ content: `🎉 **Lahan di-upgrade!**\n> ${nextLevel.name} — Sekarang punya **${nextLevel.slots} slot** tanam!` });
+            }
+
+            if (subCmd === 'craft') {
+                const recipeId = interaction.options.getString('resep');
+                const recipe = FARM_RECIPES.find(r => r.id === recipeId);
+                if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+                // Check bahan
+                for (const ing of recipe.ingredients) {
+                    const have = getStorageQty(guildId, interaction.user.id, ing.id);
+                    if (have < ing.qty) { const crop = FARM_CROPS.find(c => c.id === ing.id); return interaction.reply({ content: `❌ Bahan kurang! Butuh **${crop ? crop.emoji : ''} ${crop ? crop.name : ing.id}** x${ing.qty} (punya: ${have})`, ephemeral: true }); }
+                }
+                // Consume bahan
+                for (const ing of recipe.ingredients) { removeStorage(guildId, interaction.user.id, ing.id, ing.qty); }
+                // Tambah uang langsung (craft = jual produk)
+                userData.balance += recipe.sellPrice;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                incrementUserStat(guildId, interaction.user.id, 'total_crafts');
+                const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
+            }
+
+            if (subCmd === 'shop') {
+                const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+                let desc = '**🌱 BIBIT TANAMAN**\n\n';
+                for (const tier of tiers) {
+                    const crops = FARM_CROPS.filter(c => c.tier === tier);
+                    desc += `**${tier}** (${tier === 'Common' ? '10-20m' : tier === 'Uncommon' ? '45-90m' : tier === 'Rare' ? '2-3h' : tier === 'Epic' ? '5-8h' : '12-18h'})\n`;
+                    crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
+                    desc += '\n';
+                }
+                desc += '━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK**\n\n';
+                FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} — 🪙 ${f.cost} | ⏩ -${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus*100)}% hasil` : ''}\n`; });
+                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Gunakan /farm plant <bibit> untuk menanam' })] });
             }
         }
 
