@@ -41,6 +41,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_l
 // ================= MIGRASI: PET SYSTEM =================
 db.exec(`CREATE TABLE IF NOT EXISTS pets (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, petId TEXT, name TEXT, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, happiness INTEGER DEFAULT 100, hunger INTEGER DEFAULT 100, status TEXT DEFAULT 'happy', active INTEGER DEFAULT 0, adoptedAt INTEGER)`);
 
+// ================= MIGRASI: PET SKILLS & HUNT SYSTEM =================
+// (old pet_skills table kept for backward compat, no longer actively used)
+db.exec(`CREATE TABLE IF NOT EXISTS pet_skills (guildId TEXT, userId TEXT, petDbId INTEGER, skillId TEXT, unlockedAt INTEGER, PRIMARY KEY(guildId, userId, petDbId, skillId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS hunt_log (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, zoneId TEXT, result TEXT, loot INTEGER, petExp INTEGER, time INTEGER)`);
+
 
 function getOrCreateUser(guildId, userId) { let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); } return user; }
 function getConf(guildId, key, defaultVal) { const row = db.prepare('SELECT value FROM config WHERE guildId = ? AND key = ?').get(guildId, key); return row ? row.value : defaultVal; }
@@ -574,6 +579,93 @@ function getPetBonus(guildId, userId, bonusType) {
     return Math.floor(baseValue * lvlMult * 0.4);
 }
 
+// ================= SISTEM PET LEVEL + SKILL BUFF (STACKING) =================
+// EXP per level: Lv1-20: 80 | Lv21-50: 150 | Lv51-100: 300 | Lv101-200: 500
+function getPetExpNeeded(level) {
+    if (level <= 20) return 80;
+    if (level <= 50) return 150;
+    if (level <= 100) return 300;
+    return 500;
+}
+
+// Stacking Buffs: Lv20: +2% Money | Lv50: +2% XP | Lv100: +3% Fish | Lv200: +5% Farm
+function getPetStackBuff(guildId, userId, buffType) {
+    const pet = getPetData(guildId, userId);
+    if (!pet) return 0;
+    if (isPetHunting(guildId, userId)) return 0;
+    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return 0;
+    let bonus = 0;
+    if (buffType === 'money' && pet.level >= 20) bonus += 2;
+    if (buffType === 'xp' && pet.level >= 50) bonus += 2;
+    if (buffType === 'fish_luck' && pet.level >= 100) bonus += 3;
+    if (buffType === 'farm' && pet.level >= 200) bonus += 5;
+    return bonus;
+}
+
+// ================= SISTEM PET HUNT (AFK 30-60 MENIT) =================
+db.exec(`CREATE TABLE IF NOT EXISTS pet_hunts (guildId TEXT, userId TEXT, startTime INTEGER, duration INTEGER, PRIMARY KEY(guildId, userId))`);
+
+const PET_HUNT_ITEMS = [
+    { id: 'bone', name: 'Tulang Kecil', emoji: '🦴', chance: 30, value: 10 },
+    { id: 'feather', name: 'Bulu Burung', emoji: '🪶', chance: 25, value: 15 },
+    { id: 'herb', name: 'Herbal Liar', emoji: '🌿', chance: 20, value: 20 },
+    { id: 'gem_shard', name: 'Pecahan Permata', emoji: '💎', chance: 10, value: 50 },
+    { id: 'rare_pelt', name: 'Kulit Langka', emoji: '🧶', chance: 8, value: 80 },
+    { id: 'golden_acorn', name: 'Biji Emas', emoji: '🌰', chance: 5, value: 150 },
+    { id: 'mystic_fang', name: 'Taring Mistis', emoji: '🦷', chance: 2, value: 300 }
+];
+
+function isPetHunting(guildId, userId) {
+    const hunt = db.prepare('SELECT * FROM pet_hunts WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!hunt) return false;
+    return (Date.now() - hunt.startTime) < hunt.duration;
+}
+
+function getPetHuntStatus(guildId, userId) {
+    const hunt = db.prepare('SELECT * FROM pet_hunts WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!hunt) return null;
+    const remaining = hunt.duration - (Date.now() - hunt.startTime);
+    if (remaining <= 0) return { done: true, startTime: hunt.startTime, duration: hunt.duration };
+    return { done: false, remaining, startTime: hunt.startTime, duration: hunt.duration };
+}
+
+function startPetHunt(guildId, userId) {
+    const duration = getRandomInt(30, 60) * 60000;
+    db.prepare('INSERT OR REPLACE INTO pet_hunts (guildId, userId, startTime, duration) VALUES (?, ?, ?, ?)').run(guildId, userId, Date.now(), duration);
+    return duration;
+}
+
+function claimPetHunt(guildId, userId) {
+    const hunt = db.prepare('SELECT * FROM pet_hunts WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!hunt) return null;
+    if ((Date.now() - hunt.startTime) < hunt.duration) return null;
+    db.prepare('DELETE FROM pet_hunts WHERE guildId = ? AND userId = ?').run(guildId, userId);
+    if (Math.random() < 0.20) return { success: false, money: 0, item: null, exp: 20 };
+    const money = getRandomInt(30, 150);
+    let item = null;
+    const roll = Math.random() * 100;
+    let cum = 0;
+    for (const loot of PET_HUNT_ITEMS) { cum += loot.chance; if (roll < cum) { item = loot; break; } }
+    return { success: true, money, item, exp: 20 };
+}
+
+// Pet EXP helper: play +15, feed +8, hunt +20, chat +3, fish +5, harvest +5, daily +10
+function addPetExp(guildId, userId, amount) {
+    const pet = getPetData(guildId, userId);
+    if (!pet) return null;
+    const expNeeded = getPetExpNeeded(pet.level);
+    const newExp = pet.exp + amount;
+    if (newExp >= expNeeded && pet.level < 200) {
+        const overflow = newExp - expNeeded;
+        db.prepare('UPDATE pets SET level = level + 1, exp = ? WHERE id = ?').run(Math.max(0, overflow), pet.id);
+        return { leveledUp: true, newLevel: pet.level + 1, expGained: amount };
+    } else {
+        db.prepare('UPDATE pets SET exp = ? WHERE id = ?').run(newExp, pet.id);
+        return { leveledUp: false, expGained: amount };
+    }
+}
+
+
 // ================= SISTEM ACHIEVEMENT / BADGE =================
 const ACHIEVEMENTS = [
     // --- CHAT & SOCIAL ---
@@ -1067,8 +1159,11 @@ const commands = [
         .addSubcommand(sub => sub.setName('egg').setDescription('Buka Pet Egg').addStringOption(opt => opt.setName('tipe').setDescription('Jenis egg').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => sub.setName('collection').setDescription('Lihat semua pet yang dimiliki'))
         .addSubcommand(sub => sub.setName('swap').setDescription('Ganti pet aktif').addIntegerOption(opt => opt.setName('id').setDescription('ID pet (dari /pet collection)').setRequired(true)))
-        .addSubcommand(sub => sub.setName('rename').setDescription('Ganti nama pet').addStringOption(opt => opt.setName('nama').setDescription('Nama baru').setRequired(true).setMaxLength(20)))
-        .addSubcommand(sub => sub.setName('release').setDescription('Lepaskan pet (tidak bisa undo!)').addIntegerOption(opt => opt.setName('id').setDescription('ID pet').setRequired(true))),
+        .addSubcommand(sub => sub.setName('rename').setDescription('Ganti nama pet').addStringOption(opt => opt.setName('nama').setDescription('Nama baru (max 10 karakter)').setRequired(true).setMaxLength(10)))
+        .addSubcommand(sub => sub.setName('release').setDescription('Lepaskan pet (tidak bisa undo!)').addIntegerOption(opt => opt.setName('id').setDescription('ID pet').setRequired(true)))
+        .addSubcommand(sub => sub.setName('hunt').setDescription('Kirim pet berburu (30-60 menit, buff mati selama hunt)'))
+        .addSubcommand(sub => sub.setName('claim').setDescription('Klaim hasil hunt pet'))
+        .addSubcommand(sub => sub.setName('skills').setDescription('Lihat skill buff pet aktif')),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -1224,6 +1319,13 @@ client.on(Events.MessageCreate, async message => {
 
     const cdKey = `${guildId}_${message.author.id}`;
     if (!chatCooldowns.has(cdKey)) { await addXpAndMoney(message.member, 'chat'); chatCooldowns.add(cdKey); setTimeout(() => chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000); }
+
+    // Pet EXP from owner chat (+3 per 5 min)
+    const petChatCdKey = `pet_chat_${guildId}_${message.author.id}`;
+    if (!fishCooldowns.has(petChatCdKey) || Date.now() >= fishCooldowns.get(petChatCdKey)) {
+        addPetExp(guildId, message.author.id, 3);
+        fishCooldowns.set(petChatCdKey, Date.now() + 300000); // 5 menit
+    }
 
     // --- FARM NOTIFICATION (setiap 5 menit per user) ---
     const farmNotifKey = `farm_notif_${guildId}_${message.author.id}`;
@@ -1521,7 +1623,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (command === 'money') {
             if (subCmd === 'balance') return interaction.reply(`💰 Money: **${userData.balance.toLocaleString('id-ID')}**`);
-            if (subCmd === 'daily') { const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini!', ephemeral: true }); userData.balance += 500; db.prepare('UPDATE users SET balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(userData.balance, today, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_dailies'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' }); return interaction.reply('🎁 Kamu mendapatkan **500 money** dari klaim harian.'); }
+            if (subCmd === 'daily') { const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini!', ephemeral: true }); userData.balance += 500; db.prepare('UPDATE users SET balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(userData.balance, today, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_dailies'); addPetExp(guildId, interaction.user.id, 10); await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' }); return interaction.reply('🎁 Kamu mendapatkan **500 money** dari klaim harian.'); }
             if (subCmd === 'leaderboard') { const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY balance DESC LIMIT 10').all(guildId); const embed = new EmbedBuilder().setTitle('💰 Top Orang Terkaya 💰').setColor('#F1C40F'); let desc = data.length ? '' : 'Belum ada data.'; data.forEach((u, i) => desc += `**${i+1}.** <@${u.userId}> - **${u.balance.toLocaleString('id-ID')} money**\n`); embed.setDescription(desc); return interaction.reply({ embeds: [embed] }); }
             if (group === 'manage') {
                 const isOwner = interaction.user.id === interaction.guild.ownerId;
@@ -1621,6 +1723,8 @@ client.on(Events.InteractionCreate, async interaction => {
             fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
             const result = catchFish(guildId, interaction.user.id);
             incrementUserStat(guildId, interaction.user.id, 'total_fish_caught');
+            // Pet EXP from fishing (+5)
+            addPetExp(guildId, interaction.user.id, 5);
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
                 .setColor(tierColors[result.tier.tier] || '#2B2D31')
@@ -1964,6 +2068,8 @@ client.on(Events.InteractionCreate, async interaction => {
                 }
                 if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman yang siap dipanen! Cek `/farm status`.', ephemeral: true });
                 incrementUserStat(guildId, interaction.user.id, 'total_harvests', harvested);
+                // Pet EXP from harvest (+5)
+                addPetExp(guildId, interaction.user.id, 5);
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_harvest', legendary: harvestDesc.includes('Legendary') });
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.`)] });
             }
@@ -2072,19 +2178,31 @@ client.on(Events.InteractionCreate, async interaction => {
                 const pet = getPetData(guildId, interaction.user.id);
                 if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet! Gunakan `/pet adopt` atau `/pet egg`.', ephemeral: true });
                 const petDef = PET_DATA.find(p => p.id === pet.petId);
-                const expNeeded = pet.level <= 5 ? 50 : pet.level <= 10 ? 100 : pet.level <= 15 ? 200 : pet.level <= 20 ? 400 : pet.level <= 25 ? 600 : 1000;
+                const expNeeded = getPetExpNeeded(pet.level);
                 const happyBar = '▰'.repeat(Math.floor(pet.happiness / 10)) + '▱'.repeat(10 - Math.floor(pet.happiness / 10));
                 const hungerBar = '▰'.repeat(Math.floor(pet.hunger / 10)) + '▱'.repeat(10 - Math.floor(pet.hunger / 10));
                 const expBar = '▰'.repeat(Math.min(10, Math.floor((pet.exp / expNeeded) * 10))) + '▱'.repeat(10 - Math.min(10, Math.floor((pet.exp / expNeeded) * 10)));
                 const statusEmoji = pet.status === 'sick' ? '🤒 Sakit!' : pet.happiness >= 70 ? '😊 Bahagia!' : pet.happiness >= 30 ? '😐 Biasa' : '😢 Sedih';
-                const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
+                const hunting = isPetHunting(guildId, interaction.user.id);
+                const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick' && !hunting;
                 const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
                 const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
+                // Stacking buffs display
+                let stackDesc = '';
+                if (pet.level >= 20) stackDesc += '💰 +2% Money ';
+                if (pet.level >= 50) stackDesc += '📈 +2% XP ';
+                if (pet.level >= 100) stackDesc += '🎣 +3% Fish ';
+                if (pet.level >= 200) stackDesc += '🌾 +5% Farm ';
+                if (!stackDesc) stackDesc = '*Unlock di Lv.20*';
+                const huntStatus = getPetHuntStatus(guildId, interaction.user.id);
+                let huntText = '';
+                if (huntStatus && !huntStatus.done) { const mins = Math.ceil(huntStatus.remaining / 60000); huntText = `\n\n🗡️ **Sedang Hunt!** Kembali dalam **${mins}m** | ⚠️ Buff MATI`; }
+                else if (huntStatus && huntStatus.done) { huntText = `\n\n🗡️ **Hunt selesai!** Gunakan \`/pet claim\` untuk klaim hasil.`; }
                 const embed = new EmbedBuilder()
-                    .setTitle(`${petDef.emoji} ${pet.name} (Level ${pet.level})`)
+                    .setTitle(`${petDef.emoji} ${pet.name} (Level ${pet.level}/200)`)
                     .setColor(bonusActive ? '#2ECC71' : '#E74C3C')
-                    .setDescription(`**${petDef.name}** — *${petDef.tier}*\n\n> ❤️ Happiness: \`${happyBar}\` **${pet.happiness}%**\n> 🍖 Hunger: \`${hungerBar}\` **${pet.hunger}%**\n> ✨ EXP: \`${expBar}\` **${pet.exp}/${expNeeded}**\n> 💪 Status: ${statusEmoji}\n\n🎁 **Passive Bonus** ${bonusActive ? '(AKTIF ✅)' : '(MATI ❌)'}:\n> +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')}${!bonusActive ? '\n> ⚠️ *Happiness/Hunger terlalu rendah atau pet sakit!*' : ''}`)
-                    .setFooter({ text: '/pet feed — makan | /pet play — main | Hunger/Happy turun seiring waktu' });
+                    .setDescription(`**${petDef.name}** — *${petDef.tier}*\n\n> ❤️ Happiness: \`${happyBar}\` **${pet.happiness}%**\n> 🍖 Hunger: \`${hungerBar}\` **${pet.hunger}%**\n> ✨ EXP: \`${expBar}\` **${pet.exp}/${expNeeded}**\n> 💪 Status: ${statusEmoji}\n\n🎁 **Base Bonus** ${bonusActive ? '(AKTIF ✅)' : '(MATI ❌)'}:\n> +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')}${hunting ? '\n> ⚠️ *Buff mati selama pet hunt!*' : (!bonusActive ? '\n> ⚠️ *Happiness/Hunger rendah atau pet sakit!*' : '')}\n\n⚡ **Stack Buff:** ${stackDesc}${huntText}`)
+                    .setFooter({ text: '/pet skills — detail buff | /pet hunt — kirim berburu | /pet feed — makan' });
                 return interaction.reply({ embeds: [embed] });
             }
 
@@ -2114,11 +2232,13 @@ client.on(Events.InteractionCreate, async interaction => {
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 const newHunger = Math.min(100, pet.hunger + food.hunger);
                 const newHappy = Math.min(100, pet.happiness + food.happiness);
-                const newExp = pet.exp + 5;
                 const newStatus = pet.status === 'sick' && newHunger > 50 ? 'happy' : pet.status;
-                db.prepare('UPDATE pets SET hunger = ?, happiness = ?, exp = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newExp, newStatus, pet.id);
-                const petDef = PET_DATA.find(p => p.id === pet.petId);
-                return interaction.reply({ content: `${food.emoji} **${pet.name}** makan ${food.name}!\n\n> 🍖 Hunger: ${pet.hunger}% → **${newHunger}%**\n> ❤️ Happy: ${pet.happiness}% → **${newHappy}%**\n> ✨ +5 EXP` });
+                db.prepare('UPDATE pets SET hunger = ?, happiness = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newStatus, pet.id);
+                // +8 EXP via unified function
+                const expResult = addPetExp(guildId, interaction.user.id, 8);
+                let lvlUpMsg = '';
+                if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${pet.name} naik ke Level ${expResult.newLevel}!`;
+                return interaction.reply({ content: `${food.emoji} **${pet.name}** makan ${food.name}!\n\n> 🍖 Hunger: ${pet.hunger}% → **${newHunger}%**\n> ❤️ Happy: ${pet.happiness}% → **${newHappy}%**\n> ✨ +8 EXP${lvlUpMsg}` });
             }
 
             if (subCmd === 'play') {
@@ -2126,21 +2246,17 @@ client.on(Events.InteractionCreate, async interaction => {
                 if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
                 const playCdKey = `pet_play_${guildId}_${interaction.user.id}`;
                 if (fishCooldowns.has(playCdKey) && Date.now() < fishCooldowns.get(playCdKey)) { const rem = Math.ceil((fishCooldowns.get(playCdKey) - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih capek! Tunggu **${rem} menit** lagi.`, ephemeral: true }); }
-                fishCooldowns.set(playCdKey, Date.now() + 1800000);
+                fishCooldowns.set(playCdKey, Date.now() + 1800000); // 30 menit CD
                 const newHappy = Math.min(100, pet.happiness + 20);
                 const newHunger = Math.max(0, pet.hunger - 5);
-                const newExp = pet.exp + 10;
-                db.prepare('UPDATE pets SET happiness = ?, hunger = ?, exp = ? WHERE id = ?').run(newHappy, newHunger, newExp, pet.id);
-                // Check level up
-                const expNeeded = pet.level <= 5 ? 50 : pet.level <= 10 ? 100 : pet.level <= 15 ? 200 : pet.level <= 20 ? 400 : pet.level <= 25 ? 600 : 1000;
+                db.prepare('UPDATE pets SET happiness = ?, hunger = ? WHERE id = ?').run(newHappy, newHunger, pet.id);
+                // +15 EXP via unified function
+                const expResult = addPetExp(guildId, interaction.user.id, 15);
                 let lvlUpMsg = '';
-                if (newExp >= expNeeded && pet.level < 30) {
-                    db.prepare('UPDATE pets SET level = level + 1, exp = 0 WHERE id = ?').run(pet.id);
-                    lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${pet.name} naik ke Level ${pet.level + 1}!`;
-                }
+                if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${pet.name} naik ke Level ${expResult.newLevel}!`;
                 const activities = ['bermain kejar-kejaran', 'bermain bola', 'bermain petak umpet', 'berguling-guling', 'melompat-lompat'];
                 const activity = activities[Math.floor(Math.random() * activities.length)];
-                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +20 → **${newHappy}%**\n> 🍖 Hunger: -5 → **${newHunger}%**\n> ✨ +10 EXP${lvlUpMsg}` });
+                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +20 → **${newHappy}%**\n> 🍖 Hunger: -5 → **${newHunger}%**\n> ✨ +15 EXP${lvlUpMsg}` });
             }
 
             if (subCmd === 'shop') {
@@ -2213,6 +2329,109 @@ client.on(Events.InteractionCreate, async interaction => {
                 db.prepare('DELETE FROM pets WHERE id = ?').run(petDbId);
                 const def = PET_DATA.find(p => p.id === targetPet.petId);
                 return interaction.reply({ content: `👋 ${def ? def.emoji : '🐾'} **${targetPet.name}** telah dilepaskan... Selamat tinggal! 😢` });
+            }
+
+            if (subCmd === 'hunt') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const petDef = PET_DATA.find(p => p.id === pet.petId);
+                // Cek apakah sedang hunt
+                const huntStatus = getPetHuntStatus(guildId, interaction.user.id);
+                if (huntStatus && !huntStatus.done) {
+                    const mins = Math.ceil(huntStatus.remaining / 60000);
+                    return interaction.reply({ content: `⏳ ${petDef ? petDef.emoji : '🐾'} **${pet.name}** masih berburu! Kembali dalam **${mins} menit**.\n> ⚠️ Semua buff pet MATI selama hunt.\n> Gunakan \`/pet claim\` saat selesai.`, ephemeral: true });
+                }
+                // Cek apakah ada hasil belum diklaim
+                if (huntStatus && huntStatus.done) {
+                    return interaction.reply({ content: '❌ Pet sudah pulang dari hunt! Klaim dulu dengan `/pet claim`.', ephemeral: true });
+                }
+                // Cek kondisi pet
+                if (pet.happiness < 20) return interaction.reply({ content: '❌ Pet terlalu sedih! `/pet play` atau `/pet feed` dulu.', ephemeral: true });
+                if (pet.hunger < 10) return interaction.reply({ content: '❌ Pet terlalu lapar! `/pet feed` dulu.', ephemeral: true });
+                // Mulai hunt
+                const duration = startPetHunt(guildId, interaction.user.id);
+                const durasiMenit = Math.ceil(duration / 60000);
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#FF8C00').setTitle('🗡️ Pet Hunt Dimulai!').setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** pergi berburu!\n\n> ⏱️ Durasi: **${durasiMenit} menit**\n> ⚠️ **Semua buff pet MATI** selama hunt!\n> 🎁 Reward: 30-150 money + random item\n> ❌ 20% chance gagal\n> ✨ Pet EXP: +20\n\nGunakan \`/pet claim\` setelah timer selesai.`).setFooter({ text: 'Pet akan kembali otomatis. Buff aktif lagi setelah claim.' })] });
+            }
+
+            if (subCmd === 'claim') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const petDef = PET_DATA.find(p => p.id === pet.petId);
+                const huntStatus = getPetHuntStatus(guildId, interaction.user.id);
+                if (!huntStatus) return interaction.reply({ content: '❌ Pet tidak sedang hunt! Gunakan `/pet hunt` untuk mengirim.', ephemeral: true });
+                if (!huntStatus.done) {
+                    const mins = Math.ceil(huntStatus.remaining / 60000);
+                    return interaction.reply({ content: `⏳ Pet masih berburu! Kembali dalam **${mins} menit**.`, ephemeral: true });
+                }
+                // Klaim hasil
+                const result = claimPetHunt(guildId, interaction.user.id);
+                if (!result) return interaction.reply({ content: '❌ Gagal klaim.', ephemeral: true });
+                // Tambah EXP pet (+20)
+                const expResult = addPetExp(guildId, interaction.user.id, result.exp);
+                let desc = '';
+                if (result.success) {
+                    // Tambah money ke user
+                    let totalMoney = result.money;
+                    if (result.item) totalMoney += result.item.value;
+                    userData.balance += totalMoney;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                    desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** kembali dari hunt!\n\n`;
+                    desc += `🎉 **BERHASIL!**\n`;
+                    desc += `> 🪙 Money: **+${result.money}**\n`;
+                    if (result.item) desc += `> ${result.item.emoji} Item: **${result.item.name}** (+${result.item.value} money)\n`;
+                    desc += `> ✨ Pet EXP: **+${result.exp}**\n`;
+                    if (expResult && expResult.leveledUp) desc += `\n🎉 **LEVEL UP!** ${pet.name} → Level **${expResult.newLevel}**!\n`;
+                    desc += `\n> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`;
+                    desc += `\n> ✅ Buff pet kembali aktif!`;
+                } else {
+                    desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** kembali dari hunt...\n\n`;
+                    desc += `💀 **GAGAL!** Pet pulang tanpa hasil.\n`;
+                    desc += `> ✨ Pet EXP: **+${result.exp}** (bonus partisipasi)\n`;
+                    if (expResult && expResult.leveledUp) desc += `\n🎉 **LEVEL UP!** ${pet.name} → Level **${expResult.newLevel}**!\n`;
+                    desc += `\n> ✅ Buff pet kembali aktif!`;
+                }
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor(result.success ? '#2ECC71' : '#E74C3C').setTitle(result.success ? '🎁 Hunt Claim — Sukses!' : '💀 Hunt Claim — Gagal').setDescription(desc)] });
+            }
+
+            if (subCmd === 'skills') {
+                const pet = getPetData(guildId, interaction.user.id);
+                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const petDef = PET_DATA.find(p => p.id === pet.petId);
+                const hunting = isPetHunting(guildId, interaction.user.id);
+                const expNeeded = getPetExpNeeded(pet.level);
+                
+                let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** — Level **${pet.level}** / 200\n`;
+                desc += `> ✨ EXP: **${pet.exp}/${expNeeded}** | Status: ${hunting ? '🗡️ Sedang Hunt' : '✅ Aktif'}\n`;
+                desc += `\n━━━ **SKILL BUFF (STACKING)** ━━━\n\n`;
+                
+                const buffTiers = [
+                    { level: 20, emoji: '💰', name: '+2% Money', active: pet.level >= 20 },
+                    { level: 50, emoji: '📈', name: '+2% XP', active: pet.level >= 50 },
+                    { level: 100, emoji: '🎣', name: '+3% Fish Luck', active: pet.level >= 100 },
+                    { level: 200, emoji: '🌾', name: '+5% Farm Yield', active: pet.level >= 200 }
+                ];
+                
+                for (const buff of buffTiers) {
+                    const status = buff.active ? (hunting ? '⚠️' : '✅') : '🔒';
+                    desc += `> ${status} **Lv.${buff.level}** — ${buff.emoji} ${buff.name}`;
+                    if (buff.active && hunting) desc += ' *(mati selama hunt)*';
+                    else if (!buff.active) desc += ` *(butuh Lv.${buff.level})*`;
+                    desc += '\n';
+                }
+                
+                desc += `\n━━━ **SUMBER EXP** ━━━\n`;
+                desc += `> 🎾 /pet play: +15 (CD 30m)\n`;
+                desc += `> 🍖 /pet feed: +8\n`;
+                desc += `> 🗡️ Pet Hunt: +20\n`;
+                desc += `> 💬 Owner chat: +3 (per 5m)\n`;
+                desc += `> 🎣 Owner fishing: +5\n`;
+                desc += `> 🌾 Owner harvest: +5\n`;
+                desc += `> 📅 Owner daily: +10\n`;
+                
+                if (hunting) desc += `\n> ⚠️ **Semua buff MATI selama pet hunt!**`;
+                
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🐾 Pet Skills & Buffs').setColor('#9B59B6').setDescription(desc).setFooter({ text: 'Buff stack = semua aktif bersamaan | /pet hunt — kirim berburu' })] });
             }
         }
 
