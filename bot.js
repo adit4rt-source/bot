@@ -223,60 +223,60 @@ const FARM_LEVELS = [
 ];
 
 const FARM_CROPS = [
-    // COMMON (10-20 menit)
-    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 30, time: 10, minYield: 2, maxYield: 4, sellPrice: 20 },
-    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 40, time: 15, minYield: 2, maxYield: 3, sellPrice: 25 },
-    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 30, time: 10, minYield: 3, maxYield: 5, sellPrice: 15 },
-    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 50, time: 20, minYield: 2, maxYield: 4, sellPrice: 25 },
-    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 35, time: 15, minYield: 2, maxYield: 4, sellPrice: 20 },
-    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 40, time: 20, minYield: 2, maxYield: 3, sellPrice: 25 },
-    // UNCOMMON (45-90 menit)
-    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 100, time: 45, minYield: 2, maxYield: 4, sellPrice: 40 },
-    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 80, time: 45, minYield: 3, maxYield: 5, sellPrice: 30 },
-    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 120, time: 60, minYield: 2, maxYield: 3, sellPrice: 50 },
-    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 150, time: 90, minYield: 2, maxYield: 4, sellPrice: 60 },
-    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 90, time: 50, minYield: 3, maxYield: 5, sellPrice: 30 },
-    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 110, time: 60, minYield: 2, maxYield: 3, sellPrice: 50 },
-    // RARE (2-3 jam)
-    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 300, time: 120, minYield: 2, maxYield: 4, sellPrice: 80 },
-    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 350, time: 150, minYield: 1, maxYield: 2, sellPrice: 200 },
-    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 400, time: 150, minYield: 2, maxYield: 3, sellPrice: 120 },
-    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 350, time: 180, minYield: 2, maxYield: 3, sellPrice: 100 },
-    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 300, time: 120, minYield: 2, maxYield: 4, sellPrice: 90 },
-    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 500, time: 180, minYield: 1, maxYield: 3, sellPrice: 200 },
-    // EPIC (5-8 jam)
-    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 800, time: 300, minYield: 2, maxYield: 4, sellPrice: 200 },
-    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 1000, time: 360, minYield: 2, maxYield: 3, sellPrice: 300 },
-    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 1200, time: 420, minYield: 1, maxYield: 3, sellPrice: 500 },
-    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1500, time: 360, minYield: 1, maxYield: 2, sellPrice: 600 },
-    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 1000, time: 300, minYield: 2, maxYield: 3, sellPrice: 350 },
-    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 900, time: 300, minYield: 2, maxYield: 3, sellPrice: 250 },
-    // LEGENDARY (12-18 jam)
-    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 5000, time: 720, minYield: 1, maxYield: 2, sellPrice: 2000 },
-    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 4000, time: 720, minYield: 1, maxYield: 2, sellPrice: 1500 },
-    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 6000, time: 900, minYield: 1, maxYield: 1, sellPrice: 2500 },
-    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 5000, time: 780, minYield: 1, maxYield: 2, sellPrice: 2000 },
-    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 7000, time: 1080, minYield: 1, maxYield: 1, sellPrice: 3000 },
-    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 4500, time: 720, minYield: 1, maxYield: 2, sellPrice: 1800 }
+    // COMMON (5-12 menit)
+    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 20, time: 5, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 30, time: 8, minYield: 2, maxYield: 3, sellPrice: 15 },
+    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 20, time: 5, minYield: 3, maxYield: 5, sellPrice: 10 },
+    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 35, time: 12, minYield: 2, maxYield: 4, sellPrice: 15 },
+    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 25, time: 8, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 30, time: 10, minYield: 2, maxYield: 3, sellPrice: 15 },
+    // UNCOMMON (25-50 menit)
+    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 70, time: 25, minYield: 2, maxYield: 4, sellPrice: 25 },
+    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 60, time: 25, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 80, time: 35, minYield: 2, maxYield: 3, sellPrice: 35 },
+    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 100, time: 50, minYield: 2, maxYield: 4, sellPrice: 40 },
+    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 60, time: 30, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 75, time: 35, minYield: 2, maxYield: 3, sellPrice: 30 },
+    // RARE (60-120 menit)
+    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 200, time: 60, minYield: 2, maxYield: 4, sellPrice: 55 },
+    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 250, time: 90, minYield: 1, maxYield: 2, sellPrice: 130 },
+    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 280, time: 90, minYield: 2, maxYield: 3, sellPrice: 80 },
+    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 250, time: 120, minYield: 2, maxYield: 3, sellPrice: 70 },
+    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 200, time: 60, minYield: 2, maxYield: 4, sellPrice: 60 },
+    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 350, time: 120, minYield: 1, maxYield: 3, sellPrice: 130 },
+    // EPIC (180-300 menit = 3-5 jam)
+    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 600, time: 180, minYield: 2, maxYield: 4, sellPrice: 130 },
+    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 700, time: 240, minYield: 2, maxYield: 3, sellPrice: 200 },
+    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 900, time: 300, minYield: 1, maxYield: 3, sellPrice: 350 },
+    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 240, minYield: 1, maxYield: 2, sellPrice: 400 },
+    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 180, minYield: 2, maxYield: 3, sellPrice: 230 },
+    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 180, minYield: 2, maxYield: 3, sellPrice: 170 },
+    // LEGENDARY (480-720 menit = 8-12 jam)
+    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 480, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 480, minYield: 1, maxYield: 2, sellPrice: 1100 },
+    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 600, minYield: 1, maxYield: 1, sellPrice: 1800 },
+    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 540, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 720, minYield: 1, maxYield: 1, sellPrice: 2200 },
+    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 480, minYield: 1, maxYield: 2, sellPrice: 1300 }
 ];
 
 const FARM_RECIPES = [
-    { id: 'roti', name: 'Roti', emoji: '🍞', ingredients: [{id:'gandum',qty:3}], sellPrice: 200 },
-    { id: 'salad', name: 'Salad', emoji: '🥗', ingredients: [{id:'bayam',qty:2},{id:'tomat',qty:1}], sellPrice: 350 },
-    { id: 'kentang_goreng', name: 'Kentang Goreng', emoji: '🍟', ingredients: [{id:'kentang',qty:3}], sellPrice: 250 },
-    { id: 'popcorn', name: 'Popcorn', emoji: '🍿', ingredients: [{id:'jagung',qty:4}], sellPrice: 400 },
-    { id: 'kue', name: 'Kue Strawberry', emoji: '🍰', ingredients: [{id:'gandum',qty:2},{id:'strawberry',qty:2}], sellPrice: 700 },
-    { id: 'sup', name: 'Sup Sayur', emoji: '🫕', ingredients: [{id:'wortel',qty:2},{id:'kentang',qty:2},{id:'bawang_putih',qty:1}], sellPrice: 500 },
-    { id: 'sambal', name: 'Sambal', emoji: '🌶️', ingredients: [{id:'cabai',qty:4},{id:'bawang_merah',qty:2}], sellPrice: 800 },
-    { id: 'wine', name: 'Wine', emoji: '🍷', ingredients: [{id:'anggur',qty:5}], sellPrice: 2500 },
-    { id: 'kopi_premium', name: 'Kopi Premium', emoji: '☕', ingredients: [{id:'kopi',qty:3},{id:'madu',qty:1}], sellPrice: 3000 },
-    { id: 'cokelat', name: 'Cokelat Mewah', emoji: '🍫', ingredients: [{id:'kakao',qty:3},{id:'strawberry',qty:2}], sellPrice: 2200 },
-    { id: 'buket', name: 'Buket Bunga', emoji: '💐', ingredients: [{id:'mawar',qty:2},{id:'sakura',qty:1},{id:'hibiscus',qty:1}], sellPrice: 4500 },
-    { id: 'parfum', name: 'Parfum Sakura', emoji: '🧴', ingredients: [{id:'sakura',qty:2},{id:'mawar',qty:2}], sellPrice: 6000 },
-    { id: 'minyak_zaitun', name: 'Minyak Zaitun', emoji: '🫒', ingredients: [{id:'zaitun',qty:3}], sellPrice: 5500 },
-    { id: 'ramuan', name: 'Ramuan Ajaib', emoji: '🧪', ingredients: [{id:'mystic_herb',qty:1},{id:'crystal_flower',qty:1}], sellPrice: 14000 },
-    { id: 'essence_naga', name: 'Essence Naga', emoji: '🐉', ingredients: [{id:'dragon_fruit_crop',qty:2},{id:'ice_berry',qty:1}], sellPrice: 18000 },
-    { id: 'elixir', name: 'Elixir of Life', emoji: '✨', ingredients: [{id:'mystic_herb',qty:1},{id:'lotus',qty:1},{id:'ice_berry',qty:1}], sellPrice: 22000 }
+    { id: 'roti', name: 'Roti', emoji: '🍞', ingredients: [{id:'gandum',qty:3}], sellPrice: 150 },
+    { id: 'salad', name: 'Salad', emoji: '🥗', ingredients: [{id:'bayam',qty:2},{id:'tomat',qty:1}], sellPrice: 260 },
+    { id: 'kentang_goreng', name: 'Kentang Goreng', emoji: '🍟', ingredients: [{id:'kentang',qty:3}], sellPrice: 180 },
+    { id: 'popcorn', name: 'Popcorn', emoji: '🍿', ingredients: [{id:'jagung',qty:4}], sellPrice: 300 },
+    { id: 'kue', name: 'Kue Strawberry', emoji: '🍰', ingredients: [{id:'gandum',qty:2},{id:'strawberry',qty:2}], sellPrice: 520 },
+    { id: 'sup', name: 'Sup Sayur', emoji: '🫕', ingredients: [{id:'wortel',qty:2},{id:'kentang',qty:2},{id:'bawang_putih',qty:1}], sellPrice: 380 },
+    { id: 'sambal', name: 'Sambal', emoji: '🌶️', ingredients: [{id:'cabai',qty:4},{id:'bawang_merah',qty:2}], sellPrice: 600 },
+    { id: 'wine', name: 'Wine', emoji: '🍷', ingredients: [{id:'anggur',qty:5}], sellPrice: 1800 },
+    { id: 'kopi_premium', name: 'Kopi Premium', emoji: '☕', ingredients: [{id:'kopi',qty:3},{id:'madu',qty:1}], sellPrice: 2200 },
+    { id: 'cokelat', name: 'Cokelat Mewah', emoji: '🍫', ingredients: [{id:'kakao',qty:3},{id:'strawberry',qty:2}], sellPrice: 1600 },
+    { id: 'buket', name: 'Buket Bunga', emoji: '💐', ingredients: [{id:'mawar',qty:2},{id:'sakura',qty:1},{id:'hibiscus',qty:1}], sellPrice: 3300 },
+    { id: 'parfum', name: 'Parfum Sakura', emoji: '🧴', ingredients: [{id:'sakura',qty:2},{id:'mawar',qty:2}], sellPrice: 4500 },
+    { id: 'minyak_zaitun', name: 'Minyak Zaitun', emoji: '🫒', ingredients: [{id:'zaitun',qty:3}], sellPrice: 4000 },
+    { id: 'ramuan', name: 'Ramuan Ajaib', emoji: '🧪', ingredients: [{id:'mystic_herb',qty:1},{id:'crystal_flower',qty:1}], sellPrice: 10000 },
+    { id: 'essence_naga', name: 'Essence Naga', emoji: '🐉', ingredients: [{id:'dragon_fruit_crop',qty:2},{id:'ice_berry',qty:1}], sellPrice: 13000 },
+    { id: 'elixir', name: 'Elixir of Life', emoji: '✨', ingredients: [{id:'mystic_herb',qty:1},{id:'lotus',qty:1},{id:'ice_berry',qty:1}], sellPrice: 16000 }
 ];
 
 const FARM_FERTILIZERS = [
@@ -488,6 +488,15 @@ const ACHIEVEMENTS = [
     { id: 'fish_rod_pro', name: 'Pro Equipment', emoji: '🏆', desc: 'Beli Joran Pro Titanium', category: 'Fishing', reward: 500 },
     { id: 'fish_rod_mythic', name: 'Ultimate Gear', emoji: '🔱', desc: 'Beli Joran Mitik', category: 'Fishing', reward: 2000 },
     { id: 'fish_secret', name: 'Secret Finder', emoji: '🔮', desc: 'Tangkap ikan Secret pertama', category: 'Fishing', reward: 10000 },
+    // --- FARMING ---
+    { id: 'farm_first', name: 'Petani Baru', emoji: '🌱', desc: 'Panen pertama kali', category: 'Farming', reward: 100 },
+    { id: 'farm_50', name: 'Green Thumb', emoji: '🌿', desc: 'Panen 50 kali', category: 'Farming', reward: 500 },
+    { id: 'farm_200', name: 'Farmer Pro', emoji: '🌳', desc: 'Panen 200 kali', category: 'Farming', reward: 1500 },
+    { id: 'farm_500', name: 'Agriculture King', emoji: '👑', desc: 'Panen 500 kali', category: 'Farming', reward: 5000 },
+    { id: 'farm_craft_10', name: 'Home Cook', emoji: '🍳', desc: 'Craft 10 produk', category: 'Farming', reward: 300 },
+    { id: 'farm_craft_50', name: 'Master Chef', emoji: '👨‍🍳', desc: 'Craft 50 produk', category: 'Farming', reward: 1500 },
+    { id: 'farm_upgrade_max', name: 'Tuan Tanah', emoji: '🏰', desc: 'Upgrade lahan ke level 6 (max)', category: 'Farming', reward: 5000 },
+    { id: 'farm_legendary', name: 'Crystal Grower', emoji: '💎', desc: 'Panen tanaman Legendary pertama', category: 'Farming', reward: 3000 },
     // --- SLOT MACHINE ---
     { id: 'slot_first', name: 'Slot Beginner', emoji: '🎰', desc: 'Pertama kali main slot', category: 'Gambling', reward: 50 },
     { id: 'slot_jackpot', name: 'JACKPOT!', emoji: '💰', desc: 'Dapat jackpot pertama (3x sama)', category: 'Gambling', reward: 1000 },
@@ -650,6 +659,21 @@ async function checkAchievements(guild, userId, context = {}) {
         if (context.rod === 'pro') checks.push('fish_rod_pro');
         if (context.rod === 'mythic_rod') checks.push('fish_rod_mythic');
     }
+    // --- FARMING ---
+    if (context.type === 'farm_harvest') {
+        const harvests = getUserStat(guildId, userId, 'total_harvests');
+        if (harvests >= 1) checks.push('farm_first');
+        if (harvests >= 50) checks.push('farm_50');
+        if (harvests >= 200) checks.push('farm_200');
+        if (harvests >= 500) checks.push('farm_500');
+        if (context.legendary) checks.push('farm_legendary');
+    }
+    if (context.type === 'farm_craft') {
+        const crafts = getUserStat(guildId, userId, 'total_crafts');
+        if (crafts >= 10) checks.push('farm_craft_10');
+        if (crafts >= 50) checks.push('farm_craft_50');
+    }
+    if (context.type === 'farm_upgrade_max') checks.push('farm_upgrade_max');
     // --- SLOT ---
     if (context.type === 'slot') {
         const slotWins = getUserStat(guildId, userId, 'slot_wins');
@@ -1177,7 +1201,7 @@ client.on(Events.InteractionCreate, async interaction => {
             for (const cat of categories) {
                 const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
                 const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
+                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾' }[cat] || '📁';
                 desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
                 catAchs.forEach(a => {
                     if (unlockedIds.includes(a.id)) {
@@ -1200,7 +1224,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 .setFooter({ text: 'Pilih kategori di bawah untuk melihat detail + reward' })
                 .setTimestamp();
             const selectMenu = new StringSelectMenuBuilder().setCustomId(`ach_detail_${targetUser.id}`).setPlaceholder('📂 Lihat detail per kategori...').addOptions(categories.map(cat => {
-                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
+                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾' }[cat] || '📁';
                 const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
                 const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
                 return new StringSelectMenuOptionBuilder().setLabel(`${cat} (${catUnlocked}/${catAchs.length})`).setValue(cat).setDescription(`Lihat detail achievement ${cat}`);
@@ -1234,7 +1258,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 .addFields(
                     { name: '📊 STATISTIK UTAMA', value: `> 🏅 **Level** \`${tData.level}\` — 💰 **Saldo** \`${tData.balance.toLocaleString('id-ID')}\` — ${streakEmoji} **Streak** \`${streakCount} Hari\`\n> \n> ✨ **Progress EXP**\n> \`${progressBar}\` **${percent}%** (\`${tData.xp.toLocaleString('id-ID')}/${targetXp.toLocaleString('id-ID')}\`)`, inline: false },
                     { name: `🏆 BADGE COLLECTION (${totalBadges}/${ACHIEVEMENTS.length})`, value: badgeDisplay, inline: false },
-                    { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan Ditangkap: **${fishCaught}** — 🎰 Slot Wins: **${slotWins}** — 🪙 Coinflip Wins: **${cfWins}**`, inline: false },
+                    { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan: **${fishCaught}** — 🎰 Slot: **${slotWins}** — 🪙 CF: **${cfWins}** — 🌾 Panen: **${getUserStat(guildId, targetUser.id, 'total_harvests')}**`, inline: false },
                     { name: '📅 INFO AKUN', value: `> 📥 Bergabung: <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D> — 📆 Dibuat: <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
                     { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
                 )
@@ -1647,8 +1671,12 @@ client.on(Events.InteractionCreate, async interaction => {
                         const elapsed = Date.now() - plot.plantedAt;
                         const needWater = (Date.now() - plot.wateredAt) > growTime * 0.6;
                         let status = '';
-                        if (plot.status === 'dead') status = '☠️ Mati';
+                        const dryTime = Date.now() - plot.wateredAt;
+                        const wiltThreshold = growTime * 1.5;
+                        const deadThreshold = growTime * 2.5;
+                        if (plot.status === 'dead' || dryTime > deadThreshold) { status = '☠️ Mati'; if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id); }
                         else if (elapsed >= growTime) status = '✅ Siap Panen!';
+                        else if (dryTime > wiltThreshold) status = '🥀 Layu! (Siram segera!)';
                         else if (needWater) status = '💧 Butuh Siram!';
                         else { const pct = Math.min(100, Math.floor((elapsed / growTime) * 100)); status = `🌱 ${pct}%`; }
                         desc += `**[${i+1}]** ${crop.emoji} ${crop.name} — ${status}${fert.id !== 'none' ? ` | ${fert.emoji}` : ''}\n`;
@@ -1695,6 +1723,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 }
                 if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman yang siap dipanen! Cek `/farm status`.', ephemeral: true });
                 incrementUserStat(guildId, interaction.user.id, 'total_harvests', harvested);
+                await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_harvest', legendary: harvestDesc.includes('Legendary') });
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.`)] });
             }
 
@@ -1724,6 +1753,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 userData.balance -= nextLevel.cost;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(nextLevel.level, guildId, interaction.user.id);
+                if (nextLevel.level === 6) await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_upgrade_max' });
                 return interaction.reply({ content: `🎉 **Lahan di-upgrade!**\n> ${nextLevel.name} — Sekarang punya **${nextLevel.slots} slot** tanam!` });
             }
 
@@ -1742,6 +1772,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 userData.balance += recipe.sellPrice;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 incrementUserStat(guildId, interaction.user.id, 'total_crafts');
+                await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_craft' });
                 const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
             }
@@ -1751,14 +1782,19 @@ client.on(Events.InteractionCreate, async interaction => {
                 let desc = '**🌱 BIBIT TANAMAN**\n\n';
                 for (const tier of tiers) {
                     const crops = FARM_CROPS.filter(c => c.tier === tier);
-                    desc += `**${tier}** (${tier === 'Common' ? '10-20m' : tier === 'Uncommon' ? '45-90m' : tier === 'Rare' ? '2-3h' : tier === 'Epic' ? '5-8h' : '12-18h'})\n`;
+                    desc += `**${tier}** (${tier === 'Common' ? '5-12m' : tier === 'Uncommon' ? '25-50m' : tier === 'Rare' ? '1-2h' : tier === 'Epic' ? '3-5h' : '8-12h'})\n`;
                     crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
                     desc += '\n';
                 }
                 desc += '━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK**\n\n';
                 FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} — 🪙 ${f.cost} | ⏩ -${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus*100)}% hasil` : ''}\n`; });
                 if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Gunakan /farm plant <bibit> untuk menanam' })] });
+                const components = [];
+                const fertMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_fertilizer').setPlaceholder('🧪 Beli Pupuk...').addOptions(
+                    ...FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(f.id).setDescription(`-${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? `, +${Math.round(f.yieldBonus*100)}% hasil` : ''}`))
+                );
+                components.push(new ActionRowBuilder().addComponents(fertMenu));
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Pupuk: beli di menu bawah | Bibit: /farm plant <nama>' })], components });
             }
         }
 
@@ -1828,7 +1864,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
-        if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); const status = unlocked ? '✅' : '🔒'; const nameStyle = unlocked ? `**${ach.name}**` : `~~${ach.name}~~`; desc += `${status} ${ach.emoji} ${nameStyle}\n> *${ach.desc}*\n> Hadiah: 🪙 ${ach.reward.toLocaleString('id-ID')} Money${unlocked ? ' ✓ Diklaim' : ''}\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
+        if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); const status = unlocked ? '✅' : '🔒'; const nameStyle = unlocked ? `**${ach.name}**` : `~~${ach.name}~~`; desc += `${status} ${ach.emoji} ${nameStyle}\n> *${ach.desc}*\n> Hadiah: 🪙 ${ach.reward.toLocaleString('id-ID')} Money${unlocked ? ' ✓ Diklaim' : ''}\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
         if (interaction.customId === 'shop_buy_custom_role') { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
         if (interaction.customId === 'cr_select_color') { const selectedColor = interaction.values[0], modal = new ModalBuilder().setCustomId(`submit_cr_${selectedColor}`).setTitle('Custom Role 🎨'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_name').setLabel('Nama Role (Max 32)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32))); if (selectedColor === 'custom') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_color').setLabel('Hex (#FF0000)').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(7).setMaxLength(7).setPlaceholder('#FFFFFF'))); return interaction.showModal(modal); }
         // --- FISHING SHOP BUY ---
@@ -1866,6 +1902,20 @@ client.on(Events.InteractionCreate, async interaction => {
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
             addItem(guildId, interaction.user.id, itemId);
             return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/inventory\` — Gunakan dengan \`/use\`` });
+        }
+        if (interaction.customId === 'farm_buy_fertilizer') {
+            const fertId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
+            const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
+            if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
+            if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost}**`, ephemeral: true });
+            userData.balance -= fert.cost;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            // Apply fertilizer to the oldest unfertilized plot
+            const plot = db.prepare("SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND fertilizer = 'none' AND status != 'dead' ORDER BY plantedAt ASC LIMIT 1").get(guildId, interaction.user.id);
+            if (!plot) { userData.balance += fert.cost; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk! Tanam dulu, atau semua sudah dipupuk.', ephemeral: true }); }
+            db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
+            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** diberikan ke ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ Waktu tumbuh -${Math.round(fert.speedBonus*100)}%${fert.yieldBonus > 0 ? ` | 📈 Hasil +${Math.round(fert.yieldBonus*100)}%` : ''}` });
         }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); price = parseInt(parts.pop()); itemName = parts.join('_'); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, price); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** — 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjutkan pembelian?`, components: [row], ephemeral: true }); }
     }
