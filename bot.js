@@ -53,7 +53,7 @@ const FISH_TIERS = [
 ];
 
 const FISH_DATA = [
-    // TRASH (8)
+    // TRASH (10)
     { id: 'boot', name: 'Sepatu Bekas', tier: 'Trash', emoji: '👢' },
     { id: 'can', name: 'Kaleng Berkarat', tier: 'Trash', emoji: '🥫' },
     { id: 'tire', name: 'Ban Bocor', tier: 'Trash', emoji: '⭕' },
@@ -62,7 +62,9 @@ const FISH_DATA = [
     { id: 'plastic_bag', name: 'Kantong Plastik', tier: 'Trash', emoji: '🛍️' },
     { id: 'broken_rod', name: 'Pancing Patah', tier: 'Trash', emoji: '🪝' },
     { id: 'old_shoe', name: 'Sandal Jepit', tier: 'Trash', emoji: '🩴' },
-    // COMMON (12)
+    { id: 'newspaper', name: 'Koran Basah', tier: 'Trash', emoji: '📰' },
+    { id: 'rusty_anchor', name: 'Jangkar Karatan', tier: 'Trash', emoji: '⚓' },
+    // COMMON (15)
     { id: 'sardine', name: 'Ikan Sarden', tier: 'Common', emoji: '🐟' },
     { id: 'anchovy', name: 'Ikan Teri', tier: 'Common', emoji: '🐟' },
     { id: 'tilapia', name: 'Ikan Nila', tier: 'Common', emoji: '🐟' },
@@ -75,7 +77,10 @@ const FISH_DATA = [
     { id: 'patin', name: 'Ikan Patin', tier: 'Common', emoji: '🐟' },
     { id: 'belanak', name: 'Ikan Belanak', tier: 'Common', emoji: '🐟' },
     { id: 'kembung', name: 'Ikan Kembung', tier: 'Common', emoji: '🐟' },
-    // UNCOMMON (12)
+    { id: 'sepat', name: 'Ikan Sepat', tier: 'Common', emoji: '🐟' },
+    { id: 'betok', name: 'Ikan Betok', tier: 'Common', emoji: '🐟' },
+    { id: 'wader', name: 'Ikan Wader', tier: 'Common', emoji: '🐟' },
+    // UNCOMMON (15)
     { id: 'trout', name: 'Ikan Trout', tier: 'Uncommon', emoji: '🐠' },
     { id: 'bass', name: 'Ikan Bass', tier: 'Uncommon', emoji: '🐠' },
     { id: 'snapper', name: 'Ikan Kakap', tier: 'Uncommon', emoji: '🐠' },
@@ -88,7 +93,10 @@ const FISH_DATA = [
     { id: 'pari_kecil', name: 'Ikan Pari Kecil', tier: 'Uncommon', emoji: '🐠' },
     { id: 'baronang', name: 'Ikan Baronang', tier: 'Uncommon', emoji: '🐠' },
     { id: 'tuna_kecil', name: 'Tuna Sirip Kuning', tier: 'Uncommon', emoji: '🐠' },
-    // RARE (10)
+    { id: 'selar', name: 'Ikan Selar', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kurisi', name: 'Ikan Kurisi', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'layang', name: 'Ikan Layang', tier: 'Uncommon', emoji: '🐠' },
+    // RARE (12)
     { id: 'salmon', name: 'Ikan Salmon', tier: 'Rare', emoji: '🐡' },
     { id: 'tuna', name: 'Ikan Tuna Besar', tier: 'Rare', emoji: '🐡' },
     { id: 'swordfish', name: 'Ikan Pedang', tier: 'Rare', emoji: '🐡' },
@@ -99,7 +107,9 @@ const FISH_DATA = [
     { id: 'giant_catfish', name: 'Lele Raksasa', tier: 'Rare', emoji: '🐡' },
     { id: 'piranha', name: 'Piranha', tier: 'Rare', emoji: '🐡' },
     { id: 'electric_eel', name: 'Belut Listrik', tier: 'Rare', emoji: '🐡' },
-    // EPIC (9)
+    { id: 'sturgeon', name: 'Ikan Sturgeon', tier: 'Rare', emoji: '🐡' },
+    { id: 'red_snapper', name: 'Kakap Merah Jumbo', tier: 'Rare', emoji: '🐡' },
+    // EPIC (11)
     { id: 'shark', name: 'Hiu Putih', tier: 'Epic', emoji: '🦈' },
     { id: 'manta_ray', name: 'Pari Manta', tier: 'Epic', emoji: '🦈' },
     { id: 'giant_tuna', name: 'Tuna Raksasa', tier: 'Epic', emoji: '🦈' },
@@ -109,7 +119,9 @@ const FISH_DATA = [
     { id: 'giant_grouper', name: 'Kerapu Raksasa', tier: 'Epic', emoji: '🦈' },
     { id: 'hammerhead', name: 'Hiu Martil', tier: 'Epic', emoji: '🦈' },
     { id: 'stingray', name: 'Pari Beracun', tier: 'Epic', emoji: '🦈' },
-    // LEGENDARY (9)
+    { id: 'oarfish', name: 'Oarfish', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_squid', name: 'Cumi Raksasa', tier: 'Epic', emoji: '🦈' },
+    // LEGENDARY (11)
     { id: 'megalodon', name: 'Megalodon', tier: 'Legendary', emoji: '🐉' },
     { id: 'leviathan', name: 'Leviathan', tier: 'Legendary', emoji: '🐉' },
     { id: 'golden_koi', name: 'Koi Emas Legendaris', tier: 'Legendary', emoji: '🐉' },
@@ -119,20 +131,28 @@ const FISH_DATA = [
     { id: 'ghost_shark', name: 'Hiu Hantu', tier: 'Legendary', emoji: '🐉' },
     { id: 'abyssal_angler', name: 'Angler Abyssal', tier: 'Legendary', emoji: '🐉' },
     { id: 'thunder_eel', name: 'Belut Petir', tier: 'Legendary', emoji: '🐉' },
-    // MYTHIC (5)
+    { id: 'crystal_jellyfish', name: 'Ubur-ubur Kristal', tier: 'Legendary', emoji: '🐉' },
+    { id: 'phoenix_fish', name: 'Ikan Phoenix', tier: 'Legendary', emoji: '🐉' },
+    // MYTHIC (8)
     { id: 'poseidon_trident_fish', name: 'Ikan Trisula Poseidon', tier: 'Mythic', emoji: '🌈' },
     { id: 'kraken_baby', name: 'Bayi Kraken', tier: 'Mythic', emoji: '🌈' },
     { id: 'celestial_whale', name: 'Paus Langit', tier: 'Mythic', emoji: '🌈' },
     { id: 'rainbow_serpent', name: 'Naga Pelangi', tier: 'Mythic', emoji: '🌈' },
-    { id: 'void_leviathan', name: 'Leviathan Kegelapan', tier: 'Mythic', emoji: '🌈' }
+    { id: 'void_leviathan', name: 'Leviathan Kegelapan', tier: 'Mythic', emoji: '🌈' },
+    { id: 'golden_dragon', name: 'Naga Emas Samudra', tier: 'Mythic', emoji: '🌈' },
+    { id: 'time_fish', name: 'Ikan Waktu', tier: 'Mythic', emoji: '🌈' },
+    { id: 'world_serpent', name: 'Jormungandr', tier: 'Mythic', emoji: '🌈' }
 ];
 
 const BAIT_TYPES = [
     { id: 'none', name: 'Tanpa Umpan', emoji: '❌', price: 0, rareBonus: 0 },
     { id: 'cacing', name: 'Cacing Tanah', emoji: '🪱', price: 50, rareBonus: 0 },
+    { id: 'jangkrik', name: 'Jangkrik', emoji: '🦗', price: 100, rareBonus: 3 },
     { id: 'udang', name: 'Udang Segar', emoji: '🦐', price: 150, rareBonus: 5 },
+    { id: 'ikan_kecil', name: 'Ikan Kecil (Live Bait)', emoji: '🐟', price: 300, rareBonus: 8 },
     { id: 'emas', name: 'Umpan Emas', emoji: '✨', price: 500, rareBonus: 12 },
-    { id: 'berlian', name: 'Umpan Berlian', emoji: '💎', price: 1500, rareBonus: 20 }
+    { id: 'berlian', name: 'Umpan Berlian', emoji: '💎', price: 1500, rareBonus: 20 },
+    { id: 'mythic_bait', name: 'Umpan Mitik', emoji: '🌟', price: 5000, rareBonus: 30 }
 ];
 
 const ROD_TYPES = [
@@ -140,7 +160,8 @@ const ROD_TYPES = [
     { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 25, rareBonus: 3 },
     { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 20, rareBonus: 7 },
     { id: 'pro', name: 'Joran Pro Titanium', emoji: '🏆', price: 25000, cooldown: 15, rareBonus: 12 },
-    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 80000, cooldown: 10, rareBonus: 18 }
+    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 80000, cooldown: 10, rareBonus: 18 },
+    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 200000, cooldown: 7, rareBonus: 25 }
 ];
 
 const fishCooldowns = new Map();
@@ -196,6 +217,65 @@ function catchFish(guildId, userId) {
     db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish.id, weight, Date.now());
 
     return { fish, tier: selectedTier, weight, value };
+}
+
+// ================= SISTEM SLOT MACHINE =================
+const SLOT_SYMBOLS = [
+    { id: 'cherry', emoji: '🍒', name: 'Cherry', weight: 25 },
+    { id: 'lemon', emoji: '🍋', name: 'Lemon', weight: 20 },
+    { id: 'orange', emoji: '🍊', name: 'Orange', weight: 18 },
+    { id: 'grape', emoji: '🍇', name: 'Grape', weight: 15 },
+    { id: 'bell', emoji: '🔔', name: 'Bell', weight: 10 },
+    { id: 'star', emoji: '⭐', name: 'Star', weight: 7 },
+    { id: 'diamond', emoji: '💎', name: 'Diamond', weight: 4 },
+    { id: 'seven', emoji: '7️⃣', name: 'Seven', weight: 1 }
+];
+
+const SLOT_PAYOUTS = {
+    'cherry': 2, 'lemon': 3, 'orange': 4, 'grape': 5,
+    'bell': 8, 'star': 12, 'diamond': 18, 'seven': 25
+};
+
+function spinSlot() {
+    const totalWeight = SLOT_SYMBOLS.reduce((s, sym) => s + sym.weight, 0);
+    const spin = () => {
+        let roll = Math.random() * totalWeight, cumulative = 0;
+        for (const sym of SLOT_SYMBOLS) { cumulative += sym.weight; if (roll <= cumulative) return sym; }
+        return SLOT_SYMBOLS[0];
+    };
+    return [spin(), spin(), spin()];
+}
+
+function getSlotResult(reels, bet) {
+    const [r1, r2, r3] = reels;
+    // JACKPOT: 3x sama
+    if (r1.id === r2.id && r2.id === r3.id) {
+        const multiplier = SLOT_PAYOUTS[r1.id];
+        return { win: true, jackpot: true, multiplier, payout: bet * multiplier, desc: `🎰 **JACKPOT!!!** 3x ${r1.emoji} ${r1.name}! (${multiplier}x)` };
+    }
+    // 2x sama
+    if (r1.id === r2.id || r2.id === r3.id || r1.id === r3.id) {
+        const matchSym = r1.id === r2.id ? r1 : (r2.id === r3.id ? r2 : r1);
+        const multiplier = Math.max(1, Math.floor(SLOT_PAYOUTS[matchSym.id] / 3));
+        return { win: true, jackpot: false, multiplier, payout: bet * multiplier, desc: `✨ **2x Match!** ${matchSym.emoji} ${matchSym.name} (${multiplier}x)` };
+    }
+    // Kalah
+    return { win: false, jackpot: false, multiplier: 0, payout: 0, desc: '💀 Tidak ada yang cocok...' };
+}
+
+// ================= SISTEM GIFT / TRANSFER =================
+const GIFT_TAX_RATE = 0.10; // 10% pajak
+const GIFT_MAX_PER_TRANSACTION = 10000;
+const GIFT_RECEIVE_LIMIT_PER_DAY = 10000;
+
+function getGiftReceivedToday(guildId, userId) {
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    return getUserStat(guildId, userId, `gift_received_${today}`);
+}
+
+function addGiftReceivedToday(guildId, userId, amount) {
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    incrementUserStat(guildId, userId, `gift_received_${today}`, amount);
 }
 
 // ================= SISTEM ACHIEVEMENT / BADGE =================
@@ -266,6 +346,19 @@ const ACHIEVEMENTS = [
     { id: 'fish_heavy', name: 'Monster Fish!', emoji: '🐳', desc: 'Tangkap ikan berat > 500 kg', category: 'Fishing', reward: 1500 },
     { id: 'fish_rod_pro', name: 'Pro Equipment', emoji: '🏆', desc: 'Beli Joran Pro Titanium', category: 'Fishing', reward: 500 },
     { id: 'fish_rod_mythic', name: 'Ultimate Gear', emoji: '🔱', desc: 'Beli Joran Mitik', category: 'Fishing', reward: 2000 },
+    // --- SLOT MACHINE ---
+    { id: 'slot_first', name: 'Slot Beginner', emoji: '🎰', desc: 'Pertama kali main slot', category: 'Gambling', reward: 50 },
+    { id: 'slot_jackpot', name: 'JACKPOT!', emoji: '💰', desc: 'Dapat jackpot pertama (3x sama)', category: 'Gambling', reward: 1000 },
+    { id: 'slot_jackpot_7', name: 'Lucky Seven', emoji: '7️⃣', desc: 'Jackpot 7️⃣7️⃣7️⃣ (25x payout)', category: 'Gambling', reward: 5000 },
+    { id: 'slot_win_10', name: 'Slot Addict', emoji: '🎲', desc: 'Menang slot 10 kali', category: 'Gambling', reward: 300 },
+    { id: 'slot_win_50', name: 'Slot Master', emoji: '🃏', desc: 'Menang slot 50 kali', category: 'Gambling', reward: 1500 },
+    { id: 'slot_total_100k', name: 'High Roller', emoji: '💵', desc: 'Total menang slot 100.000 money', category: 'Gambling', reward: 2000 },
+    // --- GIFT / TRANSFER ---
+    { id: 'gift_first', name: 'Dermawan', emoji: '🎁', desc: 'Pertama kali kirim gift ke orang lain', category: 'Social', reward: 100 },
+    { id: 'gift_10', name: 'Generous Soul', emoji: '💝', desc: 'Kirim gift 10 kali', category: 'Social', reward: 500 },
+    { id: 'gift_50', name: 'Philanthropist', emoji: '🏛️', desc: 'Kirim gift 50 kali', category: 'Social', reward: 2000 },
+    { id: 'gift_total_50k', name: 'Big Spender', emoji: '💸', desc: 'Total kirim 50.000 money', category: 'Social', reward: 1000 },
+    { id: 'gift_received_first', name: 'Dicintai', emoji: '❤️', desc: 'Pertama kali menerima gift', category: 'Social', reward: 50 },
 ];
 
 
@@ -414,6 +507,27 @@ async function checkAchievements(guild, userId, context = {}) {
         if (context.rod === 'pro') checks.push('fish_rod_pro');
         if (context.rod === 'mythic_rod') checks.push('fish_rod_mythic');
     }
+    // --- SLOT ---
+    if (context.type === 'slot') {
+        const slotWins = getUserStat(guildId, userId, 'slot_wins');
+        const slotTotal = getUserStat(guildId, userId, 'slot_total_winnings');
+        checks.push('slot_first');
+        if (context.jackpot) checks.push('slot_jackpot');
+        if (context.jackpot7) checks.push('slot_jackpot_7');
+        if (slotWins >= 10) checks.push('slot_win_10');
+        if (slotWins >= 50) checks.push('slot_win_50');
+        if (slotTotal >= 100000) checks.push('slot_total_100k');
+    }
+    // --- GIFT ---
+    if (context.type === 'gift_send') {
+        const giftCount = getUserStat(guildId, userId, 'total_gifts_sent');
+        const giftTotal = getUserStat(guildId, userId, 'total_gift_amount');
+        if (giftCount >= 1) checks.push('gift_first');
+        if (giftCount >= 10) checks.push('gift_10');
+        if (giftCount >= 50) checks.push('gift_50');
+        if (giftTotal >= 50000) checks.push('gift_total_50k');
+    }
+    if (context.type === 'gift_receive') checks.push('gift_received_first');
 
     for (const achId of checks) {
         await grantAchievement(guild, userId, achId);
@@ -567,6 +681,8 @@ const commands = [
     new SlashCommandBuilder().setName('redeem').setDescription('Klaim kode promo').addStringOption(opt => opt.setName('kode').setDescription('Masukkan kode voucher').setRequired(true)),
     new SlashCommandBuilder().setName('quest').setDescription('Cek Misi Harian untuk dapat hadiah uang!'),
     new SlashCommandBuilder().setName('coinflip').setDescription('Lempar koin (50/50)!').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah uang (Max: 500)').setRequired(true).setMinValue(10).setMaxValue(500)),
+    new SlashCommandBuilder().setName('slot').setDescription('🎰 Slot Machine! 8 simbol, payout hingga 25x!').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (10-1000)').setRequired(true).setMinValue(10).setMaxValue(1000)),
+    new SlashCommandBuilder().setName('gift').setDescription('🎁 Kirim money ke player lain').addUserOption(opt => opt.setName('user').setDescription('Siapa yang mau dikasih?').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (Max: 10.000)').setRequired(true).setMinValue(1).setMaxValue(10000)),
     new SlashCommandBuilder()
         .setName('admin_shop')
         .setDescription('Manajemen Toko (Khusus Admin)')
@@ -788,15 +904,47 @@ client.on(Events.InteractionCreate, async interaction => {
             const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUser.id);
             const unlockedIds = userAchs.map(a => a.achievementId);
             const categories = [...new Set(ACHIEVEMENTS.map(a => a.category))];
-            let desc = `**${unlockedIds.length} / ${ACHIEVEMENTS.length}** badge terkumpul\n\n`;
+            const totalUnlocked = unlockedIds.length, totalAll = ACHIEVEMENTS.length;
+            const percentComplete = Math.floor((totalUnlocked / totalAll) * 100);
+            const completionBar = '▰'.repeat(Math.floor(percentComplete / 10)) + '▱'.repeat(10 - Math.floor(percentComplete / 10));
+
+            let desc = `> 🏆 **${totalUnlocked}** / **${totalAll}** badge terkumpul (**${percentComplete}%**)\n> \`${completionBar}\`\n\n`;
+
             for (const cat of categories) {
                 const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
-                const catLine = catAchs.map(a => unlockedIds.includes(a.id) ? a.emoji : '⬛').join(' ');
                 const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-                desc += `**${cat}** (${catUnlocked}/${catAchs.length})\n${catLine}\n\n`;
+                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
+                // Show emoji+name for unlocked, locked symbol for locked
+                const catLine = catAchs.map(a => {
+                    if (unlockedIds.includes(a.id)) return `${a.emoji}`;
+                    return '▪️';
+                }).join(' ');
+                desc += `${catIcon} **${cat}** — \`${catUnlocked}/${catAchs.length}\`\n${catLine}\n\n`;
             }
-            const embed = new EmbedBuilder().setAuthor({ name: `🏆 Achievement | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) }).setColor('#FFD700').setDescription(desc).setFooter({ text: 'Pilih kategori di bawah untuk detail' }).setTimestamp();
-            const selectMenu = new StringSelectMenuBuilder().setCustomId(`ach_detail_${targetUser.id}`).setPlaceholder('📂 Lihat detail per kategori...').addOptions(categories.map(cat => new StringSelectMenuOptionBuilder().setLabel(cat).setValue(cat).setDescription(`Lihat achievement ${cat}`)));
+
+            // Show 3 most recent unlocked with text
+            const recentAchs = userAchs.sort((a, b) => b.unlockedAt - a.unlockedAt).slice(0, 3);
+            if (recentAchs.length > 0) {
+                desc += `━━━━━━━━━━━━━━━━━━━━━━\n📌 **Badge Terbaru:**\n`;
+                for (const ach of recentAchs) {
+                    const def = ACHIEVEMENTS.find(d => d.id === ach.achievementId);
+                    if (def) desc += `> ${def.emoji} **${def.name}** — *${def.desc}*\n`;
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setAuthor({ name: `Achievement Collection | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+                .setColor('#FFD700')
+                .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
+                .setDescription(desc)
+                .setFooter({ text: 'Pilih kategori di bawah untuk melihat detail lengkap setiap badge' })
+                .setTimestamp();
+            const selectMenu = new StringSelectMenuBuilder().setCustomId(`ach_detail_${targetUser.id}`).setPlaceholder('📂 Lihat detail per kategori...').addOptions(categories.map(cat => {
+                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[cat] || '📁';
+                const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
+                const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
+                return new StringSelectMenuOptionBuilder().setLabel(`${cat} (${catUnlocked}/${catAchs.length})`).setValue(cat).setDescription(`Lihat semua achievement ${cat}`).setEmoji(catIcon);
+            }));
             return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)] });
         }
 
@@ -804,18 +952,49 @@ client.on(Events.InteractionCreate, async interaction => {
             const targetUser = interaction.options.getUser('user') || interaction.user, targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
             if (!targetMember) return interaction.reply({content: 'User tidak ditemukan.', ephemeral: true});
             const tData = getOrCreateUser(guildId, targetUser.id), targetXp = (tData.level + 1) * 100, percent = Math.min(100, Math.max(0, Math.floor((tData.xp / targetXp) * 100))), progressBar = '▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10)), roles = targetMember.roles.cache.filter(r => r.name !== '@everyone').sort((a, b) => b.position - a.position).map(r => `<@&${r.id}>`);
-            let displayRoles = roles.length > 0 ? roles.join(' • ') : '*Tidak ada role*'; if (displayRoles.length > 1024) displayRoles = 'Terlalu banyak role...'; 
-            const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id), streakCount = sData ? sData.count : 0, emoji = getSetting(guildId, 'streak_emoji', '🔥');
+            let displayRoles = roles.length > 0 ? roles.slice(0, 10).join(' • ') : '*Tidak ada role*'; if (roles.length > 10) displayRoles += ` *+${roles.length - 10} lainnya*`;
+            const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id), streakCount = sData ? sData.count : 0, streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+            // Badge showcase - 5 terbaru dengan emoji + nama
             const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ? ORDER BY unlockedAt DESC LIMIT 5').all(guildId, targetUser.id);
-            const badgeDisplay = userAchs.length > 0 ? userAchs.map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? def.emoji : ''; }).join(' ') : '*Belum ada badge*';
             const totalBadges = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id).cnt;
-            const profileEmbed = new EmbedBuilder().setAuthor({ name: `Kartu Profil | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) }).setColor('#2B2D31').setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
+            let badgeDisplay = '';
+            if (userAchs.length > 0) {
+                badgeDisplay = userAchs.map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? `${def.emoji} ${def.name}` : ''; }).filter(Boolean).join('\n> ');
+                badgeDisplay = `> ${badgeDisplay}`;
+                if (totalBadges > 5) badgeDisplay += `\n> *...dan ${totalBadges - 5} badge lainnya*`;
+            } else {
+                badgeDisplay = '> *Belum ada badge. Mulai beraktivitas!*';
+            }
+            // Fishing stats
+            const fishCaught = getUserStat(guildId, targetUser.id, 'total_fish_caught');
+            const fishSold = getUserStat(guildId, targetUser.id, 'total_fish_sold_value');
+            // Gambling stats
+            const slotWins = getUserStat(guildId, targetUser.id, 'slot_wins');
+            const cfWins = getUserStat(guildId, targetUser.id, 'coinflip_wins');
+
+            const profileEmbed = new EmbedBuilder()
+                .setAuthor({ name: `Kartu Profil | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+                .setColor('#2B2D31')
+                .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
                 .addFields(
-                    { name: '💳 **STATISTIK**', value: `> 🏅 **Level:** \`${tData.level}\`\n> 💰 **Saldo:** \`${tData.balance.toLocaleString('id-ID')} Money\`\n> ${emoji} **Streak:** \`${streakCount} Hari\`\n> ✨ **EXP:** \`${tData.xp.toLocaleString('id-ID')} / ${targetXp.toLocaleString('id-ID')}\`\n> 📈 \`${progressBar}\` **${percent}%**`, inline: false },
-                    { name: `🏆 **BADGE** (${totalBadges}/${ACHIEVEMENTS.length})`, value: `> ${badgeDisplay}${totalBadges > 5 ? ` *+${totalBadges - 5} lainnya*` : ''}\n> \`/achievement\` untuk detail`, inline: false },
-                    { name: '📅 **INFO AKUN**', value: `> **Bergabung:** <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D>\n> **Dibuat:** <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
-                    { name: `🎭 **ROLE [${roles.length}]**`, value: displayRoles, inline: false }
-                ).setFooter({ text: `ID: ${targetUser.id}`, iconURL: interaction.guild.iconURL() }).setTimestamp();
+                    { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📊 **STATISTIK UTAMA**', inline: false },
+                    { name: '🏅 Level', value: `\`${tData.level}\``, inline: true },
+                    { name: '💰 Saldo', value: `\`${tData.balance.toLocaleString('id-ID')}\``, inline: true },
+                    { name: `${streakEmoji} Streak`, value: `\`${streakCount} Hari\``, inline: true },
+                    { name: '✨ Progress EXP', value: `> \`${tData.xp.toLocaleString('id-ID')} / ${targetXp.toLocaleString('id-ID')}\`\n> \`${progressBar}\` **${percent}%**`, inline: false },
+                    { name: '━━━━━━━━━━━━━━━━━━━━━━', value: `🏆 **BADGE COLLECTION** (${totalBadges}/${ACHIEVEMENTS.length})`, inline: false },
+                    { name: '\u200b', value: badgeDisplay, inline: false },
+                    { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **AKTIVITAS**', inline: false },
+                    { name: '🎣 Ikan Ditangkap', value: `\`${fishCaught}\``, inline: true },
+                    { name: '🎰 Slot Wins', value: `\`${slotWins}\``, inline: true },
+                    { name: '🪙 Coinflip Wins', value: `\`${cfWins}\``, inline: true },
+                    { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📅 **INFO AKUN**', inline: false },
+                    { name: '📥 Bergabung', value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D>`, inline: true },
+                    { name: '📆 Dibuat', value: `<t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: true },
+                    { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
+                )
+                .setFooter({ text: `ID: ${targetUser.id} | /achievement untuk detail badge`, iconURL: interaction.guild.iconURL() })
+                .setTimestamp();
             return interaction.reply({ embeds: [profileEmbed] });
         }
 
@@ -851,6 +1030,71 @@ client.on(Events.InteractionCreate, async interaction => {
         if (command === 'quest') { const questChannelSetting = getSetting(guildId, 'quest_channel', null); if (questChannelSetting && interaction.channelId !== questChannelSetting) return interaction.reply({ content: `❌ Buka misi hanya di <#${questChannelSetting}>.`, ephemeral: true }); updateQuestProgress(guildId, interaction.user.id, 'dummy', 0); const row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id), quests = JSON.parse(row.data); const embed = new EmbedBuilder().setTitle('📜 Papan Misi Harian').setColor('#2B2D31').setDescription('Selesaikan misi berikut!\n*(Reset 00:00 WIB)*'); const buttons = new ActionRowBuilder(); quests.forEach((q, i) => { const percent = Math.min(100, Math.floor((q.progress / q.target) * 100)), bar = '▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10)), status = q.claimed ? '✅ **SELESAI**' : `**${q.progress} / ${q.target}**`; embed.addFields({ name: `Misi ${i+1}`, value: `${q.desc}\n> 🪙 **${q.reward} Money**\n> \`${bar}\` ${status}`, inline: false }); const btn = new ButtonBuilder().setCustomId(`claim_quest_${i}`).setLabel(`Klaim ${i+1}`).setStyle(ButtonStyle.Success); if (q.progress < q.target || q.claimed) btn.setDisabled(true); buttons.addComponents(btn); }); return interaction.reply({ embeds: [embed], components: [buttons] }); }
 
         if (command === 'coinflip') { if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true }); const taruhan = interaction.options.getInteger('taruhan'); if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true }); activeCoinflips.add(interaction.user.id); userData.balance -= taruhan; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_coinflips'); await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setDescription(`🪙 **Melempar koin...**\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**`)] }); setTimeout(async () => { activeCoinflips.delete(interaction.user.id); let freshData = getOrCreateUser(guildId, interaction.user.id); if (Math.random() < 0.5) { freshData.balance += (taruhan * 2); db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'coinflip_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🎉 MENANG!').setDescription(`Dapat 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } else { await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('💀 KALAH!').setDescription(`Hilang 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } }, 7000); return; }
+
+        // ================= SLOT MACHINE =================
+        if (command === 'slot') {
+            const bet = interaction.options.getInteger('taruhan');
+            if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
+            userData.balance -= bet;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_slot_spins');
+            const reels = spinSlot();
+            const result = getSlotResult(reels, bet);
+            const slotDisplay = `\`╔══════════╗\`\n\`║\` ${reels[0].emoji} \`┃\` ${reels[1].emoji} \`┃\` ${reels[2].emoji} \`║\`\n\`╚══════════╝\``;
+            let embed;
+            if (result.jackpot && reels[0].id === 'seven') {
+                embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> **Menang: 🪙 ${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
+                incrementUserStat(guildId, interaction.user.id, 'slot_jackpot_7_count');
+            } else if (result.jackpot) {
+                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> **Menang: 🪙 ${result.payout.toLocaleString('id-ID')}** 🎉`);
+            } else if (result.win) {
+                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **${result.payout.toLocaleString('id-ID')}**`);
+            } else {
+                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Kalah: 🪙 -${bet.toLocaleString('id-ID')}`);
+            }
+            if (result.win) {
+                userData.balance += result.payout;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                incrementUserStat(guildId, interaction.user.id, 'slot_wins');
+                incrementUserStat(guildId, interaction.user.id, 'slot_total_winnings', result.payout);
+                await checkAchievements(interaction.guild, interaction.user.id, { type: 'slot', jackpot: result.jackpot, jackpot7: result.jackpot && reels[0].id === 'seven' });
+            }
+            embed.setFooter({ text: `Saldo: ${userData.balance.toLocaleString('id-ID')} money` });
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        // ================= GIFT / TRANSFER =================
+        if (command === 'gift') {
+            const targetUser = interaction.options.getUser('user');
+            const amount = interaction.options.getInteger('jumlah');
+            if (targetUser.id === interaction.user.id) return interaction.reply({ content: '❌ Tidak bisa kirim ke diri sendiri!', ephemeral: true });
+            if (targetUser.bot) return interaction.reply({ content: '❌ Tidak bisa kirim ke bot!', ephemeral: true });
+            if (userData.balance < amount) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
+            // Cek limit harian penerima
+            const receivedToday = getGiftReceivedToday(guildId, targetUser.id);
+            if (receivedToday + amount > GIFT_RECEIVE_LIMIT_PER_DAY) return interaction.reply({ content: `❌ <@${targetUser.id}> sudah mencapai batas terima harian (🪙 ${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}/hari). Sisa kuota: 🪙 ${(GIFT_RECEIVE_LIMIT_PER_DAY - receivedToday).toLocaleString('id-ID')}`, ephemeral: true });
+            // Cek tax-free voucher (stat 'tax_free_voucher' > 0)
+            const hasTaxFree = getUserStat(guildId, interaction.user.id, 'tax_free_voucher') > 0;
+            const taxAmount = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
+            const netAmount = amount - taxAmount;
+            if (hasTaxFree) incrementUserStat(guildId, interaction.user.id, 'tax_free_voucher', -1);
+            // Transfer
+            userData.balance -= amount;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            const targetData = getOrCreateUser(guildId, targetUser.id);
+            targetData.balance += netAmount;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(targetData.balance, guildId, targetUser.id);
+            addGiftReceivedToday(guildId, targetUser.id, netAmount);
+            incrementUserStat(guildId, interaction.user.id, 'total_gifts_sent');
+            incrementUserStat(guildId, interaction.user.id, 'total_gift_amount', amount);
+            await checkAchievements(interaction.guild, interaction.user.id, { type: 'gift_send' });
+            await checkAchievements(interaction.guild, targetUser.id, { type: 'gift_receive' });
+            const embed = new EmbedBuilder().setColor('#FF69B4').setTitle('🎁 Gift Terkirim!')
+                .setDescription(`<@${interaction.user.id}> ➜ <@${targetUser.id}>\n\n> 💰 **Jumlah:** 🪙 ${amount.toLocaleString('id-ID')}\n> 📊 **Pajak (${hasTaxFree ? 'FREE!' : '10%'}):** 🪙 ${taxAmount.toLocaleString('id-ID')}${hasTaxFree ? ' *(Tax-Free Voucher)*' : ''}\n> ✅ **Diterima:** 🪙 ${netAmount.toLocaleString('id-ID')}`)
+                .setFooter({ text: `Saldo pengirim: ${userData.balance.toLocaleString('id-ID')} | Limit harian: ${(receivedToday + netAmount).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
+                .setTimestamp();
+            return interaction.reply({ embeds: [embed] });
+        }
 
         // ================= FISHING COMMANDS =================
         if (command === 'fish') {
@@ -955,7 +1199,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
-        if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); let desc = ''; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); desc += `${unlocked ? '✅' : '🔒'} ${ach.emoji} **${ach.name}**\n> *${ach.desc}*\n> 🪙 ${ach.reward.toLocaleString('id-ID')} Money\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`🏆 ${selectedCat}`).setColor('#FFD700').setDescription(desc || 'Kosong.')], ephemeral: true }); }
+        if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); const status = unlocked ? '✅' : '🔒'; const nameStyle = unlocked ? `**${ach.name}**` : `~~${ach.name}~~`; desc += `${status} ${ach.emoji} ${nameStyle}\n> *${ach.desc}*\n> Hadiah: 🪙 ${ach.reward.toLocaleString('id-ID')} Money${unlocked ? ' ✓ Diklaim' : ''}\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
         if (interaction.customId === 'shop_buy_custom_role') { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
         if (interaction.customId === 'cr_select_color') { const selectedColor = interaction.values[0], modal = new ModalBuilder().setCustomId(`submit_cr_${selectedColor}`).setTitle('Custom Role 🎨'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_name').setLabel('Nama Role (Max 32)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32))); if (selectedColor === 'custom') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_color').setLabel('Hex (#FF0000)').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(7).setMaxLength(7).setPlaceholder('#FFFFFF'))); return interaction.showModal(modal); }
         // --- FISHING SHOP BUY ---
