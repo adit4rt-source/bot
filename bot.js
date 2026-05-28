@@ -38,9 +38,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCRE
 db.exec(`CREATE TABLE IF NOT EXISTS farm_storage (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_level INTEGER DEFAULT 1, PRIMARY KEY(guildId, userId))`);
 
-// ================= MIGRASI: PROFILE CUSTOMIZATION =================
-db.exec(`CREATE TABLE IF NOT EXISTS profile_customization (guildId TEXT, userId TEXT, title TEXT DEFAULT '', bio TEXT DEFAULT '', banner_color TEXT DEFAULT '#2B2D31', frame TEXT DEFAULT 'default', PRIMARY KEY(guildId, userId))`);
-db.exec(`CREATE TABLE IF NOT EXISTS profile_collection (guildId TEXT, userId TEXT, itemType TEXT, itemId TEXT, PRIMARY KEY(guildId, userId, itemType, itemId))`);
+// ================= MIGRASI: PET SYSTEM =================
+db.exec(`CREATE TABLE IF NOT EXISTS pets (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, petId TEXT, name TEXT, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, happiness INTEGER DEFAULT 100, hunger INTEGER DEFAULT 100, status TEXT DEFAULT 'happy', active INTEGER DEFAULT 0, adoptedAt INTEGER)`);
 
 
 function getOrCreateUser(guildId, userId) { let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); } return user; }
@@ -423,78 +422,156 @@ function addGiftReceivedToday(guildId, userId, amount) {
     incrementUserStat(guildId, userId, `gift_received_${today}`, amount);
 }
 
-// ================= SISTEM PROFILE CUSTOMIZATION =================
-const PROFILE_TITLES = [
-    // Free titles (auto-unlocked)
-    { id: 'newbie', name: '🌱 Newbie', cost: 0, source: 'default' },
-    // Achievement-unlocked titles
-    { id: 'social_butterfly', name: '💬 Social Butterfly', cost: 0, source: 'achievement', achievement: 'chat_1000' },
-    { id: 'master_angler', name: '🎣 Master Angler', cost: 0, source: 'achievement', achievement: 'fish_100' },
-    { id: 'green_thumb', name: '🌾 Green Thumb', cost: 0, source: 'achievement', achievement: 'farm_50' },
-    { id: 'high_roller', name: '🎰 High Roller', cost: 0, source: 'achievement', achievement: 'slot_total_100k' },
-    { id: 'eternal_flame', name: '🔥 Eternal Flame', cost: 0, source: 'achievement', achievement: 'streak_100' },
-    { id: 'millionaire', name: '💎 Millionaire', cost: 0, source: 'achievement', achievement: 'balance_1m' },
-    { id: 'completionist', name: '🏆 Completionist', cost: 0, source: 'special', condition: 'badge_50' },
-    // Shop titles
-    { id: 'dreamer', name: '✨ Dreamer', cost: 3000, source: 'shop' },
-    { id: 'sakura_princess', name: '🌸 Sakura Princess', cost: 5000, source: 'shop' },
-    { id: 'moonlight', name: '🌙 Moonlight', cost: 5000, source: 'shop' },
-    { id: 'stardust', name: '💫 Stardust', cost: 5000, source: 'shop' },
-    { id: 'butterfly', name: '🦋 Butterfly', cost: 4000, source: 'shop' },
-    { id: 'rainbow_soul', name: '🌈 Rainbow Soul', cost: 7000, source: 'shop' },
-    { id: 'royalty', name: '👑 Royalty', cost: 10000, source: 'shop' },
-    { id: 'dark_aesthetic', name: '🖤 Dark Aesthetic', cost: 5000, source: 'shop' },
-    { id: 'lucky_one', name: '🍀 Lucky One', cost: 4000, source: 'shop' },
-    { id: 'thunder', name: '⚡ Thunder', cost: 4000, source: 'shop' },
-    { id: 'kawaii', name: '🎀 Kawaii', cost: 6000, source: 'shop' },
-    { id: 'poseidon', name: '🔱 Poseidon', cost: 8000, source: 'shop' },
-    { id: 'dragon_tamer', name: '🐉 Dragon Tamer', cost: 10000, source: 'shop' },
-    { id: 'edgy_lord', name: '💀 Edgy Lord', cost: 5000, source: 'shop' },
-    { id: 'tropical_vibes', name: '🌺 Tropical Vibes', cost: 4000, source: 'shop' }
+// ================= SISTEM PET / COMPANION =================
+const PET_DATA = [
+    // COMMON (25 pets)
+    { id: 'cat', name: 'Kucing', emoji: '🐱', tier: 'Common', price: 1000, bonus: { type: 'money_chat', value: 3 } },
+    { id: 'dog', name: 'Anjing', emoji: '🐶', tier: 'Common', price: 1000, bonus: { type: 'xp_chat', value: 3 } },
+    { id: 'hamster', name: 'Hamster', emoji: '🐹', tier: 'Common', price: 500, bonus: { type: 'farm_yield', value: 5 } },
+    { id: 'bird', name: 'Burung', emoji: '🐦', tier: 'Common', price: 500, bonus: { type: 'farm_speed', value: 3 } },
+    { id: 'fish_pet', name: 'Ikan Hias', emoji: '🐠', tier: 'Common', price: 800, bonus: { type: 'fish_luck', value: 2 } },
+    { id: 'turtle', name: 'Kura-kura', emoji: '🐢', tier: 'Common', price: 600, bonus: { type: 'xp_all', value: 2 } },
+    { id: 'duck', name: 'Bebek', emoji: '🦆', tier: 'Common', price: 700, bonus: { type: 'money_all', value: 2 } },
+    { id: 'chick', name: 'Anak Ayam', emoji: '🐤', tier: 'Common', price: 400, bonus: { type: 'quest_reward', value: 3 } },
+    { id: 'frog', name: 'Kodok', emoji: '🐸', tier: 'Common', price: 500, bonus: { type: 'event_luck', value: 3 } },
+    { id: 'mouse', name: 'Tikus Putih', emoji: '🐭', tier: 'Common', price: 400, bonus: { type: 'money_chat', value: 2 } },
+    { id: 'rabbit_small', name: 'Kelinci Kecil', emoji: '🐇', tier: 'Common', price: 800, bonus: { type: 'xp_chat', value: 2 } },
+    { id: 'snail', name: 'Siput', emoji: '🐌', tier: 'Common', price: 300, bonus: { type: 'farm_yield', value: 3 } },
+    { id: 'ladybug', name: 'Kumbang', emoji: '🐞', tier: 'Common', price: 300, bonus: { type: 'farm_speed', value: 2 } },
+    { id: 'ant', name: 'Semut Pekerja', emoji: '🐜', tier: 'Common', price: 200, bonus: { type: 'xp_all', value: 1 } },
+    { id: 'bee', name: 'Lebah', emoji: '🐝', tier: 'Common', price: 600, bonus: { type: 'farm_yield', value: 4 } },
+    { id: 'butterfly_pet', name: 'Kupu-kupu', emoji: '🦋', tier: 'Common', price: 700, bonus: { type: 'quest_reward', value: 2 } },
+    { id: 'hedgehog', name: 'Landak', emoji: '🦔', tier: 'Common', price: 800, bonus: { type: 'money_all', value: 2 } },
+    { id: 'squirrel', name: 'Tupai', emoji: '🐿️', tier: 'Common', price: 600, bonus: { type: 'fish_luck', value: 2 } },
+    { id: 'parrot', name: 'Burung Beo', emoji: '🦜', tier: 'Common', price: 900, bonus: { type: 'xp_chat', value: 3 } },
+    { id: 'penguin_small', name: 'Penguin Kecil', emoji: '🐧', tier: 'Common', price: 800, bonus: { type: 'money_chat', value: 3 } },
+    { id: 'koala', name: 'Koala', emoji: '🐨', tier: 'Common', price: 900, bonus: { type: 'xp_all', value: 2 } },
+    { id: 'pig', name: 'Babi Mini', emoji: '🐷', tier: 'Common', price: 700, bonus: { type: 'money_all', value: 3 } },
+    { id: 'sheep', name: 'Domba', emoji: '🐑', tier: 'Common', price: 600, bonus: { type: 'farm_yield', value: 3 } },
+    { id: 'cow_mini', name: 'Sapi Mini', emoji: '🐄', tier: 'Common', price: 800, bonus: { type: 'farm_speed', value: 3 } },
+    { id: 'monkey', name: 'Monyet', emoji: '🐒', tier: 'Common', price: 900, bonus: { type: 'event_luck', value: 3 } },
+    // UNCOMMON (25 pets)
+    { id: 'rabbit', name: 'Kelinci Anggora', emoji: '🐰', tier: 'Uncommon', price: 5000, bonus: { type: 'money_all', value: 5 } },
+    { id: 'fox', name: 'Rubah', emoji: '🦊', tier: 'Uncommon', price: 8000, bonus: { type: 'xp_all', value: 5 } },
+    { id: 'owl', name: 'Burung Hantu', emoji: '🦉', tier: 'Uncommon', price: 7000, bonus: { type: 'quest_reward', value: 8 } },
+    { id: 'otter', name: 'Berang-berang', emoji: '🦦', tier: 'Uncommon', price: 6000, bonus: { type: 'fish_luck', value: 5 } },
+    { id: 'deer', name: 'Rusa', emoji: '🦌', tier: 'Uncommon', price: 7000, bonus: { type: 'farm_speed', value: 7 } },
+    { id: 'raccoon', name: 'Rakun', emoji: '🦝', tier: 'Uncommon', price: 6000, bonus: { type: 'money_chat', value: 6 } },
+    { id: 'flamingo', name: 'Flamingo', emoji: '🦩', tier: 'Uncommon', price: 8000, bonus: { type: 'xp_chat', value: 6 } },
+    { id: 'swan', name: 'Angsa', emoji: '🦢', tier: 'Uncommon', price: 7000, bonus: { type: 'money_all', value: 5 } },
+    { id: 'peacock', name: 'Merak', emoji: '🦚', tier: 'Uncommon', price: 9000, bonus: { type: 'xp_all', value: 6 } },
+    { id: 'dolphin', name: 'Lumba-lumba', emoji: '🐬', tier: 'Uncommon', price: 10000, bonus: { type: 'fish_luck', value: 7 } },
+    { id: 'seal', name: 'Anjing Laut', emoji: '🦭', tier: 'Uncommon', price: 8000, bonus: { type: 'fish_luck', value: 6 } },
+    { id: 'eagle', name: 'Elang', emoji: '🦅', tier: 'Uncommon', price: 9000, bonus: { type: 'event_luck', value: 7 } },
+    { id: 'wolf_pup', name: 'Anak Serigala', emoji: '🐺', tier: 'Uncommon', price: 10000, bonus: { type: 'xp_all', value: 6 } },
+    { id: 'panda_red', name: 'Panda Merah', emoji: '🐾', tier: 'Uncommon', price: 12000, bonus: { type: 'money_all', value: 6 } },
+    { id: 'chameleon', name: 'Bunglon', emoji: '🦎', tier: 'Uncommon', price: 6000, bonus: { type: 'event_luck', value: 5 } },
+    { id: 'axolotl', name: 'Axolotl', emoji: '🪷', tier: 'Uncommon', price: 10000, bonus: { type: 'fish_luck', value: 7 } },
+    { id: 'jellyfish', name: 'Ubur-ubur', emoji: '🪼', tier: 'Uncommon', price: 7000, bonus: { type: 'fish_luck', value: 5 } },
+    { id: 'bat', name: 'Kelelawar', emoji: '🦇', tier: 'Uncommon', price: 5000, bonus: { type: 'xp_chat', value: 5 } },
+    { id: 'crane', name: 'Bangau', emoji: '🦩', tier: 'Uncommon', price: 8000, bonus: { type: 'farm_yield', value: 7 } },
+    { id: 'husky', name: 'Husky', emoji: '🐕', tier: 'Uncommon', price: 9000, bonus: { type: 'xp_all', value: 5 } },
+    { id: 'corgi', name: 'Corgi', emoji: '🐕', tier: 'Uncommon', price: 10000, bonus: { type: 'money_chat', value: 7 } },
+    { id: 'cat_persian', name: 'Kucing Persia', emoji: '🐈', tier: 'Uncommon', price: 8000, bonus: { type: 'money_all', value: 5 } },
+    { id: 'cat_siamese', name: 'Kucing Siam', emoji: '🐈‍⬛', tier: 'Uncommon', price: 9000, bonus: { type: 'xp_all', value: 5 } },
+    { id: 'horse_mini', name: 'Kuda Poni', emoji: '🐴', tier: 'Uncommon', price: 11000, bonus: { type: 'farm_speed', value: 8 } },
+    { id: 'goat', name: 'Kambing Gunung', emoji: '🐐', tier: 'Uncommon', price: 7000, bonus: { type: 'farm_yield', value: 6 } },
+    // RARE (20 pets)
+    { id: 'panda', name: 'Panda Giant', emoji: '🐼', tier: 'Rare', price: 20000, bonus: { type: 'money_xp', value: 8 } },
+    { id: 'arctic_fox', name: 'Arctic Fox', emoji: '🦊', tier: 'Rare', price: 30000, bonus: { type: 'fish_luck', value: 10 } },
+    { id: 'baby_dragon', name: 'Baby Dragon', emoji: '🐉', tier: 'Rare', price: 50000, bonus: { type: 'xp_all', value: 10 } },
+    { id: 'unicorn', name: 'Unicorn', emoji: '🦄', tier: 'Rare', price: 40000, bonus: { type: 'all_reward', value: 10 } },
+    { id: 'snow_leopard', name: 'Snow Leopard', emoji: '🐆', tier: 'Rare', price: 35000, bonus: { type: 'money_all', value: 10 } },
+    { id: 'white_tiger', name: 'White Tiger', emoji: '🐯', tier: 'Rare', price: 45000, bonus: { type: 'event_luck', value: 12 } },
+    { id: 'golden_eagle', name: 'Golden Eagle', emoji: '🦅', tier: 'Rare', price: 30000, bonus: { type: 'xp_all', value: 9 } },
+    { id: 'crystal_deer', name: 'Crystal Deer', emoji: '🦌', tier: 'Rare', price: 35000, bonus: { type: 'farm_yield', value: 12 } },
+    { id: 'shadow_wolf', name: 'Shadow Wolf', emoji: '🐺', tier: 'Rare', price: 40000, bonus: { type: 'money_all', value: 9 } },
+    { id: 'moon_rabbit', name: 'Moon Rabbit', emoji: '🐇', tier: 'Rare', price: 30000, bonus: { type: 'quest_reward', value: 12 } },
+    { id: 'fire_fox', name: 'Fire Fox', emoji: '🦊', tier: 'Rare', price: 45000, bonus: { type: 'xp_all', value: 10 } },
+    { id: 'spirit_owl', name: 'Spirit Owl', emoji: '🦉', tier: 'Rare', price: 35000, bonus: { type: 'quest_reward', value: 10 } },
+    { id: 'jade_turtle', name: 'Jade Turtle', emoji: '🐢', tier: 'Rare', price: 25000, bonus: { type: 'farm_speed', value: 12 } },
+    { id: 'storm_hawk', name: 'Storm Hawk', emoji: '🦅', tier: 'Rare', price: 40000, bonus: { type: 'event_luck', value: 10 } },
+    { id: 'ocean_horse', name: 'Kuda Laut Raksasa', emoji: '🐴', tier: 'Rare', price: 35000, bonus: { type: 'fish_luck', value: 12 } },
+    { id: 'sakura_cat', name: 'Sakura Cat', emoji: '🐱', tier: 'Rare', price: 30000, bonus: { type: 'money_xp', value: 8 } },
+    { id: 'thunder_hound', name: 'Thunder Hound', emoji: '🐶', tier: 'Rare', price: 40000, bonus: { type: 'xp_all', value: 10 } },
+    { id: 'frost_bear', name: 'Frost Bear', emoji: '🐻‍❄️', tier: 'Rare', price: 45000, bonus: { type: 'money_all', value: 10 } },
+    { id: 'vine_snake', name: 'Vine Snake', emoji: '🐍', tier: 'Rare', price: 25000, bonus: { type: 'farm_yield', value: 10 } },
+    { id: 'ember_cat', name: 'Ember Cat', emoji: '🐈‍⬛', tier: 'Rare', price: 35000, bonus: { type: 'money_chat', value: 10 } },
+    // EPIC (15 pets)
+    { id: 'phoenix', name: 'Phoenix', emoji: '🔥', tier: 'Epic', price: 100000, bonus: { type: 'xp_all', value: 12 } },
+    { id: 'ice_wolf', name: 'Ice Wolf', emoji: '❄️', tier: 'Epic', price: 120000, bonus: { type: 'money_all', value: 12 } },
+    { id: 'thunder_tiger', name: 'Thunder Tiger', emoji: '⚡', tier: 'Epic', price: 150000, bonus: { type: 'event_luck', value: 15 } },
+    { id: 'spirit_deer', name: 'Spirit Deer', emoji: '🌸', tier: 'Epic', price: 100000, bonus: { type: 'farm_speed', value: 15 } },
+    { id: 'shadow_panther', name: 'Shadow Panther', emoji: '🐆', tier: 'Epic', price: 130000, bonus: { type: 'money_all', value: 13 } },
+    { id: 'celestial_crane', name: 'Celestial Crane', emoji: '🕊️', tier: 'Epic', price: 110000, bonus: { type: 'xp_all', value: 13 } },
+    { id: 'lava_salamander', name: 'Lava Salamander', emoji: '🦎', tier: 'Epic', price: 120000, bonus: { type: 'farm_yield', value: 15 } },
+    { id: 'ocean_leviathan', name: 'Ocean Leviathan', emoji: '🐋', tier: 'Epic', price: 140000, bonus: { type: 'fish_luck', value: 15 } },
+    { id: 'storm_dragon', name: 'Storm Dragon', emoji: '🐲', tier: 'Epic', price: 180000, bonus: { type: 'all_reward', value: 12 } },
+    { id: 'crystal_phoenix', name: 'Crystal Phoenix', emoji: '💎', tier: 'Epic', price: 160000, bonus: { type: 'xp_all', value: 15 } },
+    { id: 'void_serpent', name: 'Void Serpent', emoji: '🐍', tier: 'Epic', price: 150000, bonus: { type: 'event_luck', value: 14 } },
+    { id: 'aurora_wolf', name: 'Aurora Wolf', emoji: '🌌', tier: 'Epic', price: 140000, bonus: { type: 'money_all', value: 14 } },
+    { id: 'golden_kirin', name: 'Golden Kirin', emoji: '🦄', tier: 'Epic', price: 170000, bonus: { type: 'all_reward', value: 13 } },
+    { id: 'nightmare_horse', name: 'Nightmare Horse', emoji: '🐴', tier: 'Epic', price: 130000, bonus: { type: 'xp_all', value: 14 } },
+    { id: 'ancient_tortoise', name: 'Ancient Tortoise', emoji: '🐢', tier: 'Epic', price: 100000, bonus: { type: 'farm_speed', value: 18 } },
+    // LEGENDARY (10 pets - NOT sold, only from eggs)
+    { id: 'golden_dragon', name: 'Golden Dragon', emoji: '🐲', tier: 'Legendary', price: 0, bonus: { type: 'all_reward', value: 20 } },
+    { id: 'celestial_butterfly', name: 'Celestial Butterfly', emoji: '🦋', tier: 'Legendary', price: 0, bonus: { type: 'money_xp', value: 15 } },
+    { id: 'void_cat', name: 'Void Cat', emoji: '🐈‍⬛', tier: 'Legendary', price: 0, bonus: { type: 'money_all', value: 18 } },
+    { id: 'cosmic_whale', name: 'Cosmic Whale', emoji: '🐳', tier: 'Legendary', price: 0, bonus: { type: 'fish_luck', value: 20 } },
+    { id: 'divine_phoenix', name: 'Divine Phoenix', emoji: '🔥', tier: 'Legendary', price: 0, bonus: { type: 'xp_all', value: 20 } },
+    { id: 'nature_spirit', name: 'Nature Spirit', emoji: '🌿', tier: 'Legendary', price: 0, bonus: { type: 'farm_yield', value: 25 } },
+    { id: 'thunder_god_bird', name: 'Thunder God Bird', emoji: '⚡', tier: 'Legendary', price: 0, bonus: { type: 'event_luck', value: 20 } },
+    { id: 'diamond_wolf', name: 'Diamond Wolf', emoji: '💎', tier: 'Legendary', price: 0, bonus: { type: 'money_all', value: 20 } },
+    { id: 'eternal_serpent', name: 'Eternal Serpent', emoji: '🐍', tier: 'Legendary', price: 0, bonus: { type: 'all_reward', value: 18 } },
+    { id: 'galaxy_horse', name: 'Galaxy Horse', emoji: '🌌', tier: 'Legendary', price: 0, bonus: { type: 'xp_all', value: 18 } },
+    // MYTHIC (8 pets - EXTREMELY rare from eggs only)
+    { id: 'world_tree_spirit', name: 'World Tree Spirit', emoji: '🌳', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
+    { id: 'time_dragon', name: 'Time Dragon', emoji: '⌛', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
+    { id: 'god_cat', name: 'God Cat (Bastet)', emoji: '👑', tier: 'Mythic', price: 0, bonus: { type: 'money_all', value: 25 } },
+    { id: 'fenrir', name: 'Fenrir', emoji: '🐺', tier: 'Mythic', price: 0, bonus: { type: 'xp_all', value: 25 } },
+    { id: 'quetzalcoatl', name: 'Quetzalcoatl', emoji: '🐉', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
+    { id: 'nine_tails', name: 'Nine-Tailed Fox', emoji: '🦊', tier: 'Mythic', price: 0, bonus: { type: 'event_luck', value: 25 } },
+    { id: 'cerberus', name: 'Cerberus', emoji: '🐕', tier: 'Mythic', price: 0, bonus: { type: 'money_all', value: 25 } },
+    { id: 'leviathan_pet', name: 'Leviathan', emoji: '🐋', tier: 'Mythic', price: 0, bonus: { type: 'fish_luck', value: 30 } }
 ];
 
-const PROFILE_BANNERS = [
-    { id: 'default', name: 'Default', emoji: '⬛', cost: 0, hex: '#2B2D31' },
-    { id: 'soft_pink', name: 'Soft Pink', emoji: '🩷', cost: 2000, hex: '#FFB6C1' },
-    { id: 'purple_dream', name: 'Purple Dream', emoji: '💜', cost: 2000, hex: '#9B59B6' },
-    { id: 'ocean_blue', name: 'Ocean Blue', emoji: '💙', cost: 2000, hex: '#3498DB' },
-    { id: 'mint_green', name: 'Mint Green', emoji: '💚', cost: 2000, hex: '#2ECC71' },
-    { id: 'baby_blue', name: 'Baby Blue', emoji: '🩵', cost: 2000, hex: '#87CEEB' },
-    { id: 'sunset_orange', name: 'Sunset Orange', emoji: '🧡', cost: 2000, hex: '#F39C12' },
-    { id: 'red_passion', name: 'Red Passion', emoji: '❤️', cost: 2000, hex: '#E74C3C' },
-    { id: 'dark_mode', name: 'Dark Mode', emoji: '🖤', cost: 2000, hex: '#1A1A2E' },
-    { id: 'clean_white', name: 'Clean White', emoji: '🤍', cost: 2000, hex: '#F5F5F5' },
-    { id: 'gold', name: 'Royal Gold', emoji: '🌟', cost: 5000, hex: '#FFD700' },
-    { id: 'rose_gold', name: 'Rose Gold', emoji: '🌹', cost: 5000, hex: '#B76E79' }
+const PET_FOODS = [
+    { id: 'snack', name: 'Snack Biasa', emoji: '🍖', price: 30, hunger: 15, happiness: 5 },
+    { id: 'premium_meat', name: 'Daging Premium', emoji: '🥩', price: 100, hunger: 30, happiness: 10 },
+    { id: 'cake', name: 'Kue Spesial', emoji: '🎂', price: 200, hunger: 20, happiness: 25 },
+    { id: 'feast', name: 'Feast Mewah', emoji: '🍗', price: 500, hunger: 50, happiness: 30 },
+    { id: 'mythic_food', name: 'Makanan Mitik', emoji: '⭐', price: 1500, hunger: 100, happiness: 50 }
 ];
 
-const PROFILE_FRAMES = [
-    { id: 'default', name: 'Default', cost: 0, top: '━━━━━━━━━━━━━━━━━━━━━━', bottom: '━━━━━━━━━━━━━━━━━━━━━━' },
-    { id: 'gold', name: 'Gold Border', cost: 10000, top: '═══════ ✦ ═══════', bottom: '═══════ ✦ ═══════' },
-    { id: 'star', name: 'Stardust', cost: 0, source: 'achievement_30', top: '✧･ﾟ:* ─────────── *:･ﾟ✧', bottom: '✧･ﾟ:* ─────────── *:･ﾟ✧' },
-    { id: 'sakura', name: 'Sakura Bloom', cost: 8000, top: '🌸 ─────────────── 🌸', bottom: '🌸 ─────────────── 🌸' },
-    { id: 'thunder', name: 'Thunder Strike', cost: 0, source: 'level_50', top: '⚡ ─────────────── ⚡', bottom: '⚡ ─────────────── ⚡' },
-    { id: 'fire', name: 'Eternal Fire', cost: 0, source: 'streak_60', top: '🔥 ─────────────── 🔥', bottom: '🔥 ─────────────── 🔥' },
-    { id: 'diamond', name: 'Diamond Class', cost: 0, source: 'balance_500k', top: '💎 ─────────────── 💎', bottom: '💎 ─────────────── 💎' },
-    { id: 'ocean', name: 'Ocean Wave', cost: 0, source: 'fish_200', top: '🌊 ─────────────── 🌊', bottom: '🌊 ─────────────── 🌊' },
-    { id: 'farm', name: 'Harvest Bloom', cost: 0, source: 'farm_200', top: '🌾 ─────────────── 🌾', bottom: '🌾 ─────────────── 🌾' },
-    { id: 'heart', name: 'Hearts', cost: 6000, top: '💖 ─────────────── 💖', bottom: '💖 ─────────────── 💖' },
-    { id: 'galaxy', name: 'Galaxy', cost: 9000, top: '🌌 ─────────────── 🌌', bottom: '🌌 ─────────────── 🌌' }
+const PET_EGGS = [
+    { id: 'common_egg', name: 'Common Egg', emoji: '🥚', price: 2000, rates: { Common: 60, Uncommon: 30, Rare: 10 } },
+    { id: 'rare_egg', name: 'Rare Egg', emoji: '🥚', price: 10000, rates: { Uncommon: 35, Rare: 40, Epic: 20, Legendary: 5 } },
+    { id: 'legendary_egg', name: 'Legendary Egg', emoji: '🥚', price: 50000, rates: { Rare: 25, Epic: 40, Legendary: 25, Mythic: 10 } },
+    { id: 'mythic_egg', name: 'Mythic Egg', emoji: '🌟', price: 150000, rates: { Epic: 30, Legendary: 45, Mythic: 25 } }
 ];
 
-function getProfileCustom(guildId, userId) {
-    let p = db.prepare('SELECT * FROM profile_customization WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    if (!p) { db.prepare('INSERT INTO profile_customization (guildId, userId) VALUES (?, ?)').run(guildId, userId); p = { title: '', bio: '', banner_color: '#2B2D31', frame: 'default' }; }
-    return p;
+const PET_LEVEL_MULTIPLIERS = [1.0, 1.0, 1.0, 1.0, 1.0, 1.2, 1.2, 1.2, 1.2, 1.2, 1.5, 1.5, 1.5, 1.5, 1.5, 1.8, 1.8, 1.8, 1.8, 1.8, 2.0, 2.0, 2.0, 2.0, 2.0, 2.5, 2.5, 2.5, 2.5, 2.5, 3.0];
+
+function getPetData(guildId, userId) {
+    return db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(guildId, userId);
 }
-function ownsProfileItem(guildId, userId, itemType, itemId) {
-    return !!db.prepare('SELECT 1 FROM profile_collection WHERE guildId = ? AND userId = ? AND itemType = ? AND itemId = ?').get(guildId, userId, itemType, itemId);
+function getAllPets(guildId, userId) {
+    return db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ?').all(guildId, userId);
 }
-function addProfileItem(guildId, userId, itemType, itemId) {
-    db.prepare('INSERT OR IGNORE INTO profile_collection (guildId, userId, itemType, itemId) VALUES (?, ?, ?, ?)').run(guildId, userId, itemType, itemId);
-}
-function getProfileItems(guildId, userId, itemType) {
-    return db.prepare('SELECT itemId FROM profile_collection WHERE guildId = ? AND userId = ? AND itemType = ?').all(guildId, userId, itemType).map(r => r.itemId);
+function getPetBonus(guildId, userId, bonusType) {
+    const pet = getPetData(guildId, userId);
+    if (!pet) return 0;
+    const petDef = PET_DATA.find(p => p.id === pet.petId);
+    if (!petDef) return 0;
+    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return 0;
+    if (petDef.bonus.type !== bonusType && petDef.bonus.type !== 'all_reward' && petDef.bonus.type !== 'money_xp') return 0;
+    const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
+    let baseValue = petDef.bonus.value;
+    if (petDef.bonus.type === 'all_reward' || petDef.bonus.type === 'money_xp') {
+        if (bonusType === petDef.bonus.type || bonusType === 'money_all' || bonusType === 'xp_all') baseValue = petDef.bonus.value;
+        else baseValue = Math.floor(petDef.bonus.value * 0.7);
+    }
+    return Math.floor(baseValue * lvlMult);
 }
 
 // ================= SISTEM ACHIEVEMENT / BADGE =================
