@@ -51,14 +51,14 @@ function incrementUserStat(guildId, userId, key, amount = 1) {
 
 // ================= SISTEM FISHING =================
 const FISH_TIERS = [
-    { tier: 'Trash', emoji: '🗑️', chance: 18, minWeight: 0.01, maxWeight: 0.5, minValue: 1, maxValue: 3 },
-    { tier: 'Common', emoji: '🐟', chance: 32, minWeight: 0.1, maxWeight: 5, minValue: 3, maxValue: 30 },
-    { tier: 'Uncommon', emoji: '🐠', chance: 23, minWeight: 0.5, maxWeight: 15, minValue: 15, maxValue: 80 },
-    { tier: 'Rare', emoji: '🐡', chance: 14, minWeight: 1, maxWeight: 50, minValue: 50, maxValue: 300 },
-    { tier: 'Epic', emoji: '🦈', chance: 8, minWeight: 5, maxWeight: 200, minValue: 150, maxValue: 800 },
-    { tier: 'Legendary', emoji: '🐉', chance: 3.5, minWeight: 50, maxWeight: 1000, minValue: 500, maxValue: 2500 },
-    { tier: 'Mythic', emoji: '🌈', chance: 1.2, minWeight: 100, maxWeight: 5000, minValue: 1500, maxValue: 4000 },
-    { tier: 'Secret', emoji: '🔮', chance: 0.3, minWeight: 500, maxWeight: 9999, minValue: 5000, maxValue: 10000 }
+    { tier: 'Trash', emoji: '🗑️', chance: 18, minWeight: 0.01, maxWeight: 0.5, minValue: 1, maxValue: 2 },
+    { tier: 'Common', emoji: '🐟', chance: 32, minWeight: 0.1, maxWeight: 5, minValue: 2, maxValue: 15 },
+    { tier: 'Uncommon', emoji: '🐠', chance: 23, minWeight: 0.5, maxWeight: 15, minValue: 8, maxValue: 50 },
+    { tier: 'Rare', emoji: '🐡', chance: 14, minWeight: 1, maxWeight: 50, minValue: 30, maxValue: 180 },
+    { tier: 'Epic', emoji: '🦈', chance: 8, minWeight: 5, maxWeight: 200, minValue: 80, maxValue: 500 },
+    { tier: 'Legendary', emoji: '🐉', chance: 3.5, minWeight: 50, maxWeight: 1000, minValue: 300, maxValue: 1500 },
+    { tier: 'Mythic', emoji: '🌈', chance: 1.2, minWeight: 100, maxWeight: 5000, minValue: 800, maxValue: 2500 },
+    { tier: 'Secret', emoji: '🔮', chance: 0.3, minWeight: 500, maxWeight: 9999, minValue: 3000, maxValue: 6000 }
 ];
 
 const FISH_DATA = [
@@ -1007,12 +1007,11 @@ client.on(Events.InteractionCreate, async interaction => {
             const tData = getOrCreateUser(guildId, targetUser.id), targetXp = (tData.level + 1) * 100, percent = Math.min(100, Math.max(0, Math.floor((tData.xp / targetXp) * 100))), progressBar = '▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10)), roles = targetMember.roles.cache.filter(r => r.name !== '@everyone').sort((a, b) => b.position - a.position).map(r => `<@&${r.id}>`);
             let displayRoles = roles.length > 0 ? roles.slice(0, 10).join(' • ') : '*Tidak ada role*'; if (roles.length > 10) displayRoles += ` *+${roles.length - 10} lainnya*`;
             const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id), streakCount = sData ? sData.count : 0, streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
-            const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ? ORDER BY unlockedAt DESC LIMIT 5').all(guildId, targetUser.id);
+            const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ? ORDER BY unlockedAt DESC').all(guildId, targetUser.id);
             const totalBadges = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id).cnt;
             let badgeDisplay = '';
             if (userAchs.length > 0) {
                 badgeDisplay = userAchs.map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? `> ${def.emoji} **${def.name}** — *${def.desc}*` : ''; }).filter(Boolean).join('\n');
-                if (totalBadges > 5) badgeDisplay += `\n> *...dan ${totalBadges - 5} badge lainnya*`;
             } else {
                 badgeDisplay = '> *Belum ada badge. Mulai beraktivitas!*';
             }
@@ -1079,17 +1078,17 @@ client.on(Events.InteractionCreate, async interaction => {
             incrementUserStat(guildId, interaction.user.id, 'total_slot_spins');
             const reels = spinSlot();
             const result = getSlotResult(reels, bet);
-            const slotDisplay = `> ╔═══════════════╗\n> ║  ${reels[0].emoji}  │  ${reels[1].emoji}  │  ${reels[2].emoji}  ║\n> ╚═══════════════╝`;
+            const slotDisplay = `> 🎰 **Slot Machine**\n>\n> ┌─────────────────┐\n> │  ${reels[0].emoji}  ┃  ${reels[1].emoji}  ┃  ${reels[2].emoji}  │\n> └─────────────────┘`;
             let embed;
             if (result.jackpot && reels[0].id === 'seven') {
-                embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> **Menang: 🪙 ${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
+                embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
                 incrementUserStat(guildId, interaction.user.id, 'slot_jackpot_7_count');
             } else if (result.jackpot) {
-                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> **Menang: 🪙 ${result.payout.toLocaleString('id-ID')}** 🎉`);
+                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉`);
             } else if (result.win) {
-                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **${result.payout.toLocaleString('id-ID')}**`);
+                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}**`);
             } else {
-                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Kalah: 🪙 -${bet.toLocaleString('id-ID')}`);
+                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n> 😔 Tidak ada yang cocok...\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
             }
             if (result.win) {
                 userData.balance += result.payout;
@@ -1180,8 +1179,18 @@ client.on(Events.InteractionCreate, async interaction => {
             if (getItemCount(guildId, interaction.user.id, itemId) <= 0) return interaction.reply({ content: '❌ Kamu tidak punya item ini!', ephemeral: true });
             
             if (itemId === 'mystery_box') {
+                const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+                const usedToday = getUserStat(guildId, interaction.user.id, `mbox_${today}`);
+                if (usedToday >= 5) return interaction.reply({ content: '❌ Kamu sudah membuka 5 Mystery Box hari ini! Tunggu besok.', ephemeral: true });
                 removeItem(guildId, interaction.user.id, itemId);
-                const reward = getRandomInt(50, 2000);
+                incrementUserStat(guildId, interaction.user.id, `mbox_${today}`);
+                // Weighted reward: mostly low, rarely high
+                let reward;
+                const roll = Math.random();
+                if (roll < 0.50) reward = getRandomInt(50, 200);       // 50% chance: 50-200
+                else if (roll < 0.80) reward = getRandomInt(200, 500); // 30% chance: 200-500
+                else if (roll < 0.95) reward = getRandomInt(500, 1000);// 15% chance: 500-1000
+                else reward = getRandomInt(1000, 2000);                 // 5% chance: 1000-2000
                 userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle('📦 Mystery Box Dibuka!').setDescription(`Kamu mendapatkan 🪙 **${reward.toLocaleString('id-ID')} Money**!\n\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
@@ -1277,15 +1286,25 @@ client.on(Events.InteractionCreate, async interaction => {
                 const totalCollected = collectedIds.length;
                 const percentDex = Math.floor((totalCollected / totalFish) * 100);
                 const tiers = [...new Set(FISH_DATA.map(f => f.tier))];
-                let desc = `> 📖 **${totalCollected}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
+                let desc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollected}** / ${totalFish} spesies ditemukan (${percentDex}%)\n\n`;
                 for (const tier of tiers) {
                     const tierFish = FISH_DATA.filter(f => f.tier === tier);
                     const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
                     const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
-                    const fishLine = tierFish.map(f => collectedIds.includes(f.id) ? `${f.emoji}` : '▪️').join(' ');
-                    desc += `${tierEmoji} **${tier}** (${tierCollected}/${tierFish.length})\n${fishLine}\n\n`;
+                    desc += `${tierEmoji} **${tier}** (${tierCollected}/${tierFish.length})\n`;
+                    tierFish.forEach(f => {
+                        if (collectedIds.includes(f.id)) {
+                            desc += `> ${f.emoji} ${f.name}\n`;
+                        } else {
+                            desc += `> ▪️ ???\n`;
+                        }
+                    });
+                    desc += '\n';
                 }
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection / Pokedex').setColor('#3498DB').setDescription(desc).setFooter({ text: 'Tangkap semua spesies untuk melengkapi koleksi!' })] });
+                // Discord embed has 4096 char limit - if too long, truncate
+                if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n\n*...dan lainnya*';
+                desc += `\n> *Tangkap semua spesies untuk melengkapi koleksi!*`;
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(desc).setFooter({ text: `/fish untuk memancing | ${totalCollected}/${totalFish} ditemukan` })] });
             }
             if (subCmd === 'lock') {
                 const fishDbId = interaction.options.getInteger('id');
