@@ -351,15 +351,32 @@ function catchFish(guildId, userId) {
     let roll = Math.random() * 100;
     let selectedTier = FISH_TIERS[0];
     // Shift probability: reduce trash/common chance, increase rare+ chance
+    // Equipment requirements for top tiers
+    const rodTier = ['basic', 'fiber', 'carbon', 'pro', 'mythic_rod', 'divine_rod'].indexOf(rod.id);
+    const hasBait = eq.bait !== 'none' && eq.bait_count > 0;
+    
     let adjustedTiers = FISH_TIERS.map(t => {
         let adj = t.chance;
         if (t.tier === 'Trash') adj = Math.max(2, t.chance - rareBonus);
         else if (t.tier === 'Common') adj = Math.max(8, t.chance - rareBonus * 0.5);
         else if (t.tier === 'Rare') adj = t.chance + rareBonus * 0.8;
         else if (t.tier === 'Epic') adj = t.chance + rareBonus * 0.6;
-        else if (t.tier === 'Legendary') adj = Math.min(6, t.chance + rareBonus * 0.3);
-        else if (t.tier === 'Mythic') adj = Math.min(2.5, t.chance + rareBonus * 0.15);
-        else if (t.tier === 'Secret') adj = Math.min(0.8, t.chance + rareBonus * 0.05);
+        else if (t.tier === 'Legendary') {
+            // Butuh minimal Joran Fiber + Bait untuk chance Legendary
+            if (rodTier < 1 || !hasBait) adj = 0;
+            else adj = Math.min(6, t.chance + rareBonus * 0.3);
+        }
+        else if (t.tier === 'Mythic') {
+            // Butuh minimal Joran Carbon + Bait untuk chance Mythic
+            if (rodTier < 2 || !hasBait) adj = 0;
+            else adj = Math.min(2.5, t.chance + rareBonus * 0.15);
+        }
+        else if (t.tier === 'Secret') {
+            // Butuh minimal Joran Pro + Umpan Emas/Berlian/Mitik untuk chance Secret
+            if (rodTier < 3 || !hasBait) adj = 0;
+            else if (['cacing', 'jangkrik', 'udang', 'ikan_kecil'].includes(eq.bait)) adj = 0; // Umpan biasa tidak cukup
+            else adj = Math.min(0.8, t.chance + rareBonus * 0.05);
+        }
         else adj = t.chance + rareBonus * 0.5;
         return { ...t, chance: adj };
     });
