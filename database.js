@@ -32,6 +32,7 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId 
 
 db.exec(`CREATE TABLE IF NOT EXISTS item_inventory (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS pet_food_inventory (guildId TEXT, userId TEXT, foodId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, foodId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS seed_inventory (guildId TEXT, userId TEXT, cropId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, cropId))`);
 
 // Farming
 db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing')`);
@@ -164,4 +165,27 @@ function getAllPetFood(guildId, userId) {
     return db.prepare('SELECT * FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
-module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood };
+// ================= SEED INVENTORY =================
+function getSeedCount(guildId, userId, cropId) {
+    const row = db.prepare('SELECT quantity FROM seed_inventory WHERE guildId = ? AND userId = ? AND cropId = ?').get(guildId, userId, cropId);
+    return row ? row.quantity : 0;
+}
+
+function addSeed(guildId, userId, cropId, qty = 1) {
+    const current = getSeedCount(guildId, userId, cropId);
+    db.prepare('INSERT OR REPLACE INTO seed_inventory (guildId, userId, cropId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, cropId, current + qty);
+}
+
+function removeSeed(guildId, userId, cropId, qty = 1) {
+    const current = getSeedCount(guildId, userId, cropId);
+    if (current < qty) return false;
+    if (current - qty <= 0) db.prepare('DELETE FROM seed_inventory WHERE guildId = ? AND userId = ? AND cropId = ?').run(guildId, userId, cropId);
+    else db.prepare('UPDATE seed_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND cropId = ?').run(current - qty, guildId, userId, cropId);
+    return true;
+}
+
+function getAllSeeds(guildId, userId) {
+    return db.prepare('SELECT * FROM seed_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
+}
+
+module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds };

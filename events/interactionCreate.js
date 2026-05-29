@@ -1,6 +1,6 @@
 // events/interactionCreate.js
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood } = require('../database');
+const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
 const state = require('../state');
 const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
@@ -44,8 +44,14 @@ module.exports = async function handleInteractionCreate(interaction) {
         if (interaction.commandName === 'farm') {
             const focused = interaction.options.getFocused(true);
             if (focused.name === 'bibit') {
-                const choices = FARM_CROPS.map(c => ({ name: `${c.emoji} ${c.name} (${c.tier}) — 🪙${c.cost} | ${c.time}m`, value: c.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
+                const owned = getAllSeeds(guildId, interaction.user.id);
+                if (owned.length === 0) return interaction.respond([{ name: '❌ Tidak punya bibit! Beli di /farm shop', value: 'none' }]);
+                const choices = owned.map(inv => {
+                    const c = FARM_CROPS.find(cr => cr.id === inv.cropId);
+                    if (!c) return null;
+                    return { name: `${c.emoji} ${c.name} (x${inv.quantity}) — ${c.tier} | ${c.time}m`, value: c.id };
+                }).filter(Boolean).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                return interaction.respond(choices.length ? choices : [{ name: '❌ Tidak punya bibit! Beli di /farm shop', value: 'none' }]);
             }
             if (focused.name === 'resep') {
                 const choices = FARM_RECIPES.map(r => {
@@ -811,13 +817,16 @@ module.exports = async function handleInteractionCreate(interaction) {
             if (subCmd === 'plant') {
                 if (plots.length >= maxSlots) return interaction.reply({ content: `❌ Lahan penuh! (${plots.length}/${maxSlots}) Upgrade lahan atau panen dulu.`, ephemeral: true });
                 const cropId = interaction.options.getString('bibit');
+                if (cropId === 'none') return interaction.reply({ content: '❌ Tidak punya bibit! Beli dulu di `/farm shop`.', ephemeral: true });
                 const crop = FARM_CROPS.find(c => c.id === cropId);
                 if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-                if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
-                userData.balance -= crop.cost;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                const owned = getSeedCount(guildId, interaction.user.id, cropId);
+                if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya bibit **${crop.emoji} ${crop.name}**! Beli di \`/farm shop\`.`, ephemeral: true });
+                // Konsumsi 1 bibit dari inventory
+                removeSeed(guildId, interaction.user.id, cropId, 1);
                 db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, interaction.user.id, cropId, Date.now(), Date.now());
-                return interaction.reply({ content: `🌱 **${crop.emoji} ${crop.name}** ditanam! Siap panen dalam **${crop.time} menit**.\n> Jangan lupa siram dengan \`/farm water\`!` });
+                const sisa = getSeedCount(guildId, interaction.user.id, cropId);
+                return interaction.reply({ content: `🌱 **${crop.emoji} ${crop.name}** ditanam! Siap panen dalam **${crop.time} menit**.\n> 📦 Sisa bibit ${crop.name}: **${sisa}**\n> 💡 Siram dengan \`/farm water\`!` });
             }
 
             if (subCmd === 'water') {
@@ -945,7 +954,7 @@ module.exports = async function handleInteractionCreate(interaction) {
 
             if (subCmd === 'shop') {
                 const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
-                let desc = '**🌱 BIBIT TANAMAN**\n\n';
+                let desc = '**🌱 BIBIT TANAMAN** *(masuk ke inventory, tanam dengan `/farm plant`)*\n\n';
                 for (const tier of tiers) {
                     const crops = FARM_CROPS.filter(c => c.tier === tier);
                     desc += `**${tier}** (${tier === 'Common' ? '2-4m' : tier === 'Uncommon' ? '8-18m' : tier === 'Rare' ? '20-35m' : tier === 'Epic' ? '50-90m' : '2.5-3.5h'})\n`;
@@ -956,11 +965,16 @@ module.exports = async function handleInteractionCreate(interaction) {
                 FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} — 🪙 ${f.cost} | ⏩ -${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus*100)}% hasil` : ''}\n`; });
                 if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
                 const components = [];
+                // Seed buy menu (bibit masuk inventory)
+                const seedMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_seed').setPlaceholder('🌱 Beli Bibit (→ inventory)...').setMinValues(1).setMaxValues(1);
+                FARM_CROPS.slice(0, 25).forEach(c => seedMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
+                components.push(new ActionRowBuilder().addComponents(seedMenu));
+                // Fertilizer buy menu
                 const fertMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_fertilizer').setPlaceholder('🧪 Beli Pupuk...').addOptions(
                     ...FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(f.id).setDescription(`-${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? `, +${Math.round(f.yieldBonus*100)}% hasil` : ''}`))
                 );
                 components.push(new ActionRowBuilder().addComponents(fertMenu));
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Pupuk: beli di menu bawah | Bibit: /farm plant <nama>' })], components });
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Beli bibit → /farm plant untuk tanam` })], components });
             }
         }
 
@@ -1706,6 +1720,16 @@ module.exports = async function handleInteractionCreate(interaction) {
             addItem(guildId, interaction.user.id, itemId);
             return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/me inventory\` — Gunakan dengan \`/me use\`` });
         }
+        if (interaction.customId === 'farm_buy_seed') {
+            const cropId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
+            const crop = FARM_CROPS.find(c => c.id === cropId);
+            if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+            if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(crop.cost, guildId, interaction.user.id);
+            addSeed(guildId, interaction.user.id, cropId, 1);
+            const owned = getSeedCount(guildId, interaction.user.id, cropId);
+            return interaction.reply({ content: `✅ Membeli bibit ${crop.emoji} **${crop.name}**! Masuk ke inventory.\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+        }
         if (interaction.customId === 'farm_buy_fertilizer') {
             const fertId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
             const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
@@ -1727,13 +1751,10 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const crop = FARM_CROPS.find(c => c.id === cropId);
                 if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
                 if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
-                const maxSlots = getFarmSlots(guildId, interaction.user.id);
-                const currentPlots = getPlots(guildId, interaction.user.id);
-                if (currentPlots.length >= maxSlots) return interaction.reply({ content: `❌ Lahan penuh! (${currentPlots.length}/${maxSlots}) — Panen dulu atau upgrade lahan.`, ephemeral: true });
-                userData.balance -= crop.cost;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, interaction.user.id, cropId, Date.now(), 0);
-                return interaction.reply({ content: `✅ ${crop.emoji} **${crop.name}** ditanam!\n> ⏰ Waktu panen: ${crop.time} menit\n> 💡 Siram dengan \`/farm water\` untuk percepat!` });
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(crop.cost, guildId, interaction.user.id);
+                addSeed(guildId, interaction.user.id, cropId, 1);
+                const owned = getSeedCount(guildId, interaction.user.id, cropId);
+                return interaction.reply({ content: `✅ Membeli bibit ${crop.emoji} **${crop.name}**! Masuk ke inventory.\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
             }
             if (selected.startsWith('fert_')) {
                 const fertId = selected.substring(5);
