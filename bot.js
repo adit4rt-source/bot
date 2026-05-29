@@ -212,11 +212,241 @@ const FISH_DATA = [
     { id: 'golden_dragon', name: 'Naga Emas Samudra', tier: 'Mythic', emoji: '🌈' },
     { id: 'time_fish', name: 'Ikan Waktu', tier: 'Mythic', emoji: '🌈' },
     { id: 'world_serpent', name: 'Jormungandr', tier: 'Mythic', emoji: '🌈' },
-    // SECRET (4)
+    // SECRET (4 original)
     { id: 'god_fish', name: 'Ikan Dewa', tier: 'Secret', emoji: '🔮' },
     { id: 'time_eater', name: 'Pemakan Waktu', tier: 'Secret', emoji: '🔮' },
     { id: 'universe_whale', name: 'Paus Alam Semesta', tier: 'Secret', emoji: '🔮' },
-    { id: 'null_entity', name: '???', tier: 'Secret', emoji: '🔮' }
+    { id: 'null_entity', name: '???', tier: 'Secret', emoji: '🔮' },
+    // ================= 214 IKAN BARU (total 300) =================
+    // ==================== TRASH (10 new) ====================
+    { id: 'plastic_straw', name: 'Sedotan Plastik', tier: 'Trash', emoji: '🥤' },
+    { id: 'broken_bucket', name: 'Ember Pecah', tier: 'Trash', emoji: '🪣' },
+    { id: 'old_sponge', name: 'Spons Bekas', tier: 'Trash', emoji: '🧽' },
+    { id: 'torn_net', name: 'Jaring Robek', tier: 'Trash', emoji: '🪤' },
+    { id: 'soggy_cardboard', name: 'Kardus Basah', tier: 'Trash', emoji: '📦' },
+    { id: 'broken_glass', name: 'Pecahan Kaca', tier: 'Trash', emoji: '🫙' },
+    { id: 'old_broom', name: 'Sapu Tua', tier: 'Trash', emoji: '🧹' },
+    { id: 'used_diaper', name: 'Popok Bekas', tier: 'Trash', emoji: '🩲' },
+    { id: 'styrofoam', name: 'Styrofoam', tier: 'Trash', emoji: '📋' },
+    { id: 'cigarette_butt', name: 'Puntung Rokok', tier: 'Trash', emoji: '🚬' },
+    
+    // ==================== COMMON (45 new) ====================
+    { id: 'nila', name: 'Nila', tier: 'Common', emoji: '🐟' },
+    { id: 'lele', name: 'Lele', tier: 'Common', emoji: '🐟' },
+    { id: 'mas', name: 'Ikan Mas', tier: 'Common', emoji: '🐟' },
+    { id: 'mujair_besar', name: 'Mujair Besar', tier: 'Common', emoji: '🐟' },
+    { id: 'teri', name: 'Ikan Teri', tier: 'Common', emoji: '🐟' },
+    { id: 'tawes', name: 'Tawes', tier: 'Common', emoji: '🐟' },
+    { id: 'nilem', name: 'Nilem', tier: 'Common', emoji: '🐟' },
+    { id: 'tambakan', name: 'Tambakan', tier: 'Common', emoji: '🐟' },
+    { id: 'jelawat', name: 'Jelawat', tier: 'Common', emoji: '🐟' },
+    { id: 'betutu', name: 'Betutu', tier: 'Common', emoji: '🐟' },
+    { id: 'lundu', name: 'Lundu', tier: 'Common', emoji: '🐟' },
+    { id: 'kutuk', name: 'Kutuk', tier: 'Common', emoji: '🐟' },
+    { id: 'pepuyu', name: 'Pepuyu', tier: 'Common', emoji: '🐟' },
+    { id: 'biawan', name: 'Biawan', tier: 'Common', emoji: '🐟' },
+    { id: 'seluang', name: 'Seluang', tier: 'Common', emoji: '🐟' },
+    { id: 'tongkol_kecil', name: 'Tongkol Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'belut', name: 'Belut', tier: 'Common', emoji: '🐟' },
+    { id: 'limbat', name: 'Limbat', tier: 'Common', emoji: '🐟' },
+    { id: 'sidat_kecil', name: 'Sidat Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'julung_julung', name: 'Julung-Julung', tier: 'Common', emoji: '🐟' },
+    { id: 'kapas_kapas', name: 'Kapas-Kapas', tier: 'Common', emoji: '🐟' },
+    { id: 'rebon', name: 'Rebon', tier: 'Common', emoji: '🐟' },
+    { id: 'bloso', name: 'Bloso', tier: 'Common', emoji: '🐟' },
+    { id: 'bader', name: 'Bader', tier: 'Common', emoji: '🐟' },
+    { id: 'sili', name: 'Sili', tier: 'Common', emoji: '🐟' },
+    { id: 'genjem', name: 'Genjem', tier: 'Common', emoji: '🐟' },
+    { id: 'cere', name: 'Cere', tier: 'Common', emoji: '🐟' },
+    { id: 'sapu_sapu', name: 'Sapu-Sapu', tier: 'Common', emoji: '🐟' },
+    { id: 'gatul', name: 'Gatul', tier: 'Common', emoji: '🐟' },
+    { id: 'kepala_timah', name: 'Kepala Timah', tier: 'Common', emoji: '🐟' },
+    { id: 'keting', name: 'Keting', tier: 'Common', emoji: '🐟' },
+    { id: 'jeler', name: 'Jeler', tier: 'Common', emoji: '🐟' },
+    { id: 'wader_pari', name: 'Wader Pari', tier: 'Common', emoji: '🐟' },
+    { id: 'gabos', name: 'Gabos', tier: 'Common', emoji: '🐟' },
+    { id: 'impun', name: 'Impun', tier: 'Common', emoji: '🐟' },
+    { id: 'depik', name: 'Depik', tier: 'Common', emoji: '🐟' },
+    { id: 'cakalang_kecil', name: 'Cakalang Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'layur_kecil', name: 'Layur Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'kerisi_kecil', name: 'Kerisi Kecil', tier: 'Common', emoji: '🐟' },
+    { id: 'selangat', name: 'Selangat', tier: 'Common', emoji: '🐟' },
+    { id: 'tamban', name: 'Tamban', tier: 'Common', emoji: '🐟' },
+    { id: 'lemuru', name: 'Lemuru', tier: 'Common', emoji: '🐟' },
+    { id: 'tembang', name: 'Tembang', tier: 'Common', emoji: '🐟' },
+    { id: 'japuh', name: 'Japuh', tier: 'Common', emoji: '🐟' },
+    { id: 'bilis', name: 'Bilis', tier: 'Common', emoji: '🐟' },
+    
+    // ==================== UNCOMMON (55 new) ====================
+    { id: 'kakap_putih', name: 'Kakap Putih', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kakap_merah', name: 'Kakap Merah', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tenggiri', name: 'Tenggiri', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'cakalang', name: 'Cakalang', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'barakuda_kecil', name: 'Barakuda Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'layur', name: 'Layur', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'ekor_kuning', name: 'Ekor Kuning', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kuwe', name: 'Kuwe', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'belida', name: 'Belida', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'semah', name: 'Semah', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'patin_besar', name: 'Patin Besar', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'mahseer', name: 'Mahseer', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'sidat', name: 'Sidat', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'hampala', name: 'Hampala', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tor_soro', name: 'Tor Soro', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'bambangan', name: 'Bambangan', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kerisi', name: 'Kerisi', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'jenaha', name: 'Jenaha', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'talang', name: 'Talang-Talang', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'cobia', name: 'Cobia', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kwee', name: 'Kwee', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'terubuk', name: 'Terubuk', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'parang_parang', name: 'Parang-Parang', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'manyung', name: 'Manyung', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'pari_burung', name: 'Pari Burung', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'lemadang', name: 'Lemadang', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'todak_kecil', name: 'Todak Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'alu_alu', name: 'Alu-Alu', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'cucut_kecil', name: 'Cucut Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'gulama', name: 'Gulama', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'gerot_gerot', name: 'Gerot-Gerot', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'ikan_merah', name: 'Ikan Merah', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kakap_hitam', name: 'Kakap Hitam', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kakap_batu', name: 'Kakap Batu', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'toman', name: 'Toman', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tapah', name: 'Tapah', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kelabau', name: 'Kelabau', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'tengadak', name: 'Tengadak', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'ringau', name: 'Ringau', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'entukan', name: 'Entukan', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'sultan_fish', name: 'Sultan Fish', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'daun_bambu', name: 'Daun Bambu', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'sumpit', name: 'Ikan Sumpit', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'buntal', name: 'Buntal', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'swanggi', name: 'Swanggi', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'biji_nangka', name: 'Biji Nangka', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'rajungan', name: 'Rajungan', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'udang_galah', name: 'Udang Galah', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kepiting_bakau', name: 'Kepiting Bakau', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'lobster_kecil', name: 'Lobster Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'cumi_kecil', name: 'Cumi Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'sotong', name: 'Sotong', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'gurita_kecil', name: 'Gurita Kecil', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'kerang_mutiara', name: 'Kerang Mutiara', tier: 'Uncommon', emoji: '🐠' },
+    { id: 'abalon', name: 'Abalon', tier: 'Uncommon', emoji: '🐠' },
+    
+    // ==================== RARE (43 new) ====================
+    { id: 'arwana_hijau', name: 'Arwana Hijau', tier: 'Rare', emoji: '🐡' },
+    { id: 'arwana_merah', name: 'Arwana Merah', tier: 'Rare', emoji: '🐡' },
+    { id: 'napoleon_wrasse', name: 'Napoleon Wrasse', tier: 'Rare', emoji: '🐡' },
+    { id: 'giant_trevally', name: 'Giant Trevally', tier: 'Rare', emoji: '🐡' },
+    { id: 'dogtooth_tuna', name: 'Dogtooth Tuna', tier: 'Rare', emoji: '🐡' },
+    { id: 'wahoo', name: 'Wahoo', tier: 'Rare', emoji: '🐡' },
+    { id: 'yellowfin_tuna', name: 'Yellowfin Tuna', tier: 'Rare', emoji: '🐡' },
+    { id: 'barakuda', name: 'Barakuda', tier: 'Rare', emoji: '🐡' },
+    { id: 'todak', name: 'Todak', tier: 'Rare', emoji: '🐡' },
+    { id: 'blue_marlin_kecil', name: 'Blue Marlin Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'sailfish_kecil', name: 'Sailfish Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'kerapu_raksasa', name: 'Kerapu Raksasa', tier: 'Rare', emoji: '🐡' },
+    { id: 'pari_manta_kecil', name: 'Pari Manta Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'hiu_karang', name: 'Hiu Karang', tier: 'Rare', emoji: '🐡' },
+    { id: 'hiu_bambu', name: 'Hiu Bambu', tier: 'Rare', emoji: '🐡' },
+    { id: 'giant_patin', name: 'Giant Patin', tier: 'Rare', emoji: '🐡' },
+    { id: 'belida_raksasa', name: 'Belida Raksasa', tier: 'Rare', emoji: '🐡' },
+    { id: 'tor_tambroides', name: 'Tor Tambroides', tier: 'Rare', emoji: '🐡' },
+    { id: 'golden_mahseer', name: 'Golden Mahseer', tier: 'Rare', emoji: '🐡' },
+    { id: 'peacock_bass', name: 'Peacock Bass', tier: 'Rare', emoji: '🐡' },
+    { id: 'snakehead_giant', name: 'Snakehead Giant', tier: 'Rare', emoji: '🐡' },
+    { id: 'alligator_gar', name: 'Alligator Gar', tier: 'Rare', emoji: '🐡' },
+    { id: 'arapaima_kecil', name: 'Arapaima Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'paddlefish', name: 'Paddlefish', tier: 'Rare', emoji: '🐡' },
+    { id: 'tiger_fish', name: 'Tiger Fish', tier: 'Rare', emoji: '🐡' },
+    { id: 'lionfish', name: 'Lionfish', tier: 'Rare', emoji: '🐡' },
+    { id: 'moray_eel', name: 'Moray Eel', tier: 'Rare', emoji: '🐡' },
+    { id: 'mantis_shrimp', name: 'Mantis Shrimp', tier: 'Rare', emoji: '🐡' },
+    { id: 'giant_lobster', name: 'Giant Lobster', tier: 'Rare', emoji: '🐡' },
+    { id: 'blue_ringed_octopus', name: 'Blue Ringed Octopus', tier: 'Rare', emoji: '🐡' },
+    { id: 'nautilus', name: 'Nautilus', tier: 'Rare', emoji: '🐡' },
+    { id: 'king_crab', name: 'King Crab', tier: 'Rare', emoji: '🐡' },
+    { id: 'swordtail', name: 'Swordtail Raksasa', tier: 'Rare', emoji: '🐡' },
+    { id: 'asian_catfish', name: 'Asian Giant Catfish', tier: 'Rare', emoji: '🐡' },
+    { id: 'tambra', name: 'Tambra', tier: 'Rare', emoji: '🐡' },
+    { id: 'pari_elang', name: 'Pari Elang', tier: 'Rare', emoji: '🐡' },
+    { id: 'hiu_martil_kecil', name: 'Hiu Martil Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'bluefin_kecil', name: 'Bluefin Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'ikan_layaran', name: 'Ikan Layaran', tier: 'Rare', emoji: '🐡' },
+    { id: 'tenggiri_besar', name: 'Tenggiri Besar', tier: 'Rare', emoji: '🐡' },
+    { id: 'gurita_besar', name: 'Gurita Besar', tier: 'Rare', emoji: '🐡' },
+    { id: 'cumi_raksasa_kecil', name: 'Cumi Raksasa Kecil', tier: 'Rare', emoji: '🐡' },
+    { id: 'udang_mantis', name: 'Udang Mantis', tier: 'Rare', emoji: '🐡' },
+    
+    // ==================== EPIC (29 new) ====================
+    { id: 'blue_marlin', name: 'Blue Marlin', tier: 'Epic', emoji: '🦈' },
+    { id: 'sailfish', name: 'Sailfish', tier: 'Epic', emoji: '🦈' },
+    { id: 'bluefin_tuna', name: 'Bluefin Tuna', tier: 'Epic', emoji: '🦈' },
+    { id: 'great_white_kecil', name: 'Great White Kecil', tier: 'Epic', emoji: '🦈' },
+    { id: 'bull_shark', name: 'Bull Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'tiger_shark', name: 'Tiger Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'thresher_shark', name: 'Thresher Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'arapaima', name: 'Arapaima', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_stingray', name: 'Giant Stingray', tier: 'Epic', emoji: '🦈' },
+    { id: 'sunfish', name: 'Sunfish (Mola Mola)', tier: 'Epic', emoji: '🦈' },
+    { id: 'colossal_squid', name: 'Colossal Squid', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_octopus', name: 'Giant Octopus', tier: 'Epic', emoji: '🦈' },
+    { id: 'goblin_shark', name: 'Goblin Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'frilled_shark', name: 'Frilled Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'megamouth_shark', name: 'Megamouth Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'arwana_platinum', name: 'Arwana Platinum', tier: 'Epic', emoji: '🦈' },
+    { id: 'golden_dorado', name: 'Golden Dorado', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_barramundi', name: 'Giant Barramundi', tier: 'Epic', emoji: '🦈' },
+    { id: 'electric_catfish', name: 'Electric Catfish', tier: 'Epic', emoji: '🦈' },
+    { id: 'japanese_spider_crab', name: 'Japanese Spider Crab', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_isopod', name: 'Giant Isopod', tier: 'Epic', emoji: '🦈' },
+    { id: 'beluga_sturgeon', name: 'Beluga Sturgeon', tier: 'Epic', emoji: '🦈' },
+    { id: 'mekong_catfish', name: 'Mekong Giant Catfish', tier: 'Epic', emoji: '🦈' },
+    { id: 'greenland_shark', name: 'Greenland Shark', tier: 'Epic', emoji: '🦈' },
+    { id: 'sawfish', name: 'Sawfish', tier: 'Epic', emoji: '🦈' },
+    { id: 'coelacanth', name: 'Coelacanth', tier: 'Epic', emoji: '🦈' },
+    { id: 'narwhal', name: 'Narwhal', tier: 'Epic', emoji: '🦈' },
+    { id: 'giant_moray', name: 'Giant Moray', tier: 'Epic', emoji: '🦈' },
+    { id: 'black_marlin', name: 'Black Marlin', tier: 'Epic', emoji: '🦈' },
+    
+    // ==================== LEGENDARY (19 new) ====================
+    { id: 'great_white_shark', name: 'Great White Shark', tier: 'Legendary', emoji: '🐉' },
+    { id: 'leviathan_whale', name: 'Leviathan Whale', tier: 'Legendary', emoji: '🐉' },
+    { id: 'ancient_megalodon_tooth', name: 'Megalodon Muda', tier: 'Legendary', emoji: '🐉' },
+    { id: 'deep_sea_king', name: 'Deep Sea King', tier: 'Legendary', emoji: '🐉' },
+    { id: 'abyssal_serpent', name: 'Abyssal Serpent', tier: 'Legendary', emoji: '🐉' },
+    { id: 'storm_leviathan', name: 'Storm Leviathan', tier: 'Legendary', emoji: '🐉' },
+    { id: 'frost_whale', name: 'Frost Whale', tier: 'Legendary', emoji: '🐉' },
+    { id: 'volcanic_eel', name: 'Volcanic Eel', tier: 'Legendary', emoji: '🐉' },
+    { id: 'spectral_manta', name: 'Spectral Manta', tier: 'Legendary', emoji: '🐉' },
+    { id: 'shadow_kraken', name: 'Shadow Kraken', tier: 'Legendary', emoji: '🐉' },
+    { id: 'jade_dragon_fish', name: 'Jade Dragon Fish', tier: 'Legendary', emoji: '🐉' },
+    { id: 'diamond_koi', name: 'Diamond Koi', tier: 'Legendary', emoji: '🐉' },
+    { id: 'blood_moon_shark', name: 'Blood Moon Shark', tier: 'Legendary', emoji: '🐉' },
+    { id: 'celestial_dolphin', name: 'Celestial Dolphin', tier: 'Legendary', emoji: '🐉' },
+    { id: 'naga_laut', name: 'Naga Laut', tier: 'Legendary', emoji: '🐉' },
+    { id: 'raja_pari', name: 'Raja Pari', tier: 'Legendary', emoji: '🐉' },
+    { id: 'ancient_arapaima', name: 'Ancient Arapaima', tier: 'Legendary', emoji: '🐉' },
+    { id: 'titan_grouper', name: 'Titan Grouper', tier: 'Legendary', emoji: '🐉' },
+    { id: 'prismatic_jellyfish', name: 'Prismatic Jellyfish', tier: 'Legendary', emoji: '🐉' },
+    
+    // ==================== MYTHIC (7 new) ====================
+    { id: 'naga_bahari', name: 'Naga Bahari', tier: 'Mythic', emoji: '🌈' },
+    { id: 'leviathan_ancient', name: 'Leviathan Purba', tier: 'Mythic', emoji: '🌈' },
+    { id: 'spirit_whale', name: 'Spirit Whale', tier: 'Mythic', emoji: '🌈' },
+    { id: 'cosmic_serpent', name: 'Cosmic Serpent', tier: 'Mythic', emoji: '🌈' },
+    { id: 'abyssal_emperor', name: 'Abyssal Emperor', tier: 'Mythic', emoji: '🌈' },
+    { id: 'tidecaller', name: 'Tidecaller', tier: 'Mythic', emoji: '🌈' },
+    { id: 'dream_whale', name: 'Dream Whale', tier: 'Mythic', emoji: '🌈' },
+    
+    // ==================== SECRET (6 new) ====================
+    { id: 'reality_fish', name: 'Reality Fish', tier: 'Secret', emoji: '🔮' },
+    { id: 'dimension_eater', name: 'Dimension Eater', tier: 'Secret', emoji: '🔮' },
+    { id: 'infinity_koi', name: 'Infinity Koi', tier: 'Secret', emoji: '🔮' },
+    { id: 'quantum_leviathan', name: 'Quantum Leviathan', tier: 'Secret', emoji: '🔮' },
+    { id: 'primordial_serpent', name: 'Primordial Serpent', tier: 'Secret', emoji: '🔮' },
+    { id: 'eternal_whale', name: 'Eternal Whale', tier: 'Secret', emoji: '🔮' },
 ];
 
 const BAIT_TYPES = [
@@ -2486,26 +2716,31 @@ client.on(Events.InteractionCreate, async interaction => {
                 const totalFish = FISH_DATA.length;
                 const totalCollected = collectedIds.length;
                 const percentDex = Math.floor((totalCollected / totalFish) * 100);
-                const tiers = [...new Set(FISH_DATA.map(f => f.tier))];
-                let desc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollected}** / ${totalFish} spesies ditemukan (${percentDex}%)\n\n`;
+                const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
+                const tierColors2 = { Trash: '⚫', Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴', Secret: '🟤' };
+                let desc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollected}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
                 for (const tier of tiers) {
                     const tierFish = FISH_DATA.filter(f => f.tier === tier);
                     const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
                     const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
-                    desc += `${tierEmoji} **${tier}** (${tierCollected}/${tierFish.length})\n`;
-                    tierFish.forEach(f => {
-                        if (collectedIds.includes(f.id)) {
-                            desc += `> ${f.emoji} ${f.name}\n`;
-                        } else {
-                            desc += `> ▪️ ???\n`;
-                        }
-                    });
-                    desc += '\n';
+                    const progress = tierFish.length > 0 ? Math.floor((tierCollected / tierFish.length) * 10) : 0;
+                    const bar = '▰'.repeat(progress) + '▱'.repeat(10 - progress);
+                    desc += `${tierEmoji} **${tier}** — ${tierCollected}/${tierFish.length}\n> \`${bar}\`\n`;
                 }
-                // Discord embed has 4096 char limit - if too long, truncate
-                if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n\n*...dan lainnya*';
-                desc += `\n> *Tangkap semua spesies untuk melengkapi koleksi!*`;
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(desc).setFooter({ text: `/fish untuk memancing | ${totalCollected}/${totalFish} ditemukan` })] });
+                desc += `\n> 🎯 *Pilih rarity di bawah untuk melihat detail!*`;
+                const row1 = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fcol_Trash_${interaction.user.id}_0`).setLabel(`🗑️ Trash`).setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId(`fcol_Common_${interaction.user.id}_0`).setLabel(`🐟 Common`).setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId(`fcol_Uncommon_${interaction.user.id}_0`).setLabel(`🐠 Uncommon`).setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId(`fcol_Rare_${interaction.user.id}_0`).setLabel(`🐡 Rare`).setStyle(ButtonStyle.Primary)
+                );
+                const row2 = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fcol_Epic_${interaction.user.id}_0`).setLabel(`🦈 Epic`).setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId(`fcol_Legendary_${interaction.user.id}_0`).setLabel(`🐉 Legendary`).setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`fcol_Mythic_${interaction.user.id}_0`).setLabel(`🌈 Mythic`).setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`fcol_Secret_${interaction.user.id}_0`).setLabel(`🔮 Secret`).setStyle(ButtonStyle.Danger)
+                );
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(desc).setFooter({ text: `${totalCollected}/${totalFish} ditemukan | /fish untuk memancing` })], components: [row1, row2] });
             }
             if (subCmd === 'lock') {
                 const fishDbId = interaction.options.getInteger('id');
@@ -3562,6 +3797,48 @@ client.on(Events.InteractionCreate, async interaction => {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- FISH COLLECTION BUTTONS ---
+        if (interaction.customId.startsWith('fcol_')) {
+            const parts = interaction.customId.split('_');
+            const tier = parts[1];
+            const targetUserId = parts[2];
+            const page = parseInt(parts[3]) || 0;
+            const perPage = 20;
+            const collected = db.prepare('SELECT * FROM fish_collection WHERE guildId = ? AND userId = ?').all(guildId, targetUserId);
+            const collectedIds = collected.map(c => c.fishId);
+            const tierFish = FISH_DATA.filter(f => f.tier === tier);
+            const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
+            const totalPages = Math.ceil(tierFish.length / perPage);
+            const startIdx = page * perPage;
+            const pageFish = tierFish.slice(startIdx, startIdx + perPage);
+            const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
+            let desc = `${tierEmoji} **${tier}** — ${tierCollected}/${tierFish.length} ditemukan\n\n`;
+            pageFish.forEach(f => {
+                if (collectedIds.includes(f.id)) desc += `> ${f.emoji} ${f.name} ✅\n`;
+                else desc += `> ▪️ ??? 🔒\n`;
+            });
+            if (desc.length > 3900) desc = desc.substring(0, 3890) + '\n...';
+            const navRow = new ActionRowBuilder();
+            if (page > 0) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page-1}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary));
+            navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_back_${targetUserId}_0`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Primary));
+            if (page < totalPages - 1) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page+1}`).setLabel('Next ▶').setStyle(ButtonStyle.Secondary));
+            
+            if (parts[1] === 'back') {
+                // Go back to main collection view
+                const totalFish = FISH_DATA.length;
+                const totalCollectedAll = collectedIds.length;
+                const percentDex = Math.floor((totalCollectedAll / totalFish) * 100);
+                const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
+                let mainDesc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollectedAll}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
+                for (const t of tiers) { const tf = FISH_DATA.filter(f => f.tier === t); const tc = tf.filter(f => collectedIds.includes(f.id)).length; const te = (FISH_TIERS.find(x => x.tier === t)||{emoji:'🐟'}).emoji; const p = tf.length > 0 ? Math.floor((tc/tf.length)*10) : 0; mainDesc += `${te} **${t}** — ${tc}/${tf.length}\n> \`${'▰'.repeat(p)}${'▱'.repeat(10-p)}\`\n`; }
+                mainDesc += `\n> 🎯 *Pilih rarity di bawah untuk melihat detail!*`;
+                const row1 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Trash_${targetUserId}_0`).setLabel('🗑️ Trash').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Common_${targetUserId}_0`).setLabel('🐟 Common').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Uncommon_${targetUserId}_0`).setLabel('🐠 Uncommon').setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId(`fcol_Rare_${targetUserId}_0`).setLabel('🐡 Rare').setStyle(ButtonStyle.Primary));
+                const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Epic_${targetUserId}_0`).setLabel('🦈 Epic').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`fcol_Legendary_${targetUserId}_0`).setLabel('🐉 Legendary').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Mythic_${targetUserId}_0`).setLabel('🌈 Mythic').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Secret_${targetUserId}_0`).setLabel('🔮 Secret').setStyle(ButtonStyle.Danger));
+                return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(mainDesc).setFooter({ text: `${totalCollectedAll}/${totalFish} ditemukan` })], components: [row1, row2] });
+            }
+            return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Collection`).setColor('#3498DB').setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan` })], components: [navRow] });
+        }
+
         // --- MENU HUB BUTTONS ---
         if (interaction.customId.startsWith('menu_')) {
             const cat = interaction.customId.replace('menu_', '');
