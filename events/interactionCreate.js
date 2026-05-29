@@ -48,7 +48,12 @@ module.exports = async function handleInteractionCreate(interaction) {
                 return interaction.respond(choices);
             }
             if (focused.name === 'resep') {
-                const choices = FARM_RECIPES.map(r => ({ name: `${r.emoji} ${r.name} — Jual: 🪙${r.sellPrice}`, value: r.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
+                const choices = FARM_RECIPES.map(r => {
+                    const ingStr = r.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : ''}${ing.qty}`; }).join('+');
+                    let label = `${r.emoji} ${r.name} (Butuh: ${ingStr}) — 🪙${r.sellPrice}`;
+                    if (label.length > 100) label = label.substring(0, 97) + '...';
+                    return { name: label, value: r.id };
+                }).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
                 return interaction.respond(choices);
             }
             if (focused.name === 'jenis') {
@@ -887,20 +892,26 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const recipeId = interaction.options.getString('resep');
                 const recipe = FARM_RECIPES.find(r => r.id === recipeId);
                 if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
-                // Check bahan
+                // Check SEMUA bahan sekaligus
+                const missing = [];
                 for (const ing of recipe.ingredients) {
                     const have = getStorageQty(guildId, interaction.user.id, ing.id);
-                    if (have < ing.qty) { const crop = FARM_CROPS.find(c => c.id === ing.id); return interaction.reply({ content: `❌ Bahan kurang! Butuh **${crop ? crop.emoji : ''} ${crop ? crop.name : ing.id}** x${ing.qty} (punya: ${have})`, ephemeral: true }); }
+                    if (have < ing.qty) { const crop = FARM_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
+                }
+                if (missing.length > 0) {
+                    const fullList = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(', ');
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang untuk ${recipe.emoji} ${recipe.name}`).setDescription(`**Bahan yang kurang:**\n${missing.join('\n')}\n\n> 📋 **Resep lengkap:** ${fullList}\n> 💡 Tanam & panen bahan dulu di \`/farm plant\`!`)], ephemeral: true });
                 }
                 // Consume bahan
                 for (const ing of recipe.ingredients) { removeStorage(guildId, interaction.user.id, ing.id, ing.qty); }
-                // Tambah uang langsung (craft = jual produk)
-                userData.balance += recipe.sellPrice;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                // Tambah uang langsung (craft = jual produk) - atomic
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.sellPrice, guildId, interaction.user.id);
+                const freshData = getOrCreateUser(guildId, interaction.user.id);
                 incrementUserStat(guildId, interaction.user.id, 'total_crafts');
+                addComboFeature(guildId, interaction.user.id, 'farming');
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_craft' });
                 const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] });
             }
 
             if (subCmd === 'pupuk') {
