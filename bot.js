@@ -43,6 +43,28 @@ db.exec(`CREATE TABLE IF NOT EXISTS pets (id INTEGER PRIMARY KEY AUTOINCREMENT, 
 try { db.exec(`ALTER TABLE pets ADD COLUMN hunting_until INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN skills TEXT DEFAULT '[]'`); } catch(e) {}
 
+// ================= AUTO-MIGRASI STREAK DARI KYTHIA (SEKALI JALAN) =================
+const MIGRATION_GUILD = '1056412836433240074';
+const migrationDone = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?").get(MIGRATION_GUILD, 'SYSTEM', 'kythia_migration_done');
+if (!migrationDone) {
+    console.log('🔄 Migrasi streak dari Kythia...');
+    const kythiaData = [
+        ['1388079155391893587',52],['751757086517493781',52],['1051116479912882316',51],['1183391735703945279',51],['757586932430667908',39],['1499773045840023611',28],['883240418555330600',29],['720913780183269437',16],['1491038433081032785',15],['1471703965296099490',19],['438310703300870144',23],['955048168939196446',20],['1382707281862463498',11],['515920253910253569',31],['1060794481458298992',25],['349874541784334337',8],['1241341465091772499',3],['1388566247590985728',32],['991559015144357929',2],['1080093365321871463',2],['1201894211884945418',30],['331477989315444736',29],['929800132105494608',18],['1111152686843314249',14],['1101833915808886784',10],['1330455728544157788',10],['981071097699139604',8],['1201452476889571328',7],['764119790738079764',6],['726779204116676648',6],['555944261208768526',5],['454654837989048331',4],['1360246183712260157',3],['1371753890328088686',2],['1250808742530781204',2],['1477693445727326360',2],['1320946574565572692',2],['1126123745224962229',2],['1396827530513879130',2],['1352878799813087324',2]
+    ];
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    let count = 0;
+    for (const [userId, streak] of kythiaData) {
+        const existing = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(MIGRATION_GUILD, userId);
+        if (!existing || existing.count < streak) {
+            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(MIGRATION_GUILD, userId, streak, today);
+            const userExists = db.prepare('SELECT 1 FROM users WHERE guildId = ? AND userId = ?').get(MIGRATION_GUILD, userId);
+            if (!userExists) db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(MIGRATION_GUILD, userId);
+            count++;
+        }
+    }
+    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(MIGRATION_GUILD, 'SYSTEM', 'kythia_migration_done', 1);
+    console.log(`✅ Migrasi selesai! ${count} user streak diupdate.`);
+}
 
 function getOrCreateUser(guildId, userId) { let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); } return user; }
 function getConf(guildId, key, defaultVal) { const row = db.prepare('SELECT value FROM config WHERE guildId = ? AND key = ?').get(guildId, key); return row ? row.value : defaultVal; }
