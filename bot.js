@@ -1052,6 +1052,7 @@ const activeMiniEvents = new Map(); const guildMessageCounters = new Map(); cons
 const FISH_EVENT_TARGET = 100;
 const guildFishEventCounters = new Map();
 const activeFishEvents = new Map();
+const activeBossParties = new Map();
 
 const FISH_TOURNAMENT_TYPES = [
     { type: 'first_catch', desc: 'tangkap ikan **{tier}** pertama', tierTarget: null },
@@ -1255,6 +1256,13 @@ const commands = [
     new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP - Lawan pet player lain').addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true)).addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa taruhan)').setRequired(false)),
     new SlashCommandBuilder().setName('dungeon').setDescription('🏰 Dungeon - Lawan monster NPC').addStringOption(opt => opt.setName('tier').setDescription('Pilih dungeon').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('refine').setDescription('📿 Refine relic (+1 upgrade)').addStringOption(opt => opt.setName('slot').setDescription('Slot relic').setRequired(true).addChoices({name:'⚔️ Weapon', value:'weapon'},{name:'🛡️ Armor', value:'armor'},{name:'💍 Accessory', value:'accessory'})),
+    new SlashCommandBuilder()
+        .setName('boss')
+        .setDescription('👹 Boss Battle (Party/Solo)')
+        .addSubcommand(sub => sub.setName('create').setDescription('Buat party untuk lawan boss').addStringOption(opt => opt.setName('boss').setDescription('Pilih boss').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('start').setDescription('Mulai battle (party leader only)'))
+        .addSubcommand(sub => sub.setName('solo').setDescription('Solo lawan boss').addStringOption(opt => opt.setName('boss').setDescription('Pilih boss').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(sub => sub.setName('list').setDescription('Lihat daftar boss')),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
@@ -1572,6 +1580,11 @@ client.on(Events.InteractionCreate, async interaction => {
         if (interaction.commandName === 'dungeon') {
             const focused = interaction.options.getFocused(true);
             const choices = DUNGEON_TIERS.map(d => ({ name: `${d.name} (Lv.${d.minLevel}+, ${d.waves} waves)`, value: d.id }));
+            return interaction.respond(choices);
+        }
+        if (interaction.commandName === 'boss') {
+            const focused = interaction.options.getFocused(true);
+            const choices = BOSS_LIST.map(b => ({ name: `${b.name} (Lv.${b.minLevel}+, HP: ${b.hp.toLocaleString()})`, value: b.id }));
             return interaction.respond(choices);
         }
         return;
@@ -2698,6 +2711,150 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
+        // ================= BOSS BATTLE =================
+        if (command === 'boss') {
+            if (subCmd === 'list') {
+                let desc = '👹 **DAFTAR BOSS**\n\n';
+                BOSS_LIST.forEach(b => { desc += `${b.name}\n> Level: **${b.minLevel}+** | HP: **${b.hp.toLocaleString()}** | ATK: ${b.atk} | DEF: ${b.def}\n> Reward: 🪙 ${b.reward[0].toLocaleString()}-${b.reward[1].toLocaleString()} + ${b.exp} Pet EXP\n\n`; });
+                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('👹 Boss List').setColor('#E74C3C').setDescription(desc).setFooter({ text: '/boss create <boss> — buat party | /boss solo <boss> — solo' })] });
+            }
+
+            if (subCmd === 'create') {
+                const myPet = getPetData(guildId, interaction.user.id);
+                if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const bossId = interaction.options.getString('boss');
+                const boss = BOSS_LIST.find(b => b.id === bossId);
+                if (!boss) return interaction.reply({ content: '❌ Boss tidak ditemukan!', ephemeral: true });
+                if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet butuh minimal **Lv.${boss.minLevel}**! (Sekarang: Lv.${myPet.level})`, ephemeral: true });
+                if (activeBossParties.has(`${guildId}_${interaction.user.id}`)) return interaction.reply({ content: '❌ Kamu sudah punya party aktif! Gunakan `/boss start` untuk mulai.', ephemeral: true });
+                
+                const partyId = `${guildId}_${interaction.user.id}`;
+                activeBossParties.set(partyId, { leader: interaction.user.id, bossId, members: [interaction.user.id], channelId: interaction.channelId, createdAt: Date.now() });
+                
+                const joinBtn = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`boss_join_${interaction.user.id}`).setLabel(`🎮 Join Party (1/10)`).setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId(`boss_start_${interaction.user.id}`).setLabel('⚔️ Start Battle').setStyle(ButtonStyle.Danger)
+                );
+                
+                const embed = new EmbedBuilder()
+                    .setColor('#E74C3C')
+                    .setTitle(`👹 BOSS RAID: ${boss.name}`)
+                    .setDescription(`<@${interaction.user.id}> membuat party untuk melawan **${boss.name}**!\n\n> 👹 **Boss:** ${boss.name}\n> ❤️ **HP:** ${boss.hp.toLocaleString()}\n> ⚔️ **ATK:** ${boss.atk} | 🛡️ **DEF:** ${boss.def}\n> 🎁 **Reward:** 🪙 ${boss.reward[0].toLocaleString()}-${boss.reward[1].toLocaleString()}/member\n> 🎯 **Min Level:** ${boss.minLevel}\n\n**Party Members (1/10):**\n> 👑 <@${interaction.user.id}> (Leader)\n\n*Klik tombol Join untuk bergabung!*`)
+                    .setFooter({ text: 'Party auto-expire dalam 5 menit | Leader klik Start untuk mulai' });
+                
+                await interaction.reply({ embeds: [embed], components: [joinBtn] });
+                
+                // Auto-expire after 5 min
+                setTimeout(() => { if (activeBossParties.has(partyId)) { activeBossParties.delete(partyId); } }, 300000);
+                return;
+            }
+
+            if (subCmd === 'solo') {
+                const bossCd = `boss_${guildId}_${interaction.user.id}`;
+                if (fishCooldowns.has(bossCd) && Date.now() < fishCooldowns.get(bossCd)) { const rem = Math.ceil((fishCooldowns.get(bossCd) - Date.now()) / 60000); return interaction.reply({ content: `⏳ Boss cooldown! Tunggu **${rem} menit**.`, ephemeral: true }); }
+                const myPet = getPetData(guildId, interaction.user.id);
+                if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+                const bossId = interaction.options.getString('boss');
+                const boss = BOSS_LIST.find(b => b.id === bossId);
+                if (!boss) return interaction.reply({ content: '❌ Boss tidak ditemukan!', ephemeral: true });
+                if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet butuh minimal **Lv.${boss.minLevel}**!`, ephemeral: true });
+                fishCooldowns.set(bossCd, Date.now() + 3600000); // 1 hour cooldown solo
+                
+                const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
+                const result = simulateBattle(myPet, myPetDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def }]);
+                
+                let reward = 0, expGain = 0;
+                if (result.alive) {
+                    reward = getRandomInt(boss.reward[0], boss.reward[1]);
+                    expGain = boss.exp;
+                    userData.balance += reward;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                    addPetExp(guildId, interaction.user.id, expGain);
+                    // Chance drop relic
+                    if (Math.random() < 0.3) {
+                        const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
+                        const rarity = Math.random() < 0.1 ? 'Legendary' : Math.random() < 0.3 ? 'Epic' : 'Rare';
+                        const names = RELIC_NAMES[slot];
+                        const name = names[Math.floor(Math.random() * names.length)];
+                        const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
+                        const statVal = rarity === 'Legendary' ? getRandomInt(50,80) : rarity === 'Epic' ? getRandomInt(35,50) : getRandomInt(20,35);
+                        db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, name, slot, rarity, statType, statVal);
+                        reward = `${reward} + 📿 **${name}** (${rarity})`;
+                    }
+                    // Drop refine stone
+                    addItem(guildId, interaction.user.id, 'refine_stone', getRandomInt(1, 3));
+                } else {
+                    const penalty = Math.floor(userData.balance * 0.05);
+                    userData.balance -= penalty;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                    db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 10) WHERE id = ?').run(myPet.id);
+                    addPetExp(guildId, interaction.user.id, Math.floor(boss.exp * 0.3));
+                    reward = -penalty;
+                }
+                
+                const statusText = result.alive ? `🏆 **BOSS DEFEATED!**\n> 🪙 Reward: ${typeof reward === 'string' ? reward : '+' + reward.toLocaleString('id-ID')}\n> ✨ +${expGain} Pet EXP\n> 🪨 +1-3 Refine Stone` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} (5% penalty)\n> ❤️ Happiness -10`;
+                const embed = new EmbedBuilder().setColor(result.alive ? '#FFD700' : '#E74C3C').setTitle(`👹 Solo Boss: ${boss.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: 'Cooldown: 1 jam (solo)' });
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subCmd === 'start') {
+                const partyId = `${guildId}_${interaction.user.id}`;
+                const party = activeBossParties.get(partyId);
+                if (!party) return interaction.reply({ content: '❌ Kamu tidak punya party aktif! Gunakan `/boss create` dulu.', ephemeral: true });
+                if (party.leader !== interaction.user.id) return interaction.reply({ content: '❌ Hanya leader yang bisa start!', ephemeral: true });
+                activeBossParties.delete(partyId);
+                
+                const boss = BOSS_LIST.find(b => b.id === party.bossId);
+                // All members attack boss together
+                let totalDmg = 0, bossHp = boss.hp, log = [`👹 **${boss.name}** — HP: ${boss.hp.toLocaleString()}\n`];
+                for (const memberId of party.members) {
+                    const mPet = getPetData(guildId, memberId);
+                    if (!mPet) continue;
+                    const mPetDef = PET_DATA.find(p => p.id === mPet.petId);
+                    const dmg = (mPet.atk + mPet.level) * getRandomInt(3, 6);
+                    totalDmg += dmg;
+                    log.push(`> ${mPetDef ? mPetDef.emoji : '🐾'} **${mPet.name}** (Lv.${mPet.level}) dealt **${dmg}** dmg`);
+                }
+                
+                const won = totalDmg >= boss.hp;
+                log.push(`\n> 💥 Total Damage: **${totalDmg.toLocaleString()}** / ${boss.hp.toLocaleString()} HP`);
+                
+                if (won) {
+                    log.push(`\n🏆 **BOSS DEFEATED!**`);
+                    for (const memberId of party.members) {
+                        const reward = getRandomInt(boss.reward[0], boss.reward[1]);
+                        const memberData = getOrCreateUser(guildId, memberId);
+                        memberData.balance += reward;
+                        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(memberData.balance, guildId, memberId);
+                        addPetExp(guildId, memberId, boss.exp);
+                        addItem(guildId, memberId, 'refine_stone', getRandomInt(1, 2));
+                        // 20% chance relic per member
+                        if (Math.random() < 0.2) {
+                            const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
+                            const rarity = Math.random() < 0.1 ? 'Legendary' : Math.random() < 0.3 ? 'Epic' : 'Rare';
+                            const names = RELIC_NAMES[slot]; const name = names[Math.floor(Math.random() * names.length)];
+                            const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
+                            const statVal = rarity === 'Legendary' ? getRandomInt(50,80) : rarity === 'Epic' ? getRandomInt(35,50) : getRandomInt(20,35);
+                            db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, memberId, name, slot, rarity, statType, statVal);
+                        }
+                    }
+                    log.push(`> 🎁 Reward dibagikan ke ${party.members.length} member!`);
+                } else {
+                    log.push(`\n💀 **FAILED!** Damage tidak cukup.`);
+                    for (const memberId of party.members) {
+                        const memberData = getOrCreateUser(guildId, memberId);
+                        const penalty = Math.floor(memberData.balance * 0.05);
+                        memberData.balance -= penalty;
+                        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(memberData.balance, guildId, memberId);
+                    }
+                    log.push(`> 🪙 Semua member kehilangan 5% money`);
+                }
+                
+                const embed = new EmbedBuilder().setColor(won ? '#FFD700' : '#E74C3C').setTitle(`👹 BOSS RAID: ${boss.name}`).setDescription(log.join('\n')).setFooter({ text: `Party: ${party.members.length} members` });
+                return interaction.reply({ embeds: [embed] });
+            }
+        }
+
         if (command === 'admin_shop') { if (!isAdmin) return interaction.reply({content: '❌ Admin Only', ephemeral: true}); if (subCmd === 'add_item') { const nama = interaction.options.getString('nama'), harga = interaction.options.getInteger('harga'), isi = interaction.options.getString('isi').replace(/\\n/g, '\n'), jumlah = interaction.options.getInteger('jumlah') || 1; const stmt = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)'); for (let i = 0; i < jumlah; i++) stmt.run(guildId, nama, harga, isi); return interaction.reply(`✅ **${jumlah} stok** barang **${nama}** ditambah.`); } if (subCmd === 'add_role') { db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, interaction.options.getRole('role').id, interaction.options.getInteger('harga')); return interaction.reply(`✅ Role ditambah.`); } if (subCmd === 'set_custom_role') { const harga = interaction.options.getInteger('harga'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', harga.toString()); if (harga <= 0) return interaction.reply('🛑 Custom Role dimatikan.'); return interaction.reply(`✅ Harga Custom Role: 🪙 **${harga.toLocaleString('id-ID')}**.`); } if (subCmd === 'voucher_add') { const code = interaction.options.getString('kode').toUpperCase(), reward = interaction.options.getInteger('reward'), limit = interaction.options.getInteger('limit'); db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit); return interaction.reply(`🎟️ Voucher \`${code}\` dibuat!`); } if (subCmd === 'set_testimoni') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'testimoni_channel', interaction.options.getChannel('channel').id); return interaction.reply(`✅ Testimoni diatur!`); } if (subCmd === 'history') { const logs = db.prepare('SELECT * FROM logs WHERE guildId = ? ORDER BY time DESC LIMIT ?').all(guildId, Math.min(interaction.options.getInteger('jumlah') || 10, 50)); if (logs.length === 0) return interaction.reply('Kosong.'); let logTxt = '📜 **RIWAYAT TRANSAKSI**\n\n'; logs.forEach(l => { logTxt += `\`[${new Date(l.time).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}]\` <@${l.userId}> beli **${l.item}** (🪙 ${l.price.toLocaleString('id-ID')})\n`; }); return interaction.reply({ embeds: [new EmbedBuilder().setDescription(logTxt).setColor('#2B2D31')], allowedMentions: {users: []} }); } }
 
         if (command === 'shop') {
@@ -2906,6 +3063,72 @@ client.on(Events.InteractionCreate, async interaction => {
                 new ButtonBuilder().setCustomId(`finv_next_${page}`).setLabel('▶ Next').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages)
             );
             return interaction.update({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)], components: [navRow] });
+        }
+
+        // --- BOSS PARTY BUTTONS ---
+        if (interaction.customId.startsWith('boss_join_')) {
+            const leaderId = interaction.customId.replace('boss_join_', '');
+            const partyId = `${guildId}_${leaderId}`;
+            const party = activeBossParties.get(partyId);
+            if (!party) return interaction.reply({ content: '❌ Party sudah expire atau sudah dimulai!', ephemeral: true });
+            if (party.members.includes(interaction.user.id)) return interaction.reply({ content: '❌ Kamu sudah di party ini!', ephemeral: true });
+            const myPet = getPetData(guildId, interaction.user.id);
+            if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
+            const boss = BOSS_LIST.find(b => b.id === party.bossId);
+            if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet kamu butuh minimal **Lv.${boss.minLevel}**!`, ephemeral: true });
+            if (party.members.length >= 10) return interaction.reply({ content: '❌ Party sudah penuh (10/10)!', ephemeral: true });
+            party.members.push(interaction.user.id);
+            
+            // Update embed
+            const memberList = party.members.map((m, i) => `> ${i === 0 ? '👑' : '⚔️'} <@${m}>${i === 0 ? ' (Leader)' : ''}`).join('\n');
+            const joinBtn = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`boss_join_${leaderId}`).setLabel(`🎮 Join Party (${party.members.length}/10)`).setStyle(ButtonStyle.Success).setDisabled(party.members.length >= 10),
+                new ButtonBuilder().setCustomId(`boss_start_${leaderId}`).setLabel('⚔️ Start Battle').setStyle(ButtonStyle.Danger)
+            );
+            const embed = new EmbedBuilder().setColor('#E74C3C').setTitle(`👹 BOSS RAID: ${boss.name}`).setDescription(`Party untuk melawan **${boss.name}**!\n\n> ❤️ HP: **${boss.hp.toLocaleString()}** | ⚔️ ATK: ${boss.atk}\n> 🎁 Reward: 🪙 ${boss.reward[0].toLocaleString()}-${boss.reward[1].toLocaleString()}/member\n\n**Party Members (${party.members.length}/10):**\n${memberList}\n\n*Leader klik Start untuk mulai!*`).setFooter({ text: 'Party expire dalam 5 menit' });
+            await interaction.update({ embeds: [embed], components: [joinBtn] });
+            return;
+        }
+        if (interaction.customId.startsWith('boss_start_')) {
+            const leaderId = interaction.customId.replace('boss_start_', '');
+            if (interaction.user.id !== leaderId) return interaction.reply({ content: '❌ Hanya leader yang bisa start!', ephemeral: true });
+            const partyId = `${guildId}_${leaderId}`;
+            const party = activeBossParties.get(partyId);
+            if (!party) return interaction.reply({ content: '❌ Party tidak ditemukan!', ephemeral: true });
+            activeBossParties.delete(partyId);
+            
+            const boss = BOSS_LIST.find(b => b.id === party.bossId);
+            let totalDmg = 0, log = [`👹 **${boss.name}** — HP: ${boss.hp.toLocaleString()}\n`];
+            for (const memberId of party.members) {
+                const mPet = getPetData(guildId, memberId);
+                if (!mPet) continue;
+                const mPetDef = PET_DATA.find(p => p.id === mPet.petId);
+                const dmg = (mPet.atk + mPet.level) * getRandomInt(3, 6);
+                totalDmg += dmg;
+                log.push(`> ${mPetDef ? mPetDef.emoji : '🐾'} **${mPet.name}** (Lv.${mPet.level}) → **${dmg}** dmg`);
+            }
+            const won = totalDmg >= boss.hp;
+            log.push(`\n> 💥 Total: **${totalDmg.toLocaleString()}** / ${boss.hp.toLocaleString()}`);
+            
+            if (won) {
+                log.push(`\n🏆 **BOSS DEFEATED!**`);
+                for (const memberId of party.members) {
+                    const reward = getRandomInt(boss.reward[0], boss.reward[1]);
+                    const md = getOrCreateUser(guildId, memberId); md.balance += reward;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(md.balance, guildId, memberId);
+                    addPetExp(guildId, memberId, boss.exp);
+                    addItem(guildId, memberId, 'refine_stone', getRandomInt(1, 2));
+                    if (Math.random() < 0.2) { const slot = ['weapon','armor','accessory'][Math.floor(Math.random()*3)]; const rarity = Math.random()<0.1?'Legendary':Math.random()<0.3?'Epic':'Rare'; const names = RELIC_NAMES[slot]; const name = names[Math.floor(Math.random()*names.length)]; const st = slot==='weapon'?'atk':slot==='armor'?'def':(Math.random()<0.5?'spd':'crit'); const sv = rarity==='Legendary'?getRandomInt(50,80):rarity==='Epic'?getRandomInt(35,50):getRandomInt(20,35); db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, memberId, name, slot, rarity, st, sv); }
+                }
+                log.push(`> 🎁 Reward → ${party.members.length} members!`);
+            } else {
+                log.push(`\n💀 **FAILED!**`);
+                for (const memberId of party.members) { const md = getOrCreateUser(guildId, memberId); const p = Math.floor(md.balance*0.05); md.balance -= p; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(md.balance, guildId, memberId); }
+                log.push(`> 🪙 -5% money semua member`);
+            }
+            const embed = new EmbedBuilder().setColor(won ? '#FFD700' : '#E74C3C').setTitle(`👹 ${boss.name}`).setDescription(log.join('\n')).setFooter({ text: `${party.members.length} members` });
+            await interaction.update({ embeds: [embed], components: [] });
+            return;
         }
 
         if (interaction.customId === 'airdrop_claim') { if (activeMiniEvents.has(guildId)) activeMiniEvents.delete(guildId); const reward = getRandomInt(300, 600); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'event_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'event_win' }); return interaction.update({ content: `🎉 <@${interaction.user.id}> klaim Air Drop! 🪙 **${reward}**`, embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('x').setLabel(`Diklaim ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setDisabled(true))] }); }
