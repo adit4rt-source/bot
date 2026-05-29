@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Database (data player - JANGAN di-overwrite saat update!)
+economy.sqlite
+*.sqlite
+*.sqlite-journal
+
+# Environment / secrets
+.env
+
+# Logs
+*.log
+npm-debug.log*
