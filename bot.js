@@ -765,19 +765,7 @@ async function grantAchievement(guild, userId, achievementId) {
 
     db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, achievementId, Date.now());
 
-    // Auto-grant profile titles based on achievement
-    const titleMatch = PROFILE_TITLES.find(t => t.achievement === achievementId);
-    if (titleMatch) addProfileItem(guildId, userId, 'title', titleMatch.id);
-    // Auto-grant frames based on conditions
-    if (achievementId === 'level_50') addProfileItem(guildId, userId, 'frame', 'thunder');
-    if (achievementId === 'streak_60' || achievementId === 'streak_100') addProfileItem(guildId, userId, 'frame', 'fire');
-    if (achievementId === 'balance_500k' || achievementId === 'balance_1m') addProfileItem(guildId, userId, 'frame', 'diamond');
-    if (achievementId === 'fish_500') addProfileItem(guildId, userId, 'frame', 'ocean');
-    if (achievementId === 'farm_200') addProfileItem(guildId, userId, 'frame', 'farm');
-    // Check completionist
-    const totalAchUnlocked = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
-    if (totalAchUnlocked >= 50) addProfileItem(guildId, userId, 'title', 'completionist');
-    if (totalAchUnlocked >= 30) addProfileItem(guildId, userId, 'frame', 'star');
+
     
     // Berikan reward uang
     const user = getOrCreateUser(guildId, userId);
