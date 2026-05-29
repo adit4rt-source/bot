@@ -258,41 +258,41 @@ const FARM_LEVELS = [
 ];
 
 const FARM_CROPS = [
-    // COMMON (5-12 menit)
-    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 20, time: 3, minYield: 2, maxYield: 4, sellPrice: 12 },
-    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 30, time: 5, minYield: 2, maxYield: 3, sellPrice: 15 },
-    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 20, time: 3, minYield: 3, maxYield: 5, sellPrice: 10 },
-    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 35, time: 7, minYield: 2, maxYield: 4, sellPrice: 15 },
-    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 25, time: 5, minYield: 2, maxYield: 4, sellPrice: 12 },
-    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 30, time: 6, minYield: 2, maxYield: 3, sellPrice: 15 },
-    // UNCOMMON (25-50 menit)
-    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 70, time: 15, minYield: 2, maxYield: 4, sellPrice: 25 },
-    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 60, time: 15, minYield: 3, maxYield: 5, sellPrice: 20 },
-    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 80, time: 20, minYield: 2, maxYield: 3, sellPrice: 35 },
-    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 100, time: 30, minYield: 2, maxYield: 4, sellPrice: 40 },
-    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 60, time: 18, minYield: 3, maxYield: 5, sellPrice: 20 },
-    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 75, time: 20, minYield: 2, maxYield: 3, sellPrice: 30 },
-    // RARE (60-120 menit)
-    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 200, time: 40, minYield: 2, maxYield: 4, sellPrice: 55 },
-    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 250, time: 55, minYield: 1, maxYield: 2, sellPrice: 130 },
-    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 280, time: 55, minYield: 2, maxYield: 3, sellPrice: 80 },
-    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 250, time: 70, minYield: 2, maxYield: 3, sellPrice: 70 },
-    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 200, time: 40, minYield: 2, maxYield: 4, sellPrice: 60 },
-    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 350, time: 70, minYield: 1, maxYield: 3, sellPrice: 130 },
-    // EPIC (180-300 menit = 3-5 jam)
-    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 600, time: 100, minYield: 2, maxYield: 4, sellPrice: 130 },
-    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 700, time: 140, minYield: 2, maxYield: 3, sellPrice: 200 },
-    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 900, time: 180, minYield: 1, maxYield: 3, sellPrice: 350 },
-    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 140, minYield: 1, maxYield: 2, sellPrice: 400 },
-    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 100, minYield: 2, maxYield: 3, sellPrice: 230 },
-    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 100, minYield: 2, maxYield: 3, sellPrice: 170 },
-    // LEGENDARY (480-720 menit = 8-12 jam)
-    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 300, minYield: 1, maxYield: 2, sellPrice: 1400 },
-    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 300, minYield: 1, maxYield: 2, sellPrice: 1100 },
-    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 360, minYield: 1, maxYield: 1, sellPrice: 1800 },
-    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 330, minYield: 1, maxYield: 2, sellPrice: 1400 },
-    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 420, minYield: 1, maxYield: 1, sellPrice: 2200 },
-    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 300, minYield: 1, maxYield: 2, sellPrice: 1300 }
+    // COMMON (2-4 menit)
+    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 20, time: 2, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 30, time: 3, minYield: 2, maxYield: 3, sellPrice: 15 },
+    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 20, time: 2, minYield: 3, maxYield: 5, sellPrice: 10 },
+    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 35, time: 4, minYield: 2, maxYield: 4, sellPrice: 15 },
+    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 25, time: 3, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 30, time: 4, minYield: 2, maxYield: 3, sellPrice: 15 },
+    // UNCOMMON (8-18 menit)
+    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 70, time: 8, minYield: 2, maxYield: 4, sellPrice: 25 },
+    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 60, time: 8, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 80, time: 12, minYield: 2, maxYield: 3, sellPrice: 35 },
+    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 100, time: 18, minYield: 2, maxYield: 4, sellPrice: 40 },
+    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 60, time: 10, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 75, time: 12, minYield: 2, maxYield: 3, sellPrice: 30 },
+    // RARE (20-35 menit)
+    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 200, time: 20, minYield: 2, maxYield: 4, sellPrice: 55 },
+    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 250, time: 30, minYield: 1, maxYield: 2, sellPrice: 130 },
+    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 280, time: 30, minYield: 2, maxYield: 3, sellPrice: 80 },
+    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 250, time: 35, minYield: 2, maxYield: 3, sellPrice: 70 },
+    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 200, time: 20, minYield: 2, maxYield: 4, sellPrice: 60 },
+    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 350, time: 35, minYield: 1, maxYield: 3, sellPrice: 130 },
+    // EPIC (50-90 menit = ~1-1.5 jam)
+    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 600, time: 50, minYield: 2, maxYield: 4, sellPrice: 130 },
+    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 700, time: 70, minYield: 2, maxYield: 3, sellPrice: 200 },
+    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 900, time: 90, minYield: 1, maxYield: 3, sellPrice: 350 },
+    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 70, minYield: 1, maxYield: 2, sellPrice: 400 },
+    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 50, minYield: 2, maxYield: 3, sellPrice: 230 },
+    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 50, minYield: 2, maxYield: 3, sellPrice: 170 },
+    // LEGENDARY (150-210 menit = 2.5-3.5 jam)
+    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 150, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 150, minYield: 1, maxYield: 2, sellPrice: 1100 },
+    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 180, minYield: 1, maxYield: 1, sellPrice: 1800 },
+    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 165, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 210, minYield: 1, maxYield: 1, sellPrice: 2200 },
+    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 150, minYield: 1, maxYield: 2, sellPrice: 1300 }
 ];
 
 const FARM_RECIPES = [
@@ -1141,6 +1141,7 @@ const commands = [
         .addSubcommand(sub => sub.setName('upgrade').setDescription('Upgrade lahan (tambah slot)'))
         .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen'))
+        .addSubcommand(sub => sub.setName('remove').setDescription('Hapus tanaman mati').addIntegerOption(opt => opt.setName('slot').setDescription('Slot tanaman (0 = semua mati)').setRequired(false)))
 .addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman (dari /farm status)').setRequired(true))),
     new SlashCommandBuilder()
         .setName('pet')
@@ -2243,6 +2244,25 @@ client.on(Events.InteractionCreate, async interaction => {
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
             }
 
+            if (subCmd === 'remove') {
+                const slotNum = interaction.options.getInteger('slot');
+                if (slotNum && slotNum > 0) {
+                    // Remove specific slot
+                    if (slotNum > plots.length) return interaction.reply({ content: `❌ Slot ${slotNum} tidak ada! Kamu punya ${plots.length} tanaman.`, ephemeral: true });
+                    const plot = plots[slotNum - 1];
+                    if (plot.status !== 'dead') return interaction.reply({ content: '❌ Tanaman ini masih hidup! Hanya bisa hapus yang sudah mati.', ephemeral: true });
+                    db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                    return interaction.reply({ content: `🗑️ Tanaman mati **${crop ? crop.emoji + ' ' + crop.name : ''}** di slot ${slotNum} dihapus.` });
+                } else {
+                    // Remove ALL dead plants
+                    const deadPlots = plots.filter(p => p.status === 'dead');
+                    if (deadPlots.length === 0) return interaction.reply({ content: '✅ Tidak ada tanaman mati di kebunmu!', ephemeral: true });
+                    db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, interaction.user.id);
+                    return interaction.reply({ content: `🗑️ **${deadPlots.length} tanaman mati** dihapus dari kebun! Slot sekarang tersedia untuk tanam baru.` });
+                }
+            }
+
             if (subCmd === 'pupuk') {
                 const fertId = interaction.options.getString('jenis');
                 const slotNum = interaction.options.getInteger('slot');
@@ -2275,7 +2295,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 let desc = '**🌱 BIBIT TANAMAN**\n\n';
                 for (const tier of tiers) {
                     const crops = FARM_CROPS.filter(c => c.tier === tier);
-                    desc += `**${tier}** (${tier === 'Common' ? '5-12m' : tier === 'Uncommon' ? '25-50m' : tier === 'Rare' ? '1-2h' : tier === 'Epic' ? '3-5h' : '8-12h'})\n`;
+                    desc += `**${tier}** (${tier === 'Common' ? '2-4m' : tier === 'Uncommon' ? '8-18m' : tier === 'Rare' ? '20-35m' : tier === 'Epic' ? '50-90m' : '2.5-3.5h'})\n`;
                     crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
                     desc += '\n';
                 }
@@ -2452,7 +2472,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     }
                 }
                 if (pet.hunting_until && pet.hunting_until > Date.now()) { const remaining = Math.ceil((pet.hunting_until - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih berburu! Kembali dalam **${remaining} menit**.`, ephemeral: true }); }
-                const huntDuration = getRandomInt(15, 30) * 60000; // 15-30 menit
+                const huntDuration = getRandomInt(5, 10) * 60000; // 5-10 menit
                 const huntEnd = Date.now() + huntDuration;
                 db.prepare('UPDATE pets SET hunting_until = ?, hunger = MAX(0, hunger - 20) WHERE id = ?').run(huntEnd, pet.id);
                 const durationMin = Math.round(huntDuration / 60000);
