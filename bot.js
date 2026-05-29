@@ -215,16 +215,16 @@ const BAIT_TYPES = [
 ];
 
 const ROD_TYPES = [
-    { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 30, rareBonus: 0 },
-    { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 25, rareBonus: 3 },
-    { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 20, rareBonus: 7 },
-    { id: 'titanium', name: 'Joran Titanium', emoji: '🔩', price: 18000, cooldown: 18, rareBonus: 9 },
-    { id: 'pro', name: 'Joran Pro', emoji: '🏆', price: 35000, cooldown: 15, rareBonus: 12 },
-    { id: 'enchanted', name: 'Joran Enchanted', emoji: '✨', price: 60000, cooldown: 13, rareBonus: 15 },
-    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 100000, cooldown: 11, rareBonus: 18 },
-    { id: 'celestial', name: 'Joran Celestial', emoji: '🌟', price: 150000, cooldown: 9, rareBonus: 21 },
-    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 250000, cooldown: 7, rareBonus: 25 },
-    { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 500000, cooldown: 5, rareBonus: 30 }
+    { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 15, rareBonus: 0 },
+    { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 13, rareBonus: 3 },
+    { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 11, rareBonus: 7 },
+    { id: 'titanium', name: 'Joran Titanium', emoji: '🔩', price: 18000, cooldown: 10, rareBonus: 9 },
+    { id: 'pro', name: 'Joran Pro', emoji: '🏆', price: 35000, cooldown: 8, rareBonus: 12 },
+    { id: 'enchanted', name: 'Joran Enchanted', emoji: '✨', price: 60000, cooldown: 7, rareBonus: 15 },
+    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 100000, cooldown: 6, rareBonus: 18 },
+    { id: 'celestial', name: 'Joran Celestial', emoji: '🌟', price: 150000, cooldown: 5, rareBonus: 21 },
+    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 250000, cooldown: 4, rareBonus: 25 },
+    { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 500000, cooldown: 3, rareBonus: 30 }
 ];
 
 // ================= SISTEM ITEM INVENTORY =================
@@ -615,18 +615,18 @@ const PET_ELEMENTS = ['fire', 'water', 'nature', 'electric', 'dark', 'light'];
 const ELEMENT_ADVANTAGE = { fire: 'nature', water: 'fire', nature: 'water', electric: 'water', dark: 'light', light: 'dark' };
 
 const DUNGEON_TIERS = [
-    { id: 'forest', name: '🌿 Hutan Pemula', minLevel: 1, waves: 3, monsterHp: [50,70,100], monsterAtk: [8,10,15], reward: [50,150], exp: 8, cooldown: 300000 },
-    { id: 'cave', name: '🏔️ Gua Batu', minLevel: 10, waves: 4, monsterHp: [100,130,160,200], monsterAtk: [15,18,22,28], reward: [120,400], exp: 15, cooldown: 600000 },
-    { id: 'volcano', name: '🌋 Gunung Api', minLevel: 25, waves: 5, monsterHp: [200,250,300,350,450], monsterAtk: [25,30,35,40,50], reward: [300,800], exp: 25, cooldown: 900000 },
-    { id: 'castle', name: '🏰 Kastil Gelap', minLevel: 50, waves: 6, monsterHp: [400,500,600,700,800,1000], monsterAtk: [40,50,55,60,70,85], reward: [600,1500], exp: 40, cooldown: 1200000 },
-    { id: 'void', name: '🌌 Void Realm', minLevel: 100, waves: 7, monsterHp: [800,1000,1200,1400,1600,1800,2500], monsterAtk: [70,80,90,100,110,120,150], reward: [1000,2500], exp: 60, cooldown: 1800000 }
+    { id: 'forest', name: '🌿 Hutan Pemula', minLevel: 1, waves: 3, monsterHp: [50,70,100], monsterAtk: [8,10,15], reward: [30,100], exp: 5, cooldown: 60000 },
+    { id: 'cave', name: '🏔️ Gua Batu', minLevel: 10, waves: 4, monsterHp: [100,130,160,200], monsterAtk: [15,18,22,28], reward: [80,250], exp: 10, cooldown: 90000 },
+    { id: 'volcano', name: '🌋 Gunung Api', minLevel: 25, waves: 5, monsterHp: [200,250,300,350,450], monsterAtk: [25,30,35,40,50], reward: [150,450], exp: 18, cooldown: 120000 },
+    { id: 'castle', name: '🏰 Kastil Gelap', minLevel: 50, waves: 6, monsterHp: [400,500,600,700,800,1000], monsterAtk: [40,50,55,60,70,85], reward: [300,800], exp: 28, cooldown: 180000 },
+    { id: 'void', name: '🌌 Void Realm', minLevel: 100, waves: 7, monsterHp: [800,1000,1200,1400,1600,1800,2500], monsterAtk: [70,80,90,100,110,120,150], reward: [500,1500], exp: 40, cooldown: 300000 }
 ];
 
 const BOSS_LIST = [
-    { id: 'dragon', name: '🐲 Dragon Lord', minLevel: 20, hp: 8000, atk: 60, def: 30, reward: [2000, 4000], exp: 80 },
-    { id: 'demon', name: '👹 Demon King', minLevel: 50, hp: 15000, atk: 90, def: 50, reward: [3500, 7000], exp: 120 },
-    { id: 'void_emp', name: '🌑 Void Emperor', minLevel: 100, hp: 30000, atk: 130, def: 70, reward: [6000, 12000], exp: 180 },
-    { id: 'ancient', name: '☠️ Ancient God', minLevel: 150, hp: 50000, atk: 180, def: 100, reward: [10000, 20000], exp: 300 }
+    { id: 'dragon', name: '🐲 Dragon Lord', minLevel: 20, hp: 8000, atk: 60, def: 30, reward: [800, 2000], exp: 50 },
+    { id: 'demon', name: '👹 Demon King', minLevel: 50, hp: 15000, atk: 90, def: 50, reward: [1500, 3500], exp: 80 },
+    { id: 'void_emp', name: '🌑 Void Emperor', minLevel: 100, hp: 30000, atk: 130, def: 70, reward: [3000, 6000], exp: 120 },
+    { id: 'ancient', name: '☠️ Ancient God', minLevel: 150, hp: 50000, atk: 180, def: 100, reward: [5000, 10000], exp: 200 }
 ];
 
 const RELIC_NAMES = {
@@ -1961,7 +1961,7 @@ client.on(Events.InteractionCreate, async interaction => {
         if (command === 'economy' && subCmd === 'slot') {
             const slotCdKey = `slot_${guildId}_${interaction.user.id}`;
             if (fishCooldowns.has(slotCdKey) && Date.now() < fishCooldowns.get(slotCdKey)) { const remaining = Math.ceil((fishCooldowns.get(slotCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Mesin slot masih panas! Tunggu **${remaining} detik**.`, ephemeral: true }); }
-            fishCooldowns.set(slotCdKey, Date.now() + 7000);
+            fishCooldowns.set(slotCdKey, Date.now() + 5000);
             const bet = interaction.options.getInteger('taruhan');
             if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
             userData.balance -= bet;
@@ -2670,7 +2670,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     }
                 }
                 if (pet.hunting_until && pet.hunting_until > Date.now()) { const remaining = Math.ceil((pet.hunting_until - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih berburu! Kembali dalam **${remaining} menit**.`, ephemeral: true }); }
-                const huntDuration = getRandomInt(30, 60) * 60000; // 30-60 menit
+                const huntDuration = getRandomInt(10, 20) * 60000; // 10-20 menit
                 const huntEnd = Date.now() + huntDuration;
                 db.prepare('UPDATE pets SET hunting_until = ?, hunger = MAX(0, hunger - 20) WHERE id = ?').run(huntEnd, pet.id);
                 const durationMin = Math.round(huntDuration / 60000);
@@ -2713,7 +2713,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 const enemyData = getOrCreateUser(guildId, target.id);
                 if (enemyData.balance < taruhan) return interaction.reply({ content: `❌ <@${target.id}> saldo kurang untuk taruhan! (Butuh 🪙 ${taruhan.toLocaleString('id-ID')})`, ephemeral: true });
             }
-            fishCooldowns.set(battleCd, Date.now() + 300000);
+            fishCooldowns.set(battleCd, Date.now() + 120000);
             const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
             const enemyPetDef = PET_DATA.find(p => p.id === enemyPet.petId);
             
@@ -2860,7 +2860,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 const boss = BOSS_LIST.find(b => b.id === bossId);
                 if (!boss) return interaction.reply({ content: '❌ Boss tidak ditemukan!', ephemeral: true });
                 if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet butuh minimal **Lv.${boss.minLevel}**!`, ephemeral: true });
-                fishCooldowns.set(bossCd, Date.now() + 3600000); // 1 hour cooldown solo
+                fishCooldowns.set(bossCd, Date.now() + 600000); // 10 min cooldown solo
                 
                 const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
                 const result = simulateBattle(myPet, myPetDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def }]);
@@ -2897,7 +2897,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 }
                 
                 const statusText = result.alive ? `🏆 **BOSS DEFEATED!**\n> 🪙 Reward: ${typeof reward === 'string' ? reward : '+' + reward.toLocaleString('id-ID')}\n> ✨ +${expGain} Pet EXP\n> 🪨 +1-3 Refine Stone` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} (5% penalty)\n> ❤️ Happiness -10`;
-                const embed = new EmbedBuilder().setColor(result.alive ? '#FFD700' : '#E74C3C').setTitle(`👹 Solo Boss: ${boss.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: 'Cooldown: 1 jam (solo)' });
+                const embed = new EmbedBuilder().setColor(result.alive ? '#FFD700' : '#E74C3C').setTitle(`👹 Solo Boss: ${boss.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: 'Cooldown: 10 menit (solo)' });
                 return interaction.reply({ embeds: [embed] });
             }
 
