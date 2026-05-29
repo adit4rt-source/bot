@@ -1293,7 +1293,6 @@ const commands = [
         .addSubcommand(sub => sub.setName('upgrade').setDescription('Upgrade lahan (tambah slot)'))
         .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen'))
-        .addSubcommand(sub => sub.setName('remove').setDescription('Hapus tanaman mati').addIntegerOption(opt => opt.setName('slot').setDescription('Slot tanaman (0 = semua mati)').setRequired(false)))
 .addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman (dari /farm status)').setRequired(true))),
     new SlashCommandBuilder()
         .setName('pet')
@@ -2379,11 +2378,19 @@ client.on(Events.InteractionCreate, async interaction => {
                         db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
                     }
                 }
+                // Auto-remove dead plants during harvest
+                const deadPlots = plots.filter(p => p.status === 'dead');
+                let deadMsg = '';
+                if (deadPlots.length > 0) {
+                    db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, interaction.user.id);
+                    deadMsg = `\n\n🗑️ **${deadPlots.length} tanaman mati** otomatis dihapus.`;
+                }
+                if (harvested === 0 && deadPlots.length > 0) return interaction.reply({ content: `🗑️ **${deadPlots.length} tanaman mati** dihapus dari kebun! Slot sekarang tersedia untuk tanam baru.\n\n> Tidak ada tanaman yang siap dipanen.`, ephemeral: false });
                 if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman yang siap dipanen! Cek `/farm status`.', ephemeral: true });
                 incrementUserStat(guildId, interaction.user.id, 'total_harvests', harvested);
                 addPetExp(guildId, interaction.user.id, 5);
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_harvest', legendary: harvestDesc.includes('Legendary') });
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.`)] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.${deadMsg}`)] });
             }
 
             if (subCmd === 'storage') {
@@ -2434,25 +2441,6 @@ client.on(Events.InteractionCreate, async interaction => {
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_craft' });
                 const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
                 return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
-            }
-
-            if (subCmd === 'remove') {
-                const slotNum = interaction.options.getInteger('slot');
-                if (slotNum && slotNum > 0) {
-                    // Remove specific slot
-                    if (slotNum > plots.length) return interaction.reply({ content: `❌ Slot ${slotNum} tidak ada! Kamu punya ${plots.length} tanaman.`, ephemeral: true });
-                    const plot = plots[slotNum - 1];
-                    if (plot.status !== 'dead') return interaction.reply({ content: '❌ Tanaman ini masih hidup! Hanya bisa hapus yang sudah mati.', ephemeral: true });
-                    db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
-                    const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-                    return interaction.reply({ content: `🗑️ Tanaman mati **${crop ? crop.emoji + ' ' + crop.name : ''}** di slot ${slotNum} dihapus.` });
-                } else {
-                    // Remove ALL dead plants
-                    const deadPlots = plots.filter(p => p.status === 'dead');
-                    if (deadPlots.length === 0) return interaction.reply({ content: '✅ Tidak ada tanaman mati di kebunmu!', ephemeral: true });
-                    db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, interaction.user.id);
-                    return interaction.reply({ content: `🗑️ **${deadPlots.length} tanaman mati** dihapus dari kebun! Slot sekarang tersedia untuk tanam baru.` });
-                }
             }
 
             if (subCmd === 'pupuk') {
