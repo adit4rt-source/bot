@@ -1476,8 +1476,8 @@ client.on(Events.MessageCreate, async message => {
     // Pet passive EXP from chatting (every 5 min)
     const petExpKey = `pet_exp_${guildId}_${message.author.id}`;
     if (!fishCooldowns.has(petExpKey) || Date.now() > fishCooldowns.get(petExpKey)) {
-        fishCooldowns.set(petExpKey, Date.now() + 300000);
-        addPetExp(guildId, message.author.id, 3);
+        fishCooldowns.set(petExpKey, Date.now() + 120000);
+        addPetExp(guildId, message.author.id, 2);
     }
 
     const cdKey = `${guildId}_${message.author.id}`;
@@ -2573,18 +2573,18 @@ client.on(Events.InteractionCreate, async interaction => {
                 const pet = getPetData(guildId, interaction.user.id);
                 if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
                 const playCdKey = `pet_play_${guildId}_${interaction.user.id}`;
-                if (fishCooldowns.has(playCdKey) && Date.now() < fishCooldowns.get(playCdKey)) { const rem = Math.ceil((fishCooldowns.get(playCdKey) - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih capek! Tunggu **${rem} menit** lagi.`, ephemeral: true }); }
-                fishCooldowns.set(playCdKey, Date.now() + 1800000);
-                const newHappy = Math.min(100, pet.happiness + 20);
-                const newHunger = Math.max(0, pet.hunger - 5);
+                if (fishCooldowns.has(playCdKey) && Date.now() < fishCooldowns.get(playCdKey)) { const remSec = Math.ceil((fishCooldowns.get(playCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ ${pet.name} masih capek! Tunggu **${remSec > 60 ? Math.ceil(remSec/60) + ' menit' : remSec + ' detik'}** lagi.`, ephemeral: true }); }
+                fishCooldowns.set(playCdKey, Date.now() + 180000); // 3 menit
+                const newHappy = Math.min(100, pet.happiness + 10);
+                const newHunger = Math.max(0, pet.hunger - 3);
                 db.prepare('UPDATE pets SET happiness = ?, hunger = ? WHERE id = ?').run(newHappy, newHunger, pet.id);
-                const expResult = addPetExp(guildId, interaction.user.id, 15);
+                const expResult = addPetExp(guildId, interaction.user.id, 8);
                 let lvlUpMsg = '';
                 if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
                 if (expResult && expResult.newSkill) lvlUpMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
                 const activities = ['bermain kejar-kejaran', 'bermain bola', 'bermain petak umpet', 'berguling-guling', 'melompat-lompat'];
                 const activity = activities[Math.floor(Math.random() * activities.length)];
-                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +20 → **${newHappy}%**\n> 🍖 Hunger: -5 → **${newHunger}%**\n> ✨ +15 EXP${lvlUpMsg}` });
+                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +10 → **${newHappy}%**\n> 🍖 Hunger: -3 → **${newHunger}%**\n> ✨ +8 EXP${lvlUpMsg}` });
             }
 
             if (subCmd === 'shop') {
