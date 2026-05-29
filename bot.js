@@ -1613,7 +1613,9 @@ client.on(Events.InteractionCreate, async interaction => {
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎒 **ITEMS & QUEST**', inline: false },
                 { name: '\u200b', value: `> \`/inventory\` — Lihat item\n> \`/use <item>\` — Gunakan item\n> \`/quest\` — Misi harian (3 misi/hari)`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **EVENTS & VOICE**', inline: false },
-                { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
+                { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '⚔️ **BATTLE & DUNGEON**', inline: false },
+                { name: '\u200b', value: `> \`/battle @user <taruhan>\` — PvP auto-battle\n> \`/dungeon <tier>\` — Lawan monster (5 tier)\n> \`/boss create/solo <boss>\` — Raid boss (party max 10)\n> \`/boss list\` — Daftar boss\n> \`/refine <slot>\` — Upgrade relic\n> \`/daily\` — Klaim hadiah harian`, inline: false }
             );
             if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/setting\` — Atur channels notifikasi\n> \`/admin_shop\` — Kelola toko\n> \`/tempvoice setup\` — Setup voice\n> \`/level setting\` — Atur XP\n> \`/money manage\` — Kelola uang user\n> \`/streak admin_...\` — Kelola streak`, inline: false });
             helpEmbed.setFooter({ text: 'Ketik / untuk melihat semua command', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
@@ -2635,19 +2637,24 @@ client.on(Events.InteractionCreate, async interaction => {
             fishCooldowns.set(battleCd, Date.now() + 300000);
             const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
             const enemyPetDef = PET_DATA.find(p => p.id === enemyPet.petId);
-            const result = simulatePvP(myPet, myPetDef, enemyPet, enemyPetDef);
-            const winner = result.winner === 1 ? interaction.user : target;
-            const loser = result.winner === 1 ? target : interaction.user;
-            // Handle taruhan
-            if (taruhan > 0) {
-                const loserData = getOrCreateUser(guildId, loser.id);
-                const winnerData = getOrCreateUser(guildId, winner.id);
-                if (loserData.balance >= taruhan) { loserData.balance -= taruhan; winnerData.balance += taruhan; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(loserData.balance, guildId, loser.id); db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner.id); }
-            }
-            addPetExp(guildId, winner.id, 15);
-            addPetExp(guildId, loser.id, 5);
-            const embed = new EmbedBuilder().setColor('#FF6B00').setTitle(`⚔️ BATTLE: ${myPet.name} vs ${enemyPet.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n🏆 Winner: ${result.winner === 1 ? myPetDef.emoji : enemyPetDef.emoji} **${result.winner === 1 ? myPet.name : enemyPet.name}** (<@${winner.id}>)\n💀 Loser: ${result.winner === 1 ? enemyPetDef.emoji : myPetDef.emoji} **${result.winner === 1 ? enemyPet.name : myPet.name}**${taruhan > 0 ? `\n\n💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}** → <@${winner.id}>` : ''}`).setFooter({ text: `Winner +15 EXP | Loser +5 EXP` });
-            return interaction.reply({ embeds: [embed] });
+            
+            await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F39C12').setTitle('⚔️ BATTLE!').setDescription(`${myPetDef.emoji} **${myPet.name}** vs ${enemyPetDef.emoji} **${enemyPet.name}**\n\n> ⚔️ *Pertarungan sedang berlangsung...*`).setFooter({ text: 'Menunggu hasil...' })] });
+            
+            setTimeout(async () => {
+                const result = simulatePvP(myPet, myPetDef, enemyPet, enemyPetDef);
+                const winner = result.winner === 1 ? interaction.user : target;
+                const loser = result.winner === 1 ? target : interaction.user;
+                if (taruhan > 0) {
+                    const loserData = getOrCreateUser(guildId, loser.id);
+                    const winnerData = getOrCreateUser(guildId, winner.id);
+                    if (loserData.balance >= taruhan) { loserData.balance -= taruhan; winnerData.balance += taruhan; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(loserData.balance, guildId, loser.id); db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner.id); }
+                }
+                addPetExp(guildId, winner.id, 15);
+                addPetExp(guildId, loser.id, 5);
+                const embed = new EmbedBuilder().setColor('#FF6B00').setTitle(`⚔️ BATTLE RESULT`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n🏆 Winner: ${result.winner === 1 ? myPetDef.emoji : enemyPetDef.emoji} **${result.winner === 1 ? myPet.name : enemyPet.name}** (<@${winner.id}>)\n💀 Loser: ${result.winner === 1 ? enemyPetDef.emoji : myPetDef.emoji} **${result.winner === 1 ? enemyPet.name : myPet.name}**${taruhan > 0 ? `\n\n💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}** → <@${winner.id}>` : ''}`).setFooter({ text: 'Winner +15 EXP | Loser +5 EXP' });
+                interaction.editReply({ embeds: [embed] }).catch(() => {});
+            }, 3000);
+            return;
         }
 
         // ================= DUNGEON =================
@@ -2660,29 +2667,36 @@ client.on(Events.InteractionCreate, async interaction => {
             const dungeon = DUNGEON_TIERS.find(d => d.id === tierId);
             if (!dungeon) return interaction.reply({ content: '❌ Dungeon tidak ditemukan!', ephemeral: true });
             if (myPet.level < dungeon.minLevel) return interaction.reply({ content: `❌ Pet kamu butuh minimal **Level ${dungeon.minLevel}** untuk dungeon ini! (Sekarang: Lv.${myPet.level})`, ephemeral: true });
-            fishCooldowns.set(dungeonCd, Date.now() + 1800000); // 30 min cooldown
+            fishCooldowns.set(dungeonCd, Date.now() + 300000); // 5 min cooldown
             const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
             const enemies = dungeon.monsterHp.map((hp, i) => ({ hp, atk: dungeon.monsterAtk[i], def: Math.floor(dungeon.monsterAtk[i] * 0.3) }));
-            const result = simulateBattle(myPet, myPetDef, enemies);
-            let reward = 0, expGain = 0;
-            if (result.alive) {
-                reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
-                expGain = dungeon.exp;
-                userData.balance += reward;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                addPetExp(guildId, interaction.user.id, expGain);
-            } else {
-                // Penalty: lose 10% money, happiness -20
-                const penalty = Math.floor(userData.balance * 0.1);
-                userData.balance -= penalty;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(myPet.id);
-                addPetExp(guildId, interaction.user.id, Math.floor(dungeon.exp * 0.3));
-                reward = -penalty;
-            }
-            const statusText = result.alive ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money (10% penalty)\n> ❤️ Happiness -20\n> ✨ +${Math.floor(dungeon.exp*0.3)} EXP (30%)`;
-            const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: `Pet: ${myPet.name} Lv.${myPet.level} | Cooldown: 30 menit` });
-            return interaction.reply({ embeds: [embed] });
+            
+            await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F39C12').setTitle(`🏰 ${dungeon.name}`).setDescription(`${myPetDef.emoji} **${myPet.name}** memasuki dungeon...\n\n> ⚔️ *Pertarungan sedang berlangsung...*\n> 🐾 Pet Lv.${myPet.level} vs ${dungeon.waves} Wave Monster`).setFooter({ text: 'Menunggu hasil...' })] });
+            
+            setTimeout(async () => {
+                const result = simulateBattle(myPet, myPetDef, enemies);
+                let reward = 0, expGain = 0;
+                if (result.alive) {
+                    reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
+                    expGain = dungeon.exp;
+                    const freshData = getOrCreateUser(guildId, interaction.user.id);
+                    freshData.balance += reward;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
+                    addPetExp(guildId, interaction.user.id, expGain);
+                } else {
+                    const freshData = getOrCreateUser(guildId, interaction.user.id);
+                    const penalty = Math.floor(freshData.balance * 0.1);
+                    freshData.balance -= penalty;
+                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
+                    db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(myPet.id);
+                    addPetExp(guildId, interaction.user.id, Math.floor(dungeon.exp * 0.3));
+                    reward = -penalty;
+                }
+                const statusText = result.alive ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money (10%)\n> ❤️ Happiness -20\n> ✨ +${Math.floor(dungeon.exp*0.3)} EXP`;
+                const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: `Pet: ${myPet.name} Lv.${myPet.level} | CD: 5 menit` });
+                interaction.editReply({ embeds: [embed] }).catch(() => {});
+            }, 3000);
+            return;
         }
 
         // ================= REFINE =================
