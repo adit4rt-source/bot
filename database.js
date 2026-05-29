@@ -31,6 +31,7 @@ try { db.exec(`ALTER TABLE fish_inventory ADD COLUMN locked INTEGER DEFAULT 0`);
 try { db.exec(`CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId TEXT, fishId TEXT, PRIMARY KEY(guildId, userId, fishId))`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS item_inventory (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS pet_food_inventory (guildId TEXT, userId TEXT, foodId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, foodId))`);
 
 // Farming
 db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing')`);
@@ -140,4 +141,27 @@ function removeItem(guildId, userId, itemId, qty = 1) {
     return true;
 }
 
-module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem };
+// ================= PET FOOD INVENTORY =================
+function getPetFoodCount(guildId, userId, foodId) {
+    const row = db.prepare('SELECT quantity FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND foodId = ?').get(guildId, userId, foodId);
+    return row ? row.quantity : 0;
+}
+
+function addPetFood(guildId, userId, foodId, qty = 1) {
+    const current = getPetFoodCount(guildId, userId, foodId);
+    db.prepare('INSERT OR REPLACE INTO pet_food_inventory (guildId, userId, foodId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, foodId, current + qty);
+}
+
+function removePetFood(guildId, userId, foodId, qty = 1) {
+    const current = getPetFoodCount(guildId, userId, foodId);
+    if (current < qty) return false;
+    if (current - qty <= 0) db.prepare('DELETE FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND foodId = ?').run(guildId, userId, foodId);
+    else db.prepare('UPDATE pet_food_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND foodId = ?').run(current - qty, guildId, userId, foodId);
+    return true;
+}
+
+function getAllPetFood(guildId, userId) {
+    return db.prepare('SELECT * FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
+}
+
+module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood };
