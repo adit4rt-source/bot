@@ -1113,7 +1113,7 @@ const commands = [
     new SlashCommandBuilder()
         .setName('leaderboard')
         .setDescription('🏆 Leaderboard Global')
-        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori').setRequired(false).addChoices({name:'💰 Money', value:'money'},{name:'📈 Level', value:'level'},{name:'🎣 Fishing', value:'fish'},{name:'🌾 Farming', value:'farm'},{name:'🔥 Streak', value:'streak'},{name:'🏆 Overall', value:'overall'})),
+        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori').setRequired(false).addChoices({name:'💰 Money', value:'money'},{name:'📈 Level', value:'level'},{name:'🎣 Fishing (Jumlah)', value:'fish'},{name:'🎣 Ikan Terberat', value:'fish_weight'},{name:'🌾 Farming', value:'farm'},{name:'🐾 Pet Level', value:'pet'},{name:'🔥 Streak', value:'streak'},{name:'🏆 Overall', value:'overall'})),
     new SlashCommandBuilder()
         .setName('admin_shop')
         .setDescription('Manajemen Toko (Khusus Admin)')
@@ -1317,6 +1317,26 @@ client.on(Events.MessageCreate, async message => {
 
     const cdKey = `${guildId}_${message.author.id}`;
     if (!chatCooldowns.has(cdKey)) { await addXpAndMoney(message.member, 'chat'); chatCooldowns.add(cdKey); setTimeout(() => chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000); }
+
+    // --- PET HUNGER/HAPPY DECAY (setiap 10 menit per user) ---
+    const petDecayKey = `pet_decay_${guildId}_${message.author.id}`;
+    if (!fishCooldowns.has(petDecayKey) || Date.now() > fishCooldowns.get(petDecayKey)) {
+        fishCooldowns.set(petDecayKey, Date.now() + 600000); // 10 menit
+        const activePet = db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(guildId, message.author.id);
+        if (activePet && activePet.status !== 'dead') {
+            const newHunger = Math.max(0, activePet.hunger - 3);
+            const newHappy = Math.max(0, activePet.happiness - 2);
+            let newStatus = activePet.status;
+            if (newHunger <= 0 && activePet.status !== 'sick') newStatus = 'sick';
+            db.prepare('UPDATE pets SET hunger = ?, happiness = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newStatus, activePet.id);
+            // Notify if pet is hungry or sick
+            if (newHunger <= 20 && newHunger > 0) {
+                message.reply({ content: `🐾 <@${message.author.id}> Pet kamu **${activePet.name}** lapar! (🍖 ${newHunger}%) Kasih makan dengan \`/pet feed\`!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 10000); }).catch(() => {});
+            } else if (newStatus === 'sick' && activePet.status !== 'sick') {
+                message.reply({ content: `🐾⚠️ <@${message.author.id}> Pet kamu **${activePet.name}** SAKIT! 🤒 Segera kasih makan!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
+            }
+        }
+    }
 
     // --- FARM NOTIFICATION (setiap 5 menit per user) ---
     const farmNotifKey = `farm_notif_${guildId}_${message.author.id}`;
@@ -1654,10 +1674,18 @@ client.on(Events.InteractionCreate, async interaction => {
                 title = '🎣 Top Fisher';
                 data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_fish_caught' ORDER BY stat_value DESC LIMIT 10").all(guildId);
                 data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🐟 **${u.stat_value}** ikan\n`; });
+            } else if (kategori === 'fish_weight') {
+                title = '🎣 Ikan Terberat';
+                data = db.prepare('SELECT fi.*, fd.fishId FROM fish_inventory fi WHERE fi.guildId = ? ORDER BY fi.weight DESC LIMIT 10').all(guildId);
+                data.forEach((u, i) => { const fishDef = FISH_DATA.find(f => f.id === u.fishId); desc += `**${i+1}.** <@${u.userId}> — ${fishDef ? fishDef.emoji : '🐟'} **${fishDef ? fishDef.name : '?'}** (${u.weight} kg) *${fishDef ? fishDef.tier : ''}*\n`; });
             } else if (kategori === 'farm') {
                 title = '🌾 Top Farmer';
                 data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_harvests' ORDER BY stat_value DESC LIMIT 10").all(guildId);
                 data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🌾 **${u.stat_value}** panen\n`; });
+            } else if (kategori === 'pet') {
+                title = '🐾 Top Pet Level';
+                data = db.prepare('SELECT * FROM pets WHERE guildId = ? ORDER BY level DESC, exp DESC LIMIT 10').all(guildId);
+                data.forEach((u, i) => { const petDef = PET_DATA.find(p => p.id === u.petId); desc += `**${i+1}.** <@${u.userId}> — ${petDef ? petDef.emoji : '🐾'} **${u.name}** Lv.**${u.level}** *(${petDef ? petDef.tier : '?'})*\n`; });
             } else if (kategori === 'streak') {
                 title = '🔥 Top Streak';
                 data = db.prepare('SELECT * FROM streaks WHERE guildId = ? ORDER BY count DESC LIMIT 10').all(guildId);
