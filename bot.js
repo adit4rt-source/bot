@@ -192,22 +192,30 @@ const FISH_DATA = [
 
 const BAIT_TYPES = [
     { id: 'none', name: 'Tanpa Umpan', emoji: '❌', price: 0, rareBonus: 0 },
-    { id: 'cacing', name: 'Cacing Tanah', emoji: '🪱', price: 50, rareBonus: 0 },
-    { id: 'jangkrik', name: 'Jangkrik', emoji: '🦗', price: 100, rareBonus: 3 },
-    { id: 'udang', name: 'Udang Segar', emoji: '🦐', price: 150, rareBonus: 5 },
-    { id: 'ikan_kecil', name: 'Ikan Kecil (Live Bait)', emoji: '🐟', price: 300, rareBonus: 8 },
+    { id: 'cacing', name: 'Cacing Tanah', emoji: '🪱', price: 30, rareBonus: 0 },
+    { id: 'jangkrik', name: 'Jangkrik', emoji: '🦗', price: 60, rareBonus: 2 },
+    { id: 'udang', name: 'Udang Segar', emoji: '🦐', price: 100, rareBonus: 4 },
+    { id: 'ikan_kecil', name: 'Ikan Kecil (Live)', emoji: '🐟', price: 200, rareBonus: 6 },
+    { id: 'cumi', name: 'Cumi-cumi', emoji: '🦑', price: 350, rareBonus: 9 },
     { id: 'emas', name: 'Umpan Emas', emoji: '✨', price: 500, rareBonus: 12 },
+    { id: 'mutiara', name: 'Umpan Mutiara', emoji: '🫧', price: 800, rareBonus: 16 },
     { id: 'berlian', name: 'Umpan Berlian', emoji: '💎', price: 1500, rareBonus: 20 },
-    { id: 'mythic_bait', name: 'Umpan Mitik', emoji: '🌟', price: 5000, rareBonus: 30 }
+    { id: 'blood_worm', name: 'Blood Worm', emoji: '🩸', price: 3000, rareBonus: 25 },
+    { id: 'mythic_bait', name: 'Umpan Mitik', emoji: '🌟', price: 5000, rareBonus: 30 },
+    { id: 'void_bait', name: 'Umpan Void', emoji: '🕳️', price: 10000, rareBonus: 35 }
 ];
 
 const ROD_TYPES = [
     { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 30, rareBonus: 0 },
     { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 25, rareBonus: 3 },
     { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 20, rareBonus: 7 },
-    { id: 'pro', name: 'Joran Pro Titanium', emoji: '🏆', price: 25000, cooldown: 15, rareBonus: 12 },
-    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 80000, cooldown: 10, rareBonus: 18 },
-    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 200000, cooldown: 7, rareBonus: 25 }
+    { id: 'titanium', name: 'Joran Titanium', emoji: '🔩', price: 18000, cooldown: 18, rareBonus: 9 },
+    { id: 'pro', name: 'Joran Pro', emoji: '🏆', price: 35000, cooldown: 15, rareBonus: 12 },
+    { id: 'enchanted', name: 'Joran Enchanted', emoji: '✨', price: 60000, cooldown: 13, rareBonus: 15 },
+    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 100000, cooldown: 11, rareBonus: 18 },
+    { id: 'celestial', name: 'Joran Celestial', emoji: '🌟', price: 150000, cooldown: 9, rareBonus: 21 },
+    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 250000, cooldown: 7, rareBonus: 25 },
+    { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 500000, cooldown: 5, rareBonus: 30 }
 ];
 
 // ================= SISTEM ITEM INVENTORY =================
@@ -352,7 +360,7 @@ function catchFish(guildId, userId) {
     let selectedTier = FISH_TIERS[0];
     // Shift probability: reduce trash/common chance, increase rare+ chance
     // Equipment requirements for top tiers
-    const rodTier = ['basic', 'fiber', 'carbon', 'pro', 'mythic_rod', 'divine_rod'].indexOf(rod.id);
+    const rodTier = ['basic', 'fiber', 'carbon', 'titanium', 'pro', 'enchanted', 'mythic_rod', 'celestial', 'divine_rod', 'void_rod'].indexOf(rod.id);
     const hasBait = eq.bait !== 'none' && eq.bait_count > 0;
     
     let adjustedTiers = FISH_TIERS.map(t => {
@@ -362,19 +370,19 @@ function catchFish(guildId, userId) {
         else if (t.tier === 'Rare') adj = t.chance + rareBonus * 0.8;
         else if (t.tier === 'Epic') adj = t.chance + rareBonus * 0.6;
         else if (t.tier === 'Legendary') {
-            // Butuh minimal Joran Fiber + Bait untuk chance Legendary
+            // Butuh minimal Joran Fiber (index 1) + Bait
             if (rodTier < 1 || !hasBait) adj = 0;
             else adj = Math.min(6, t.chance + rareBonus * 0.3);
         }
         else if (t.tier === 'Mythic') {
-            // Butuh minimal Joran Carbon + Bait untuk chance Mythic
+            // Butuh minimal Joran Carbon (index 2) + Bait
             if (rodTier < 2 || !hasBait) adj = 0;
             else adj = Math.min(2.5, t.chance + rareBonus * 0.15);
         }
         else if (t.tier === 'Secret') {
-            // Butuh minimal Joran Pro + Umpan Emas/Berlian/Mitik untuk chance Secret
-            if (rodTier < 3 || !hasBait) adj = 0;
-            else if (['cacing', 'jangkrik', 'udang', 'ikan_kecil'].includes(eq.bait)) adj = 0; // Umpan biasa tidak cukup
+            // Butuh minimal Joran Pro (index 4) + Umpan premium (emas+)
+            if (rodTier < 4 || !hasBait) adj = 0;
+            else if (['cacing', 'jangkrik', 'udang', 'ikan_kecil', 'cumi'].includes(eq.bait)) adj = 0; // Umpan biasa tidak cukup
             else adj = Math.min(0.8, t.chance + rareBonus * 0.05);
         }
         else adj = t.chance + rareBonus * 0.5;
