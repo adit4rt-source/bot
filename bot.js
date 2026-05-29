@@ -259,40 +259,40 @@ const FARM_LEVELS = [
 
 const FARM_CROPS = [
     // COMMON (5-12 menit)
-    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 20, time: 5, minYield: 2, maxYield: 4, sellPrice: 12 },
-    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 30, time: 8, minYield: 2, maxYield: 3, sellPrice: 15 },
-    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 20, time: 5, minYield: 3, maxYield: 5, sellPrice: 10 },
-    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 35, time: 12, minYield: 2, maxYield: 4, sellPrice: 15 },
-    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 25, time: 8, minYield: 2, maxYield: 4, sellPrice: 12 },
-    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 30, time: 10, minYield: 2, maxYield: 3, sellPrice: 15 },
+    { id: 'gandum', name: 'Gandum', emoji: '🌾', tier: 'Common', cost: 20, time: 3, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'wortel', name: 'Wortel', emoji: '🥕', tier: 'Common', cost: 30, time: 5, minYield: 2, maxYield: 3, sellPrice: 15 },
+    { id: 'bayam', name: 'Bayam', emoji: '🥬', tier: 'Common', cost: 20, time: 3, minYield: 3, maxYield: 5, sellPrice: 10 },
+    { id: 'jagung', name: 'Jagung', emoji: '🌽', tier: 'Common', cost: 35, time: 7, minYield: 2, maxYield: 4, sellPrice: 15 },
+    { id: 'kentang', name: 'Kentang', emoji: '🥔', tier: 'Common', cost: 25, time: 5, minYield: 2, maxYield: 4, sellPrice: 12 },
+    { id: 'bawang_putih', name: 'Bawang Putih', emoji: '🧄', tier: 'Common', cost: 30, time: 6, minYield: 2, maxYield: 3, sellPrice: 15 },
     // UNCOMMON (25-50 menit)
-    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 70, time: 25, minYield: 2, maxYield: 4, sellPrice: 25 },
-    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 60, time: 25, minYield: 3, maxYield: 5, sellPrice: 20 },
-    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 80, time: 35, minYield: 2, maxYield: 3, sellPrice: 35 },
-    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 100, time: 50, minYield: 2, maxYield: 4, sellPrice: 40 },
-    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 60, time: 30, minYield: 3, maxYield: 5, sellPrice: 20 },
-    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 75, time: 35, minYield: 2, maxYield: 3, sellPrice: 30 },
+    { id: 'tomat', name: 'Tomat', emoji: '🍅', tier: 'Uncommon', cost: 70, time: 15, minYield: 2, maxYield: 4, sellPrice: 25 },
+    { id: 'cabai', name: 'Cabai', emoji: '🌶️', tier: 'Uncommon', cost: 60, time: 15, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'paprika', name: 'Paprika', emoji: '🫑', tier: 'Uncommon', cost: 80, time: 20, minYield: 2, maxYield: 3, sellPrice: 35 },
+    { id: 'strawberry', name: 'Strawberry', emoji: '🍓', tier: 'Uncommon', cost: 100, time: 30, minYield: 2, maxYield: 4, sellPrice: 40 },
+    { id: 'bawang_merah', name: 'Bawang Merah', emoji: '🧅', tier: 'Uncommon', cost: 60, time: 18, minYield: 3, maxYield: 5, sellPrice: 20 },
+    { id: 'terong', name: 'Terong', emoji: '🍆', tier: 'Uncommon', cost: 75, time: 20, minYield: 2, maxYield: 3, sellPrice: 30 },
     // RARE (60-120 menit)
-    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 200, time: 60, minYield: 2, maxYield: 4, sellPrice: 55 },
-    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 250, time: 90, minYield: 1, maxYield: 2, sellPrice: 130 },
-    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 280, time: 90, minYield: 2, maxYield: 3, sellPrice: 80 },
-    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 250, time: 120, minYield: 2, maxYield: 3, sellPrice: 70 },
-    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 200, time: 60, minYield: 2, maxYield: 4, sellPrice: 60 },
-    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 350, time: 120, minYield: 1, maxYield: 3, sellPrice: 130 },
+    { id: 'anggur', name: 'Anggur', emoji: '🍇', tier: 'Rare', cost: 200, time: 40, minYield: 2, maxYield: 4, sellPrice: 55 },
+    { id: 'semangka', name: 'Semangka', emoji: '🍉', tier: 'Rare', cost: 250, time: 55, minYield: 1, maxYield: 2, sellPrice: 130 },
+    { id: 'kopi', name: 'Kopi', emoji: '☕', tier: 'Rare', cost: 280, time: 55, minYield: 2, maxYield: 3, sellPrice: 80 },
+    { id: 'kakao', name: 'Kakao', emoji: '🍫', tier: 'Rare', cost: 250, time: 70, minYield: 2, maxYield: 3, sellPrice: 70 },
+    { id: 'blueberry', name: 'Blueberry', emoji: '🫐', tier: 'Rare', cost: 200, time: 40, minYield: 2, maxYield: 4, sellPrice: 60 },
+    { id: 'mawar', name: 'Mawar', emoji: '🌹', tier: 'Rare', cost: 350, time: 70, minYield: 1, maxYield: 3, sellPrice: 130 },
     // EPIC (180-300 menit = 3-5 jam)
-    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 600, time: 180, minYield: 2, maxYield: 4, sellPrice: 130 },
-    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 700, time: 240, minYield: 2, maxYield: 3, sellPrice: 200 },
-    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 900, time: 300, minYield: 1, maxYield: 3, sellPrice: 350 },
-    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 240, minYield: 1, maxYield: 2, sellPrice: 400 },
-    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 180, minYield: 2, maxYield: 3, sellPrice: 230 },
-    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 180, minYield: 2, maxYield: 3, sellPrice: 170 },
+    { id: 'bunga_matahari', name: 'Bunga Matahari', emoji: '🌻', tier: 'Epic', cost: 600, time: 100, minYield: 2, maxYield: 4, sellPrice: 130 },
+    { id: 'jeruk', name: 'Jeruk', emoji: '🍊', tier: 'Epic', cost: 700, time: 140, minYield: 2, maxYield: 3, sellPrice: 200 },
+    { id: 'zaitun', name: 'Zaitun', emoji: '🫒', tier: 'Epic', cost: 900, time: 180, minYield: 1, maxYield: 3, sellPrice: 350 },
+    { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 140, minYield: 1, maxYield: 2, sellPrice: 400 },
+    { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 100, minYield: 2, maxYield: 3, sellPrice: 230 },
+    { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 100, minYield: 2, maxYield: 3, sellPrice: 170 },
     // LEGENDARY (480-720 menit = 8-12 jam)
-    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 480, minYield: 1, maxYield: 2, sellPrice: 1400 },
-    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 480, minYield: 1, maxYield: 2, sellPrice: 1100 },
-    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 600, minYield: 1, maxYield: 1, sellPrice: 1800 },
-    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 540, minYield: 1, maxYield: 2, sellPrice: 1400 },
-    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 720, minYield: 1, maxYield: 1, sellPrice: 2200 },
-    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 480, minYield: 1, maxYield: 2, sellPrice: 1300 }
+    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 300, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 300, minYield: 1, maxYield: 2, sellPrice: 1100 },
+    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 360, minYield: 1, maxYield: 1, sellPrice: 1800 },
+    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 330, minYield: 1, maxYield: 2, sellPrice: 1400 },
+    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 420, minYield: 1, maxYield: 1, sellPrice: 2200 },
+    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 300, minYield: 1, maxYield: 2, sellPrice: 1300 }
 ];
 
 const FARM_RECIPES = [
@@ -1114,6 +1114,7 @@ const commands = [
         .setName('leaderboard')
         .setDescription('🏆 Leaderboard Global')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori').setRequired(false).addChoices({name:'💰 Money', value:'money'},{name:'📈 Level', value:'level'},{name:'🎣 Fishing (Jumlah)', value:'fish'},{name:'🎣 Ikan Terberat', value:'fish_weight'},{name:'🌾 Farming', value:'farm'},{name:'🐾 Pet Level', value:'pet'},{name:'🔥 Streak', value:'streak'},{name:'🏆 Overall', value:'overall'})),
+    new SlashCommandBuilder().setName('daily').setDescription('🎁 Klaim hadiah harian (money + EXP + random item)'),
     new SlashCommandBuilder()
         .setName('admin_shop')
         .setDescription('Manajemen Toko (Khusus Admin)')
@@ -1483,7 +1484,7 @@ client.on(Events.InteractionCreate, async interaction => {
         if (command === 'help') {
             const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Semua command yang tersedia di server ini:').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & GAMES**', inline: false },
-                { name: '\u200b', value: `> \`/money balance\` — Cek saldo\n> \`/money daily\` — Klaim 500 money/hari\n> \`/money leaderboard\` — Top 10 terkaya\n> \`/gift @user <jumlah>\` — Kirim money (pajak 10%)\n> \`/shop\` — Toko (role, items, pet food, eggs)\n> \`/redeem <kode>\` — Tukar voucher\n> \`/coinflip <taruhan>\` — Lempar koin 50/50\n> \`/slot <taruhan>\` — Slot machine (max 25x!)\n> \`/leaderboard\` — Ranking global`, inline: false },
+                { name: '\u200b', value: `> \`/money balance\` — Cek saldo\n> \`/daily\` — Klaim hadiah harian (money+item+pet EXP)\n> \`/money leaderboard\` — Top 10 terkaya\n> \`/gift @user <jumlah>\` — Kirim money (pajak 10%)\n> \`/shop\` — Toko (role, items, pet food, eggs)\n> \`/redeem <kode>\` — Tukar voucher\n> \`/coinflip <taruhan>\` — Lempar koin 50/50\n> \`/slot <taruhan>\` — Slot machine (max 25x!)\n> \`/leaderboard\` — Ranking global`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING**', inline: false },
                 { name: '\u200b', value: `> \`/fish\` — Lempar pancing\n> \`/fishing sell\` — Jual ikan (kecuali locked)\n> \`/fishing inventory\` — Lihat ikan (◀ ▶)\n> \`/fishing collection\` — Pokedex ikan\n> \`/fishing lock/unlock <id>\` — Kunci ikan\n> \`/fishing shop\` — Beli joran & umpan\n> \`/fishing stats\` — Statistik`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING**', inline: false },
@@ -1640,7 +1641,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (command === 'money') {
             if (subCmd === 'balance') return interaction.reply(`💰 Money: **${userData.balance.toLocaleString('id-ID')}**`);
-            if (subCmd === 'daily') { const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini!', ephemeral: true }); userData.balance += 500; db.prepare('UPDATE users SET balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(userData.balance, today, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_dailies'); addPetExp(guildId, interaction.user.id, 10); await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' }); return interaction.reply('🎁 Kamu mendapatkan **500 money** dari klaim harian.'); }
+            if (subCmd === 'daily') { return interaction.reply({ content: '💡 Command ini sudah dipindah ke `/daily`! Gunakan `/daily` untuk klaim hadiah harian.', ephemeral: true }); }
             if (subCmd === 'leaderboard') { const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY balance DESC LIMIT 10').all(guildId); const embed = new EmbedBuilder().setTitle('💰 Top Orang Terkaya 💰').setColor('#F1C40F'); let desc = data.length ? '' : 'Belum ada data.'; data.forEach((u, i) => desc += `**${i+1}.** <@${u.userId}> - **${u.balance.toLocaleString('id-ID')} money**\n`); embed.setDescription(desc); return interaction.reply({ embeds: [embed] }); }
             if (group === 'manage') {
                 const isOwner = interaction.user.id === interaction.guild.ownerId;
@@ -1704,6 +1705,61 @@ client.on(Events.InteractionCreate, async interaction => {
             }
             if (!desc) desc = '*Belum ada data.*';
             return interaction.reply({ embeds: [new EmbedBuilder().setTitle(title).setColor('#FFD700').setDescription(desc).setFooter({ text: '/leaderboard <kategori> untuk filter | Overall = combined score' }).setTimestamp()] });
+        }
+
+        if (command === 'daily') {
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
+            
+            // Base reward
+            let moneyReward = 500;
+            let petExpReward = 10;
+            let bonusDesc = '';
+            
+            // Check Daily Doubler item
+            const hasDoubler = getUserStat(guildId, interaction.user.id, 'daily_doubler_active') > 0;
+            if (hasDoubler) { moneyReward *= 2; incrementUserStat(guildId, interaction.user.id, 'daily_doubler_active', -1); bonusDesc += '> 📅 **Daily Doubler** aktif! Money x2!\n'; }
+            
+            // Random bonus reward (30% chance item, 20% chance extra money, 50% normal)
+            const roll = Math.random();
+            let randomReward = '';
+            if (roll < 0.15) {
+                // Random item reward
+                const possibleItems = ['mystery_box', 'lucky_charm', 'xp_booster_2x'];
+                const wonItem = possibleItems[Math.floor(Math.random() * possibleItems.length)];
+                const itemDef = ITEMS.find(i => i.id === wonItem);
+                addItem(guildId, interaction.user.id, wonItem);
+                randomReward = `\n> 🎁 **Bonus Item:** ${itemDef.emoji} ${itemDef.name}!`;
+            } else if (roll < 0.35) {
+                // Extra money
+                const extra = getRandomInt(100, 500);
+                moneyReward += extra;
+                randomReward = `\n> 💰 **Bonus Money:** +${extra} extra!`;
+            } else if (roll < 0.50) {
+                // Extra pet EXP
+                petExpReward += 15;
+                randomReward = `\n> 🐾 **Bonus Pet EXP:** +15 extra!`;
+            }
+            
+            userData.balance += moneyReward;
+            db.prepare('UPDATE users SET balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(userData.balance, today, guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_dailies');
+            addPetExp(guildId, interaction.user.id, petExpReward);
+            await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' });
+            
+            const embed = new EmbedBuilder()
+                .setColor('#F1C40F')
+                .setTitle('🎁 Daily Reward!')
+                .setDescription(`${bonusDesc}> 🪙 **Money:** +${moneyReward.toLocaleString('id-ID')}\n> 🐾 **Pet EXP:** +${petExpReward}\n> ✨ **XP Bonus:** +15${randomReward}\n\n> 💳 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)
+                .setFooter({ text: 'Kembali lagi besok! | Streak aktif = bonus lebih besar' })
+                .setTimestamp();
+            
+            // Bonus XP from daily
+            const user = getOrCreateUser(guildId, interaction.user.id);
+            user.xp += 15;
+            db.prepare('UPDATE users SET xp = ? WHERE guildId = ? AND userId = ?').run(user.xp, guildId, interaction.user.id);
+            
+            return interaction.reply({ embeds: [embed] });
         }
 
         if (command === 'coinflip') { if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true }); const taruhan = interaction.options.getInteger('taruhan'); if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true }); activeCoinflips.add(interaction.user.id); userData.balance -= taruhan; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_coinflips'); await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setDescription(`🪙 **Melempar koin...**\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**`)] }); setTimeout(async () => { activeCoinflips.delete(interaction.user.id); let freshData = getOrCreateUser(guildId, interaction.user.id); if (Math.random() < 0.5) { freshData.balance += (taruhan * 2); db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'coinflip_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🎉 MENANG!').setDescription(`Dapat 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } else { await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('💀 KALAH!').setDescription(`Hilang 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } }, 7000); return; }
@@ -2396,7 +2452,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     }
                 }
                 if (pet.hunting_until && pet.hunting_until > Date.now()) { const remaining = Math.ceil((pet.hunting_until - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih berburu! Kembali dalam **${remaining} menit**.`, ephemeral: true }); }
-                const huntDuration = getRandomInt(30, 60) * 60000; // 30-60 menit
+                const huntDuration = getRandomInt(15, 30) * 60000; // 15-30 menit
                 const huntEnd = Date.now() + huntDuration;
                 db.prepare('UPDATE pets SET hunting_until = ?, hunger = MAX(0, hunger - 20) WHERE id = ?').run(huntEnd, pet.id);
                 const durationMin = Math.round(huntDuration / 60000);
