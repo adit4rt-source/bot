@@ -30,9 +30,9 @@ const QUEST_POOL = [
 
 // ================= DIFFICULTY TIERS =================
 const DIFFICULTY_TIERS = {
-    easy: { stars: '⭐', label: 'Easy', rewardRange: [50, 100] },
-    medium: { stars: '⭐⭐', label: 'Medium', rewardRange: [100, 200] },
-    hard: { stars: '⭐⭐⭐', label: 'Hard', rewardRange: [200, 400] },
+    easy: { stars: '⭐', label: 'Easy', rewardRange: [150, 300] },
+    medium: { stars: '⭐⭐', label: 'Medium', rewardRange: [300, 600] },
+    hard: { stars: '⭐⭐⭐', label: 'Hard', rewardRange: [600, 1200] },
 };
 
 // ================= WEEKLY QUEST TABLE =================
@@ -117,7 +117,7 @@ function generateWeeklyQuests() {
         const hardRange = questDef.targetRange.hard;
         const multiplier = getRandomInt(3, 5);
         const target = getRandomInt(hardRange[0] * multiplier, hardRange[1] * multiplier);
-        const reward = getRandomInt(500, 2000);
+        const reward = getRandomInt(1500, 6000);
 
         let quest = { type: questDef.type, target, reward, progress: 0, claimed: false, difficulty: 'weekly' };
         quest.desc = questDef.descFn(quest);

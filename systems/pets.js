@@ -129,14 +129,14 @@ function getPetSkillBonus(guildId, userId, bonusType) {
 function checkPetEvolution(guildId, userId) {
     const pet = getPetData(guildId, userId);
     if (!pet) return null;
-    const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId && pet.level >= e.level && !pet.evolved);
+    const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId && pet.level >= e.level);
     return evo || null;
 }
 
 function evolvePet(guildId, userId) {
     const pet = getPetData(guildId, userId);
     if (!pet) return null;
-    const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId && pet.level >= e.level && !pet.evolved);
+    const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId && pet.level >= e.level);
     if (!evo) return null;
     const newPetDef = PET_DATA.find(p => p.id === evo.to);
     if (!newPetDef) return null;

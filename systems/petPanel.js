@@ -58,7 +58,7 @@ function buildMainPanel(guildId, userId, username) {
     // Evolution info
     let evoInfo = '';
     const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
-    if (evo && !pet.evolved) {
+    if (evo) {
         const evoPetDef = PET_DATA.find(p => p.id === evo.to);
         if (pet.level >= evo.level) evoInfo = `\n🧬 **SIAP EVOLVE!** → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
         else evoInfo = `\n🧬 Evolution: Lv.${evo.level} → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
@@ -179,8 +179,8 @@ async function handlePetButton(interaction) {
         const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
         if (evo) {
             const evoPetDef = PET_DATA.find(p => p.id === evo.to);
-            const canEvolve = pet.level >= evo.level && !pet.evolved;
-            const evoStatus = canEvolve ? '✅ **SIAP EVOLVE!**' : pet.evolved ? '✅ Sudah evolve' : `🔒 Butuh **Lv.${evo.level}** (sekarang: Lv.${pet.level})`;
+            const canEvolve = pet.level >= evo.level;
+            const evoStatus = canEvolve ? '✅ **SIAP EVOLVE!**' : `🔒 Butuh **Lv.${evo.level}** (sekarang: Lv.${pet.level})`;
             embed.addFields({ name: '🧬 Evolution', value: `> ${evo.name}\n> → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}\n> ${evoStatus}`, inline: false });
         }
 

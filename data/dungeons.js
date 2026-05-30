@@ -7,10 +7,12 @@ const DUNGEON_TIERS = [
 ];
 
 const BOSS_LIST = [
-    { id: 'dragon', name: '🐲 Dragon Lord', minLevel: 20, hp: 8000, atk: 60, def: 30, reward: [800, 2000], exp: 50 },
-    { id: 'demon', name: '👹 Demon King', minLevel: 50, hp: 15000, atk: 90, def: 50, reward: [1500, 3500], exp: 80 },
-    { id: 'void_emp', name: '🌑 Void Emperor', minLevel: 100, hp: 30000, atk: 130, def: 70, reward: [3000, 6000], exp: 120 },
-    { id: 'ancient', name: '☠️ Ancient God', minLevel: 150, hp: 50000, atk: 180, def: 100, reward: [5000, 10000], exp: 200 }
+    { id: 'slime_king', name: '🟢 Slime King', minLevel: 5, hp: 2000, atk: 25, def: 10, reward: [400, 800], exp: 30 },
+    { id: 'wolf_alpha', name: '🐺 Wolf Alpha', minLevel: 10, hp: 4000, atk: 40, def: 20, reward: [600, 1200], exp: 50 },
+    { id: 'dragon', name: '🐲 Dragon Lord', minLevel: 20, hp: 8000, atk: 60, def: 30, reward: [1600, 4000], exp: 100 },
+    { id: 'demon', name: '👹 Demon King', minLevel: 50, hp: 15000, atk: 90, def: 50, reward: [3000, 7000], exp: 160 },
+    { id: 'void_emp', name: '🌑 Void Emperor', minLevel: 100, hp: 30000, atk: 130, def: 70, reward: [6000, 12000], exp: 240 },
+    { id: 'ancient', name: '☠️ Ancient God', minLevel: 150, hp: 50000, atk: 180, def: 100, reward: [10000, 20000], exp: 400 }
 ];
 
 module.exports = { DUNGEON_TIERS, BOSS_LIST };
