@@ -1,6 +1,10 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
+// ================= BOT VERSION =================
+const BOT_VERSION = '2.5.0';
+const BUILD_DATE = '2026-05-31';
+
 // Load database (runs migrations on require)
 require('./database');
 
@@ -23,9 +27,14 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, async c => {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`🚀 Bot siap! Login sebagai ${c.user.tag}`);
+    console.log(`📦 Version: v${BOT_VERSION} | Build: ${BUILD_DATE}`);
+    console.log(`⚙️ Commands: ${commands.length} registered`);
+    console.log(`🏠 Servers: ${c.guilds.cache.size}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     const rest = new REST({ version: '10' }).setToken(TOKEN);
-    try { await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands }); } catch (error) { console.error(error); }
+    try { await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands }); console.log(`✅ Slash commands synced (${commands.length} commands)`); } catch (error) { console.error('❌ Failed to sync commands:', error); }
 });
 
 client.on(Events.MessageCreate, handleMessageCreate);
