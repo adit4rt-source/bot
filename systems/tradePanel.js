@@ -110,15 +110,15 @@ async function handleTradeButton(interaction) {
 
         const giveInput = new TextInputBuilder()
             .setCustomId('trade_give')
-            .setLabel('Yang kamu kasih (fish:ID / relic:ID / money:JML)')
-            .setPlaceholder('Contoh: fish:5 atau money:1000 atau pet:3')
+            .setLabel('Yang kamu kasih')
+            .setPlaceholder('fish:5 / relic:2 / pet:3 / money:1000')
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
         const wantInput = new TextInputBuilder()
             .setCustomId('trade_want')
-            .setLabel('Yang kamu minta (fish:ID / relic:ID / money:JML)')
-            .setPlaceholder('Contoh: relic:2 atau money:5000 atau pet:1')
+            .setLabel('Yang kamu minta')
+            .setPlaceholder('fish:5 / relic:2 / pet:3 / money:1000')
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
