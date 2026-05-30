@@ -40,7 +40,7 @@ module.exports = async function handleInteractionCreate(interaction) {
         return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
     }
 
-    // Autocomplete handler for /me use and /farm
+    // Autocomplete handler for item use
     if (interaction.isAutocomplete()) {
         if (interaction.commandName === 'use' || (interaction.commandName === 'me' && interaction.options.getSubcommand(false) === 'use')) {
             const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, interaction.user.id);
@@ -72,8 +72,8 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '\u200b', value: `> \`/farm status\` — Lihat kebun\n> \`/farm plant\` — Tanam bibit\n> \`/farm water\` — Siram\n> \`/farm harvest\` — Panen\n> \`/farm craft\` — Craft resep\n> \`/farm shop\` — Bibit & pupuk\n> \`/farm upgrade\` — Upgrade lahan`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
                 { name: '\u200b', value: `> \`/pet\` — 🐾 Buka Pet Panel (button-based)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine\n> Semua diakses dari panel interaktif!\n> \`/battle @user\` — PvP auto-battle\n> \`/evolve\` — Evolve pet`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/me` + `/quest`)', inline: false },
-                { name: '\u200b', value: `> \`/me profile\` — Kartu profil\n> \`/me achievement\` — Koleksi badge\n> \`/me inventory\` — Lihat item\n> \`/me use <item>\` — Gunakan item\n> \`/quest\` — 📜 Quest Panel (Daily & Weekly)\n> \`/me streak\` — Info streak\n> \`/me restore\` — Pulihkan streak\n> \`/level rank\` — Cek XP & level`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/profile` + `/quest`)', inline: false },
+                { name: '\u200b', value: `> \`/profile\` — 📋 Profile Panel (profil, badge, inventory, stats)\n> \`/quest\` — 📜 Quest Panel (Daily & Weekly)\n> \`/levelpanel\` — 🌟 Level Panel (rank, leaderboard)\n> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem)`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **EVENTS & VOICE**', inline: false },
                 { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
             );
@@ -226,7 +226,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                     { name: '📅 INFO AKUN', value: `> 📥 Bergabung: <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D> — 📆 Dibuat: <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
                     { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
                 )
-                .setFooter({ text: `ID: ${targetUser.id} | /me achievement untuk badge | /pet info untuk pet`, iconURL: interaction.guild.iconURL() })
+                .setFooter({ text: `ID: ${targetUser.id} | /profile untuk badge & stats | /pet untuk pet`, iconURL: interaction.guild.iconURL() })
                 .setTimestamp();
             return interaction.reply({ embeds: [profileEmbed] });
         }
@@ -679,7 +679,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const def = ITEMS.find(i => i.id === inv.itemId);
                 if (def) desc += `${def.emoji} **${def.name}** x${inv.quantity}\n> *${def.desc}*\n\n`;
             }
-            return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎒 Item Inventory').setColor('#2B2D31').setDescription(desc).setFooter({ text: '/me use <item> untuk memakai item' })] });
+            return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎒 Item Inventory').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Gunakan item dari /profile → Inventory' })] });
         }
 
         if (command === 'me' && subCmd === 'use') {
@@ -1034,7 +1034,7 @@ module.exports = async function handleInteractionCreate(interaction) {
         if (command === 'autoharvest') {
             let ahData = db.prepare('SELECT * FROM auto_harvest WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
             if (!ahData) { db.prepare('INSERT INTO auto_harvest (guildId, userId) VALUES (?, ?)').run(guildId, interaction.user.id); ahData = { purchased: 0, enabled: 0 }; }
-            if (!ahData.purchased) return interaction.reply({ content: '❌ Kamu belum punya **🔔 Auto-Harvest Pass**!\n\n> Beli di `/shop` kategori Items seharga 🪙 5,000\n> Setelah beli, gunakan `/me use auto_harvest_pass` untuk aktivasi permanen.', ephemeral: true });
+            if (!ahData.purchased) return interaction.reply({ content: '❌ Kamu belum punya **🔔 Auto-Harvest Pass**!\n\n> Beli di `/shop` kategori Items seharga 🪙 5,000\n> Setelah beli, gunakan dari `/profile` → Inventory untuk aktivasi.', ephemeral: true });
             const newState = ahData.enabled ? 0 : 1;
             db.prepare('UPDATE auto_harvest SET enabled = ? WHERE guildId = ? AND userId = ?').run(newState, guildId, interaction.user.id);
             return interaction.reply({ content: newState ? '🔔 **Auto-Harvest Notification AKTIF!**\n> Bot akan ping kamu saat tanaman siap dipanen.' : '🔕 **Auto-Harvest Notification DIMATIKAN.**\n> Kamu tidak akan di-ping lagi.', ephemeral: true });
@@ -1113,7 +1113,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             userData.balance -= itemDef.price;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
             addItem(guildId, interaction.user.id, itemId);
-            return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/me inventory\` — Gunakan dengan \`/me use\`` });
+            return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/profile\` → Inventory` });
         }
         if (interaction.customId === 'farm_buy_seed' || interaction.customId === 'farm_buy_seed2') {
             const cropId = interaction.values[0];
@@ -1380,10 +1380,10 @@ module.exports = async function handleInteractionCreate(interaction) {
             else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing (quick cast)\n> `/fishing` — 🎣 Buka Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection\n> Lock/Unlock, Sell All — semua dalam 1 panel!';
             else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm` — 🌾 Buka Farm Panel\n> Panel: Plant, Water, Harvest, Shop\n> Storage, Craft, Upgrade, Pupuk — semua dalam 1 panel!';
             else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle\n> `/evolve` — Evolve pet ke bentuk baru';
-            else if (cat === 'profile') content = '📋 **Profil Commands:**\n\n> `/me profile` — Kartu profil\n> `/me achievement` — Koleksi badge\n> `/me inventory` — Lihat item\n> `/me use <item>` — Gunakan item\n> `/me quest` — Misi harian\n> `/me streak` — Info streak\n> `/me restore` — Pulihkan streak';
+            else if (cat === 'profile') content = '📋 **Profil:**\n\n> `/profile` — 📋 Profile Panel\n> Profil, Achievement, Inventory, Streak, Stats\n> Semua dalam 1 panel interaktif!';
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
             else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';
-            else if (cat === 'quest') content = '📜 **Quest:**\n\n> `/me quest` — Lihat misi harian (3 misi/hari)\n> Selesaikan untuk dapat money bonus!\n> Reset setiap 00:00 WIB';
+            else if (cat === 'quest') content = '📜 **Quest:**\n\n> `/quest` — 📜 Quest Panel\n> Misi harian (3/hari) & mingguan (3/minggu)\n> Selesaikan untuk dapat money bonus!\n> Reset setiap 00:00 WIB';
             return interaction.reply({ content, ephemeral: true });
         }
 

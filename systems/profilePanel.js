@@ -104,7 +104,7 @@ async function handleProfileButton(interaction) {
             .setTitle(`\ud83c\udfc6 Achievement \u2014 ${interaction.user.username}`)
             .setColor('#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Gunakan /me achievement untuk detail per kategori' });
+            .setFooter({ text: 'Klik kembali untuk lihat per kategori' });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
@@ -130,7 +130,7 @@ async function handleProfileButton(interaction) {
             .setTitle(`\ud83c\udf92 Inventory \u2014 ${interaction.user.username}`)
             .setColor('#3498DB')
             .setDescription(desc)
-            .setFooter({ text: 'Gunakan /me use <item> untuk pakai item' });
+            .setFooter({ text: 'Klik item untuk menggunakan (coming soon)' });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
@@ -153,7 +153,7 @@ async function handleProfileButton(interaction) {
                 `> \ud83d\udcc5 **Last Active:** ${lastDate}\n` +
                 `> \u267b\ufe0f **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
                 `*Ketik pesan setiap hari untuk menjaga streak!*\n` +
-                `*Gunakan \`/me restore\` untuk pulihkan streak yang putus.*`
+                `*Streak restore: hubungi admin server.*`
             );
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
