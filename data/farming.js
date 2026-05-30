@@ -67,4 +67,15 @@ const FARM_FERTILIZERS = [
     { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '🌟', cost: 1500, speedBonus: 0.50, yieldBonus: 0.50 }
 ];
 
-module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS };
+const FARM_DECORATIONS = [
+    { id: 'scarecrow', name: 'Orang-orangan Sawah', emoji: '🧑‍🌾', price: 5000, desc: 'Melindungi tanaman dari hama' },
+    { id: 'fountain', name: 'Air Mancur', emoji: '⛲', price: 10000, desc: 'Dekorasi mewah' },
+    { id: 'windmill', name: 'Kincir Angin', emoji: '🏗️', price: 15000, desc: 'Menambah estetika kebun' },
+    { id: 'flower_bed', name: 'Taman Bunga', emoji: '🌷', price: 8000, desc: 'Taman bunga cantik' },
+    { id: 'bee_hive', name: 'Sarang Lebah', emoji: '🐝', price: 12000, desc: 'Menarik lebah penyerbuk' },
+    { id: 'pond', name: 'Kolam Ikan', emoji: '🐟', price: 20000, desc: 'Kolam mini di kebun' },
+    { id: 'greenhouse', name: 'Rumah Kaca', emoji: '🏠', price: 50000, desc: 'Rumah kaca premium' },
+    { id: 'golden_statue', name: 'Patung Emas', emoji: '🗽', price: 100000, desc: 'Simbol kemewahan!' },
+];
+
+module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS };

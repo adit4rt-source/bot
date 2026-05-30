@@ -18,16 +18,17 @@ const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu,
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { handleTradeCommand, handleTradeButton, handleTradeModal, isTradePanelButton, isTradePanelModal } = require('../systems/tradePanel');
 const { handleMarketCommand, handleMarketButton, handleMarketModal, isMarketPanelButton, isMarketPanelModal } = require('../systems/marketPanel');
+const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
-const { catchFish, getEquipment } = require('../systems/fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
 const { CALENDAR_REWARDS, getLoginCalendar } = require('../systems/calendar');
 const { spinSlot, getSlotResult, GIFT_TAX_RATE, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('../systems/slots');
-const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES } = require('../data/fish');
+const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS } = require('../data/fish');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES } = require('../data/pets');
-const { ITEMS } = require('../data/items');
-const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS } = require('../data/farming');
+const { ITEMS, CRAFT_RECIPES } = require('../data/items');
+const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
@@ -940,6 +941,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleMarketCommand(interaction);
         }
 
+        // ================= STATS DASHBOARD =================
+        if (command === 'stats') {
+            return handleStatsCommand(interaction);
+        }
+
         // ================= PET EVOLUTION =================
         if (command === 'evolve') {
             const pet = getPetData(guildId, interaction.user.id);
@@ -1288,6 +1294,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- MARKET PANEL BUTTONS ---
         if (isMarketPanelButton(interaction.customId)) {
             return handleMarketButton(interaction);
+        }
+
+        // --- STATS PANEL BUTTONS ---
+        if (isStatsPanelButton(interaction.customId)) {
+            return handleStatsButton(interaction);
         }
 
         // --- NOTIFICATION TOGGLE BUTTONS ---

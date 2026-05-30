@@ -374,4 +374,12 @@ const ROD_TYPES = [
     { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 500000, cooldown: 3, rareBonus: 30 }
 ];
 
-module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES };
+const FISHING_LOCATIONS = [
+    { id: 'river', name: '🏞️ Sungai', emoji: '🏞️', unlockLevel: 1, desc: 'Ikan air tawar (Common-Rare)', tiers: ['Trash', 'Common', 'Uncommon', 'Rare'], bonusRare: 0 },
+    { id: 'lake', name: '🏔️ Danau', emoji: '🏔️', unlockLevel: 10, desc: 'Ikan danau (Uncommon-Epic)', tiers: ['Common', 'Uncommon', 'Rare', 'Epic'], bonusRare: 5 },
+    { id: 'ocean', name: '🌊 Laut', emoji: '🌊', unlockLevel: 25, desc: 'Ikan laut besar (Rare-Legendary)', tiers: ['Uncommon', 'Rare', 'Epic', 'Legendary'], bonusRare: 10 },
+    { id: 'deep_sea', name: '🌑 Laut Dalam', emoji: '🌑', unlockLevel: 50, desc: 'Monster laut (Epic-Mythic)', tiers: ['Rare', 'Epic', 'Legendary', 'Mythic'], bonusRare: 15 },
+    { id: 'void_rift', name: '🕳️ Void Rift', emoji: '🕳️', unlockLevel: 100, desc: 'Dimensi lain (Legendary-Secret)', tiers: ['Epic', 'Legendary', 'Mythic', 'Secret'], bonusRare: 25 },
+];
+
+module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS };

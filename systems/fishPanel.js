@@ -2,13 +2,13 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
-const { catchFish, getEquipment } = require('./fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
 const { getContestState, addContestEntry } = require('./contest');
 const { addPetExp } = require('../systems/pets');
-const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES } = require('../data/fish');
+const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS } = require('../data/fish');
 const state = require('../state');
 const { fishCooldowns, activeFishEvents } = state;
 
@@ -19,6 +19,7 @@ function buildFishingPanel(guildId, userId, username) {
     const eq = getEquipment(guildId, userId);
     const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
     const bait = BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0];
+    const location = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river')) || FISHING_LOCATIONS[0];
     const totalCaught = getUserStat(guildId, userId, 'total_fish_caught');
     const collected = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE guildId = ? AND userId = ?').get(guildId, userId);
     const totalFish = FISH_DATA.length;
@@ -27,9 +28,10 @@ function buildFishingPanel(guildId, userId, username) {
         .setTitle(`🎣 FISHING PANEL — ${username}`)
         .setColor('#3498DB')
         .setDescription(
+            `📍 Lokasi: **${location.name}** — *${location.desc}*\n` +
             `🎋 Rod: **${rod.emoji} ${rod.name}** | 🪱 Bait: **${bait.emoji} ${bait.name}** (x${eq.bait !== 'none' ? eq.bait_count : 0})\n` +
             `🐟 Total Caught: **${totalCaught}** | 📖 Collection: **${collected.c}**/${totalFish}\n\n` +
-            `> ⏱️ Cooldown: ${rod.cooldown}s | Rare+: +${rod.rareBonus + bait.rareBonus}%\n` +
+            `> ⏱️ Cooldown: ${rod.cooldown}s | Rare+: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%\n` +
             `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`
         )
         .setFooter({ text: 'Pilih aksi di bawah!' });
@@ -38,12 +40,13 @@ function buildFishingPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('📍 Location').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('🔒 Lock').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('🔓 Unlock').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('💰 Sell All').setStyle(ButtonStyle.Danger)
     );
     return { embeds: [embed], components: [row1, row2] };
@@ -76,6 +79,50 @@ async function handleFishingButton(interaction) {
     if (action === 'back') {
         const panel = buildFishingPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
+    }
+
+    // === LOCATION ===
+    if (action === 'location') {
+        const eq = getEquipment(guildId, userId);
+        const currentLoc = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river')) || FISHING_LOCATIONS[0];
+        const userLevel = userData.level;
+
+        let desc = `📍 **Lokasi Saat Ini:** ${currentLoc.name}\n> *${currentLoc.desc}*\n> Bonus Rare: +${currentLoc.bonusRare}% | Tier: ${currentLoc.tiers.join(', ')}\n\n`;
+        desc += `**🗺️ Semua Lokasi:**\n`;
+        FISHING_LOCATIONS.forEach(loc => {
+            const isUnlocked = userLevel >= loc.unlockLevel;
+            const isCurrent = loc.id === currentLoc.id;
+            const statusIcon = isCurrent ? '📍' : (isUnlocked ? '✅' : '🔒');
+            desc += `${statusIcon} **${loc.name}** (Lv.${loc.unlockLevel})\n`;
+            desc += `> ${loc.desc} | +${loc.bonusRare}% rare\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📍 Fishing Locations — ${interaction.user.username}`)
+            .setColor('#1ABC9C')
+            .setDescription(desc)
+            .setFooter({ text: `Level kamu: ${userLevel} | Pilih lokasi di bawah` });
+
+        const components = [];
+        const unlockedLocs = FISHING_LOCATIONS.filter(l => userLevel >= l.unlockLevel && l.id !== currentLoc.id);
+        if (unlockedLocs.length > 0) {
+            const locMenu = new StringSelectMenuBuilder()
+                .setCustomId(`fish_setloc_${userId}`)
+                .setPlaceholder('📍 Pindah lokasi...')
+                .setMinValues(1).setMaxValues(1);
+            unlockedLocs.forEach(loc => {
+                locMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(loc.name.replace(/[^\w\s]/g, '').trim())
+                    .setValue(loc.id)
+                    .setDescription(`${loc.desc.substring(0, 50)} | +${loc.bonusRare}% rare`));
+            });
+            components.push(new ActionRowBuilder().addComponents(locMenu));
+        }
+        components.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        ));
+
+        return interaction.update({ embeds: [embed], components });
     }
 
     // === CAST (fish) ===
@@ -373,6 +420,25 @@ async function handleFishingSelectMenu(interaction) {
 
     const userData = getOrCreateUser(guildId, userId);
 
+    // === SET LOCATION ===
+    if (customId.startsWith('fish_setloc_')) {
+        const locId = interaction.values[0];
+        const loc = FISHING_LOCATIONS.find(l => l.id === locId);
+        if (!loc) return interaction.reply({ content: '❌ Lokasi tidak ditemukan!', ephemeral: true });
+        if (userData.level < loc.unlockLevel) {
+            return interaction.reply({ content: `🔒 Lokasi **${loc.name}** butuh Level **${loc.unlockLevel}**! (Level kamu: ${userData.level})`, ephemeral: true });
+        }
+        setPlayerLocation(guildId, userId, locId);
+        const embed = new EmbedBuilder()
+            .setColor('#1ABC9C')
+            .setTitle(`📍 Pindah ke ${loc.name}!`)
+            .setDescription(`> *${loc.desc}*\n> Bonus Rare: +${loc.bonusRare}%\n> Tier: ${loc.tiers.join(', ')}`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
     // === SHOP ROD ===
     if (customId.startsWith('fish_shoprod_')) {
         const rodId = interaction.values[0];
@@ -456,7 +522,7 @@ function isFishingPanelButton(customId) {
 }
 
 function isFishingPanelSelectMenu(customId) {
-    return customId.startsWith('fish_shop');
+    return customId.startsWith('fish_shop') || customId.startsWith('fish_setloc_');
 }
 
 function isFishingPanelModal(customId) {

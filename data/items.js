@@ -13,4 +13,12 @@ const ITEMS = [
     { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 5000, category: 'Special' }
 ];
 
-module.exports = { ITEMS };
+const CRAFT_RECIPES = [
+    { id: 'super_bait', name: 'Super Bait', emoji: '🎣', ingredients: [{id: 'mystery_box', qty: 2}], result: {type: 'bait', id: 'mythic_bait', qty: 5}, desc: '2 Mystery Box → 5 Umpan Mitik' },
+    { id: 'mega_booster', name: 'Mega Booster', emoji: '⚡', ingredients: [{id: 'xp_booster_2x', qty: 3}], result: {type: 'item', id: 'xp_booster_3x', qty: 1}, desc: '3 XP Booster 2x → 1 XP Booster 3x' },
+    { id: 'golden_rod_ticket', name: 'Golden Rod Upgrade', emoji: '🎫', ingredients: [{id: 'refine_stone', qty: 10}], result: {type: 'money', amount: 25000}, desc: '10 Refine Stone → 🪙 25,000' },
+    { id: 'protection_bundle', name: 'Protection Bundle', emoji: '🛡️', ingredients: [{id: 'protection_stone', qty: 2}, {id: 'streak_shield', qty: 1}], result: {type: 'item', id: 'protection_stone', qty: 5}, desc: '2 Protection + 1 Shield → 5 Protection Stone' },
+    { id: 'lucky_potion', name: 'Lucky Potion', emoji: '🍀', ingredients: [{id: 'lucky_charm', qty: 2}, {id: 'mystery_box', qty: 1}], result: {type: 'item', id: 'lucky_spin_token', qty: 3}, desc: '2 Lucky Charm + 1 Mystery → 3 Lucky Spin' },
+];
+
+module.exports = { ITEMS, CRAFT_RECIPES };

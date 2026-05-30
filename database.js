@@ -81,6 +81,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS login_calendar (guildId TEXT, userId TEXT, m
 db.exec(`CREATE TABLE IF NOT EXISTS fish_contest (guildId TEXT, oderId TEXT, odent TEXT, weight REAL DEFAULT 0, fishId TEXT, startedAt INTEGER, PRIMARY KEY(guildId, oderId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS fish_contest_state (guildId TEXT PRIMARY KEY, active INTEGER DEFAULT 0, startedAt INTEGER, endsAt INTEGER, channelId TEXT)`);
 
+// Fishing Location
+try { db.exec(`ALTER TABLE fish_equipment ADD COLUMN location TEXT DEFAULT 'river'`); } catch(e) {}
+
+// Farm Decorations
+db.exec(`CREATE TABLE IF NOT EXISTS farm_decorations (guildId TEXT, userId TEXT, decoId TEXT, purchasedAt INTEGER, PRIMARY KEY(guildId, userId, decoId))`);
+
 // ================= STREAK MIGRATION (ONE-TIME) =================
 const MIGRATION_GUILD = '1056412836433240074';
 const migrationDone = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?").get(MIGRATION_GUILD, 'SYSTEM', 'kythia_migration_done');

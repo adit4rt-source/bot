@@ -5,7 +5,8 @@ const { getRandomInt } = require('../utils');
 const { ACHIEVEMENTS } = require('./achievements');
 const { getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
-const { ITEMS } = require('../data/items');
+const { ITEMS, CRAFT_RECIPES } = require('../data/items');
+const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings } = require('./notifications');
 
 
@@ -169,9 +170,60 @@ async function handleProfileButton(interaction) {
         }
 
         const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_craft_${userId}`).setLabel('\ud83d\udd28 Craft').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
         components.push(backRow);
+
+        return interaction.update({ embeds: [embed], components });
+    }
+
+    // === CRAFT (Non-Farm item crafting) ===
+    if (action === 'craft') {
+        let desc = '**🔨 CRAFTING RECIPES**\n\n';
+        CRAFT_RECIPES.forEach(recipe => {
+            const canCraft = recipe.ingredients.every(ing => getItemCount(guildId, userId, ing.id) >= ing.qty);
+            const statusIcon = canCraft ? '✅' : '❌';
+            desc += `${statusIcon} ${recipe.emoji} **${recipe.name}**\n> ${recipe.desc}\n`;
+            recipe.ingredients.forEach(ing => {
+                const def = ITEMS.find(i => i.id === ing.id);
+                const have = getItemCount(guildId, userId, ing.id);
+                desc += `>  ┗ ${def ? def.emoji : '📦'} ${def ? def.name : ing.id}: ${have}/${ing.qty}\n`;
+            });
+            desc += '\n';
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔨 Crafting — ${interaction.user.username}`)
+            .setColor('#9B59B6')
+            .setDescription(desc)
+            .setFooter({ text: 'Pilih resep di bawah untuk craft' });
+
+        const components = [];
+
+        // Build select menu for craftable recipes
+        const craftableRecipes = CRAFT_RECIPES.filter(r => r.ingredients.every(ing => getItemCount(guildId, userId, ing.id) >= ing.qty));
+        if (craftableRecipes.length > 0) {
+            const craftMenu = new StringSelectMenuBuilder()
+                .setCustomId(`profpnl_craftitem_${userId}`)
+                .setPlaceholder('🔨 Pilih resep untuk craft...')
+                .setMinValues(1).setMaxValues(1);
+
+            craftableRecipes.forEach(recipe => {
+                craftMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(recipe.name)
+                    .setValue(recipe.id)
+                    .setDescription(recipe.desc.substring(0, 50))
+                    .setEmoji(recipe.emoji));
+            });
+            components.push(new ActionRowBuilder().addComponents(craftMenu));
+        }
+
+        const craftBackRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('🎒 Inventory').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        components.push(craftBackRow);
 
         return interaction.update({ embeds: [embed], components });
     }
@@ -269,10 +321,10 @@ function isProfilePanelButton(customId) {
 }
 
 function isProfilePanelSelectMenu(customId) {
-    return customId.startsWith('profpnl_useitem_');
+    return customId.startsWith('profpnl_useitem_') || customId.startsWith('profpnl_craftitem_');
 }
 
-// ============ HANDLER: Profile panel select menu (Use Item) ============
+// ============ HANDLER: Profile panel select menu (Use Item & Craft) ============
 async function handleProfileSelectMenu(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
@@ -282,6 +334,76 @@ async function handleProfileSelectMenu(interaction) {
         return interaction.reply({ content: '\u274c Ini bukan panel profil kamu!', ephemeral: true });
     }
 
+    // === CRAFT ITEM SELECT ===
+    if (customId.startsWith('profpnl_craftitem_')) {
+        const recipeId = interaction.values[0];
+        const recipe = CRAFT_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        // Verify ingredients
+        const missing = [];
+        for (const ing of recipe.ingredients) {
+            const have = getItemCount(guildId, userId, ing.id);
+            if (have < ing.qty) {
+                const def = ITEMS.find(i => i.id === ing.id);
+                missing.push(`${def ? def.emoji : '📦'} ${def ? def.name : ing.id}: ${have}/${ing.qty}`);
+            }
+        }
+        if (missing.length > 0) {
+            return interaction.reply({ content: `❌ Bahan kurang!\n${missing.join('\n')}`, ephemeral: true });
+        }
+
+        // Consume ingredients
+        for (const ing of recipe.ingredients) {
+            removeItem(guildId, userId, ing.id, ing.qty);
+        }
+
+        // Give result
+        let resultMsg = '';
+        if (recipe.result.type === 'item') {
+            addItem(guildId, userId, recipe.result.id, recipe.result.qty);
+            const resDef = ITEMS.find(i => i.id === recipe.result.id);
+            resultMsg = `${resDef ? resDef.emoji : '📦'} **${resDef ? resDef.name : recipe.result.id}** x${recipe.result.qty}`;
+        } else if (recipe.result.type === 'bait') {
+            // Add bait to fish equipment
+            const eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
+            if (eq && eq.bait === recipe.result.id) {
+                db.prepare('UPDATE fish_equipment SET bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.qty, guildId, userId);
+            } else {
+                // Store as item for now (bait tokens)
+                const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
+                resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty} (pasang di Fishing Panel)`;
+                // Add to bait count directly
+                if (!eq) {
+                    db.prepare('INSERT INTO fish_equipment (guildId, userId, bait, bait_count) VALUES (?, ?, ?, ?)').run(guildId, userId, recipe.result.id, recipe.result.qty);
+                } else {
+                    db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.id, recipe.result.qty, guildId, userId);
+                }
+            }
+            const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
+            resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty}`;
+        } else if (recipe.result.type === 'money') {
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.result.amount, guildId, userId);
+            resultMsg = `🪙 **${recipe.result.amount.toLocaleString('id-ID')}** money`;
+        }
+
+        incrementUserStat(guildId, userId, 'total_crafts');
+
+        const embed = new EmbedBuilder()
+            .setTitle('✅ Craft Berhasil!')
+            .setColor('#9B59B6')
+            .setDescription(`${recipe.emoji} **${recipe.name}**\n\n> Hasil: ${resultMsg}`)
+            .setFooter({ text: recipe.desc });
+
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_craft_${userId}`).setLabel('🔨 Craft Lagi').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // === USE ITEM SELECT ===
     const selectedItemId = interaction.values[0];
     const itemDef = ITEMS.find(i => i.id === selectedItemId);
     if (!itemDef) {

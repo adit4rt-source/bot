@@ -7,7 +7,7 @@ const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
 const { addPetExp } = require('../systems/pets');
-const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS } = require('../data/farming');
+const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
 const state = require('../state');
 const { fishCooldowns } = state;
 
@@ -28,6 +28,16 @@ function buildFarmPanel(guildId, userId, username) {
         const growTime = crop.time * (1 - fert.speedBonus) * 60000;
         return Date.now() - p.plantedAt >= growTime;
     }).length;
+
+    // Decoration display
+    const ownedDecos = db.prepare('SELECT decoId FROM farm_decorations WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    let decoDisplay = '';
+    if (ownedDecos.length > 0) {
+        decoDisplay = ownedDecos.map(d => {
+            const deco = FARM_DECORATIONS.find(dec => dec.id === d.decoId);
+            return deco ? deco.emoji : '';
+        }).filter(Boolean).join(' ') + '\n';
+    }
 
     let plotStatus = '';
     if (plots.length === 0) {
@@ -73,6 +83,7 @@ function buildFarmPanel(guildId, userId, username) {
         .setTitle(`🌾 FARM PANEL — ${username}`)
         .setColor(readyCount > 0 ? '#F1C40F' : '#2ECC71')
         .setDescription(
+            (decoDisplay ? decoDisplay : '') +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `🏡 **${levelInfo.name}**\n` +
             `> 📊 Slots: **${plots.length}** / ${maxSlots} terpakai\n` +
@@ -97,7 +108,10 @@ function buildFarmPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Primary)
+    );
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 
@@ -392,6 +406,53 @@ async function handleFarmButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
+    // === DECO (Farm Decorations) ===
+    if (action === 'deco') {
+        const ownedDecos = db.prepare('SELECT decoId FROM farm_decorations WHERE guildId = ? AND userId = ?').all(guildId, userId);
+        const ownedIds = ownedDecos.map(d => d.decoId);
+
+        let desc = '**🎨 DEKORASI KEBUN**\n\n';
+        if (ownedIds.length > 0) {
+            desc += '**Milik kamu:**\n';
+            ownedIds.forEach(id => {
+                const deco = FARM_DECORATIONS.find(d => d.id === id);
+                if (deco) desc += `> ${deco.emoji} ${deco.name} — *${deco.desc}*\n`;
+            });
+            desc += '\n';
+        }
+        desc += '**🛒 Shop Dekorasi:**\n';
+        FARM_DECORATIONS.forEach(deco => {
+            const owned = ownedIds.includes(deco.id);
+            desc += `> ${owned ? '✅' : '🏷️'} ${deco.emoji} **${deco.name}** — 🪙 ${deco.price.toLocaleString('id-ID')}\n>  ┗ *${deco.desc}*${owned ? ' *(owned)*' : ''}\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🎨 Decorations — ${interaction.user.username}`)
+            .setColor('#E91E63')
+            .setDescription(desc)
+            .setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Pilih dekorasi untuk beli` });
+
+        const components = [];
+        const buyable = FARM_DECORATIONS.filter(d => !ownedIds.includes(d.id));
+        if (buyable.length > 0) {
+            const decoMenu = new StringSelectMenuBuilder()
+                .setCustomId(`farm_buydeco_${userId}`)
+                .setPlaceholder('🎨 Beli dekorasi...')
+                .setMinValues(1).setMaxValues(1);
+            buyable.forEach(deco => {
+                decoMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(`${deco.name} (🪙${deco.price.toLocaleString('id-ID')})`)
+                    .setValue(deco.id)
+                    .setDescription(deco.desc.substring(0, 50)));
+            });
+            components.push(new ActionRowBuilder().addComponents(decoMenu));
+        }
+        components.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        ));
+        return interaction.update({ embeds: [embed], components });
+    }
+
     return null;
 }
 
@@ -544,6 +605,27 @@ async function handleFarmSelectMenu(interaction) {
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
+    // === BUY DECORATION ===
+    if (customId.startsWith('farm_buydeco_')) {
+        const decoId = interaction.values[0];
+        const deco = FARM_DECORATIONS.find(d => d.id === decoId);
+        if (!deco) return interaction.reply({ content: '❌ Dekorasi tidak ditemukan!', ephemeral: true });
+        // Check if already owned
+        const existing = db.prepare('SELECT 1 FROM farm_decorations WHERE guildId = ? AND userId = ? AND decoId = ?').get(guildId, userId, decoId);
+        if (existing) return interaction.reply({ content: `❌ Kamu sudah punya ${deco.emoji} **${deco.name}**!`, ephemeral: true });
+        if (userData.balance < deco.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${deco.price.toLocaleString('id-ID')}**`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(deco.price, guildId, userId);
+        db.prepare('INSERT INTO farm_decorations (guildId, userId, decoId, purchasedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, decoId, Date.now());
+        const freshData = getOrCreateUser(guildId, userId);
+        const embed = new EmbedBuilder().setColor('#E91E63').setTitle('🎨 Dekorasi Dibeli!')
+            .setDescription(`${deco.emoji} **${deco.name}**\n> *${deco.desc}*\n\n> 💰 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**\n> Dekorasi akan muncul di header Farm Panel!`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco Shop').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
     return null;
 }
 
@@ -589,7 +671,8 @@ function isFarmPanelButton(customId) {
 function isFarmPanelSelectMenu(customId) {
     return customId.startsWith('farm_plantseed_') || customId.startsWith('farm_buyseed') ||
            customId.startsWith('farm_buyfert_') || customId.startsWith('farm_pupukfert_') ||
-           customId.startsWith('farm_pupukplot_') || customId.startsWith('farm_craftselect_');
+           customId.startsWith('farm_pupukplot_') || customId.startsWith('farm_craftselect_') ||
+           customId.startsWith('farm_buydeco_');
 }
 
 function isFarmPanelModal(customId) {
