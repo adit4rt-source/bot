@@ -66,6 +66,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS auto_harvest (guildId TEXT, userId TEXT, ena
 // Combo
 db.exec(`CREATE TABLE IF NOT EXISTS combo_tracker (guildId TEXT, userId TEXT, features TEXT DEFAULT '[]', lastAction INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId))`);
 
+// Weekly Quests
+db.exec(`CREATE TABLE IF NOT EXISTS weekly_quests (guildId TEXT, userId TEXT, week TEXT, data TEXT, PRIMARY KEY(guildId, userId, week))`);
+
 // Calendar
 db.exec(`CREATE TABLE IF NOT EXISTS login_calendar (guildId TEXT, userId TEXT, month TEXT, days TEXT DEFAULT '[]', claimed TEXT DEFAULT '[]', PRIMARY KEY(guildId, userId, month))`);
 

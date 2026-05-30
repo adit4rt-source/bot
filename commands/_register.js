@@ -67,6 +67,7 @@ const commands = [
         .addSubcommand(sub => sub.setName('inventory').setDescription('🎒 Lihat item yang kamu punya'))
         .addSubcommand(sub => sub.setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => sub.setName('quest').setDescription('Cek Misi Harian'))
+        .addSubcommand(sub => sub.setName('weekly').setDescription('Cek Misi Mingguan'))
         .addSubcommand(sub => sub.setName('streak').setDescription('Cek info streak'))
         .addSubcommand(sub => sub.setName('restore').setDescription('Pulihkan streak yang putus (Max 3x sebulan)')),
     new SlashCommandBuilder()
