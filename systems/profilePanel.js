@@ -29,6 +29,11 @@ function buildProfilePanel(guildId, userId, username, member) {
     const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
     const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
 
+    // Get achievement title
+    const achievementTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'achievement_title');
+    const achievementTitle = achievementTitleRow ? achievementTitleRow.stat_value : null;
+    const titleLine = achievementTitle ? `\n\ud83c\udfc6 **Title:** ${achievementTitle}` : '';
+
     const embed = new EmbedBuilder()
         .setTitle(`\ud83d\udccb PROFIL \u2014 ${username}`)
         .setColor('#2B2D31')
@@ -36,7 +41,7 @@ function buildProfilePanel(guildId, userId, username, member) {
         .setDescription(
             `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
             `\ud83c\udfc5 **Level** \`${userData.level}\` \u2014 \ud83d\udcb0 **Saldo** \`${userData.balance.toLocaleString('id-ID')}\`\n` +
-            `${streakEmoji} **Streak** \`${streakCount} Hari\`\n\n` +
+            `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}\n\n` +
             `\u2728 **EXP:** \`${progressBar}\` **${percent}%** (${userData.xp}/${targetXp})\n\n` +
             `\ud83c\udfc6 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}\n` +
             `\ud83d\udc3e **Pet:** ${petInfo}\n` +

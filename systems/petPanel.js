@@ -2,8 +2,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded } = require('./pets');
-const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES } = require('../data/pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills } = require('./pets');
+const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { checkAchievements } = require('./achievements');
 const { getComboMultiplier, addComboFeature } = require('./combo');
@@ -155,6 +155,25 @@ async function handlePetButton(interaction) {
             else skillDesc += `> 🔒 Lv.${ms.level}: ${ms.skill.name}\n`;
         }
 
+        // Active Battle Skills
+        const activeSkills = getPetSkills(pet);
+        let battleSkillDesc = '';
+        if (activeSkills.length > 0) {
+            activeSkills.forEach(s => {
+                battleSkillDesc += `> ${s.emoji} **${s.name}** (T${s.tier}) — *${s.desc}* | CD: ${s.cooldown} turns\n`;
+            });
+        } else {
+            battleSkillDesc = '> *Belum ada skill aktif (unlock di Lv.10)*\n';
+        }
+        // Show locked tiers
+        const skillTiers = [{ tier: 1, level: 10 }, { tier: 2, level: 30 }, { tier: 3, level: 60 }, { tier: 4, level: 100 }];
+        for (const st of skillTiers) {
+            const hasThisTier = activeSkills.some(s => s.tier === st.tier);
+            if (!hasThisTier && pet.level < st.level) {
+                battleSkillDesc += `> 🔒 Tier ${st.tier} — Unlock di **Lv.${st.level}**\n`;
+            }
+        }
+
         const embed = new EmbedBuilder()
             .setTitle(`${petDef.emoji} ${pet.name} — Detailed Info`)
             .setColor(bonusActive ? '#2ECC71' : '#E74C3C')
@@ -174,7 +193,8 @@ async function handlePetButton(interaction) {
             );
 
         if (isHunting) embed.addFields({ name: '🏹 HUNTING', value: `> Kembali <t:${Math.floor(pet.hunting_until / 1000)}:R>\n> ⚠️ Buff MATI selama hunt`, inline: false });
-        embed.addFields({ name: '🌟 Skill Buffs', value: skillDesc || '> Belum ada skill', inline: false });
+        embed.addFields({ name: '🌟 Skill Buffs (Passive)', value: skillDesc || '> Belum ada skill', inline: false });
+        embed.addFields({ name: '⚔️ Skills (Battle Active)', value: battleSkillDesc, inline: false });
 
         const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
         if (evo) {

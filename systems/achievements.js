@@ -1,6 +1,14 @@
 // systems/achievements.js
 const { EmbedBuilder } = require('discord.js');
-const { db, getOrCreateUser, getSetting, getUserStat } = require('../database');
+const { db, getOrCreateUser, getSetting, getUserStat, addItem, incrementUserStat } = require('../database');
+
+const ACHIEVEMENT_MILESTONES = [
+    { count: 10, reward: { money: 5000, item: 'mystery_box', title: '🎖️ Collector' }, desc: '10 Badge' },
+    { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
+    { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
+    { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
+    { count: 89, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+];
 
 const ACHIEVEMENTS = [
     // --- CHAT & SOCIAL ---
@@ -134,7 +142,55 @@ async function grantAchievement(guild, userId, achievementId) {
             channel.send({ embeds: [embed] }).catch(() => {});
         }
     }
+
+    // Check milestone rewards
+    await checkMilestoneRewards(guild, userId);
+
     return true;
+}
+
+async function checkMilestoneRewards(guild, userId) {
+    const guildId = guild.id;
+    const totalAchs = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    const totalCount = totalAchs ? totalAchs.cnt : 0;
+
+    for (const milestone of ACHIEVEMENT_MILESTONES) {
+        if (totalCount >= milestone.count) {
+            const milestoneKey = `milestone_${milestone.count}_claimed`;
+            const alreadyClaimed = getUserStat(guildId, userId, milestoneKey);
+            if (alreadyClaimed) continue;
+
+            // Grant milestone reward
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(milestone.reward.money, guildId, userId);
+            if (milestone.reward.item) {
+                addItem(guildId, userId, milestone.reward.item, 1);
+            }
+            // Store title
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'achievement_title', milestone.reward.title);
+            // Mark as claimed
+            incrementUserStat(guildId, userId, milestoneKey, 1);
+
+            // Send notification
+            const achChannelId = getSetting(guildId, 'achievement_channel', null);
+            if (achChannelId) {
+                const channel = guild.channels.cache.get(achChannelId);
+                if (channel) {
+                    const embed = new EmbedBuilder()
+                        .setColor('#FF69B4')
+                        .setTitle('🌟 MILESTONE REWARD!')
+                        .setDescription(
+                            `<@${userId}> mencapai **${milestone.desc}** milestone!\n\n` +
+                            `🏆 Title: **${milestone.reward.title}**\n` +
+                            `💰 Money: **+${milestone.reward.money.toLocaleString('id-ID')}**\n` +
+                            (milestone.reward.item ? `🎁 Item: **${milestone.reward.item}**\n` : '') +
+                            `\n*Selamat! Terus kumpulkan badge!*`
+                        )
+                        .setTimestamp();
+                    channel.send({ embeds: [embed] }).catch(() => {});
+                }
+            }
+        }
+    }
 }
 
 async function checkAchievements(guild, userId, context = {}) {
@@ -169,4 +225,4 @@ async function checkAchievements(guild, userId, context = {}) {
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
-module.exports = { ACHIEVEMENTS, hasAchievement, grantAchievement, checkAchievements };
+module.exports = { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES, hasAchievement, grantAchievement, checkAchievements, checkMilestoneRewards };

@@ -173,4 +173,26 @@ const RELIC_NAMES = {
     accessory: ['Speed Ring', 'Crit Necklace', 'Power Gem', 'Shadow Pendant', 'Void Orb', 'Divine Crown']
 };
 
-module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES };
+const PET_SKILLS = [
+    // Tier 1 (unlocked at pet level 10)
+    { id: 'power_strike', name: 'Power Strike', emoji: '⚔️', tier: 1, level: 10, type: 'attack', multiplier: 2.0, cooldown: 3, desc: 'Serangan 2x damage' },
+    { id: 'shield_wall', name: 'Shield Wall', emoji: '🛡️', tier: 1, level: 10, type: 'defense', reduction: 0.5, cooldown: 4, desc: 'Kurangi damage 50% selama 1 turn' },
+    { id: 'quick_heal', name: 'Quick Heal', emoji: '💚', tier: 1, level: 10, type: 'heal', amount: 0.2, cooldown: 5, desc: 'Heal 20% max HP' },
+
+    // Tier 2 (unlocked at pet level 30)
+    { id: 'critical_surge', name: 'Critical Surge', emoji: '🎯', tier: 2, level: 30, type: 'buff', critBonus: 30, duration: 3, cooldown: 5, desc: '+30% crit rate selama 3 turn' },
+    { id: 'elemental_blast', name: 'Elemental Blast', emoji: '🌊', tier: 2, level: 30, type: 'attack', multiplier: 2.5, cooldown: 4, desc: 'Serangan elemen 2.5x (bonus jika advantage)' },
+    { id: 'life_drain', name: 'Life Drain', emoji: '🧛', tier: 2, level: 30, type: 'drain', multiplier: 1.5, healRatio: 0.5, cooldown: 4, desc: 'Serang 1.5x + heal 50% dari damage' },
+
+    // Tier 3 (unlocked at pet level 60)
+    { id: 'berserk', name: 'Berserk', emoji: '😡', tier: 3, level: 60, type: 'buff', atkBonus: 50, defPenalty: 30, duration: 3, cooldown: 6, desc: '+50% ATK tapi -30% DEF (3 turn)' },
+    { id: 'iron_fortress', name: 'Iron Fortress', emoji: '🏰', tier: 3, level: 60, type: 'defense', reduction: 0.8, duration: 2, cooldown: 7, desc: 'Hampir tak tertembus (80% reduction, 2 turn)' },
+    { id: 'resurrection', name: 'Resurrection', emoji: '✨', tier: 3, level: 60, type: 'revive', hpRestore: 0.3, cooldown: 10, desc: 'Jika HP 0, bangkit dengan 30% HP (1x per battle)' },
+
+    // Tier 4 (unlocked at pet level 100)
+    { id: 'ultimate_strike', name: 'Ultimate Strike', emoji: '💥', tier: 4, level: 100, type: 'attack', multiplier: 4.0, cooldown: 8, desc: 'Serangan ULTIMATE 4x damage!' },
+    { id: 'divine_shield', name: 'Divine Shield', emoji: '✝️', tier: 4, level: 100, type: 'immune', duration: 1, cooldown: 10, desc: 'Kebal damage selama 1 turn' },
+    { id: 'omega_heal', name: 'Omega Heal', emoji: '💖', tier: 4, level: 100, type: 'heal', amount: 0.5, cooldown: 8, desc: 'Heal 50% max HP' },
+];
+
+module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS };
