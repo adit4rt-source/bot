@@ -7,6 +7,7 @@ const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
 const { getComboTracker, addComboFeature, getComboMultiplier } = require('../systems/combo');
 const { getContestState, startFishContest, addContestEntry, getContestLeaderboard } = require('../systems/contest');
 const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet } = require('../systems/pets');
+const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -67,32 +68,6 @@ module.exports = async function handleInteractionCreate(interaction) {
                 return interaction.respond(choices);
             }
         }
-        if (interaction.commandName === 'pet') {
-            const focused = interaction.options.getFocused(true);
-            if (focused.name === 'pet') {
-                const choices = PET_DATA.filter(p => p.price > 0).map(p => ({ name: `${p.emoji} ${p.name} (${p.tier}) — 🪙${p.price.toLocaleString('id-ID')}`, value: p.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
-            if (focused.name === 'food') {
-                const owned = getAllPetFood(guildId, interaction.user.id);
-                if (owned.length === 0) return interaction.respond([{ name: '❌ Inventory makanan kosong! Beli di /pet shop', value: 'none' }]);
-                const choices = owned.map(inv => {
-                    const f = PET_FOODS.find(pf => pf.id === inv.foodId);
-                    if (!f) return null;
-                    return { name: `${f.emoji} ${f.name} (x${inv.quantity}) — +${f.hunger} hunger +${f.happiness} happy`, value: f.id };
-                }).filter(Boolean).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices.length ? choices : [{ name: '❌ Inventory makanan kosong! Beli di /pet shop', value: 'none' }]);
-            }
-            if (focused.name === 'tier') {
-                const choices = DUNGEON_TIERS.map(d => ({ name: `${d.name} (Lv.${d.minLevel}+, ${d.waves} waves)`, value: d.id }));
-                return interaction.respond(choices);
-            }
-            if (focused.name === 'boss') {
-                const choices = BOSS_LIST.map(b => ({ name: `${b.name} (Lv.${b.minLevel}+, HP: ${b.hp.toLocaleString()})`, value: b.id }));
-                return interaction.respond(choices);
-            }
-            return interaction.respond([]);
-        }
         return;
     }
 
@@ -113,7 +88,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING** (`/farm`)', inline: false },
                 { name: '\u200b', value: `> \`/farm status\` — Lihat kebun\n> \`/farm plant\` — Tanam bibit\n> \`/farm water\` — Siram\n> \`/farm harvest\` — Panen\n> \`/farm craft\` — Craft resep\n> \`/farm shop\` — Bibit & pupuk\n> \`/farm upgrade\` — Upgrade lahan`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
-                { name: '\u200b', value: `> \`/pet adopt/info/feed/play/hunt\` — Kelola pet\n> \`/pet shop\` — Beli makanan & telur (gacha)\n> \`/pet dungeon <tier>\` — Lawan monster\n> \`/pet boss create/solo/list\` — Raid boss\n> \`/pet refine <slot>\` — Upgrade relic\n> \`/battle @user\` — PvP auto-battle`, inline: false },
+                { name: '\u200b', value: `> \`/pet\` — 🐾 Buka Pet Panel (button-based)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine\n> Semua diakses dari panel interaktif!\n> \`/battle @user\` — PvP auto-battle\n> \`/evolve\` — Evolve pet`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/me`)', inline: false },
                 { name: '\u200b', value: `> \`/me profile\` — Kartu profil\n> \`/me achievement\` — Koleksi badge\n> \`/me inventory\` — Lihat item\n> \`/me use <item>\` — Gunakan item\n> \`/me quest\` — Misi harian\n> \`/me streak\` — Info streak\n> \`/me restore\` — Pulihkan streak\n> \`/level rank\` — Cek XP & level`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **EVENTS & VOICE**', inline: false },
@@ -1222,190 +1197,12 @@ module.exports = async function handleInteractionCreate(interaction) {
             }
         }
 
-        // ================= PET COMMANDS =================
+        // ================= PET PANEL (Button-based) =================
         if (command === 'pet') {
-            if (subCmd === 'info') {
-                const pet = getPetData(guildId, interaction.user.id);
-                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet! Gunakan `/pet adopt` atau beli telur di `/pet shop`.', ephemeral: true });
-                const petDef = PET_DATA.find(p => p.id === pet.petId);
-                const expNeeded = pet.level <= 5 ? 50 : pet.level <= 10 ? 100 : pet.level <= 15 ? 200 : pet.level <= 20 ? 400 : pet.level <= 25 ? 600 : 1000;
-                const happyBar = '▰'.repeat(Math.floor(pet.happiness / 10)) + '▱'.repeat(10 - Math.floor(pet.happiness / 10));
-                const hungerBar = '▰'.repeat(Math.floor(pet.hunger / 10)) + '▱'.repeat(10 - Math.floor(pet.hunger / 10));
-                const expBar = '▰'.repeat(Math.min(10, Math.floor((pet.exp / expNeeded) * 10))) + '▱'.repeat(10 - Math.min(10, Math.floor((pet.exp / expNeeded) * 10)));
-                const statusEmoji = pet.status === 'sick' ? '🤒 Sakit!' : pet.happiness >= 70 ? '😊 Bahagia!' : pet.happiness >= 30 ? '😐 Biasa' : '😢 Sedih';
-                const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
-                const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-                const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
-                const embed = new EmbedBuilder()
-                    .setTitle(`${petDef.emoji} ${pet.name} (Level ${pet.level})`)
-                    .setColor(bonusActive ? '#2ECC71' : '#E74C3C')
-                    .setDescription(`**${petDef.name}** — *${petDef.tier}*\n\n> ❤️ Happiness: \`${happyBar}\` **${pet.happiness}%**\n> 🍖 Hunger: \`${hungerBar}\` **${pet.hunger}%**\n> ✨ EXP: \`${expBar}\` **${pet.exp}/${expNeeded}**\n> 💪 Status: ${statusEmoji}\n\n🎁 **Passive Bonus** ${bonusActive ? '(AKTIF ✅)' : '(MATI ❌)'}:\n> +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')}${!bonusActive ? '\n> ⚠️ *Happiness/Hunger terlalu rendah atau pet sakit!*' : ''}\n\n⚔️ **Battle Stats:**\n> Class: **${pet.class || 'warrior'}** | Element: **${pet.element || 'fire'}**\n> HP: \`${pet.hp || 100}\` | ATK: \`${pet.atk || 20}\` | DEF: \`${pet.def || 10}\`\n> SPD: \`${pet.spd || 10}\` | CRIT: \`${pet.crit || 5}%\``)
-                    .setFooter({ text: '/pet feed — makan | /pet play — main | /pet hunt — berburu' });
-                const isHunting = pet.hunting_until && pet.hunting_until > Date.now();
-                let skillDesc = '';
-                for (const ms of PET_SKILL_MILESTONES) {
-                    if (pet.level >= ms.level) skillDesc += `> ✅ Lv.${ms.level}: **${ms.skill.name}**\n`;
-                    else skillDesc += `> 🔒 Lv.${ms.level}: ${ms.skill.name}\n`;
-                }
-                if (isHunting) embed.addFields({ name: '🏹 HUNTING', value: `> Kembali dalam **${Math.ceil((pet.hunting_until - Date.now()) / 60000)} menit**\n> ⚠️ Buff MATI selama hunt`, inline: false });
-                embed.addFields({ name: '🌟 Skill Buffs (Stack per Level)', value: skillDesc, inline: false });
-                // Evolution info
-                const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
-                if (evo) {
-                    const evoPetDef = PET_DATA.find(p => p.id === evo.to);
-                    const canEvolve = pet.level >= evo.level && !pet.evolved;
-                    const evoStatus = canEvolve ? '✅ **SIAP EVOLVE!** Gunakan `/evolve`' : pet.evolved ? '✅ Sudah evolve' : `🔒 Butuh **Lv.${evo.level}** (sekarang: Lv.${pet.level})`;
-                    embed.addFields({ name: '🧬 Evolution', value: `> ${evo.name}\n> → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name + ' (' + evoPetDef.tier + ')' : evo.to}\n> ${evoStatus}`, inline: false });
-                } else if (!pet.evolved) {
-                    embed.addFields({ name: '🧬 Evolution', value: '> ❌ Pet ini tidak memiliki evolusi.', inline: false });
-                }
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            if (subCmd === 'adopt') {
-                const petId = interaction.options.getString('pet');
-                const petDef = PET_DATA.find(p => p.id === petId);
-                if (!petDef) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
-                if (petDef.price <= 0) return interaction.reply({ content: '❌ Pet ini tidak bisa dibeli! Hanya dari Pet Egg di `/pet shop`.', ephemeral: true });
-                if (userData.balance < petDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${petDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
-                const allPets = getAllPets(guildId, interaction.user.id);
-                if (allPets.length >= 10) return interaction.reply({ content: '❌ Kamu sudah punya 10 pet (max)! Lepaskan salah satu dengan `/pet release`.', ephemeral: true });
-                userData.balance -= petDef.price;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                const isFirst = allPets.length === 0 ? 1 : 0;
-                const stats = generatePetStats(petDef.tier);
-                const pClass = PET_CLASSES[Math.floor(Math.random() * PET_CLASSES.length)];
-                const pElement = PET_ELEMENTS[Math.floor(Math.random() * PET_ELEMENTS.length)];
-                db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt, class, element, hp, atk, def, spd, crit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, petId, petDef.name, isFirst, Date.now(), pClass, pElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🐾 Pet Adopted!').setDescription(`Kamu mengadopsi ${petDef.emoji} **${petDef.name}**!\n\n> Tier: **${petDef.tier}**\n> Bonus: +${petDef.bonus.value}% ${petDef.bonus.type.replace(/_/g, ' ')}\n\n${isFirst ? '✅ Pet ini langsung menjadi pet aktifmu!' : 'Gunakan `/pet swap` untuk mengaktifkan.'}`)] });
-            }
-
-            if (subCmd === 'feed') {
-                const pet = getPetData(guildId, interaction.user.id);
-                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-                const foodId = interaction.options.getString('food');
-                if (foodId === 'none') return interaction.reply({ content: '❌ Inventory makanan kosong! Beli makanan dulu di `/pet shop`.', ephemeral: true });
-                const food = PET_FOODS.find(f => f.id === foodId);
-                if (!food) return interaction.reply({ content: '❌ Makanan tidak ditemukan!', ephemeral: true });
-                const owned = getPetFoodCount(guildId, interaction.user.id, foodId);
-                if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya **${food.emoji} ${food.name}**! Beli di \`/pet shop\`.`, ephemeral: true });
-                // Konsumsi 1 makanan dari inventory (tanpa biaya money)
-                removePetFood(guildId, interaction.user.id, foodId, 1);
-                const newHunger = Math.min(100, pet.hunger + food.hunger);
-                const newHappy = Math.min(100, pet.happiness + food.happiness);
-                const newExp = pet.exp + 5;
-                const newStatus = pet.status === 'sick' && newHunger > 50 ? 'happy' : pet.status;
-                db.prepare('UPDATE pets SET hunger = ?, happiness = ?, exp = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newExp, newStatus, pet.id);
-                const sisa = getPetFoodCount(guildId, interaction.user.id, foodId);
-                return interaction.reply({ content: `${food.emoji} **${pet.name}** makan ${food.name}!\n\n> 🍖 Hunger: ${pet.hunger}% → **${newHunger}%**\n> ❤️ Happy: ${pet.happiness}% → **${newHappy}%**\n> ✨ +5 EXP\n> 📦 Sisa ${food.name}: **${sisa}**` });
-            }
-
-            if (subCmd === 'play') {
-                const pet = getPetData(guildId, interaction.user.id);
-                if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-                const playCdKey = `pet_play_${guildId}_${interaction.user.id}`;
-                if (fishCooldowns.has(playCdKey) && Date.now() < fishCooldowns.get(playCdKey)) { const remSec = Math.ceil((fishCooldowns.get(playCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ ${pet.name} masih capek! Tunggu **${remSec > 60 ? Math.ceil(remSec/60) + ' menit' : remSec + ' detik'}** lagi.`, ephemeral: true }); }
-                fishCooldowns.set(playCdKey, Date.now() + 180000); // 3 menit
-                addComboFeature(guildId, interaction.user.id, 'pet');
-                updateQuestProgress(guildId, interaction.user.id, 'pet_play', 1);
-                const newHappy = Math.min(100, pet.happiness + 10);
-                const newHunger = Math.max(0, pet.hunger - 3);
-                db.prepare('UPDATE pets SET happiness = ?, hunger = ? WHERE id = ?').run(newHappy, newHunger, pet.id);
-                const expResult = addPetExp(guildId, interaction.user.id, 8);
-                let lvlUpMsg = '';
-                if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
-                if (expResult && expResult.newSkill) lvlUpMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
-                const activities = ['bermain kejar-kejaran', 'bermain bola', 'bermain petak umpet', 'berguling-guling', 'melompat-lompat'];
-                const activity = activities[Math.floor(Math.random() * activities.length)];
-                return interaction.reply({ content: `🎾 ${pet.name} ${activity}!\n\n> ❤️ Happy: +10 → **${newHappy}%**\n> 🍖 Hunger: -3 → **${newHunger}%**\n> ✨ +8 EXP${lvlUpMsg}` });
-            }
-
-            if (subCmd === 'shop') {
-                let desc = '**🍖 MAKANAN PET** *(masuk ke inventory, pakai dengan `/pet feed`)*\n\n';
-                PET_FOODS.forEach(f => { desc += `> ${f.emoji} **${f.name}** — 🪙 ${f.price} | Hunger +${f.hunger} | Happy +${f.happiness}\n`; });
-                desc += '\n━━━━━━━━━━━━━━━━━━━━━━\n**🥚 PET EGGS (Gacha — langsung dibuka)**\n\n';
-                PET_EGGS.forEach(e => { const rates = Object.entries(e.rates).map(([t, r]) => `${t}: ${r}%`).join(', '); desc += `> ${e.emoji} **${e.name}** — 🪙 ${e.price.toLocaleString('id-ID')}\n> Rates: ${rates}\n`; });
-                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
-                const foodMenu = new StringSelectMenuBuilder().setCustomId('petshop_buy_food').setPlaceholder('🍖 Beli Makanan (→ inventory)...').setMinValues(1).setMaxValues(1);
-                PET_FOODS.forEach(f => foodMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${f.name} — 🪙${f.price}`).setValue(f.id).setDescription(`Hunger +${f.hunger} | Happy +${f.happiness}`).setEmoji(f.emoji)));
-                const eggMenu = new StringSelectMenuBuilder().setCustomId('petshop_buy_egg').setPlaceholder('🥚 Beli & Buka Egg (Gacha)...').setMinValues(1).setMaxValues(1);
-                PET_EGGS.forEach(e => eggMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${e.name} — 🪙${e.price.toLocaleString('id-ID')}`).setValue(e.id).setDescription('Gacha Pet Egg')));
-                const row1 = new ActionRowBuilder().addComponents(foodMenu);
-                const row2 = new ActionRowBuilder().addComponents(eggMenu);
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🐾 Pet Shop').setColor('#FF69B4').setDescription(desc).setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Beli makanan → /pet feed untuk pakai` })], components: [row1, row2] });
-            }
-
-            if (subCmd === 'collection') {
-                const allPets = getAllPets(guildId, interaction.user.id);
-                if (allPets.length === 0) return interaction.reply({ content: '🐾 Kamu belum punya pet! `/pet adopt` atau beli telur di `/pet shop` untuk mulai.', ephemeral: true });
-                let desc = `🐾 **Pet Collection** (${allPets.length}/10 slot)\n\n`;
-                const tierOrder = ['Mythic', 'Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
-                const sorted = allPets.sort((a, b) => { const ta = tierOrder.indexOf(PET_DATA.find(p => p.id === a.petId)?.tier || 'Common'); const tb = tierOrder.indexOf(PET_DATA.find(p => p.id === b.petId)?.tier || 'Common'); return ta - tb; });
-                sorted.forEach(pet => { const def = PET_DATA.find(p => p.id === pet.petId); const bonusText = def ? `+${def.bonus.value}% ${def.bonus.type.replace(/_/g, ' ')}` : ''; desc += `${pet.active ? '⭐' : '▪️'} **#${pet.id}** ${def ? def.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) — **(${def ? def.tier : '?'})**\n> ${bonusText}\n`; });
-                desc += `\n> ⭐ = Pet Aktif | /pet swap <id> untuk ganti`;
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🐾 Pet Collection').setColor('#FF69B4').setDescription(desc)] });
-            }
-
-            if (subCmd === 'swap') {
-                const petDbId = interaction.options.getInteger('id');
-                const targetPet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petDbId, guildId, interaction.user.id);
-                if (!targetPet) return interaction.reply({ content: '❌ Pet tidak ditemukan! Cek ID di `/pet collection`.', ephemeral: true });
-                db.prepare('UPDATE pets SET active = 0 WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id);
-                db.prepare('UPDATE pets SET active = 1 WHERE id = ?').run(petDbId);
-                const def = PET_DATA.find(p => p.id === targetPet.petId);
-                return interaction.reply({ content: `✅ Pet aktif diganti ke ${def ? def.emoji : '🐾'} **${targetPet.name}**!` });
-            }
-
-            if (subCmd === 'hunt') {
-                const pet = getPetData(guildId, interaction.user.id);
-                if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
-                if (pet.happiness < 50) return interaction.reply({ content: '❌ Pet terlalu sedih untuk berburu! (Happiness harus > 50)', ephemeral: true });
-                if (pet.hunting_until && pet.hunting_until > 0 && pet.hunting_until <= Date.now()) {
-                    // Hunt finished! Collect rewards
-                    db.prepare('UPDATE pets SET hunting_until = 0 WHERE id = ?').run(pet.id);
-                    const success = Math.random() > 0.2; // 80% success
-                    if (success) {
-                        const reward = getRandomInt(30, 150);
-                        userData.balance += reward;
-                        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                        const expResult = addPetExp(guildId, interaction.user.id, 20);
-                        let lvlMsg = '';
-                        if (expResult && expResult.leveledUp) lvlMsg = `\n> 🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
-                        if (expResult && expResult.newSkill) lvlMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
-                        const petDef = PET_DATA.find(p => p.id === pet.petId);
-                        return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🐾 Hunt Complete!').setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** kembali dari berburu!\n\n> ✅ Hasil: 🪙 **${reward} Money**\n> ✨ Pet EXP: +20${lvlMsg}\n\n*Buff pet kembali aktif!*`)] });
-                    } else {
-                        addPetExp(guildId, interaction.user.id, 8);
-                        const petDef = PET_DATA.find(p => p.id === pet.petId);
-                        return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('🐾 Hunt Gagal...').setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** pulang tanpa hasil.\n\n> ❌ Tidak menemukan apa-apa\n> ✨ Pet EXP: +8\n\n*Buff pet kembali aktif!*`)] });
-                    }
-                }
-                if (pet.hunting_until && pet.hunting_until > Date.now()) { const remaining = Math.ceil((pet.hunting_until - Date.now()) / 60000); return interaction.reply({ content: `⏳ ${pet.name} masih berburu! Kembali dalam **${remaining} menit**.`, ephemeral: true }); }
-                const huntDuration = getRandomInt(10, 20) * 60000; // 10-20 menit
-                const huntEnd = Date.now() + huntDuration;
-                db.prepare('UPDATE pets SET hunting_until = ?, hunger = MAX(0, hunger - 20) WHERE id = ?').run(huntEnd, pet.id);
-                const durationMin = Math.round(huntDuration / 60000);
-                const petDef = PET_DATA.find(p => p.id === pet.petId);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#F39C12').setTitle('🐾 Pet Hunt Started!').setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** pergi berburu!\n\n> ⏱️ Durasi: **${durationMin} menit**\n> ⚠️ Semua buff pet **MATI** selama hunt\n> 🍖 Hunger: -20\n\nGunakan \`/pet hunt\` lagi nanti untuk mengambil hasil.`).setFooter({ text: 'Pet akan kembali otomatis. Buff aktif kembali setelah hunt selesai.' })] });
-            }
-
-            if (subCmd === 'rename') {
-                const pet = getPetData(guildId, interaction.user.id);
-                if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
-                const newName = interaction.options.getString('nama');
-                db.prepare('UPDATE pets SET name = ? WHERE id = ?').run(newName, pet.id);
-                return interaction.reply({ content: `✅ Nama pet diubah menjadi **${newName}**!` });
-            }
-
-            if (subCmd === 'release') {
-                const petDbId = interaction.options.getInteger('id');
-                const targetPet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petDbId, guildId, interaction.user.id);
-                if (!targetPet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
-                db.prepare('DELETE FROM pets WHERE id = ?').run(petDbId);
-                const def = PET_DATA.find(p => p.id === targetPet.petId);
-                return interaction.reply({ content: `👋 ${def ? def.emoji : '🐾'} **${targetPet.name}** telah dilepaskan... Selamat tinggal! 😢` });
-            }
+            return handlePetCommand(interaction);
         }
+
+
 
         // ================= BATTLE PVP =================
         if (command === 'battle') {
@@ -1455,229 +1252,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             return;
         }
 
-        // ================= DUNGEON (now under /pet dungeon) =================
-        if (command === 'pet' && subCmd === 'dungeon') {
-            const dungeonCd = `dungeon_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(dungeonCd) && Date.now() < fishCooldowns.get(dungeonCd)) { const rem = Math.ceil((fishCooldowns.get(dungeonCd) - Date.now()) / 60000); return interaction.reply({ content: `⏳ Dungeon cooldown! Tunggu **${rem} menit**.`, ephemeral: true }); }
-            const myPet = getPetData(guildId, interaction.user.id);
-            if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-            const tierId = interaction.options.getString('tier');
-            const dungeon = DUNGEON_TIERS.find(d => d.id === tierId);
-            if (!dungeon) return interaction.reply({ content: '❌ Dungeon tidak ditemukan!', ephemeral: true });
-            if (myPet.level < dungeon.minLevel) return interaction.reply({ content: `❌ Pet kamu butuh minimal **Level ${dungeon.minLevel}** untuk dungeon ini! (Sekarang: Lv.${myPet.level})`, ephemeral: true });
-            fishCooldowns.set(dungeonCd, Date.now() + (dungeon.cooldown || 300000));
-            addComboFeature(guildId, interaction.user.id, 'dungeon');
-            const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
-            const enemies = dungeon.monsterHp.map((hp, i) => ({ hp, atk: dungeon.monsterAtk[i], def: Math.floor(dungeon.monsterAtk[i] * 0.3) }));
-            
-            await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F39C12').setTitle(`🏰 ${dungeon.name}`).setDescription(`${myPetDef.emoji} **${myPet.name}** memasuki dungeon...\n\n> ⚔️ *Pertarungan sedang berlangsung...*\n> 🐾 Pet Lv.${myPet.level} vs ${dungeon.waves} Wave Monster`).setFooter({ text: 'Menunggu hasil...' })] });
-            
-            setTimeout(async () => {
-                const result = simulateBattle(myPet, myPetDef, enemies);
-                let reward = 0, expGain = 0;
-                if (result.alive) {
-                    reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
-                    const comboMult = getComboMultiplier(guildId, interaction.user.id);
-                    reward = Math.floor(reward * comboMult);
-                    expGain = dungeon.exp;
-                    const freshData = getOrCreateUser(guildId, interaction.user.id);
-                    freshData.balance += reward;
-                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
-                    addPetExp(guildId, interaction.user.id, expGain);
-                    incrementUserStat(guildId, interaction.user.id, 'dungeon_clears');
-                    updateQuestProgress(guildId, interaction.user.id, 'dungeon', 1);
-                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'dungeon_clear' });
-                } else {
-                    const freshData = getOrCreateUser(guildId, interaction.user.id);
-                    const penalty = Math.floor(freshData.balance * 0.1);
-                    freshData.balance -= penalty;
-                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
-                    db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(myPet.id);
-                    addPetExp(guildId, interaction.user.id, Math.floor(dungeon.exp * 0.3));
-                    reward = -penalty;
-                }
-                const statusText = result.alive ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money (10%)\n> ❤️ Happiness -20\n> ✨ +${Math.floor(dungeon.exp*0.3)} EXP`;
-                const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: `Pet: ${myPet.name} Lv.${myPet.level} | CD: ${Math.round((dungeon.cooldown||300000)/60000)} menit` });
-                interaction.editReply({ embeds: [embed] }).catch(() => {});
-            }, 3000);
-            return;
-        }
-
-        // ================= REFINE (now under /pet refine) =================
-        if (command === 'pet' && subCmd === 'refine') {
-            const slot = interaction.options.getString('slot');
-            const myPet = getPetData(guildId, interaction.user.id);
-            if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-            const relic = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ? AND slot = ? AND equipped_pet_id = ?').get(guildId, interaction.user.id, slot, myPet.id);
-            if (!relic) return interaction.reply({ content: `❌ Pet kamu tidak punya relic di slot **${slot}**! Dapatkan relic dari dungeon/boss.`, ephemeral: true });
-            // Check refine stone
-            const hasStone = getItemCount(guildId, interaction.user.id, 'refine_stone');
-            if (hasStone <= 0) return interaction.reply({ content: '❌ Kamu butuh **🪨 Refine Stone** untuk upgrade! Dapatkan dari dungeon/boss.', ephemeral: true });
-            if (relic.refine_level >= 20) return interaction.reply({ content: '✅ Relic ini sudah **+20** (MAX)!', ephemeral: true });
-            removeItem(guildId, interaction.user.id, 'refine_stone');
-            // Success rate
-            const lvl = relic.refine_level;
-            const rate = lvl < 10 ? 100 : lvl < 15 ? 70 : lvl < 18 ? 50 : 30;
-            const success = Math.random() * 100 < rate;
-            if (success) {
-                db.prepare('UPDATE relics SET refine_level = refine_level + 1 WHERE id = ?').run(relic.id);
-                incrementUserStat(guildId, interaction.user.id, 'refine_successes');
-                await checkAchievements(interaction.guild, interaction.user.id, { type: 'refine_success', maxRefine: (lvl + 1) >= 20 });
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('✨ Refine Success!').setDescription(`**${relic.name}** berhasil di-upgrade!\n\n> ${slot === 'weapon' ? '⚔️' : slot === 'armor' ? '🛡️' : '💍'} **${relic.name}** +${lvl} → **+${lvl+1}**\n> Stats: +${Math.floor(relic.stat_value * (1 + (lvl+1)*0.05))} ${relic.stat_type}\n\n> Rate: ${rate}%`)] });
-            } else {
-                const newLvl = Math.max(0, lvl - 1);
-                db.prepare('UPDATE relics SET refine_level = ? WHERE id = ?').run(newLvl, relic.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('💔 Refine Failed!').setDescription(`**${relic.name}** gagal di-upgrade...\n\n> ${slot === 'weapon' ? '⚔️' : slot === 'armor' ? '🛡️' : '💍'} **${relic.name}** +${lvl} → **+${newLvl}** (-1)\n\n> Rate was: ${rate}%\n> 💡 *Tip: Gunakan Protection Stone untuk mencegah turun level*`)] });
-            }
-        }
-
-        // ================= BOSS BATTLE (now under /pet boss) =================
-        if (command === 'pet' && group === 'boss') {
-            if (subCmd === 'list') {
-                let desc = '👹 **DAFTAR BOSS**\n\n';
-                BOSS_LIST.forEach(b => { desc += `${b.name}\n> Level: **${b.minLevel}+** | HP: **${b.hp.toLocaleString()}** | ATK: ${b.atk} | DEF: ${b.def}\n> Reward: 🪙 ${b.reward[0].toLocaleString()}-${b.reward[1].toLocaleString()} + ${b.exp} Pet EXP\n\n`; });
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('👹 Boss List').setColor('#E74C3C').setDescription(desc).setFooter({ text: '/boss create <boss> — buat party | /boss solo <boss> — solo' })] });
-            }
-
-            if (subCmd === 'create') {
-                const myPet = getPetData(guildId, interaction.user.id);
-                if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-                const bossId = interaction.options.getString('boss');
-                const boss = BOSS_LIST.find(b => b.id === bossId);
-                if (!boss) return interaction.reply({ content: '❌ Boss tidak ditemukan!', ephemeral: true });
-                if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet butuh minimal **Lv.${boss.minLevel}**! (Sekarang: Lv.${myPet.level})`, ephemeral: true });
-                if (activeBossParties.has(`${guildId}_${interaction.user.id}`)) return interaction.reply({ content: '❌ Kamu sudah punya party aktif! Gunakan `/boss start` untuk mulai.', ephemeral: true });
-                
-                const partyId = `${guildId}_${interaction.user.id}`;
-                activeBossParties.set(partyId, { leader: interaction.user.id, bossId, members: [interaction.user.id], channelId: interaction.channelId, createdAt: Date.now() });
-                
-                const joinBtn = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`boss_join_${interaction.user.id}`).setLabel(`🎮 Join Party (1/10)`).setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId(`boss_start_${interaction.user.id}`).setLabel('⚔️ Start Battle').setStyle(ButtonStyle.Danger)
-                );
-                
-                const embed = new EmbedBuilder()
-                    .setColor('#E74C3C')
-                    .setTitle(`👹 BOSS RAID: ${boss.name}`)
-                    .setDescription(`<@${interaction.user.id}> membuat party untuk melawan **${boss.name}**!\n\n> 👹 **Boss:** ${boss.name}\n> ❤️ **HP:** ${boss.hp.toLocaleString()}\n> ⚔️ **ATK:** ${boss.atk} | 🛡️ **DEF:** ${boss.def}\n> 🎁 **Reward:** 🪙 ${boss.reward[0].toLocaleString()}-${boss.reward[1].toLocaleString()}/member\n> 🎯 **Min Level:** ${boss.minLevel}\n\n**Party Members (1/10):**\n> 👑 <@${interaction.user.id}> (Leader)\n\n*Klik tombol Join untuk bergabung!*`)
-                    .setFooter({ text: 'Party auto-expire dalam 5 menit | Leader klik Start untuk mulai' });
-                
-                await interaction.reply({ embeds: [embed], components: [joinBtn] });
-                
-                // Auto-expire after 5 min
-                setTimeout(() => { if (activeBossParties.has(partyId)) { activeBossParties.delete(partyId); } }, 300000);
-                return;
-            }
-
-            if (subCmd === 'solo') {
-                const bossCd = `boss_${guildId}_${interaction.user.id}`;
-                if (fishCooldowns.has(bossCd) && Date.now() < fishCooldowns.get(bossCd)) { const rem = Math.ceil((fishCooldowns.get(bossCd) - Date.now()) / 60000); return interaction.reply({ content: `⏳ Boss cooldown! Tunggu **${rem} menit**.`, ephemeral: true }); }
-                const myPet = getPetData(guildId, interaction.user.id);
-                if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-                const bossId = interaction.options.getString('boss');
-                const boss = BOSS_LIST.find(b => b.id === bossId);
-                if (!boss) return interaction.reply({ content: '❌ Boss tidak ditemukan!', ephemeral: true });
-                if (myPet.level < boss.minLevel) return interaction.reply({ content: `❌ Pet butuh minimal **Lv.${boss.minLevel}**!`, ephemeral: true });
-                fishCooldowns.set(bossCd, Date.now() + 600000); // 10 min cooldown solo
-                
-                const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
-                const result = simulateBattle(myPet, myPetDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def }]);
-                
-                let reward = 0, expGain = 0;
-                if (result.alive) {
-                    reward = getRandomInt(boss.reward[0], boss.reward[1]);
-                    expGain = boss.exp;
-                    userData.balance += reward;
-                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                    addPetExp(guildId, interaction.user.id, expGain);
-                    incrementUserStat(guildId, interaction.user.id, 'boss_kills');
-                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'boss_kill' });
-                    // Chance drop relic
-                    if (Math.random() < 0.3) {
-                        const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
-                        const rarity = Math.random() < 0.1 ? 'Legendary' : Math.random() < 0.3 ? 'Epic' : 'Rare';
-                        const names = RELIC_NAMES[slot];
-                        const name = names[Math.floor(Math.random() * names.length)];
-                        const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
-                        const statVal = rarity === 'Legendary' ? getRandomInt(50,80) : rarity === 'Epic' ? getRandomInt(35,50) : getRandomInt(20,35);
-                        db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, name, slot, rarity, statType, statVal);
-                        reward = `${reward} + 📿 **${name}** (${rarity})`;
-                    }
-                    // Drop refine stone
-                    addItem(guildId, interaction.user.id, 'refine_stone', getRandomInt(1, 3));
-                } else {
-                    const penalty = Math.floor(userData.balance * 0.05);
-                    userData.balance -= penalty;
-                    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                    db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 10) WHERE id = ?').run(myPet.id);
-                    addPetExp(guildId, interaction.user.id, Math.floor(boss.exp * 0.3));
-                    reward = -penalty;
-                }
-                
-                const statusText = result.alive ? `🏆 **BOSS DEFEATED!**\n> 🪙 Reward: ${typeof reward === 'string' ? reward : '+' + reward.toLocaleString('id-ID')}\n> ✨ +${expGain} Pet EXP\n> 🪨 +1-3 Refine Stone` : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} (5% penalty)\n> ❤️ Happiness -10`;
-                const embed = new EmbedBuilder().setColor(result.alive ? '#FFD700' : '#E74C3C').setTitle(`👹 Solo Boss: ${boss.name}`).setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`).setFooter({ text: 'Cooldown: 10 menit (solo)' });
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            if (subCmd === 'start') {
-                const partyId = `${guildId}_${interaction.user.id}`;
-                const party = activeBossParties.get(partyId);
-                if (!party) return interaction.reply({ content: '❌ Kamu tidak punya party aktif! Gunakan `/boss create` dulu.', ephemeral: true });
-                if (party.leader !== interaction.user.id) return interaction.reply({ content: '❌ Hanya leader yang bisa start!', ephemeral: true });
-                activeBossParties.delete(partyId);
-                
-                const boss = BOSS_LIST.find(b => b.id === party.bossId);
-                // All members attack boss together
-                let totalDmg = 0, bossHp = boss.hp, log = [`👹 **${boss.name}** — HP: ${boss.hp.toLocaleString()}\n`];
-                for (const memberId of party.members) {
-                    const mPet = getPetData(guildId, memberId);
-                    if (!mPet) continue;
-                    const mPetDef = PET_DATA.find(p => p.id === mPet.petId);
-                    const dmg = (mPet.atk + mPet.level) * getRandomInt(3, 6);
-                    totalDmg += dmg;
-                    log.push(`> ${mPetDef ? mPetDef.emoji : '🐾'} **${mPet.name}** (Lv.${mPet.level}) dealt **${dmg}** dmg`);
-                }
-                
-                const won = totalDmg >= boss.hp;
-                log.push(`\n> 💥 Total Damage: **${totalDmg.toLocaleString()}** / ${boss.hp.toLocaleString()} HP`);
-                
-                if (won) {
-                    log.push(`\n🏆 **BOSS DEFEATED!**`);
-                    for (const memberId of party.members) {
-                        const reward = getRandomInt(boss.reward[0], boss.reward[1]);
-                        const memberData = getOrCreateUser(guildId, memberId);
-                        memberData.balance += reward;
-                        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(memberData.balance, guildId, memberId);
-                        addPetExp(guildId, memberId, boss.exp);
-                        addItem(guildId, memberId, 'refine_stone', getRandomInt(1, 2));
-                        incrementUserStat(guildId, memberId, 'boss_kills');
-                        await checkAchievements(interaction.guild, memberId, { type: 'boss_kill' });
-                        // 20% chance relic per member
-                        if (Math.random() < 0.2) {
-                            const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
-                            const rarity = Math.random() < 0.1 ? 'Legendary' : Math.random() < 0.3 ? 'Epic' : 'Rare';
-                            const names = RELIC_NAMES[slot]; const name = names[Math.floor(Math.random() * names.length)];
-                            const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
-                            const statVal = rarity === 'Legendary' ? getRandomInt(50,80) : rarity === 'Epic' ? getRandomInt(35,50) : getRandomInt(20,35);
-                            db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, memberId, name, slot, rarity, statType, statVal);
-                        }
-                    }
-                    log.push(`> 🎁 Reward dibagikan ke ${party.members.length} member!`);
-                } else {
-                    log.push(`\n💀 **FAILED!** Damage tidak cukup.`);
-                    for (const memberId of party.members) {
-                        const memberData = getOrCreateUser(guildId, memberId);
-                        const penalty = Math.floor(memberData.balance * 0.05);
-                        memberData.balance -= penalty;
-                        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(memberData.balance, guildId, memberId);
-                    }
-                    log.push(`> 🪙 Semua member kehilangan 5% money`);
-                }
-                
-                const embed = new EmbedBuilder().setColor(won ? '#FFD700' : '#E74C3C').setTitle(`👹 BOSS RAID: ${boss.name}`).setDescription(log.join('\n')).setFooter({ text: `Party: ${party.members.length} members` });
-                return interaction.reply({ embeds: [embed] });
-            }
-        }
 
         if (command === 'admin_shop') { if (!isAdmin) return interaction.reply({content: '❌ Admin Only', ephemeral: true}); if (subCmd === 'add_item') { const nama = interaction.options.getString('nama'), harga = interaction.options.getInteger('harga'), isi = interaction.options.getString('isi').replace(/\\n/g, '\n'), jumlah = interaction.options.getInteger('jumlah') || 1; const stmt = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)'); for (let i = 0; i < jumlah; i++) stmt.run(guildId, nama, harga, isi); return interaction.reply(`✅ **${jumlah} stok** barang **${nama}** ditambah.`); } if (subCmd === 'add_role') { db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, interaction.options.getRole('role').id, interaction.options.getInteger('harga')); return interaction.reply(`✅ Role ditambah.`); } if (subCmd === 'set_custom_role') { const harga = interaction.options.getInteger('harga'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', harga.toString()); if (harga <= 0) return interaction.reply('🛑 Custom Role dimatikan.'); return interaction.reply(`✅ Harga Custom Role: 🪙 **${harga.toLocaleString('id-ID')}**.`); } if (subCmd === 'voucher_add') { const code = interaction.options.getString('kode').toUpperCase(), reward = interaction.options.getInteger('reward'), limit = interaction.options.getInteger('limit'); db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit); return interaction.reply(`🎟️ Voucher \`${code}\` dibuat!`); } if (subCmd === 'set_testimoni') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'testimoni_channel', interaction.options.getChannel('channel').id); return interaction.reply(`✅ Testimoni diatur!`); } if (subCmd === 'history') { const logs = db.prepare('SELECT * FROM logs WHERE guildId = ? ORDER BY time DESC LIMIT ?').all(guildId, Math.min(interaction.options.getInteger('jumlah') || 10, 50)); if (logs.length === 0) return interaction.reply('Kosong.'); let logTxt = '📜 **RIWAYAT TRANSAKSI**\n\n'; logs.forEach(l => { logTxt += `\`[${new Date(l.time).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}]\` <@${l.userId}> beli **${l.item}** (🪙 ${l.price.toLocaleString('id-ID')})\n`; }); return interaction.reply({ embeds: [new EmbedBuilder().setDescription(logTxt).setColor('#2B2D31')], allowedMentions: {users: []} }); } }
 
@@ -1941,6 +1515,11 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
+        // --- PET PANEL SELECT MENUS ---
+        if (isPetPanelSelectMenu(interaction.customId)) {
+            return handlePetSelectMenu(interaction);
+        }
+
         if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); const status = unlocked ? '✅' : '🔒'; const nameStyle = unlocked ? `**${ach.name}**` : `~~${ach.name}~~`; desc += `${status} ${ach.emoji} ${nameStyle}\n> *${ach.desc}*\n> Hadiah: 🪙 ${ach.reward.toLocaleString('id-ID')} Money${unlocked ? ' ✓ Diklaim' : ''}\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
         if (interaction.customId === 'shop_buy_custom_role' || (interaction.customId === 'shop_buy_role_misc' && interaction.values[0] === 'init_cr')) { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
         if (interaction.customId === 'cr_select_color') { const selectedColor = interaction.values[0], modal = new ModalBuilder().setCustomId(`submit_cr_${selectedColor}`).setTitle('Custom Role 🎨'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_name').setLabel('Nama Role (Max 32)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32))); if (selectedColor === 'custom') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_color').setLabel('Hex (#FF0000)').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(7).setMaxLength(7).setPlaceholder('#FFFFFF'))); return interaction.showModal(modal); }
@@ -2081,6 +1660,11 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- PET PANEL BUTTONS ---
+        if (isPetPanelButton(interaction.customId)) {
+            return handlePetButton(interaction);
+        }
+
         // --- COINFLIP BUTTONS ---
         if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
             const parts = interaction.customId.split('_');
@@ -2194,7 +1778,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             if (cat === 'economy') content = '💰 **Economy Commands:**\n\n> `/economy balance` — Cek saldo\n> `/economy coinflip <taruhan>` — Lempar koin 50/50\n> `/economy slot <taruhan>` — Slot machine\n> `/economy gift @user <jumlah>` — Kirim money\n> `/economy redeem <kode>` — Tukar voucher\n> `/economy leaderboard` — Ranking global\n> `/daily` — Klaim hadiah harian';
             else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing\n> `/fishing sell` — Jual ikan\n> `/fishing inventory` — Lihat ikan\n> `/fishing collection` — Pokedex ikan\n> `/fishing shop` — Beli joran & umpan\n> `/fishing stats` — Statistik\n> `/fishing lock/unlock <id>` — Kunci ikan';
             else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm status` — Lihat kebun\n> `/farm plant <bibit>` — Tanam\n> `/farm water` — Siram semua\n> `/farm harvest` — Panen\n> `/farm sell` — Jual hasil\n> `/farm craft <resep>` — Craft produk\n> `/farm shop` — Beli bibit & pupuk\n> `/farm upgrade` — Upgrade lahan';
-            else if (cat === 'pet') content = '🐾 **Pet & Battle Commands:**\n\n> `/pet adopt/info/feed/play/hunt` — Kelola pet\n> `/pet shop` — Beli makanan & telur (gacha)\n> `/pet dungeon <tier>` — Lawan monster\n> `/pet boss create/solo/list` — Raid boss\n> `/pet refine <slot>` — Upgrade relic\n> `/battle @user` — PvP auto-battle';
+            else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle\n> `/evolve` — Evolve pet ke bentuk baru';
             else if (cat === 'profile') content = '📋 **Profil Commands:**\n\n> `/me profile` — Kartu profil\n> `/me achievement` — Koleksi badge\n> `/me inventory` — Lihat item\n> `/me use <item>` — Gunakan item\n> `/me quest` — Misi harian\n> `/me streak` — Info streak\n> `/me restore` — Pulihkan streak';
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
             else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';
@@ -2311,6 +1895,11 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= MODAL HANDLERS =================
     if (interaction.isModalSubmit()) {
+        // --- PET PANEL MODAL (Rename) ---
+        if (isPetPanelModal(interaction.customId)) {
+            return handlePetModal(interaction);
+        }
+
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }
 
         if (interaction.customId.startsWith('tv_modal_')) { const parts = interaction.customId.split('_'), actionType = parts[2], channelId = parts.slice(3).join('_'), voiceChannel = interaction.guild.channels.cache.get(channelId); if (!voiceChannel) return interaction.reply({content: '❌ Channel hilang.', ephemeral: true}); const tempVoice = db.prepare('SELECT * FROM temp_voices WHERE channelId = ? AND guildId = ?').get(channelId, guildId); if (!tempVoice || tempVoice.ownerId !== interaction.user.id) return interaction.reply({content: '❌ Bukan owner!', ephemeral: true}); if (actionType === 'name') { await voiceChannel.setName(interaction.fields.getTextInputValue('tv_input_name')).catch(()=>{}); return interaction.reply({content: '✅ Diubah.', ephemeral: true}); } if (actionType === 'limit') { let l = parseInt(interaction.fields.getTextInputValue('tv_input_limit')); if (isNaN(l)) l = 0; await voiceChannel.setUserLimit(l).catch(()=>{}); return interaction.reply({content: `✅ Limit: ${l||'unlimited'}`, ephemeral: true}); } if (actionType === 'kick') { const tid = interaction.fields.getTextInputValue('tv_input_kick'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ Tidak ada.', ephemeral: true}); await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: `👢 Kicked.`, ephemeral: true}); } if (actionType === 'block') { const tid = interaction.fields.getTextInputValue('tv_input_block'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: false, ViewChannel: false}).catch(()=>{}); const m = voiceChannel.members.get(tid); if (m) await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: '🚫 Blocked.', ephemeral: true}); } if (actionType === 'unblock') { const tid = interaction.fields.getTextInputValue('tv_input_unblock'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: null, ViewChannel: null}).catch(()=>{}); return interaction.reply({content: '🟢 Unblocked.', ephemeral: true}); } if (actionType === 'transfer') { const tid = interaction.fields.getTextInputValue('tv_input_transfer'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ User harus di VC.', ephemeral: true}); db.prepare('UPDATE temp_voices SET ownerId = ? WHERE channelId = ?').run(tid, channelId); await voiceChannel.permissionOverwrites.edit(interaction.user.id, {ManageChannels: null, ManageRoles: null}).catch(()=>{}); await voiceChannel.permissionOverwrites.edit(tid, {ManageChannels: true, ManageRoles: true}).catch(()=>{}); return interaction.reply({content: `🔄 Transferred.`, ephemeral: true}); } }

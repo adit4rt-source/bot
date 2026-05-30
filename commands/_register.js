@@ -85,25 +85,7 @@ const commands = [
         .addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman').setRequired(true))),
     new SlashCommandBuilder()
         .setName('pet')
-        .setDescription('🐾 Sistem Pet / Companion')
-        .addSubcommand(sub => sub.setName('info').setDescription('Lihat info pet aktif'))
-        .addSubcommand(sub => sub.setName('adopt').setDescription('Adopt pet baru').addStringOption(opt => opt.setName('pet').setDescription('Pilih pet').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('feed').setDescription('Beri makan pet (pakai makanan dari inventory)').addStringOption(opt => opt.setName('food').setDescription('Pilih makanan dari inventory kamu').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('play').setDescription('Bermain dengan pet'))
-        .addSubcommand(sub => sub.setName('shop').setDescription('Pet Shop - beli makanan & telur'))
-        .addSubcommand(sub => sub.setName('collection').setDescription('Lihat semua pet yang dimiliki'))
-        .addSubcommand(sub => sub.setName('swap').setDescription('Ganti pet aktif').addIntegerOption(opt => opt.setName('id').setDescription('ID pet (dari /pet collection)').setRequired(true)))
-        .addSubcommand(sub => sub.setName('rename').setDescription('Ganti nama pet (max 10 char)').addStringOption(opt => opt.setName('nama').setDescription('Nama baru (max 10)').setRequired(true).setMaxLength(10)))
-        .addSubcommand(sub => sub.setName('hunt').setDescription('Kirim pet berburu (30-60 menit, buff mati saat hunt)'))
-        .addSubcommand(sub => sub.setName('release').setDescription('Lepaskan pet (tidak bisa undo!)').addIntegerOption(opt => opt.setName('id').setDescription('ID pet').setRequired(true)))
-        .addSubcommand(sub => sub.setName('refine').setDescription('Refine relic (+1 upgrade)').addStringOption(opt => opt.setName('slot').setDescription('Slot relic').setRequired(true).addChoices({name:'⚔️ Weapon',value:'weapon'},{name:'🛡️ Armor',value:'armor'},{name:'💍 Accessory',value:'accessory'})))
-        .addSubcommand(sub => sub.setName('dungeon').setDescription('Dungeon - Lawan monster NPC').addStringOption(opt => opt.setName('tier').setDescription('Pilih dungeon').setRequired(true).setAutocomplete(true)))
-        .addSubcommandGroup(group => group.setName('boss').setDescription('Boss Battle (Party/Solo)')
-            .addSubcommand(sub => sub.setName('create').setDescription('Buat party untuk lawan boss').addStringOption(opt => opt.setName('boss').setDescription('Pilih boss').setRequired(true).setAutocomplete(true)))
-            .addSubcommand(sub => sub.setName('start').setDescription('Mulai battle (party leader only)'))
-            .addSubcommand(sub => sub.setName('solo').setDescription('Solo lawan boss').addStringOption(opt => opt.setName('boss').setDescription('Pilih boss').setRequired(true).setAutocomplete(true)))
-            .addSubcommand(sub => sub.setName('list').setDescription('Lihat daftar boss'))
-        ),
+        .setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
     new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP').addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true)).addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa taruhan)').setRequired(false)),
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
