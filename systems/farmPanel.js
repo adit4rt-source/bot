@@ -21,10 +21,17 @@ function buildFarmPanel(guildId, userId, username) {
     const storage = getStorage(guildId, userId);
     const levelInfo = FARM_LEVELS.find(l => l.level === farmData.farm_level);
     const storageCount = storage.reduce((sum, s) => sum + s.quantity, 0);
+    const readyCount = plots.filter(p => {
+        const crop = FARM_CROPS.find(c => c.id === p.cropId);
+        if (!crop || p.status === 'dead') return false;
+        const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
+        const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+        return Date.now() - p.plantedAt >= growTime;
+    }).length;
 
     let plotStatus = '';
     if (plots.length === 0) {
-        plotStatus = '*Kebun kosong! Tanam bibit untuk mulai.*';
+        plotStatus = '> *🌿 Kebun kosong! Tanam bibit untuk mulai.*\n';
     } else {
         plots.forEach((plot, i) => {
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
@@ -34,34 +41,57 @@ function buildFarmPanel(guildId, userId, username) {
             const elapsed = Date.now() - plot.plantedAt;
             const dryTime = Date.now() - plot.wateredAt;
             const deadThreshold = growTime * 2.5;
-            let status = '';
-            if (plot.status === 'dead' || dryTime > deadThreshold) { status = '☠️'; if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id); }
-            else if (elapsed >= growTime) status = '✅';
-            else if (dryTime > growTime * 1.5) status = '🥀';
-            else if ((Date.now() - plot.wateredAt) > growTime * 0.6) status = '💧';
-            else { const pct = Math.min(100, Math.floor((elapsed / growTime) * 100)); status = `${pct}%`; }
-            plotStatus += `[${i + 1}]${crop.emoji}${status} `;
-            if ((i + 1) % 4 === 0) plotStatus += '\n';
+            
+            let statusIcon = '', statusText = '', progressBar = '';
+            if (plot.status === 'dead' || dryTime > deadThreshold) {
+                statusIcon = '☠️'; statusText = 'Mati';
+                progressBar = '░░░░░░░░░░';
+                if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id);
+            } else if (elapsed >= growTime) {
+                statusIcon = '✅'; statusText = 'Siap Panen!';
+                progressBar = '██████████';
+            } else if (dryTime > growTime * 1.5) {
+                statusIcon = '🥀'; statusText = 'Layu!';
+                const pct = Math.min(100, Math.floor((elapsed / growTime) * 100));
+                const filled = Math.floor(pct / 10);
+                progressBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+            } else {
+                const pct = Math.min(100, Math.floor((elapsed / growTime) * 100));
+                const filled = Math.floor(pct / 10);
+                progressBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+                const remainMs = growTime - elapsed;
+                const remainMin = Math.max(0, Math.ceil(remainMs / 60000));
+                statusIcon = '🌱'; statusText = `${pct}% (${remainMin}m)`;
+            }
+            
+            const fertIcon = fert.id !== 'none' ? ` ${fert.emoji}` : '';
+            plotStatus += `> \`[${i+1}]\` ${crop.emoji} **${crop.name}**${fertIcon}\n>  ┗ ${statusIcon} \`${progressBar}\` ${statusText}\n`;
         });
     }
 
     const embed = new EmbedBuilder()
         .setTitle(`🌾 FARM PANEL — ${username}`)
-        .setColor('#2ECC71')
+        .setColor(readyCount > 0 ? '#F1C40F' : '#2ECC71')
         .setDescription(
-            `🏡 Level: **${levelInfo.name}** | Slots: **${plots.length}/${maxSlots}**\n` +
-            `📦 Storage: **${storageCount} items** | 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n` +
-            `${plotStatus}`
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🏡 **${levelInfo.name}**\n` +
+            `> 📊 Slots: **${plots.length}** / ${maxSlots} terpakai\n` +
+            `> 📦 Storage: **${storageCount}** items\n` +
+            `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
+            (readyCount > 0 ? `> 🔔 **${readyCount} tanaman siap panen!**\n` : '') +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `📋 **Status Tanaman:**\n${plotStatus}`
         )
-        .setFooter({ text: '✅=Panen | 💧=Siram | 🥀=Layu | ☠️=Mati' });
+        .setFooter({ text: '✅ Panen | 🌱 Growing | 🥀 Layu (siram!) | ☠️ Mati | 🔄 Refresh' });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_water_${userId}`).setLabel('💧 Water').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_harvest_${userId}`).setLabel('🌾 Harvest').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`farm_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('📦 Storage').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
@@ -94,7 +124,7 @@ async function handleFarmButton(interaction) {
     const userData = getOrCreateUser(guildId, userId);
 
     // === BACK TO MAIN PANEL ===
-    if (action === 'back') {
+    if (action === 'back' || action === 'refresh') {
         const panel = buildFarmPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
     }
