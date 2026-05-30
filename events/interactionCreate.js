@@ -1892,26 +1892,15 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/me inventory\` — Gunakan dengan \`/me use\`` });
         }
         if (interaction.customId === 'farm_buy_seed') {
-            const cropId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
+            const cropId = interaction.values[0];
             const crop = FARM_CROPS.find(c => c.id === cropId);
             if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-            // Beli 5x sekaligus supaya tidak capek
-            const qty = 5;
-            const totalCost = crop.cost * qty;
-            if (userData.balance < totalCost) {
-                // Coba beli sebanyak yang mampu (min 1)
-                const affordable = Math.floor(userData.balance / crop.cost);
-                if (affordable <= 0) return interaction.reply({ content: `❌ Saldo kurang! Butuh minimal 🪙 **${crop.cost}** untuk 1 bibit.`, ephemeral: true });
-                const cost = crop.cost * affordable;
-                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(cost, guildId, interaction.user.id);
-                addSeed(guildId, interaction.user.id, cropId, affordable);
-                const owned = getSeedCount(guildId, interaction.user.id, cropId);
-                return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${affordable}**! (saldo cuma cukup ${affordable})\n> 💰 Total harga: 🪙 **${cost.toLocaleString('id-ID')}**\n> 📦 Total bibit: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
-            }
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
-            addSeed(guildId, interaction.user.id, cropId, qty);
-            const owned = getSeedCount(guildId, interaction.user.id, cropId);
-            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**! Masuk ke inventory.\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+            // Show modal for quantity input
+            const modal = new ModalBuilder().setCustomId(`seed_qty_${cropId}`).setTitle(`Beli ${crop.emoji} ${crop.name}`);
+            modal.addComponents(new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
+            ));
+            return interaction.showModal(modal);
         }
         if (interaction.customId === 'farm_buy_fertilizer') {
             const fertId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
@@ -1933,14 +1922,11 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const cropId = selected.substring(5);
                 const crop = FARM_CROPS.find(c => c.id === cropId);
                 if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-                if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh minimal 🪙 **${crop.cost}** untuk 1 bibit.`, ephemeral: true });
-                const qty = 5;
-                const affordable = Math.min(qty, Math.floor(userData.balance / crop.cost));
-                const totalCost = crop.cost * affordable;
-                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
-                addSeed(guildId, interaction.user.id, cropId, affordable);
-                const owned = getSeedCount(guildId, interaction.user.id, cropId);
-                return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${affordable}**!\n> 💰 Harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit: **${owned}**\n> 💡 Tanam: \`/farm plant\`` });
+                const modal = new ModalBuilder().setCustomId(`seed_qty_${cropId}`).setTitle(`Beli ${crop.emoji} ${crop.name}`);
+                modal.addComponents(new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
+                ));
+                return interaction.showModal(modal);
             }
             if (selected.startsWith('fert_')) {
                 const fertId = selected.substring(5);
@@ -2238,5 +2224,25 @@ module.exports = async function handleInteractionCreate(interaction) {
         if (interaction.customId.startsWith('tv_modal_')) { const parts = interaction.customId.split('_'), actionType = parts[2], channelId = parts.slice(3).join('_'), voiceChannel = interaction.guild.channels.cache.get(channelId); if (!voiceChannel) return interaction.reply({content: '❌ Channel hilang.', ephemeral: true}); const tempVoice = db.prepare('SELECT * FROM temp_voices WHERE channelId = ? AND guildId = ?').get(channelId, guildId); if (!tempVoice || tempVoice.ownerId !== interaction.user.id) return interaction.reply({content: '❌ Bukan owner!', ephemeral: true}); if (actionType === 'name') { await voiceChannel.setName(interaction.fields.getTextInputValue('tv_input_name')).catch(()=>{}); return interaction.reply({content: '✅ Diubah.', ephemeral: true}); } if (actionType === 'limit') { let l = parseInt(interaction.fields.getTextInputValue('tv_input_limit')); if (isNaN(l)) l = 0; await voiceChannel.setUserLimit(l).catch(()=>{}); return interaction.reply({content: `✅ Limit: ${l||'unlimited'}`, ephemeral: true}); } if (actionType === 'kick') { const tid = interaction.fields.getTextInputValue('tv_input_kick'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ Tidak ada.', ephemeral: true}); await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: `👢 Kicked.`, ephemeral: true}); } if (actionType === 'block') { const tid = interaction.fields.getTextInputValue('tv_input_block'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: false, ViewChannel: false}).catch(()=>{}); const m = voiceChannel.members.get(tid); if (m) await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: '🚫 Blocked.', ephemeral: true}); } if (actionType === 'unblock') { const tid = interaction.fields.getTextInputValue('tv_input_unblock'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: null, ViewChannel: null}).catch(()=>{}); return interaction.reply({content: '🟢 Unblocked.', ephemeral: true}); } if (actionType === 'transfer') { const tid = interaction.fields.getTextInputValue('tv_input_transfer'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ User harus di VC.', ephemeral: true}); db.prepare('UPDATE temp_voices SET ownerId = ? WHERE channelId = ?').run(tid, channelId); await voiceChannel.permissionOverwrites.edit(interaction.user.id, {ManageChannels: null, ManageRoles: null}).catch(()=>{}); await voiceChannel.permissionOverwrites.edit(tid, {ManageChannels: true, ManageRoles: true}).catch(()=>{}); return interaction.reply({content: `🔄 Transferred.`, ephemeral: true}); } }
 
         if (interaction.customId.startsWith('submit_cr_')) { const colorData = interaction.customId.replace('submit_cr_', ''), crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({content: '❌ Saldo kurang!', ephemeral: true}); const roleName = interaction.fields.getTextInputValue('cr_name'); let roleColor = colorData === 'custom' ? interaction.fields.getTextInputValue('cr_color') : `#${colorData}`; if (!/^#[0-9A-F]{6}$/i.test(roleColor)) return interaction.reply({content: '❌ Format hex salah!', ephemeral: true}); await interaction.deferReply(); try { userData.balance -= crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); const targetRoleId = '1062034108433301515', targetRole = interaction.guild.roles.cache.get(targetRoleId); let targetPos = targetRole ? Math.max(1, targetRole.position - 1) : Math.max(1, (interaction.guild.members.me.roles.highest.position || 1) - 1); const newRole = await interaction.guild.roles.create({ name: roleName, color: roleColor, hoist: true, position: targetPos, reason: `Custom Role: ${interaction.user.username}` }); await interaction.member.roles.add(newRole); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', `Custom Role: ${roleName}`, crPrice); incrementUserStat(guildId, interaction.user.id, 'total_buys'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'custom_role' }); await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor(roleColor).setDescription(`<@${interaction.user.id}> buat **${roleName}** (🪙 ${crPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.editReply(`🎉 Custom Role <@&${newRole.id}> dibuat! 🪙 **${crPrice.toLocaleString('id-ID')}**`); } catch(e) { userData.balance += crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); console.error(e); return interaction.editReply('❌ Gagal. Uang dikembalikan.'); } }
+
+        // --- SEED QUANTITY MODAL ---
+        if (interaction.customId.startsWith('seed_qty_')) {
+            const cropId = interaction.customId.replace('seed_qty_', '');
+            const crop = FARM_CROPS.find(c => c.id === cropId);
+            if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+            const input = interaction.fields.getTextInputValue('seed_qty_input');
+            const qty = parseInt(input);
+            if (isNaN(qty) || qty < 1 || qty > 999) return interaction.reply({ content: '❌ Masukkan angka valid (1-999)!', ephemeral: true });
+            const totalCost = crop.cost * qty;
+            const userData = getOrCreateUser(guildId, interaction.user.id);
+            if (userData.balance < totalCost) {
+                const affordable = Math.floor(userData.balance / crop.cost);
+                return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} bibit.\n> Kamu hanya mampu beli **${affordable}** bibit (🪙 ${(affordable * crop.cost).toLocaleString('id-ID')}).`, ephemeral: true });
+            }
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
+            addSeed(guildId, interaction.user.id, cropId, qty);
+            const owned = getSeedCount(guildId, interaction.user.id, cropId);
+            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**!\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+        }
     }
 };
