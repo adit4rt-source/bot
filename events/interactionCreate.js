@@ -17,6 +17,8 @@ const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, isEc
 const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { handleTradeCommand, handleTradeButton, handleTradeModal, isTradePanelButton, isTradePanelModal } = require('../systems/tradePanel');
+const { handleMarketCommand, handleMarketButton, handleMarketModal, isMarketPanelButton, isMarketPanelModal } = require('../systems/marketPanel');
+const { getNotifSettings, toggleNotif } = require('../systems/notifications');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -933,6 +935,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleTradeCommand(interaction);
         }
 
+        // ================= MARKET SYSTEM (Panel) =================
+        if (command === 'market') {
+            return handleMarketCommand(interaction);
+        }
+
         // ================= PET EVOLUTION =================
         if (command === 'evolve') {
             const pet = getPetData(guildId, interaction.user.id);
@@ -1278,6 +1285,45 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleTradeButton(interaction);
         }
 
+        // --- MARKET PANEL BUTTONS ---
+        if (isMarketPanelButton(interaction.customId)) {
+            return handleMarketButton(interaction);
+        }
+
+        // --- NOTIFICATION TOGGLE BUTTONS ---
+        if (interaction.customId.startsWith('notif_toggle_')) {
+            const parts = interaction.customId.split('_');
+            const type = parts[2]; // daily, quest, trade, pet, farm
+            const targetUserId = parts[3];
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+            const newValue = toggleNotif(guildId, targetUserId, type);
+            const settings = getNotifSettings(guildId, targetUserId);
+            // Rebuild notification panel
+            const { EmbedBuilder: EB, ActionRowBuilder: AR, ButtonBuilder: BB, ButtonStyle: BS } = require('discord.js');
+            const notifEmbed = new EB()
+                .setTitle('🔔 Notification Settings')
+                .setColor('#F39C12')
+                .setDescription(
+                    `${settings.notif_daily ? '✅' : '❌'} Daily Reminder\n` +
+                    `${settings.notif_quest ? '✅' : '❌'} Quest Complete\n` +
+                    `${settings.notif_trade ? '✅' : '❌'} Trade & Market\n` +
+                    `${settings.notif_pet ? '✅' : '❌'} Pet Warnings\n` +
+                    `${settings.notif_farm ? '✅' : '❌'} Farm Harvest\n\n` +
+                    `💡 *Klik tombol untuk toggle on/off*`
+                );
+            const row1 = new AR().addComponents(
+                new BB().setCustomId(`notif_toggle_daily_${targetUserId}`).setLabel(`${settings.notif_daily ? '✅' : '❌'} Daily`).setStyle(settings.notif_daily ? BS.Success : BS.Secondary),
+                new BB().setCustomId(`notif_toggle_quest_${targetUserId}`).setLabel(`${settings.notif_quest ? '✅' : '❌'} Quest`).setStyle(settings.notif_quest ? BS.Success : BS.Secondary),
+                new BB().setCustomId(`notif_toggle_trade_${targetUserId}`).setLabel(`${settings.notif_trade ? '✅' : '❌'} Trade`).setStyle(settings.notif_trade ? BS.Success : BS.Secondary),
+                new BB().setCustomId(`notif_toggle_pet_${targetUserId}`).setLabel(`${settings.notif_pet ? '✅' : '❌'} Pet`).setStyle(settings.notif_pet ? BS.Success : BS.Secondary),
+                new BB().setCustomId(`notif_toggle_farm_${targetUserId}`).setLabel(`${settings.notif_farm ? '✅' : '❌'} Farm`).setStyle(settings.notif_farm ? BS.Success : BS.Secondary)
+            );
+            const row2 = new AR().addComponents(
+                new BB().setCustomId(`profpnl_back_${targetUserId}`).setLabel('🔙 Kembali').setStyle(BS.Secondary)
+            );
+            return interaction.update({ embeds: [notifEmbed], components: [row1, row2] });
+        }
+
         // --- COINFLIP BUTTONS ---
         if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
             const parts = interaction.customId.split('_');
@@ -1537,6 +1583,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- TRADE PANEL MODAL ---
         if (isTradePanelModal(interaction.customId)) {
             return handleTradeModal(interaction);
+        }
+
+        // --- MARKET PANEL MODAL ---
+        if (isMarketPanelModal(interaction.customId)) {
+            return handleMarketModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }

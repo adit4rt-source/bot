@@ -2,6 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser } = require('../database');
 const { updateQuestProgress } = require('./quests');
+const { notifyTradeReceived, notifyTradeAccepted } = require('./notifications');
 const { PET_DATA } = require('../data/pets');
 const { FISH_DATA } = require('../data/fish');
 
@@ -308,6 +309,9 @@ async function handleTradeModal(interaction) {
             new ButtonBuilder().setCustomId(`trade_back_${userId}`).setLabel('🔙 Kembali ke Panel').setStyle(ButtonStyle.Secondary)
         );
 
+        // Notify receiver via DM
+        try { await notifyTradeReceived(interaction.client, guildId, targetUserId, userId, tradeId); } catch (e) {}
+
         return interaction.reply({ embeds: [embed], components: [row] });
     }
 
@@ -411,6 +415,9 @@ async function handleTradeModal(interaction) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`trade_back_${userId}`).setLabel('🔙 Kembali ke Panel').setStyle(ButtonStyle.Secondary)
         );
+
+        // Notify sender that their trade was accepted
+        try { await notifyTradeAccepted(interaction.client, guildId, trade.senderId, userId, tradeId); } catch (e) {}
 
         return interaction.reply({ embeds: [embed], components: [row] });
     }

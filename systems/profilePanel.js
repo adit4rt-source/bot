@@ -6,6 +6,7 @@ const { ACHIEVEMENTS } = require('./achievements');
 const { getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { ITEMS } = require('../data/items');
+const { getNotifSettings } = require('./notifications');
 
 
 // ============ BUILD: Main Profile Panel ============
@@ -55,7 +56,8 @@ function buildProfilePanel(guildId, userId, username, member) {
         new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('\ud83c\udfc6 Achievement').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('\ud83c\udf92 Inventory').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('\ud83d\udcca Stats').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('\ud83d\udcca Stats').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('\ud83d\udd14 Notifs').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1] };
@@ -231,6 +233,33 @@ async function handleProfileButton(interaction) {
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === NOTIFICATIONS ===
+    if (action === 'notifs') {
+        const settings = getNotifSettings(guildId, userId);
+        const embed = new EmbedBuilder()
+            .setTitle('\ud83d\udd14 Notification Settings')
+            .setColor('#F39C12')
+            .setDescription(
+                `${settings.notif_daily ? '\u2705' : '\u274c'} Daily Reminder\n` +
+                `${settings.notif_quest ? '\u2705' : '\u274c'} Quest Complete\n` +
+                `${settings.notif_trade ? '\u2705' : '\u274c'} Trade & Market\n` +
+                `${settings.notif_pet ? '\u2705' : '\u274c'} Pet Warnings\n` +
+                `${settings.notif_farm ? '\u2705' : '\u274c'} Farm Harvest\n\n` +
+                `\ud83d\udca1 *Klik tombol untuk toggle on/off*`
+            );
+        const row1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`notif_toggle_daily_${userId}`).setLabel(`${settings.notif_daily ? '\u2705' : '\u274c'} Daily`).setStyle(settings.notif_daily ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`notif_toggle_quest_${userId}`).setLabel(`${settings.notif_quest ? '\u2705' : '\u274c'} Quest`).setStyle(settings.notif_quest ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`notif_toggle_trade_${userId}`).setLabel(`${settings.notif_trade ? '\u2705' : '\u274c'} Trade`).setStyle(settings.notif_trade ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`notif_toggle_pet_${userId}`).setLabel(`${settings.notif_pet ? '\u2705' : '\u274c'} Pet`).setStyle(settings.notif_pet ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`notif_toggle_farm_${userId}`).setLabel(`${settings.notif_farm ? '\u2705' : '\u274c'} Farm`).setStyle(settings.notif_farm ? ButtonStyle.Success : ButtonStyle.Secondary)
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 }
 

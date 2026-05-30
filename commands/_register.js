@@ -21,6 +21,7 @@ const commands = [
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
     new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
     new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
+    new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
