@@ -10,6 +10,7 @@ const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, a
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
+const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -65,8 +66,8 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '\u200b', value: `> \`/farm status\` — Lihat kebun\n> \`/farm plant\` — Tanam bibit\n> \`/farm water\` — Siram\n> \`/farm harvest\` — Panen\n> \`/farm craft\` — Craft resep\n> \`/farm shop\` — Bibit & pupuk\n> \`/farm upgrade\` — Upgrade lahan`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
                 { name: '\u200b', value: `> \`/pet\` — 🐾 Buka Pet Panel (button-based)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine\n> Semua diakses dari panel interaktif!\n> \`/battle @user\` — PvP auto-battle\n> \`/evolve\` — Evolve pet`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/me`)', inline: false },
-                { name: '\u200b', value: `> \`/me profile\` — Kartu profil\n> \`/me achievement\` — Koleksi badge\n> \`/me inventory\` — Lihat item\n> \`/me use <item>\` — Gunakan item\n> \`/me quest\` — Misi harian\n> \`/me streak\` — Info streak\n> \`/me restore\` — Pulihkan streak\n> \`/level rank\` — Cek XP & level`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/me` + `/quest`)', inline: false },
+                { name: '\u200b', value: `> \`/me profile\` — Kartu profil\n> \`/me achievement\` — Koleksi badge\n> \`/me inventory\` — Lihat item\n> \`/me use <item>\` — Gunakan item\n> \`/quest\` — 📜 Quest Panel (Daily & Weekly)\n> \`/me streak\` — Info streak\n> \`/me restore\` — Pulihkan streak\n> \`/level rank\` — Cek XP & level`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **EVENTS & VOICE**', inline: false },
                 { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
             );
@@ -101,7 +102,7 @@ module.exports = async function handleInteractionCreate(interaction) {
 
         if (command === 'setting') {
             if (!isAdmin) return interaction.reply({content: '❌ Hanya Admin!', ephemeral: true});
-            if (subCmd === 'quest_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_channel', ch.id); return interaction.reply(`✅ \`/me quest\` hanya bisa di <#${ch.id}>.`); }
+            if (subCmd === 'quest_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_channel', ch.id); return interaction.reply(`✅ \`/quest\` hanya bisa di <#${ch.id}>.`); }
             if (subCmd === 'level_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'level_channel', ch.id); return interaction.reply(`✅ Level Up notif ke <#${ch.id}>.`); }
             if (subCmd === 'achievement_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'achievement_channel', ch.id); return interaction.reply(`✅ Achievement notif ke <#${ch.id}>.`); }
             if (subCmd === 'streak_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_channel', ch.id); return interaction.reply(`✅ Streak notif ke <#${ch.id}>.`); }
@@ -251,69 +252,6 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
 
         if (command === 'economy' && subCmd === 'redeem') { const code = interaction.options.getString('kode').toUpperCase(); const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(guildId, code); if (!voucher) return interaction.reply({ content: '❌ Kode tidak valid!', ephemeral: true }); if (voucher.current_uses >= voucher.max_uses) return interaction.reply({ content: '❌ Kuota habis!', ephemeral: true }); if (db.prepare('SELECT * FROM voucher_claims WHERE guildId = ? AND userId = ? AND code = ?').get(guildId, interaction.user.id, code)) return interaction.reply({ content: '❌ Sudah pernah ditukar!', ephemeral: true }); db.prepare('INSERT INTO voucher_claims (guildId, userId, code) VALUES (?, ?, ?)').run(guildId, interaction.user.id, code); db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(guildId, code); userData.balance += voucher.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); await checkAchievements(interaction.guild, interaction.user.id, { type: 'redeem' }); return interaction.reply(`🎉 **BERHASIL!** Dapat **${voucher.reward.toLocaleString('id-ID')} money** gratis!`); }
-
-        if (command === 'me' && subCmd === 'quest') {
-            const questChannelSetting = getSetting(guildId, 'quest_channel', null);
-            if (questChannelSetting && interaction.channelId !== questChannelSetting) return interaction.reply({ content: `❌ Buka misi hanya di <#${questChannelSetting}>.`, ephemeral: true });
-            updateQuestProgress(guildId, interaction.user.id, 'dummy', 0);
-            const row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
-            const quests = JSON.parse(row.data);
-            const weeklyQuests = getOrCreateWeeklyQuests(guildId, interaction.user.id);
-            const weeklyDone = weeklyQuests.filter(q => q.claimed).length;
-            const allDailyDone = quests.every(q => q.claimed);
-
-            const embed = new EmbedBuilder()
-                .setTitle('📜 Papan Misi Harian')
-                .setColor(allDailyDone ? '#2ECC71' : '#2B2D31')
-                .setDescription(`Selesaikan misi berikut!\n*(Reset 00:00 WIB)*\n\n📅 **Weekly Quest:** ${weeklyDone}/3 selesai (\`/me weekly\`)`);
-
-            const buttons = new ActionRowBuilder();
-            quests.forEach((q, i) => {
-                const diff = DIFFICULTY_TIERS[q.difficulty] || DIFFICULTY_TIERS.easy;
-                const percent = Math.min(100, Math.floor((q.progress / q.target) * 100));
-                const filled = Math.floor(percent / 10);
-                const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-                const status = q.claimed ? '✅ **DIKLAIM**' : `**${q.progress} / ${q.target}**`;
-                embed.addFields({ name: `${diff.stars} Misi ${i+1} — ${diff.label}`, value: `${q.desc}\n> 🪙 **${q.reward} Money**\n> \`[${bar}]\` ${percent}% ${status}`, inline: false });
-                const btn = new ButtonBuilder().setCustomId(`claim_quest_${i}`).setLabel(`Klaim ${i+1}`).setStyle(ButtonStyle.Success);
-                if (q.progress < q.target || q.claimed) btn.setDisabled(true);
-                buttons.addComponents(btn);
-            });
-
-            if (allDailyDone) {
-                embed.addFields({ name: '\u200b', value: '🎁 **All Done Bonus: +200 Money!**\n> Selesaikan semua misi harian setiap hari untuk bonus streak!', inline: false });
-            }
-
-            const perfectDays = getUserStat(guildId, interaction.user.id, 'quest_perfect_days');
-            const consecutive = getUserStat(guildId, interaction.user.id, 'quest_consecutive_perfect');
-            embed.setFooter({ text: `🏅 Perfect Days: ${perfectDays} | 🔥 Consecutive: ${consecutive}/7 → Bonus 1000 + Mystery Box` });
-
-            return interaction.reply({ embeds: [embed], components: [buttons] });
-        }
-
-        if (command === 'me' && subCmd === 'weekly') {
-            const weeklyQuests = getOrCreateWeeklyQuests(guildId, interaction.user.id);
-            const allWeeklyDone = weeklyQuests.every(q => q.claimed);
-
-            const embed = new EmbedBuilder()
-                .setTitle('📅 Misi Mingguan')
-                .setColor(allWeeklyDone ? '#F1C40F' : '#3498DB')
-                .setDescription(`Misi besar dengan hadiah besar!\n*(Reset setiap Senin 00:00 WIB)*\n\n> 🆔 Week: **${getWeekId()}**`);
-
-            const buttons = new ActionRowBuilder();
-            weeklyQuests.forEach((q, i) => {
-                const percent = Math.min(100, Math.floor((q.progress / q.target) * 100));
-                const filled = Math.floor(percent / 10);
-                const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-                const status = q.claimed ? '✅ **DIKLAIM**' : `**${q.progress} / ${q.target}**`;
-                embed.addFields({ name: `🏆 Weekly ${i+1}`, value: `${q.desc}\n> 🪙 **${q.reward} Money**\n> \`[${bar}]\` ${percent}% ${status}`, inline: false });
-                const btn = new ButtonBuilder().setCustomId(`claim_weekly_${i}`).setLabel(`Klaim W${i+1}`).setStyle(ButtonStyle.Primary);
-                if (q.progress < q.target || q.claimed) btn.setDisabled(true);
-                buttons.addComponents(btn);
-            });
-
-            return interaction.reply({ embeds: [embed], components: [buttons] });
-        }
 
         if (command === 'economy' && subCmd === 'leaderboard') {
             const kategori = interaction.options.getString('kategori') || 'overall';
@@ -827,6 +765,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handlePetCommand(interaction);
         }
 
+        // ================= QUEST PANEL (Button-based) =================
+        if (command === 'quest') {
+            return handleQuestCommand(interaction);
+        }
+
 
 
         // ================= BATTLE PVP =================
@@ -1310,6 +1253,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handlePetButton(interaction);
         }
 
+        // --- QUEST PANEL BUTTONS ---
+        if (isQuestPanelButton(interaction.customId)) {
+            return handleQuestButton(interaction);
+        }
+
         // --- COINFLIP BUTTONS ---
         if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
             const parts = interaction.customId.split('_');
@@ -1531,9 +1479,10 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
 
         if (interaction.customId === 'airdrop_claim') { if (activeMiniEvents.has(guildId)) activeMiniEvents.delete(guildId); const reward = getRandomInt(300, 600); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'event_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'event_win' }); return interaction.update({ content: `🎉 <@${interaction.user.id}> klaim Air Drop! 🪙 **${reward}**`, embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('x').setLabel(`Diklaim ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setDisabled(true))] }); }
-        if (interaction.customId.startsWith('claim_quest_')) { const qi = parseInt(interaction.customId.replace('claim_quest_', '')), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!row || row.date !== today) return interaction.update({ content: '❌ Expired.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (tq.progress < tq.target || tq.claimed) return interaction.reply({content: '❌ Belum selesai!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, interaction.user.id); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_quests_done'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'quest' }); if (quests.every(q => q.claimed)) await checkAchievements(interaction.guild, interaction.user.id, { type: 'all_quest_day' }); let bonusMsg = ''; const streakResult = checkDailyQuestStreak(guildId, interaction.user.id); if (streakResult) { bonusMsg = `\n\n🎁 **ALL DONE BONUS: +200 Money!**\n> 🏅 Perfect Days: ${streakResult.perfectDays}`; if (streakResult.weeklyBonus) bonusMsg += `\n\n🎉🎉 **7-DAY STREAK BONUS!** +1000 Money + 📦 Mystery Box! 🎉🎉`; } return interaction.reply(`✅ Dapat 🪙 **${tq.reward}**!${bonusMsg}`); }
-        if (interaction.customId.startsWith('claim_weekly_')) { const qi = parseInt(interaction.customId.replace('claim_weekly_', '')); const week = getWeekId(); let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week); if (!row) return interaction.update({ content: '❌ Expired.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '❌ Belum selesai atau sudah diklaim!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done'); return interaction.reply(`✅ Weekly Quest selesai! Dapat 🪙 **${tq.reward.toLocaleString('id-ID')}**!`); }
-        if (interaction.customId === 'cancel_buy') return interaction.update({ content: '❌ Dibatalkan.', components: [] });
+        // Legacy claim_quest_ and claim_weekly_ buttons (kept for backward compat with old messages)
+        if (interaction.customId.startsWith('claim_quest_')) { const qi = parseInt(interaction.customId.replace('claim_quest_', '')), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!row || row.date !== today) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, interaction.user.id); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_quests_done'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'quest' }); if (quests.every(q => q.claimed)) await checkAchievements(interaction.guild, interaction.user.id, { type: 'all_quest_day' }); let bonusMsg = ''; const streakResult = checkDailyQuestStreak(guildId, interaction.user.id); if (streakResult) { bonusMsg = `\n\n\ud83c\udf81 **ALL DONE BONUS: +200 Money!**\n> \ud83c\udfc5 Perfect Days: ${streakResult.perfectDays}`; if (streakResult.weeklyBonus) bonusMsg += `\n\n\ud83c\udf89\ud83c\udf89 **7-DAY STREAK BONUS!** +1000 Money + \ud83d\udce6 Mystery Box! \ud83c\udf89\ud83c\udf89`; } return interaction.reply(`\u2705 Dapat \ud83e\ude99 **${tq.reward}**!${bonusMsg}`); }
+        if (interaction.customId.startsWith('claim_weekly_')) { const qi = parseInt(interaction.customId.replace('claim_weekly_', '')); const week = getWeekId(); let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week); if (!row) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai atau sudah diklaim!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done'); return interaction.reply(`\u2705 Weekly Quest selesai! Dapat \ud83e\ude99 **${tq.reward.toLocaleString('id-ID')}**!`); }
+        if (interaction.customId === 'cancel_buy') return interaction.update({ content: '\u274c Dibatalkan.', components: [] });
         if (interaction.customId.startsWith('confirm_')) { const selected = interaction.customId.substring(8), userData = getOrCreateUser(guildId, interaction.user.id); let finalItemName = '', finalPrice = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); const itemPrice = parseInt(parts.pop()); const itemName = parts.join('_'); const item = db.prepare('SELECT * FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, itemPrice); if (!item) return interaction.update({content: '❌ Habis!', components: []}); if (userData.balance < item.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); try { await interaction.user.send(`🛍️ **${item.name}**:\n\`\`\`\n${item.content}\n\`\`\``); } catch(e) { return interaction.update({content: '❌ DM tertutup!', components: []}); } userData.balance -= item.price; finalItemName = item.name; finalPrice = item.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id); } if (selected.startsWith('role_')) { const roleId = selected.substring(5), sr = db.prepare('SELECT * FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!sr) return interaction.update({content: '❌ Tidak dijual.', components: []}); if (userData.balance < sr.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); if (interaction.member.roles.cache.has(roleId)) return interaction.update({content: '❌ Sudah punya!', components: []}); userData.balance -= sr.price; const role = interaction.guild.roles.cache.get(roleId); finalItemName = role ? `Role ${role.name}` : 'Role'; finalPrice = sr.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); if (role) await interaction.member.roles.add(role).catch(()=>{}); } incrementUserStat(guildId, interaction.user.id, 'total_buys'); if (finalPrice > 0) updateQuestProgress(guildId, interaction.user.id, 'spend_money', finalPrice); await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', finalItemName, finalPrice); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor('#2B2D31').setDescription(`<@${interaction.user.id}> beli **${finalItemName}** (🪙 ${finalPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.update({content: `✅ Berhasil beli **${finalItemName}**!`, components: []}); }
     }
 

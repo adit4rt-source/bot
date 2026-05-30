@@ -61,15 +61,16 @@ const commands = [
         .addSubcommand(sub => sub.setName('set_custom_role').setDescription('Atur harga tiket Custom Role').addIntegerOption(opt => opt.setName('harga').setDescription('Harga (Ketik 0 untuk mematikan)').setRequired(true))),
     new SlashCommandBuilder()
         .setName('me')
-        .setDescription('📋 Profil, Achievement, Inventory & Quest')
+        .setDescription('📋 Profil, Achievement, Inventory')
         .addSubcommand(sub => sub.setName('profile').setDescription('Lihat kartu profil').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
         .addSubcommand(sub => sub.setName('achievement').setDescription('Lihat koleksi badge').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
         .addSubcommand(sub => sub.setName('inventory').setDescription('🎒 Lihat item yang kamu punya'))
         .addSubcommand(sub => sub.setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('quest').setDescription('Cek Misi Harian'))
-        .addSubcommand(sub => sub.setName('weekly').setDescription('Cek Misi Mingguan'))
         .addSubcommand(sub => sub.setName('streak').setDescription('Cek info streak'))
         .addSubcommand(sub => sub.setName('restore').setDescription('Pulihkan streak yang putus (Max 3x sebulan)')),
+    new SlashCommandBuilder()
+        .setName('quest')
+        .setDescription('📜 Quest Panel — Misi Harian & Mingguan'),
     new SlashCommandBuilder()
         .setName('farm')
         .setDescription('🌾 Farm Panel — Kelola kebun'),
