@@ -112,7 +112,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('admin')
         .setDescription('🛡️ Admin Panel — Kelola semua fitur admin')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder().setName('wallet').setDescription('💰 Economy Panel — Kelola ekonomi & transaksi'),
+    new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, achievement, inventory, streak'),
+    new SlashCommandBuilder().setName('levelpanel').setDescription('🌟 Level Panel — Rank, leaderboard, rewards')
 ];
 
 module.exports = { commands };

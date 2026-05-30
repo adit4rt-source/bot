@@ -13,6 +13,9 @@ const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmMod
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
+const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
+const { handleProfilePanelCommand, handleProfileButton, isProfilePanelButton } = require('../systems/profilePanel');
+const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -782,6 +785,21 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleAdminCommand(interaction);
         }
 
+        // ================= ECONOMY PANEL (Button-based) =================
+        if (command === 'wallet') {
+            return handleEconomyPanelCommand(interaction);
+        }
+
+        // ================= PROFILE PANEL (Button-based) =================
+        if (command === 'profile') {
+            return handleProfilePanelCommand(interaction);
+        }
+
+        // ================= LEVEL PANEL (Button-based) =================
+        if (command === 'levelpanel') {
+            return handleLevelPanelCommand(interaction);
+        }
+
 
 
         // ================= BATTLE PVP =================
@@ -1285,6 +1303,21 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleAdminButton(interaction);
         }
 
+        // --- ECONOMY PANEL BUTTONS ---
+        if (isEconomyPanelButton(interaction.customId)) {
+            return handleEconomyButton(interaction);
+        }
+
+        // --- PROFILE PANEL BUTTONS ---
+        if (isProfilePanelButton(interaction.customId)) {
+            return handleProfileButton(interaction);
+        }
+
+        // --- LEVEL PANEL BUTTONS ---
+        if (isLevelPanelButton(interaction.customId)) {
+            return handleLevelButton(interaction);
+        }
+
         // --- COINFLIP BUTTONS ---
         if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
             const parts = interaction.customId.split('_');
@@ -1534,6 +1567,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- ADMIN PANEL MODAL ---
         if (isAdminPanelModal(interaction.customId)) {
             return handleAdminModal(interaction);
+        }
+
+        // --- ECONOMY PANEL MODAL ---
+        if (isEconomyPanelModal(interaction.customId)) {
+            return handleEconomyModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }
