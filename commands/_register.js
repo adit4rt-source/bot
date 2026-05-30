@@ -107,7 +107,12 @@ const commands = [
         .addSubcommand(sub => sub.setName('leaderboard').setDescription('Lihat peringkat kontes'))
         .addSubcommand(sub => sub.setName('start').setDescription('(Admin) Mulai kontes baru').addIntegerOption(opt => opt.setName('durasi').setDescription('Durasi dalam menit (default: 60)').setRequired(false)))
         .addSubcommand(sub => sub.setName('end').setDescription('(Admin) Akhiri kontes & bagi hadiah')),
-    new SlashCommandBuilder().setName('autoharvest').setDescription('🔔 Toggle notifikasi auto-harvest')
+    new SlashCommandBuilder().setName('autoharvest').setDescription('🔔 Toggle notifikasi auto-harvest'),
+    new SlashCommandBuilder().setName('casino').setDescription('🎰 Casino Panel — Semua game judi dalam satu panel'),
+    new SlashCommandBuilder()
+        .setName('admin')
+        .setDescription('🛡️ Admin Panel — Kelola semua fitur admin')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 ];
 
 module.exports = { commands };
