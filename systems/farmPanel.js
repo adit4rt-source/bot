@@ -226,14 +226,15 @@ async function handleFarmButton(interaction) {
 
     // === SHOP ===
     if (action === 'shop') {
-        let desc = '**🌱 BIBIT** *(pilih di menu bawah)*\n';
+        let desc = '━━━━━━━━━━━━━━━━━━━━━━\n**🌱 BIBIT TANAMAN**\n';
         const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
         for (const tier of tiers) {
             const crops = FARM_CROPS.filter(c => c.tier === tier);
-            desc += `> **${tier}:** ${crops.map(c => `${c.emoji}${c.name}(🪙${c.cost})`).join(', ')}\n`;
+            desc += `\n**${tier}:**\n`;
+            crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
         }
-        desc += '\n**🧪 PUPUK**\n';
-        FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} 🪙${f.cost} | -${Math.round(f.speedBonus * 100)}%${f.yieldBonus > 0 ? ` +${Math.round(f.yieldBonus * 100)}%` : ''}\n`; });
+        desc += '\n━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK** *(masuk inventory)*\n\n';
+        FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} **${f.name}** — 🪙 ${f.cost}\n>  ┗ ⏩ -${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus * 100)}% hasil` : ''}\n`; });
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
 
         const cropsPage1 = FARM_CROPS.filter(c => ['Common', 'Uncommon', 'Rare'].includes(c.tier));
@@ -488,7 +489,10 @@ async function handleFarmSelectMenu(interaction) {
 
     // === PUPUK PLOT SELECT (apply fertilizer from inventory to specific plot) ===
     if (customId.startsWith('farm_pupukplot_')) {
-        const fertId = parts[2];
+        // customId: farm_pupukplot_{fertId}_{userId} — fertId can have underscores!
+        const withoutPrefix = customId.replace('farm_pupukplot_', '');
+        const lastUnderscore = withoutPrefix.lastIndexOf('_');
+        const fertId = withoutPrefix.substring(0, lastUnderscore);
         const plotId = parseInt(interaction.values[0]);
         const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
         if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
