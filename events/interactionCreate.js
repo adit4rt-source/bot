@@ -13,7 +13,7 @@ const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuest
 const { CALENDAR_REWARDS, getLoginCalendar } = require('../systems/calendar');
 const { spinSlot, getSlotResult, GIFT_TAX_RATE, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('../systems/slots');
 const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES } = require('../data/fish');
-const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES } = require('../data/pets');
+const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES } = require('../data/pets');
 const { ITEMS } = require('../data/items');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS } = require('../data/farming');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
@@ -1242,6 +1242,16 @@ module.exports = async function handleInteractionCreate(interaction) {
                 }
                 if (isHunting) embed.addFields({ name: '🏹 HUNTING', value: `> Kembali dalam **${Math.ceil((pet.hunting_until - Date.now()) / 60000)} menit**\n> ⚠️ Buff MATI selama hunt`, inline: false });
                 embed.addFields({ name: '🌟 Skill Buffs (Stack per Level)', value: skillDesc, inline: false });
+                // Evolution info
+                const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
+                if (evo) {
+                    const evoPetDef = PET_DATA.find(p => p.id === evo.to);
+                    const canEvolve = pet.level >= evo.level && !pet.evolved;
+                    const evoStatus = canEvolve ? '✅ **SIAP EVOLVE!** Gunakan `/evolve`' : pet.evolved ? '✅ Sudah evolve' : `🔒 Butuh **Lv.${evo.level}** (sekarang: Lv.${pet.level})`;
+                    embed.addFields({ name: '🧬 Evolution', value: `> ${evo.name}\n> → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name + ' (' + evoPetDef.tier + ')' : evo.to}\n> ${evoStatus}`, inline: false });
+                } else if (!pet.evolved) {
+                    embed.addFields({ name: '🧬 Evolution', value: '> ❌ Pet ini tidak memiliki evolusi.', inline: false });
+                }
                 return interaction.reply({ embeds: [embed] });
             }
 
