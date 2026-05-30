@@ -2,95 +2,24 @@
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 
 const commands = [
-    new SlashCommandBuilder().setName('help').setDescription('Lihat daftar lengkap command dan panduan bot ini'),
-    new SlashCommandBuilder()
-        .setName('setting')
-        .setDescription('Pengaturan Fitur Server (Khusus Admin)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('quest_channel').setDescription('Atur channel khusus untuk buka /quest').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
-        .addSubcommand(sub => sub.setName('level_channel').setDescription('Atur channel khusus notifikasi Level Up').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
-        .addSubcommand(sub => sub.setName('achievement_channel').setDescription('Atur channel notifikasi Achievement').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
-        .addSubcommand(sub => sub.setName('streak_channel').setDescription('Atur channel notifikasi Streak').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
-        .addSubcommand(sub => sub.setName('setup_notifications').setDescription('Auto-create kategori Notification + semua channel notifikasi')),
-    new SlashCommandBuilder()
-        .setName('tempvoice')
-        .setDescription('Sistem Auto Voice Channel')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('setup').setDescription('Auto-Create kategori dan text channel Control Panel Private Voice!')),
-    new SlashCommandBuilder()
-        .setName('level')
-        .setDescription('Sistem Leveling & XP')
-        .addSubcommand(sub => sub.setName('rank').setDescription('Cek rank kamu').addUserOption(opt => opt.setName('user').setDescription('Pilih user')))
-        .addSubcommand(sub => sub.setName('leaderboard').setDescription('Top global level'))
-        .addSubcommandGroup(group => group.setName('setting').setDescription('Pengaturan Admin')
-            .addSubcommand(sub => sub.setName('rolereward').setDescription('Atur hadiah level').addStringOption(opt => opt.setName('action').setDescription('Aksi').setRequired(true).addChoices({name:'Add',value:'add'},{name:'Remove',value:'remove'},{name:'List',value:'list'})).addIntegerOption(opt => opt.setName('level').setDescription('Level')).addRoleOption(opt => opt.setName('role').setDescription('Role')).addIntegerOption(opt => opt.setName('money').setDescription('Money')))
-            .addSubcommand(sub => sub.setName('xp').setDescription('Atur Min, Max, dan Cooldown XP').addStringOption(opt => opt.setName('tipe').setDescription('Sumber XP').setRequired(true).addChoices({name:'💬 Chat Message',value:'chat'},{name:'🎙️ Voice Chat',value:'voice'},{name:'😀 Reaction',value:'reaction'})).addIntegerOption(opt => opt.setName('min_xp').setDescription('Minimal XP').setRequired(true)).addIntegerOption(opt => opt.setName('max_xp').setDescription('Maksimal XP').setRequired(true)).addIntegerOption(opt => opt.setName('cooldown').setDescription('Cooldown').setRequired(true)).addStringOption(opt => opt.setName('award_to').setDescription('(Khusus Reaction)').setRequired(false).addChoices({name:'Both Users',value:'both'},{name:'Message Author',value:'author'},{name:'Reactor',value:'reactor'},{name:'None',value:'none'})))
-        ),
-    new SlashCommandBuilder()
-        .setName('money')
-        .setDescription('Sistem Ekonomi (Admin/Banker)')
-        .addSubcommandGroup(group => group.setName('manage').setDescription('Keamanan Tinggi: Sistem Kasir')
-            .addSubcommand(sub => sub.setName('atur').setDescription('(Banker) Atur uang user').addStringOption(opt => opt.setName('action').setDescription('Aksi').setRequired(true).addChoices({name:'Add',value:'add'},{name:'Take',value:'take'},{name:'Set',value:'set'})).addUserOption(opt => opt.setName('user').setDescription('User').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah').setRequired(true)))
-            .addSubcommand(sub => sub.setName('add_admin').setDescription('(OWNER) Beri izin mengelola uang').addUserOption(opt => opt.setName('user').setDescription('User yang diizinkan')).addRoleOption(opt => opt.setName('role').setDescription('Role yang diizinkan')))
-            .addSubcommand(sub => sub.setName('remove_admin').setDescription('(OWNER) Cabut izin mengelola uang').addUserOption(opt => opt.setName('user').setDescription('User yang dicabut')).addRoleOption(opt => opt.setName('role').setDescription('Role yang dicabut')))
-            .addSubcommand(sub => sub.setName('list_admin').setDescription('(OWNER) Lihat list banker aktif'))
-        ),
-    new SlashCommandBuilder().setName('shop').setDescription('Buka menu toko'),
-    new SlashCommandBuilder().setName('daily').setDescription('🎁 Klaim hadiah harian (money + EXP + random item)'),
-    new SlashCommandBuilder()
-        .setName('economy')
-        .setDescription('💰 Ekonomi & Games')
-        .addSubcommand(sub => sub.setName('balance').setDescription('Cek saldo'))
-        .addSubcommand(sub => sub.setName('coinflip').setDescription('🪙 Lempar koin (50/50)!').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah uang (Max: 2000)').setRequired(true).setMinValue(10).setMaxValue(2000)))
-        .addSubcommand(sub => sub.setName('slot').setDescription('🎰 Slot Machine (max 25x!)').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (10-1000)').setRequired(true).setMinValue(10).setMaxValue(1000)))
-        .addSubcommand(sub => sub.setName('roulette').setDescription('🎯 Roulette - Tebak warna/angka!')
-            .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (10-2000)').setRequired(true).setMinValue(10).setMaxValue(2000))
-            .addStringOption(opt => opt.setName('pilihan').setDescription('Merah/Hitam/Hijau/Ganjil/Genap/Angka(0-36)').setRequired(true)))
-        .addSubcommand(sub => sub.setName('gift').setDescription('🎁 Kirim money ke player lain').addUserOption(opt => opt.setName('user').setDescription('Siapa yang mau dikasih?').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (Max: 10.000)').setRequired(true).setMinValue(1).setMaxValue(10000)))
-        .addSubcommand(sub => sub.setName('redeem').setDescription('Klaim kode promo').addStringOption(opt => opt.setName('kode').setDescription('Masukkan kode voucher').setRequired(true)))
-        .addSubcommand(sub => sub.setName('leaderboard').setDescription('🏆 Leaderboard Global').addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori').setRequired(false).addChoices({name:'💰 Money',value:'money'},{name:'📈 Level',value:'level'},{name:'🎣 Fishing',value:'fish'},{name:'🎣 Ikan Terberat',value:'fish_weight'},{name:'🌾 Farming',value:'farm'},{name:'🐾 Pet Level',value:'pet'},{name:'🔥 Streak',value:'streak'},{name:'🏆 Overall',value:'overall'}))),
-    new SlashCommandBuilder()
-        .setName('admin_shop')
-        .setDescription('Manajemen Toko (Khusus Admin)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('add_role').setDescription('Jual Role').addRoleOption(opt => opt.setName('role').setDescription('Role').setRequired(true)).addIntegerOption(opt => opt.setName('harga').setDescription('Harga').setRequired(true)))
-        .addSubcommand(sub => sub.setName('add_item').setDescription('Jual Barang Virtual').addStringOption(opt => opt.setName('nama').setDescription('Nama Barang').setRequired(true)).addIntegerOption(opt => opt.setName('harga').setDescription('Harga').setRequired(true)).addStringOption(opt => opt.setName('isi').setDescription('Isi text ke DM').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah Stok').setRequired(false)))
-        .addSubcommand(sub => sub.setName('voucher_add').setDescription('Buat kode promo').addStringOption(opt => opt.setName('kode').setDescription('Ketik kode').setRequired(true)).addIntegerOption(opt => opt.setName('reward').setDescription('Hadiah money').setRequired(true)).addIntegerOption(opt => opt.setName('limit').setDescription('Batas klaim').setRequired(true)))
-        .addSubcommand(sub => sub.setName('set_testimoni').setDescription('Atur channel testimoni').addChannelOption(opt => opt.setName('channel').setDescription('Pilih channel').setRequired(true)))
-        .addSubcommand(sub => sub.setName('history').setDescription('Lihat log transaksi').addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah history').setRequired(false)))
-        .addSubcommand(sub => sub.setName('set_custom_role').setDescription('Atur harga tiket Custom Role').addIntegerOption(opt => opt.setName('harga').setDescription('Harga (Ketik 0 untuk mematikan)').setRequired(true))),
-    new SlashCommandBuilder()
-        .setName('me')
-        .setDescription('📋 Profil, Achievement, Inventory')
-        .addSubcommand(sub => sub.setName('profile').setDescription('Lihat kartu profil').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
-        .addSubcommand(sub => sub.setName('achievement').setDescription('Lihat koleksi badge').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(false)))
-        .addSubcommand(sub => sub.setName('inventory').setDescription('🎒 Lihat item yang kamu punya'))
-        .addSubcommand(sub => sub.setName('use').setDescription('Gunakan item dari inventory').addStringOption(opt => opt.setName('item').setDescription('Nama item yang mau dipakai').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('streak').setDescription('Cek info streak'))
-        .addSubcommand(sub => sub.setName('restore').setDescription('Pulihkan streak yang putus (Max 3x sebulan)')),
-    new SlashCommandBuilder()
-        .setName('quest')
-        .setDescription('📜 Quest Panel — Misi Harian & Mingguan'),
-    new SlashCommandBuilder()
-        .setName('farm')
-        .setDescription('🌾 Farm Panel — Kelola kebun'),
-    new SlashCommandBuilder()
-        .setName('pet')
-        .setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
-    new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP').addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true)).addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa taruhan)').setRequired(false)),
-    new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
-    new SlashCommandBuilder()
-        .setName('fishing')
-        .setDescription('🎣 Fishing Panel — Kelola memancing'),
-    new SlashCommandBuilder()
-        .setName('streak')
-        .setDescription('Sistem Api Harian (Admin)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('setting').setDescription('Atur fitur streak').addStringOption(opt => opt.setName('status').setDescription('Nyalakan/Matikan?').setRequired(true).addChoices({name:'Nyala (Enable)',value:'true'},{name:'Mati (Disable)',value:'false'})).addStringOption(opt => opt.setName('autonick').setDescription('Auto ganti nickname?').setRequired(true).addChoices({name:'Ya',value:'true'},{name:'Tidak',value:'false'})).addIntegerOption(opt => opt.setName('min_hari').setDescription('Min hari untuk emoji').setRequired(true)).addStringOption(opt => opt.setName('emoji').setDescription('Emoji (Default: 🔥)').setRequired(false)))
-        .addSubcommand(sub => sub.setName('admin_set').setDescription('Atur jumlah streak user').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah streak baru').setRequired(true)))
-        .addSubcommand(sub => sub.setName('admin_reset').setDescription('Reset streak user ke 0').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(true)))
-        .addSubcommand(sub => sub.setName('admin_restore').setDescription('Pulihkan streak user tanpa batasan').addUserOption(opt => opt.setName('user').setDescription('Pilih user').setRequired(true))),
-    new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama bot'),
+    // ================= PANEL COMMANDS (Player) =================
+    new SlashCommandBuilder().setName('pet').setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
+    new SlashCommandBuilder().setName('fishing').setDescription('🎣 Fishing Panel — Kelola memancing'),
+    new SlashCommandBuilder().setName('farm').setDescription('🌾 Farm Panel — Kelola kebun'),
+    new SlashCommandBuilder().setName('quest').setDescription('📜 Quest Panel — Misi Harian & Mingguan'),
+    new SlashCommandBuilder().setName('casino').setDescription('🎰 Casino Panel — Coinflip, Slot, Roulette'),
+    new SlashCommandBuilder().setName('wallet').setDescription('💰 Economy Panel — Saldo, Gift, Redeem, Leaderboard'),
+    new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, Achievement, Inventory, Stats'),
+    new SlashCommandBuilder().setName('levelpanel').setDescription('🌟 Level Panel — Rank, Leaderboard, Rewards'),
+
+    // ================= QUICK ACTION COMMANDS =================
+    new SlashCommandBuilder().setName('fish').setDescription('🎣 Lempar pancing (quick cast)'),
+    new SlashCommandBuilder().setName('daily').setDescription('🎁 Klaim hadiah harian'),
+    new SlashCommandBuilder().setName('calendar').setDescription('📅 Daily Login Calendar'),
+    new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP')
+        .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
+        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
+    new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
     new SlashCommandBuilder()
         .setName('trade')
         .setDescription('🔄 Trading System')
@@ -98,24 +27,16 @@ const commands = [
         .addSubcommand(sub => sub.setName('accept').setDescription('Terima trade').addIntegerOption(opt => opt.setName('id').setDescription('Trade ID').setRequired(true)))
         .addSubcommand(sub => sub.setName('reject').setDescription('Tolak trade').addIntegerOption(opt => opt.setName('id').setDescription('Trade ID').setRequired(true)))
         .addSubcommand(sub => sub.setName('list').setDescription('Lihat trade pending')),
-    new SlashCommandBuilder().setName('evolve').setDescription('🧬 Evolve pet ke bentuk yang lebih kuat'),
-    new SlashCommandBuilder().setName('calendar').setDescription('📅 Daily Login Calendar'),
-    new SlashCommandBuilder()
-        .setName('contest')
-        .setDescription('🏆 Fishing Contest')
-        .addSubcommand(sub => sub.setName('status').setDescription('Lihat status kontes'))
-        .addSubcommand(sub => sub.setName('leaderboard').setDescription('Lihat peringkat kontes'))
-        .addSubcommand(sub => sub.setName('start').setDescription('(Admin) Mulai kontes baru').addIntegerOption(opt => opt.setName('durasi').setDescription('Durasi dalam menit (default: 60)').setRequired(false)))
-        .addSubcommand(sub => sub.setName('end').setDescription('(Admin) Akhiri kontes & bagi hadiah')),
-    new SlashCommandBuilder().setName('autoharvest').setDescription('🔔 Toggle notifikasi auto-harvest'),
-    new SlashCommandBuilder().setName('casino').setDescription('🎰 Casino Panel — Semua game judi dalam satu panel'),
+
+    // ================= UTILITY =================
+    new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
+    new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
+
+    // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
         .setName('admin')
         .setDescription('🛡️ Admin Panel — Kelola semua fitur admin')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-    new SlashCommandBuilder().setName('wallet').setDescription('💰 Economy Panel — Kelola ekonomi & transaksi'),
-    new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, achievement, inventory, streak'),
-    new SlashCommandBuilder().setName('levelpanel').setDescription('🌟 Level Panel — Rank, leaderboard, rewards')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 ];
 
 module.exports = { commands };
