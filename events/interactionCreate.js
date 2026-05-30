@@ -342,10 +342,43 @@ module.exports = async function handleInteractionCreate(interaction) {
                     const fishStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_fish_caught'").get(guildId, u.userId);
                     const farmStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_harvests'").get(guildId, u.userId);
                     const streakData = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
-                    const score = (u.level * 100) + Math.floor(u.balance / 10) + ((fishStat ? fishStat.stat_value : 0) * 5) + ((farmStat ? farmStat.stat_value : 0) * 3) + ((streakData ? streakData.count : 0) * 10);
-                    return { ...u, score, fish: fishStat ? fishStat.stat_value : 0, farm: farmStat ? farmStat.stat_value : 0, streak: streakData ? streakData.count : 0 };
+                    const petData = db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
+                    const dungeonClears = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'dungeon_clears'").get(guildId, u.userId);
+                    const bossKills = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'boss_kills'").get(guildId, u.userId);
+                    const pvpWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'pvp_wins'").get(guildId, u.userId);
+                    const craftStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_crafts'").get(guildId, u.userId);
+                    const achieveCount = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
+                    const slotWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'slot_wins'").get(guildId, u.userId);
+                    const cfWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'coinflip_wins'").get(guildId, u.userId);
+
+                    const fish = fishStat ? fishStat.stat_value : 0;
+                    const farm = farmStat ? farmStat.stat_value : 0;
+                    const streak = streakData ? streakData.count : 0;
+                    const petLv = petData ? petData.level : 0;
+                    const dungeon = dungeonClears ? dungeonClears.stat_value : 0;
+                    const boss = bossKills ? bossKills.stat_value : 0;
+                    const pvp = pvpWins ? pvpWins.stat_value : 0;
+                    const craft = craftStat ? craftStat.stat_value : 0;
+                    const badges = achieveCount ? achieveCount.c : 0;
+                    const gambling = (slotWins ? slotWins.stat_value : 0) + (cfWins ? cfWins.stat_value : 0);
+
+                    // Scoring formula (weighted):
+                    const score = (u.level * 150)           // Level contribution (paling penting)
+                        + Math.floor(u.balance / 20)       // Wealth (diminishing)
+                        + (fish * 3)                       // Fishing activity
+                        + (farm * 4)                       // Farming activity
+                        + (craft * 8)                      // Crafting (harder)
+                        + (streak * 12)                    // Streak dedication
+                        + (petLv * 5)                      // Pet progression
+                        + (dungeon * 6)                    // Dungeon grinding
+                        + (boss * 15)                      // Boss kills (harder)
+                        + (pvp * 10)                       // PvP skill
+                        + (badges * 20)                    // Achievement collecting
+                        + (gambling * 2);                  // Gambling luck
+
+                    return { ...u, score, fish, farm, streak, petLv, dungeon, boss, pvp, badges };
                 }).sort((a, b) => b.score - a.score).slice(0, 10);
-                scored.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n> Lv.${u.level} | 🪙${u.balance.toLocaleString('id-ID')} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak}\n`; });
+                scored.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n> Lv.${u.level} | 🪙${u.balance.toLocaleString('id-ID')} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.dungeon+u.boss+u.pvp} | 🏆${u.badges}\n`; });
             }
             if (!desc) desc = '*Belum ada data.*';
             return interaction.reply({ embeds: [new EmbedBuilder().setTitle(title).setColor('#FFD700').setDescription(desc).setFooter({ text: '/economy leaderboard <kategori> untuk filter | Overall = combined score' }).setTimestamp()] });
@@ -1862,11 +1895,23 @@ module.exports = async function handleInteractionCreate(interaction) {
             const cropId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
             const crop = FARM_CROPS.find(c => c.id === cropId);
             if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-            if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(crop.cost, guildId, interaction.user.id);
-            addSeed(guildId, interaction.user.id, cropId, 1);
+            // Beli 5x sekaligus supaya tidak capek
+            const qty = 5;
+            const totalCost = crop.cost * qty;
+            if (userData.balance < totalCost) {
+                // Coba beli sebanyak yang mampu (min 1)
+                const affordable = Math.floor(userData.balance / crop.cost);
+                if (affordable <= 0) return interaction.reply({ content: `❌ Saldo kurang! Butuh minimal 🪙 **${crop.cost}** untuk 1 bibit.`, ephemeral: true });
+                const cost = crop.cost * affordable;
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(cost, guildId, interaction.user.id);
+                addSeed(guildId, interaction.user.id, cropId, affordable);
+                const owned = getSeedCount(guildId, interaction.user.id, cropId);
+                return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${affordable}**! (saldo cuma cukup ${affordable})\n> 💰 Total harga: 🪙 **${cost.toLocaleString('id-ID')}**\n> 📦 Total bibit: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+            }
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
+            addSeed(guildId, interaction.user.id, cropId, qty);
             const owned = getSeedCount(guildId, interaction.user.id, cropId);
-            return interaction.reply({ content: `✅ Membeli bibit ${crop.emoji} **${crop.name}**! Masuk ke inventory.\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**! Masuk ke inventory.\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
         }
         if (interaction.customId === 'farm_buy_fertilizer') {
             const fertId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
@@ -1888,11 +1933,14 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const cropId = selected.substring(5);
                 const crop = FARM_CROPS.find(c => c.id === cropId);
                 if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-                if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crop.cost}**`, ephemeral: true });
-                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(crop.cost, guildId, interaction.user.id);
-                addSeed(guildId, interaction.user.id, cropId, 1);
+                if (userData.balance < crop.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh minimal 🪙 **${crop.cost}** untuk 1 bibit.`, ephemeral: true });
+                const qty = 5;
+                const affordable = Math.min(qty, Math.floor(userData.balance / crop.cost));
+                const totalCost = crop.cost * affordable;
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
+                addSeed(guildId, interaction.user.id, cropId, affordable);
                 const owned = getSeedCount(guildId, interaction.user.id, cropId);
-                return interaction.reply({ content: `✅ Membeli bibit ${crop.emoji} **${crop.name}**! Masuk ke inventory.\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+                return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${affordable}**!\n> 💰 Harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit: **${owned}**\n> 💡 Tanam: \`/farm plant\`` });
             }
             if (selected.startsWith('fert_')) {
                 const fertId = selected.substring(5);
