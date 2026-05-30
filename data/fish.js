@@ -362,16 +362,16 @@ const BAIT_TYPES = [
 ];
 
 const ROD_TYPES = [
-    { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 15, rareBonus: 0 },
-    { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 2000, cooldown: 13, rareBonus: 3 },
-    { id: 'carbon', name: 'Joran Carbon', emoji: '⚡', price: 8000, cooldown: 11, rareBonus: 7 },
-    { id: 'titanium', name: 'Joran Titanium', emoji: '🔩', price: 18000, cooldown: 10, rareBonus: 9 },
-    { id: 'pro', name: 'Joran Pro', emoji: '🏆', price: 35000, cooldown: 8, rareBonus: 12 },
-    { id: 'enchanted', name: 'Joran Enchanted', emoji: '✨', price: 60000, cooldown: 7, rareBonus: 15 },
-    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '🔱', price: 100000, cooldown: 6, rareBonus: 18 },
-    { id: 'celestial', name: 'Joran Celestial', emoji: '🌟', price: 150000, cooldown: 5, rareBonus: 21 },
-    { id: 'divine_rod', name: 'Joran Dewa', emoji: '👑', price: 250000, cooldown: 4, rareBonus: 25 },
-    { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 500000, cooldown: 3, rareBonus: 30 }
+    { id: 'basic', name: 'Joran Bambu', emoji: '<:Joran_Bambu:1510378860309385247>', price: 0, cooldown: 15, rareBonus: 0 },
+    { id: 'fiber', name: 'Joran Fiber', emoji: '<:joran_fiber:1510379464083636384>', price: 2000, cooldown: 13, rareBonus: 3 },
+    { id: 'carbon', name: 'Joran Carbon', emoji: '<:Joran_Carbon:1510379531125522443>', price: 8000, cooldown: 11, rareBonus: 7 },
+    { id: 'titanium', name: 'Joran Titanium', emoji: '<:Joran_Titanium:1510379624323092632>', price: 18000, cooldown: 10, rareBonus: 9 },
+    { id: 'pro', name: 'Joran Pro', emoji: '<:Joran_Pro:1510379862571876563>', price: 35000, cooldown: 8, rareBonus: 12 },
+    { id: 'enchanted', name: 'Joran Enchanted', emoji: '<:Joran_Enchanted:1510380093577625791>', price: 60000, cooldown: 7, rareBonus: 15 },
+    { id: 'mythic_rod', name: 'Joran Mitik', emoji: '<:Joran_Mitik:1510380462152093766>', price: 100000, cooldown: 6, rareBonus: 18 },
+    { id: 'celestial', name: 'Joran Celestial', emoji: '<:Joran_Celestial:1510381090186203195>', price: 150000, cooldown: 5, rareBonus: 21 },
+    { id: 'divine_rod', name: 'Joran Dewa', emoji: '<:Joran_Dewa:1510382273852342422>', price: 250000, cooldown: 4, rareBonus: 25 },
+    { id: 'void_rod', name: 'Joran Void', emoji: '<:Joran_Void:1510382639373095144>', price: 500000, cooldown: 3, rareBonus: 30 }
 ];
 
 module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES };
