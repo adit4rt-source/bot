@@ -1202,10 +1202,17 @@ module.exports = async function handleInteractionCreate(interaction) {
                 FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} — 🪙 ${f.cost} | ⏩ -${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus*100)}% hasil` : ''}\n`; });
                 if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
                 const components = [];
-                // Seed buy menu (bibit masuk inventory)
-                const seedMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_seed').setPlaceholder('🌱 Beli Bibit (→ inventory)...').setMinValues(1).setMaxValues(1);
-                FARM_CROPS.slice(0, 25).forEach(c => seedMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
-                components.push(new ActionRowBuilder().addComponents(seedMenu));
+                // Seed buy menus (split into 2 because Discord max 25 options per menu)
+                const cropsPage1 = FARM_CROPS.filter(c => ['Common','Uncommon','Rare'].includes(c.tier));
+                const cropsPage2 = FARM_CROPS.filter(c => ['Epic','Legendary'].includes(c.tier));
+                const seedMenu1 = new StringSelectMenuBuilder().setCustomId('farm_buy_seed').setPlaceholder('🌱 Bibit Common/Uncommon/Rare...').setMinValues(1).setMaxValues(1);
+                cropsPage1.slice(0, 25).forEach(c => seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
+                components.push(new ActionRowBuilder().addComponents(seedMenu1));
+                if (cropsPage2.length > 0) {
+                    const seedMenu2 = new StringSelectMenuBuilder().setCustomId('farm_buy_seed2').setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
+                    cropsPage2.slice(0, 25).forEach(c => seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
+                    components.push(new ActionRowBuilder().addComponents(seedMenu2));
+                }
                 // Fertilizer buy menu
                 const fertMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_fertilizer').setPlaceholder('🧪 Beli Pupuk...').addOptions(
                     ...FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(f.id).setDescription(`-${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? `, +${Math.round(f.yieldBonus*100)}% hasil` : ''}`))
@@ -1973,7 +1980,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             addItem(guildId, interaction.user.id, itemId);
             return interaction.reply({ content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}**!\n> Cek di \`/me inventory\` — Gunakan dengan \`/me use\`` });
         }
-        if (interaction.customId === 'farm_buy_seed') {
+        if (interaction.customId === 'farm_buy_seed' || interaction.customId === 'farm_buy_seed2') {
             const cropId = interaction.values[0];
             const crop = FARM_CROPS.find(c => c.id === cropId);
             if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
