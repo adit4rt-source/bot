@@ -406,7 +406,39 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply({ embeds: [embed] });
         }
 
-        if (command === 'economy' && subCmd === 'coinflip') { if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true }); const taruhan = interaction.options.getInteger('taruhan'); if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true }); activeCoinflips.add(interaction.user.id); db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_coinflips'); await interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setDescription(`🪙 **Melempar koin...**\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**`)] }); setTimeout(async () => { activeCoinflips.delete(interaction.user.id); if (Math.random() < 0.5) { db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(taruhan * 2, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'coinflip_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); const freshData = getOrCreateUser(guildId, interaction.user.id); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🎉 MENANG!').setDescription(`Dapat 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } else { await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' }); const freshData = getOrCreateUser(guildId, interaction.user.id); interaction.editReply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('💀 KALAH!').setDescription(`Hilang 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] }).catch(()=>{}); } }, 7000); return; }
+        if (command === 'economy' && subCmd === 'coinflip') {
+            if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true });
+            const taruhan = interaction.options.getInteger('taruhan');
+            if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
+            activeCoinflips.add(interaction.user.id);
+            addComboFeature(guildId, interaction.user.id, 'gambling');
+            // Deduct balance atomically
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_coinflips');
+            
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`coinflip_head_${interaction.user.id}_${taruhan}`).setLabel('🪙 Head').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`coinflip_tail_${interaction.user.id}_${taruhan}`).setLabel('🦅 Tail').setStyle(ButtonStyle.Danger)
+            );
+            const embed = new EmbedBuilder()
+                .setColor('#F1C40F')
+                .setTitle('🪙 Coinflip — Pilih Sisi!')
+                .setDescription(`> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n\n> Pilih **Head** atau **Tail** dalam 30 detik!`)
+                .setFooter({ text: `${interaction.user.username} | Klik tombol di bawah` });
+            await interaction.reply({ embeds: [embed], components: [row] });
+            
+            // Auto-expire after 30s
+            setTimeout(async () => {
+                if (activeCoinflips.has(interaction.user.id)) {
+                    activeCoinflips.delete(interaction.user.id);
+                    // Refund
+                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, interaction.user.id);
+                    const expiredEmbed = new EmbedBuilder().setColor('#95A5A6').setTitle('⏰ Coinflip Expired').setDescription(`> Kamu tidak memilih dalam 30 detik.\n> 🪙 **${taruhan.toLocaleString('id-ID')}** dikembalikan.`);
+                    interaction.editReply({ embeds: [expiredEmbed], components: [] }).catch(()=>{});
+                }
+            }, 30000);
+            return;
+        }
 
         // ================= SLOT MACHINE =================
         if (command === 'economy' && subCmd === 'slot') {
@@ -416,32 +448,138 @@ module.exports = async function handleInteractionCreate(interaction) {
             addComboFeature(guildId, interaction.user.id, 'gambling');
             const bet = interaction.options.getInteger('taruhan');
             if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-            userData.balance -= bet;
-            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            
+            // Deduct balance atomically
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, interaction.user.id);
             incrementUserStat(guildId, interaction.user.id, 'total_slot_spins');
-            const reels = spinSlot();
+            
+            // Show spinning animation first
+            const spinEmbed = new EmbedBuilder()
+                .setColor('#F1C40F')
+                .setTitle('🎰 Slot Machine — Spinning...')
+                .setDescription(`> 🎰 **SLOT MACHINE**\n>\n> ╔═══════════════════╗\n> ║   ❓  ┃  ❓  ┃  ❓   ║\n> ╚═══════════════════╝\n>\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**\n> 🎲 *Memutar gulungan...*`)
+                .setFooter({ text: `${interaction.user.username} | Slot Machine` });
+            await interaction.reply({ embeds: [spinEmbed] });
+            
+            // Generate reels
+            let reels = spinSlot();
+            
+            // Lucky Spin Token check
+            const luckySpinActive = getUserStat(guildId, interaction.user.id, 'lucky_spin_active');
+            if (luckySpinActive > 0) {
+                // Force reel[1] = reel[0] to guarantee at least 2x match
+                reels[1] = reels[0];
+                incrementUserStat(guildId, interaction.user.id, 'lucky_spin_active', -1);
+            }
+            
             const result = getSlotResult(reels, bet);
-            const slotDisplay = `> 🎰 **Slot Machine**\n>\n> ┌─────────────────┐\n> │  ${reels[0].emoji}  ┃  ${reels[1].emoji}  ┃  ${reels[2].emoji}  │\n> └─────────────────┘`;
-            let embed;
-            if (result.jackpot && reels[0].id === 'seven') {
-                embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
-                incrementUserStat(guildId, interaction.user.id, 'slot_jackpot_7_count');
-            } else if (result.jackpot) {
-                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉`);
-            } else if (result.win) {
-                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}**`);
-            } else {
-                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n> 😔 Tidak ada yang cocok...\n\n> Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
+            
+            setTimeout(async () => {
+                const slotDisplay = `> 🎰 **SLOT MACHINE**\n>\n> ╔═══════════════════╗\n> ║   ${reels[0].emoji}  ┃  ${reels[1].emoji}  ┃  ${reels[2].emoji}   ║\n> ╚═══════════════════╝`;
+                let embed;
+                const luckyTag = luckySpinActive > 0 ? '\n> 🍀 *Lucky Spin Token digunakan!*' : '';
+                
+                if (result.jackpot && reels[0].id === 'seven') {
+                    embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
+                    incrementUserStat(guildId, interaction.user.id, 'slot_jackpot_7_count');
+                } else if (result.jackpot) {
+                    embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉`);
+                } else if (result.win) {
+                    embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ✅ Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}**`);
+                } else {
+                    embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n> 😔 Tidak ada yang cocok...${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ❌ Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
+                }
+                
+                if (result.win) {
+                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(result.payout, guildId, interaction.user.id);
+                    incrementUserStat(guildId, interaction.user.id, 'slot_wins');
+                    incrementUserStat(guildId, interaction.user.id, 'slot_total_winnings', result.payout);
+                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'slot', jackpot: result.jackpot, jackpot7: result.jackpot && reels[0].id === 'seven' });
+                }
+                const freshData = getOrCreateUser(guildId, interaction.user.id);
+                embed.setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} money | ${interaction.user.username}` });
+                interaction.editReply({ embeds: [embed] }).catch(()=>{});
+            }, 2000);
+            return;
+        }
+
+        // ================= ROULETTE =================
+        if (command === 'economy' && subCmd === 'roulette') {
+            const rouletteCdKey = `roulette_${guildId}_${interaction.user.id}`;
+            if (fishCooldowns.has(rouletteCdKey) && Date.now() < fishCooldowns.get(rouletteCdKey)) { const remaining = Math.ceil((fishCooldowns.get(rouletteCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Meja roulette masih berputar! Tunggu **${remaining} detik**.`, ephemeral: true }); }
+            fishCooldowns.set(rouletteCdKey, Date.now() + 5000);
+            addComboFeature(guildId, interaction.user.id, 'gambling');
+            
+            const bet = interaction.options.getInteger('taruhan');
+            const pilihan = interaction.options.getString('pilihan').toLowerCase().trim();
+            if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
+            
+            // Validate choice
+            const RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+            const validChoices = ['merah', 'hitam', 'hijau', 'ganjil', 'genap'];
+            const numChoice = parseInt(pilihan);
+            const isNumber = !isNaN(numChoice) && numChoice >= 0 && numChoice <= 36;
+            if (!validChoices.includes(pilihan) && !isNumber) {
+                return interaction.reply({ content: '❌ Pilihan tidak valid! Gunakan: `Merah`, `Hitam`, `Hijau`, `Ganjil`, `Genap`, atau angka `0-36`', ephemeral: true });
             }
-            if (result.win) {
-                userData.balance += result.payout;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                incrementUserStat(guildId, interaction.user.id, 'slot_wins');
-                incrementUserStat(guildId, interaction.user.id, 'slot_total_winnings', result.payout);
-                await checkAchievements(interaction.guild, interaction.user.id, { type: 'slot', jackpot: result.jackpot, jackpot7: result.jackpot && reels[0].id === 'seven' });
-            }
-            embed.setFooter({ text: `Saldo: ${userData.balance.toLocaleString('id-ID')} money` });
-            return interaction.reply({ embeds: [embed] });
+            
+            // Deduct balance atomically
+            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_roulette_spins');
+            
+            // Show spinning animation
+            const spinEmbed = new EmbedBuilder()
+                .setColor('#8B0000')
+                .setTitle('🎯 Roulette — Spinning...')
+                .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │     ❓      │\n> │  *berputar...*  │\n> └─────────────┘\n>\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}**`)
+                .setFooter({ text: `${interaction.user.username} | Roulette` });
+            await interaction.reply({ embeds: [spinEmbed] });
+            
+            setTimeout(async () => {
+                // Determine result
+                const resultNumber = Math.floor(Math.random() * 37); // 0-36
+                let resultColor, colorEmoji, colorName;
+                if (resultNumber === 0) { resultColor = 'hijau'; colorEmoji = '🟢'; colorName = 'Hijau'; }
+                else if (RED_NUMBERS.includes(resultNumber)) { resultColor = 'merah'; colorEmoji = '🔴'; colorName = 'Merah'; }
+                else { resultColor = 'hitam'; colorEmoji = '⚫'; colorName = 'Hitam'; }
+                
+                const isOdd = resultNumber > 0 && resultNumber % 2 !== 0;
+                const isEven = resultNumber > 0 && resultNumber % 2 === 0;
+                
+                // Check win condition
+                let won = false;
+                let multiplier = 0;
+                if (isNumber && numChoice === resultNumber) { won = true; multiplier = 36; }
+                else if (pilihan === 'merah' && resultColor === 'merah') { won = true; multiplier = 2; }
+                else if (pilihan === 'hitam' && resultColor === 'hitam') { won = true; multiplier = 2; }
+                else if (pilihan === 'hijau' && resultColor === 'hijau') { won = true; multiplier = 14; }
+                else if (pilihan === 'ganjil' && isOdd) { won = true; multiplier = 2; }
+                else if (pilihan === 'genap' && isEven) { won = true; multiplier = 2; }
+                
+                const payout = won ? bet * multiplier : 0;
+                let embed;
+                
+                if (won) {
+                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(payout, guildId, interaction.user.id);
+                    incrementUserStat(guildId, interaction.user.id, 'roulette_wins');
+                    incrementUserStat(guildId, interaction.user.id, 'roulette_total_winnings', payout);
+                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'roulette' });
+                    embed = new EmbedBuilder()
+                        .setColor(resultColor === 'merah' ? '#E74C3C' : resultColor === 'hijau' ? '#2ECC71' : '#2C2F33')
+                        .setTitle('🎯🎉 ROULETTE — MENANG!')
+                        .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │  ${colorEmoji} **${resultNumber}**  │\n> │  ${colorName}  │\n> └─────────────┘\n\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}** ✅\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${payout.toLocaleString('id-ID')}** (${multiplier}x)`);
+                } else {
+                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'roulette' });
+                    embed = new EmbedBuilder()
+                        .setColor('#95A5A6')
+                        .setTitle('🎯 ROULETTE — Kalah!')
+                        .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │  ${colorEmoji} **${resultNumber}**  │\n> │  ${colorName}  │\n> └─────────────┘\n\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}** ❌\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 😔 Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
+                }
+                const freshData = getOrCreateUser(guildId, interaction.user.id);
+                embed.setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} money | ${interaction.user.username}` });
+                interaction.editReply({ embeds: [embed] }).catch(()=>{});
+            }, 2500);
+            return;
         }
 
         // ================= GIFT / TRANSFER =================
@@ -1818,6 +1956,70 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- COINFLIP BUTTONS ---
+        if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
+            const parts = interaction.customId.split('_');
+            const choice = parts[1]; // 'head' or 'tail'
+            const targetUserId = parts[2];
+            const taruhan = parseInt(parts[3]);
+            
+            // Only the original user can click
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan coinflip kamu!', ephemeral: true });
+            if (!activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '❌ Coinflip ini sudah expired!', ephemeral: true });
+            
+            activeCoinflips.delete(interaction.user.id);
+            
+            // Disable buttons
+            await interaction.update({ components: [] });
+            
+            // Animation stage 1
+            const anim1 = new EmbedBuilder().setColor('#F1C40F').setTitle('🪙 Coinflip — Melempar...').setDescription(`> 🪙 *Koin melayang...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+            await interaction.editReply({ embeds: [anim1], components: [] });
+            
+            setTimeout(async () => {
+                // Animation stage 2
+                const anim2 = new EmbedBuilder().setColor('#F39C12').setTitle('🪙 Coinflip — Berputar...').setDescription(`> 🌀 *Koin berputar di udara...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+                await interaction.editReply({ embeds: [anim2], components: [] }).catch(()=>{});
+                
+                setTimeout(async () => {
+                    // Animation stage 3
+                    const anim3 = new EmbedBuilder().setColor('#E67E22').setTitle('🪙 Coinflip — Mendarat...').setDescription(`> ✨ *Koin hampir mendarat...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+                    await interaction.editReply({ embeds: [anim3], components: [] }).catch(()=>{});
+                    
+                    setTimeout(async () => {
+                        // Final result
+                        const coinResult = Math.random() < 0.5 ? 'head' : 'tail';
+                        const won = choice === coinResult;
+                        const resultEmoji = coinResult === 'head' ? '🪙' : '🦅';
+                        const resultName = coinResult === 'head' ? 'HEAD' : 'TAIL';
+                        
+                        if (won) {
+                            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(taruhan * 2, guildId, interaction.user.id);
+                            incrementUserStat(guildId, interaction.user.id, 'coinflip_wins');
+                            await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' });
+                            const freshData = getOrCreateUser(guildId, interaction.user.id);
+                            const winEmbed = new EmbedBuilder()
+                                .setColor('#2ECC71')
+                                .setTitle(`${resultEmoji} ${resultName} — MENANG! 🎉`)
+                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ✅\n\n> 💰 Dapat: 🪙 **+${taruhan.toLocaleString('id-ID')}**\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
+                                .setFooter({ text: interaction.user.username });
+                            interaction.editReply({ embeds: [winEmbed], components: [] }).catch(()=>{});
+                        } else {
+                            await checkAchievements(interaction.guild, interaction.user.id, { type: 'coinflip' });
+                            const freshData = getOrCreateUser(guildId, interaction.user.id);
+                            const loseEmbed = new EmbedBuilder()
+                                .setColor('#E74C3C')
+                                .setTitle(`${resultEmoji} ${resultName} — KALAH! 💀`)
+                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ❌\n\n> 💸 Hilang: 🪙 **-${taruhan.toLocaleString('id-ID')}**\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
+                                .setFooter({ text: interaction.user.username });
+                            interaction.editReply({ embeds: [loseEmbed], components: [] }).catch(()=>{});
+                        }
+                    }, 1000);
+                }, 1000);
+            }, 1000);
+            return;
+        }
+
         // --- FISH COLLECTION BUTTONS ---
         if (interaction.customId.startsWith('fcol_')) {
             const parts = interaction.customId.split('_');

@@ -41,8 +41,11 @@ const commands = [
         .setName('economy')
         .setDescription('💰 Ekonomi & Games')
         .addSubcommand(sub => sub.setName('balance').setDescription('Cek saldo'))
-        .addSubcommand(sub => sub.setName('coinflip').setDescription('Lempar koin (50/50)!').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah uang (Max: 500)').setRequired(true).setMinValue(10).setMaxValue(500)))
+        .addSubcommand(sub => sub.setName('coinflip').setDescription('🪙 Lempar koin (50/50)!').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah uang (Max: 2000)').setRequired(true).setMinValue(10).setMaxValue(2000)))
         .addSubcommand(sub => sub.setName('slot').setDescription('🎰 Slot Machine (max 25x!)').addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (10-1000)').setRequired(true).setMinValue(10).setMaxValue(1000)))
+        .addSubcommand(sub => sub.setName('roulette').setDescription('🎯 Roulette - Tebak warna/angka!')
+            .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (10-2000)').setRequired(true).setMinValue(10).setMaxValue(2000))
+            .addStringOption(opt => opt.setName('pilihan').setDescription('Merah/Hitam/Hijau/Ganjil/Genap/Angka(0-36)').setRequired(true)))
         .addSubcommand(sub => sub.setName('gift').setDescription('🎁 Kirim money ke player lain').addUserOption(opt => opt.setName('user').setDescription('Siapa yang mau dikasih?').setRequired(true)).addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (Max: 10.000)').setRequired(true).setMinValue(1).setMaxValue(10000)))
         .addSubcommand(sub => sub.setName('redeem').setDescription('Klaim kode promo').addStringOption(opt => opt.setName('kode').setDescription('Masukkan kode voucher').setRequired(true)))
         .addSubcommand(sub => sub.setName('leaderboard').setDescription('🏆 Leaderboard Global').addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori').setRequired(false).addChoices({name:'💰 Money',value:'money'},{name:'📈 Level',value:'level'},{name:'🎣 Fishing',value:'fish'},{name:'🎣 Ikan Terberat',value:'fish_weight'},{name:'🌾 Farming',value:'farm'},{name:'🐾 Pet Level',value:'pet'},{name:'🔥 Streak',value:'streak'},{name:'🏆 Overall',value:'overall'}))),
