@@ -59,6 +59,13 @@ module.exports = async function handleInteractionCreate(interaction) {
         const cdKey = `${interaction.user.id}_${command}`;
         if (slashCooldowns.has(cdKey) && Date.now() < slashCooldowns.get(cdKey)) return interaction.reply({ content: `⏳ Sabar... Tunggu sebentar sebelum memakai perintah ini lagi.`, ephemeral: true });
         slashCooldowns.set(cdKey, Date.now() + 3000);
+
+        // Track command usage analytics
+        try {
+            const cmdName = subCmd ? `${command} ${subCmd}` : command;
+            db.prepare('INSERT OR REPLACE INTO command_summary (guildId, command, count, lastUsed) VALUES (?, ?, COALESCE((SELECT count FROM command_summary WHERE guildId = ? AND command = ?), 0) + 1, ?)').run(guildId, cmdName, guildId, cmdName, Date.now());
+        } catch (e) { /* analytics failure should not block command */ }
+
         const userData = getOrCreateUser(guildId, interaction.user.id);
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 

@@ -10,5 +10,9 @@ economy.sqlite
 .env
 
 # Logs
+logs/*.log
 *.log
 npm-debug.log*
+
+# Backups (keep .gitkeep only)
+backups/*.sqlite

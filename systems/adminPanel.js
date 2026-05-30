@@ -22,8 +22,9 @@ function buildAdminPanel(guildId) {
             `> \u2699\ufe0f **Setting** \u2014 Atur channel notifikasi\n` +
             `> \ud83d\udce2 **Notifications** \u2014 Auto-create channel notif\n` +
             `> \ud83c\udf99\ufe0f **TempVoice** \u2014 Setup voice channel privat\n` +
-            `> \ud83c\udfc6 **Contest** \u2014 Fishing contest\n` +
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501`
+            `> 🏆 **Contest** — Fishing contest\n` +
+            `> 📊 **Analytics** — Command usage stats\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━`
         )
         .setFooter({ text: 'Hanya Admin yang bisa menggunakan panel ini' })
         .setTimestamp();
@@ -37,7 +38,8 @@ function buildAdminPanel(guildId) {
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('\ud83d\udce2 Notifications').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('\ud83c\udf99\ufe0f TempVoice').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83c\udfc6 Contest').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83c\udfc6 Contest').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -257,6 +259,30 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
     if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
+
+    // === ANALYTICS ===
+    if (customId === 'admpnl_analytics') {
+        const topCommands = db.prepare('SELECT command, SUM(count) as total, MAX(lastUsed) as lastUsed FROM command_summary WHERE guildId = ? GROUP BY command ORDER BY total DESC LIMIT 10').all(guildId);
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const activeToday = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM users WHERE guildId = ? AND userId IN (SELECT DISTINCT userId FROM command_summary WHERE guildId = ? AND lastUsed > ?)').get(guildId, guildId, todayStart.getTime());
+
+        let cmdList = topCommands.length ? topCommands.map((c, i) => `> **${i+1}.** \`/${c.command}\` — ${c.total.toLocaleString('id-ID')}x`).join('\n') : '> *Belum ada data*';
+
+        const embed = new EmbedBuilder()
+            .setTitle('📊 COMMAND ANALYTICS')
+            .setColor('#9B59B6')
+            .setDescription(`━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `**Top 10 Commands:**\n${cmdList}\n\n` +
+                `**Hari Ini:**\n> 👥 Active Users: **${activeToday?.cnt || 0}**\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━`)
+            .setFooter({ text: 'Data resets never — lifetime analytics' })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
 
     // === SHOP: Add Role (Modal) ===

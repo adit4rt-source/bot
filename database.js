@@ -57,6 +57,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS battle_logs (id INTEGER PRIMARY KEY AUTOINCR
 // Trading
 db.exec(`CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, senderId TEXT, receiverId TEXT, status TEXT DEFAULT 'pending', createdAt INTEGER, senderOffer TEXT, receiverOffer TEXT)`);
 
+// Command Analytics
+db.exec(`CREATE TABLE IF NOT EXISTS command_analytics (guildId TEXT, command TEXT, userId TEXT, timestamp INTEGER, PRIMARY KEY(guildId, command, userId, timestamp))`);
+db.exec(`CREATE TABLE IF NOT EXISTS command_summary (guildId TEXT, command TEXT, count INTEGER DEFAULT 0, lastUsed INTEGER, PRIMARY KEY(guildId, command))`);
+
 // Pet Evolution
 try { db.exec(`ALTER TABLE pets ADD COLUMN evolved INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN evoStage INTEGER DEFAULT 0`); } catch(e) {}
