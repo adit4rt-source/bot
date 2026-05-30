@@ -20,13 +20,7 @@ const commands = [
         .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
     new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
-    new SlashCommandBuilder()
-        .setName('trade')
-        .setDescription('🔄 Trading System')
-        .addSubcommand(sub => sub.setName('offer').setDescription('Tawarkan trade').addUserOption(opt => opt.setName('user').setDescription('Siapa?').setRequired(true)).addStringOption(opt => opt.setName('give').setDescription('Yang kamu kasih').setRequired(true)).addStringOption(opt => opt.setName('want').setDescription('Yang kamu minta').setRequired(true)))
-        .addSubcommand(sub => sub.setName('accept').setDescription('Terima trade').addIntegerOption(opt => opt.setName('id').setDescription('Trade ID').setRequired(true)))
-        .addSubcommand(sub => sub.setName('reject').setDescription('Tolak trade').addIntegerOption(opt => opt.setName('id').setDescription('Trade ID').setRequired(true)))
-        .addSubcommand(sub => sub.setName('list').setDescription('Lihat trade pending')),
+    new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),

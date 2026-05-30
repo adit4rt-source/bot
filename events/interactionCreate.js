@@ -16,6 +16,7 @@ const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelBut
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
 const { handleProfilePanelCommand, handleProfileButton, isProfilePanelButton } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
+const { handleTradeCommand, handleTradeButton, handleTradeModal, isTradePanelButton, isTradePanelModal } = require('../systems/tradePanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -920,67 +921,9 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
 
 
-        // ================= TRADING SYSTEM =================
+        // ================= TRADING SYSTEM (Panel) =================
         if (command === 'trade') {
-            if (subCmd === 'offer') {
-                const target = interaction.options.getUser('user');
-                if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Tidak bisa trade dengan diri sendiri!', ephemeral: true });
-                if (target.bot) return interaction.reply({ content: '❌ Tidak bisa trade dengan bot!', ephemeral: true });
-                const give = interaction.options.getString('give');
-                const want = interaction.options.getString('want');
-                // Validate format
-                const parseTradeItem = (str) => { const parts = str.split(':'); if (parts.length !== 2) return null; const [type, id] = parts; if (!['fish','relic','money','pet'].includes(type)) return null; return { type, id }; };
-                const giveItem = parseTradeItem(give);
-                const wantItem = parseTradeItem(want);
-                if (!giveItem || !wantItem) return interaction.reply({ content: '❌ Format salah! Gunakan: `fish:ID`, `relic:ID`, `pet:ID`, atau `money:JUMLAH`\n\n> Contoh: `/trade offer @user give:fish:5 want:money:500`', ephemeral: true });
-                // Validate ownership
-                if (giveItem.type === 'fish') { const fish = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(giveItem.id), guildId, interaction.user.id); if (!fish) return interaction.reply({ content: '❌ Ikan tidak ditemukan di inventory kamu!', ephemeral: true }); }
-                if (giveItem.type === 'relic') { const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(giveItem.id), guildId, interaction.user.id); if (!relic) return interaction.reply({ content: '❌ Relic tidak ditemukan!', ephemeral: true }); }
-                if (giveItem.type === 'money') { if (userData.balance < parseInt(giveItem.id)) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true }); }
-                if (giveItem.type === 'pet') { const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(giveItem.id), guildId, interaction.user.id); if (!pet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true }); }
-                // Create trade
-                db.prepare('INSERT INTO trades (guildId, senderId, receiverId, status, createdAt, senderOffer, receiverOffer) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, target.id, 'pending', Date.now(), give, want);
-                const tradeId = db.prepare('SELECT last_insert_rowid() as id').get().id;
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#3498DB').setTitle('🔄 Trade Offer Sent!').setDescription(`<@${interaction.user.id}> → <@${target.id}>\n\n> 📤 **Menawarkan:** \`${give}\`\n> 📥 **Meminta:** \`${want}\`\n> 🆔 Trade ID: **#${tradeId}**\n\n<@${target.id}> gunakan \`/trade accept ${tradeId}\` untuk terima!`).setFooter({ text: 'Trade berlaku 24 jam' })] });
-            }
-            if (subCmd === 'accept') {
-                const tradeId = interaction.options.getInteger('id');
-                const trade = db.prepare('SELECT * FROM trades WHERE id = ? AND guildId = ? AND receiverId = ? AND status = ?').get(tradeId, guildId, interaction.user.id, 'pending');
-                if (!trade) return interaction.reply({ content: '❌ Trade tidak ditemukan atau bukan untuk kamu!', ephemeral: true });
-                if (Date.now() - trade.createdAt > 86400000) { db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('expired', tradeId); return interaction.reply({ content: '❌ Trade sudah expired (>24 jam)!', ephemeral: true }); }
-                // Execute trade
-                const parseItem = (str) => { const [type, id] = str.split(':'); return { type, id }; };
-                const senderGive = parseItem(trade.senderOffer);
-                const senderWant = parseItem(trade.receiverOffer);
-                // Transfer sender's offer to receiver
-                if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(interaction.user.id, parseInt(senderGive.id), guildId); }
-                if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(interaction.user.id, parseInt(senderGive.id), guildId); }
-                if (senderGive.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, interaction.user.id); }
-                if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(interaction.user.id, parseInt(senderGive.id), guildId); }
-                // Transfer receiver's offer to sender
-                if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-                if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-                if (senderWant.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, interaction.user.id); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId); }
-                if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-                db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
-                updateQuestProgress(guildId, interaction.user.id, 'trade', 1);
-                updateQuestProgress(guildId, trade.senderId, 'trade', 1);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('✅ Trade Complete!').setDescription(`Trade #${tradeId} berhasil!\n\n> <@${trade.senderId}> memberikan \`${trade.senderOffer}\`\n> <@${interaction.user.id}> memberikan \`${trade.receiverOffer}\``)] });
-            }
-            if (subCmd === 'reject') {
-                const tradeId = interaction.options.getInteger('id');
-                const trade = db.prepare('SELECT * FROM trades WHERE id = ? AND guildId = ? AND receiverId = ? AND status = ?').get(tradeId, guildId, interaction.user.id, 'pending');
-                if (!trade) return interaction.reply({ content: '❌ Trade tidak ditemukan!', ephemeral: true });
-                db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('rejected', tradeId);
-                return interaction.reply({ content: `❌ Trade #${tradeId} ditolak.` });
-            }
-            if (subCmd === 'list') {
-                const pending = db.prepare('SELECT * FROM trades WHERE guildId = ? AND (senderId = ? OR receiverId = ?) AND status = ? ORDER BY createdAt DESC LIMIT 10').all(guildId, interaction.user.id, interaction.user.id, 'pending');
-                if (pending.length === 0) return interaction.reply({ content: '📭 Tidak ada trade pending.', ephemeral: true });
-                let desc = '';
-                pending.forEach(t => { desc += `> **#${t.id}** | <@${t.senderId}> → <@${t.receiverId}>\n> 📤 ${t.senderOffer} | 📥 ${t.receiverOffer}\n\n`; });
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🔄 Pending Trades').setColor('#3498DB').setDescription(desc).setFooter({ text: '/trade accept <id> atau /trade reject <id>' })], ephemeral: true });
-            }
+            return handleTradeCommand(interaction);
         }
 
         // ================= PET EVOLUTION =================
@@ -1318,6 +1261,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleLevelButton(interaction);
         }
 
+        // --- TRADE PANEL BUTTONS ---
+        if (isTradePanelButton(interaction.customId)) {
+            return handleTradeButton(interaction);
+        }
+
         // --- COINFLIP BUTTONS ---
         if (interaction.customId.startsWith('coinflip_head_') || interaction.customId.startsWith('coinflip_tail_')) {
             const parts = interaction.customId.split('_');
@@ -1572,6 +1520,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- ECONOMY PANEL MODAL ---
         if (isEconomyPanelModal(interaction.customId)) {
             return handleEconomyModal(interaction);
+        }
+
+        // --- TRADE PANEL MODAL ---
+        if (isTradePanelModal(interaction.customId)) {
+            return handleTradeModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }

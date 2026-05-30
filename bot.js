@@ -2,7 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '2.5.0';
+const BOT_VERSION = '2.6.0';
 const BUILD_DATE = '2026-05-31';
 
 // Load database (runs migrations on require)
