@@ -4,10 +4,12 @@ const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat
 const { getRandomInt } = require('../utils');
 const state = require('../state');
 const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
-const { getComboTracker, addComboFeature, getComboMultiplier } = require('../systems/combo');
+const { addComboFeature, getComboMultiplier } = require('../systems/combo');
 const { getContestState, startFishContest, addContestEntry, getContestLeaderboard } = require('../systems/contest');
 const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet } = require('../systems/pets');
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
+const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
+const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -41,32 +43,6 @@ module.exports = async function handleInteractionCreate(interaction) {
                 return { name: `${def.emoji} ${def.name} (x${inv.quantity})`, value: def.id };
             }).filter(Boolean).slice(0, 25);
             return interaction.respond(choices);
-        }
-        if (interaction.commandName === 'farm') {
-            const focused = interaction.options.getFocused(true);
-            if (focused.name === 'bibit') {
-                const owned = getAllSeeds(guildId, interaction.user.id);
-                if (owned.length === 0) return interaction.respond([{ name: '❌ Tidak punya bibit! Beli di /farm shop', value: 'none' }]);
-                const choices = owned.map(inv => {
-                    const c = FARM_CROPS.find(cr => cr.id === inv.cropId);
-                    if (!c) return null;
-                    return { name: `${c.emoji} ${c.name} (x${inv.quantity}) — ${c.tier} | ${c.time}m`, value: c.id };
-                }).filter(Boolean).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices.length ? choices : [{ name: '❌ Tidak punya bibit! Beli di /farm shop', value: 'none' }]);
-            }
-            if (focused.name === 'resep') {
-                const choices = FARM_RECIPES.map(r => {
-                    const ingStr = r.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : ''}${ing.qty}`; }).join('+');
-                    let label = `${r.emoji} ${r.name} (Butuh: ${ingStr}) — 🪙${r.sellPrice}`;
-                    if (label.length > 100) label = label.substring(0, 97) + '...';
-                    return { name: label, value: r.id };
-                }).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
-            if (focused.name === 'jenis') {
-                const choices = FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => ({ name: `${f.emoji} ${f.name} — 🪙${f.cost} | -${Math.round(f.speedBonus*100)}% waktu`, value: f.id })).filter(c => c.name.toLowerCase().includes(focused.value.toLowerCase())).slice(0, 25);
-                return interaction.respond(choices);
-            }
         }
         return;
     }
@@ -701,38 +677,37 @@ module.exports = async function handleInteractionCreate(interaction) {
             updateQuestProgress(guildId, interaction.user.id, 'fish', 1);
             addPetExp(guildId, interaction.user.id, 5);
             addComboFeature(guildId, interaction.user.id, 'fishing');
-            // Auto-enter fishing contest
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
-            const comboCount = getComboTracker(guildId, interaction.user.id);
-            const comboFeatures = JSON.parse(comboCount.features || '[]');
             const comboMult = getComboMultiplier(guildId, interaction.user.id);
-            let comboMsg = comboMult > 1 ? `\n> 🔥 **Combo x${comboMult}!** (${comboFeatures.length} fitur aktif)` : '';
+            let comboMsg = comboMult > 1 ? `\n> 🔥 **Combo x${comboMult}!**` : '';
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
                 .setColor(tierColors[result.tier.tier] || '#2B2D31')
                 .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
-                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}`)
-                .setFooter({ text: `Cooldown: ${rod.cooldown}s | /fishing sell untuk jual | /fishing inventory${comboMult > 1 ? ' | COMBO AKTIF!' : ''}` });
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg)
+                .setFooter({ text: `Cooldown: ${rod.cooldown}s | Gunakan tombol di bawah!` });
             if (result.tier.tier === 'Secret') embed.setTitle('🔮💫 SECRET CATCH!!! 💫🔮');
             else if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
             else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
-            await interaction.reply({ embeds: [embed] });
+            const afterCatchRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`fish_cast_${interaction.user.id}`).setLabel('🎣 Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`fish_inv_${interaction.user.id}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`fish_shop_${interaction.user.id}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`fish_back_${interaction.user.id}`).setLabel('📋 Panel').setStyle(ButtonStyle.Secondary)
+            );
+            await interaction.reply({ embeds: [embed], components: [afterCatchRow] });
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
-            // --- FISHING TOURNAMENT PARTICIPATION ---
             if (activeFishEvents.has(guildId)) {
                 const ev = activeFishEvents.get(guildId);
                 if (!ev.participants[interaction.user.id]) ev.participants[interaction.user.id] = { count: 0, heaviest: 0 };
                 ev.participants[interaction.user.id].count++;
                 if (result.weight > ev.participants[interaction.user.id].heaviest) ev.participants[interaction.user.id].heaviest = result.weight;
-                
-                // Instant-win events
                 let tournamentWin = false;
                 if (ev.type === 'first_legendary' && ['Legendary', 'Mythic', 'Secret'].includes(result.tier.tier)) tournamentWin = true;
                 if (ev.type === 'first_rare' && ['Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'].includes(result.tier.tier)) tournamentWin = true;
                 if (ev.type === 'first_trash' && result.tier.tier === 'Trash') tournamentWin = true;
-                
                 if (tournamentWin) {
                     activeFishEvents.delete(guildId);
                     userData.balance += ev.reward;
@@ -742,6 +717,10 @@ module.exports = async function handleInteractionCreate(interaction) {
                 }
             }
             return;
+        }
+
+        if (command === 'fishing') {
+            return handleFishingCommand(interaction);
         }
 
         if (command === 'sell') {
@@ -837,364 +816,10 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply({ content: '❌ Item tidak bisa digunakan langsung.', ephemeral: true });
         }
 
-        if (command === 'fishing') {
-            if (subCmd === 'inventory') {
-                const tierOrder = { 'Secret': 0, 'Mythic': 1, 'Legendary': 2, 'Epic': 3, 'Rare': 4, 'Uncommon': 5, 'Common': 6, 'Trash': 7 };
-                const allInventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ?').all(guildId, interaction.user.id);
-                const totalCount = allInventory.length;
-                const lockedCount = allInventory.filter(i => i.locked === 1).length;
-                if (totalCount === 0) return interaction.reply({ content: '🎒 Inventory kosong! Gunakan `/fish` untuk memancing.', ephemeral: true });
-                
-                const sorted = allInventory.sort((a, b) => {
-                    const fishA = FISH_DATA.find(f => f.id === a.fishId);
-                    const fishB = FISH_DATA.find(f => f.id === b.fishId);
-                    const tierA = fishA ? (tierOrder[fishA.tier] ?? 99) : 99;
-                    const tierB = fishB ? (tierOrder[fishB.tier] ?? 99) : 99;
-                    if (tierA !== tierB) return tierA - tierB;
-                    return b.weight - a.weight;
-                });
-                
-                const page = interaction.options.getInteger('page') || 1;
-                const perPage = 20;
-                const totalPages = Math.ceil(totalCount / perPage);
-                const currentPage = Math.min(Math.max(1, page), totalPages);
-                const start = (currentPage - 1) * perPage;
-                const pageItems = sorted.slice(start, start + perPage);
-                
-                let desc = `🎒 **Total: ${totalCount} ikan** (🔒 Locked: ${lockedCount})\n\n`;
-                pageItems.forEach((item) => {
-                    const fd = FISH_DATA.find(f => f.id === item.fishId);
-                    const tier = fd ? FISH_TIERS.find(t => t.tier === fd.tier) : null;
-                    const lockIcon = item.locked ? '🔒 ' : '';
-                    const tierTag = fd ? `**(${fd.tier})**` : '';
-                    desc += `**ID #${item.id}** ${lockIcon}${tier ? tier.emoji : '🐟'} **${fd ? fd.name : '?'}** — ${item.weight} kg ${tierTag}\n`;
-                });
-                desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 📄 Halaman **${currentPage}** / **${totalPages}**`;
-                
-                const navRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`finv_prev_${currentPage}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary).setDisabled(currentPage <= 1),
-                    new ButtonBuilder().setCustomId(`finv_next_${currentPage}`).setLabel('▶ Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage >= totalPages)
-                );
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Inventory').setColor('#2B2D31').setDescription(desc)], components: [navRow] });
-            }
-            if (subCmd === 'equip') {
-                const eq = getEquipment(guildId, interaction.user.id);
-                const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
-                const bait = BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0];
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('⚙️ Perlengkapan Mancing').setColor('#2B2D31').setDescription(`> 🎋 **Joran:** ${rod.emoji} ${rod.name}\n> ⏱️ Cooldown: ${rod.cooldown}s | Rare+: +${rod.rareBonus}%\n\n> 🪱 **Umpan:** ${bait.emoji} ${bait.name}\n> Sisa: **${eq.bait !== 'none' ? eq.bait_count : 0}** | Rare+: +${bait.rareBonus}%`)] });
-            }
-            if (subCmd === 'stats') {
-                const totalCaught = getUserStat(guildId, interaction.user.id, 'total_fish_caught');
-                const totalSoldValue = getUserStat(guildId, interaction.user.id, 'total_fish_sold_value');
-                const totalSoldCount = getUserStat(guildId, interaction.user.id, 'total_fish_sold_count');
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📊 Statistik Memancing').setColor('#2B2D31').setDescription(`> 🎣 **Total Tangkapan:** ${totalCaught}\n> 💰 **Total Penjualan:** 🪙 ${totalSoldValue.toLocaleString('id-ID')}\n> 📦 **Ikan Dijual:** ${totalSoldCount}\n> 🐟 **Di Inventory:** ${db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id).c}`)] });
-            }
-            if (subCmd === 'shop') {
-                let desc = '**🎋 JORAN (Beli Sekali, Pakai Selamanya)**\n\n';
-                const eq = getEquipment(guildId, interaction.user.id);
-                ROD_TYPES.forEach(r => { const owned = eq.rod === r.id || r.id === 'basic'; desc += `${r.emoji} **${r.name}** ${owned ? '✅ *(Dimiliki)*' : `— 🪙 ${r.price.toLocaleString('id-ID')}`}\n> CD: ${r.cooldown}s | Rare+: +${r.rareBonus}%\n\n`; });
-                desc += '━━━━━━━━━━━━━━━━━━━━━━\n\n**🪱 UMPAN (Habis Pakai, per 10 buah)**\n\n';
-                BAIT_TYPES.filter(b => b.id !== 'none').forEach(b => { desc += `${b.emoji} **${b.name}** — 🪙 ${(b.price * 10).toLocaleString('id-ID')} /10pcs\n> Rare+: +${b.rareBonus}%\n\n`; });
-                const componentsShop = [];
-                const availableRods = ROD_TYPES.filter(r => r.id !== 'basic' && r.id !== eq.rod);
-                if (availableRods.length > 0) {
-                    const rodMenu = new StringSelectMenuBuilder().setCustomId('fishing_buy_rod').setPlaceholder('🎋 Beli Joran...').addOptions(
-                        ...availableRods.map(r => new StringSelectMenuOptionBuilder().setLabel(`${r.name} (🪙 ${r.price.toLocaleString('id-ID')})`).setValue(`rod_${r.id}`).setEmoji(r.emoji).setDescription(`CD: ${r.cooldown}s | Rare+${r.rareBonus}%`))
-                    );
-                    componentsShop.push(new ActionRowBuilder().addComponents(rodMenu));
-                }
-                const baitMenu = new StringSelectMenuBuilder().setCustomId('fishing_buy_bait').setPlaceholder('🪱 Beli Umpan (x10)...').addOptions(
-                    ...BAIT_TYPES.filter(b => b.id !== 'none').map(b => new StringSelectMenuOptionBuilder().setLabel(`${b.name} x10 (🪙 ${(b.price * 10).toLocaleString('id-ID')})`).setValue(`bait_${b.id}`).setEmoji(b.emoji).setDescription(`Rare+${b.rareBonus}%`))
-                );
-                componentsShop.push(new ActionRowBuilder().addComponents(baitMenu));
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎣 Fishing Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: `Saldo: ${userData.balance.toLocaleString('id-ID')} money` })], components: componentsShop });
-            }
-            if (subCmd === 'sell') {
-                const sellCdKey = `sell_${guildId}_${interaction.user.id}`;
-                if (fishCooldowns.has(sellCdKey) && Date.now() < fishCooldowns.get(sellCdKey)) { return interaction.reply({ content: `⏳ Tunggu sebentar sebelum menjual lagi.`, ephemeral: true }); }
-                fishCooldowns.set(sellCdKey, Date.now() + 10000);
-                const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').all(guildId, interaction.user.id);
-                if (inventory.length === 0) return interaction.reply({ content: '❌ Tidak ada ikan yang bisa dijual! (Ikan yang di-lock tidak terjual)', ephemeral: true });
-                let totalValue = 0, countByTier = {};
-                for (const item of inventory) {
-                    const fishDef = FISH_DATA.find(f => f.id === item.fishId);
-                    const tierDef = fishDef ? FISH_TIERS.find(t => t.tier === fishDef.tier) : FISH_TIERS[0];
-                    const weightRatio = tierDef ? (item.weight - tierDef.minWeight) / (tierDef.maxWeight - tierDef.minWeight) : 0;
-                    const value = tierDef ? Math.floor(tierDef.minValue + Math.min(1, Math.max(0, weightRatio)) * (tierDef.maxValue - tierDef.minValue)) : 1;
-                    totalValue += value;
-                    const tier = fishDef ? fishDef.tier : 'Trash';
-                    countByTier[tier] = (countByTier[tier] || 0) + 1;
-                }
-                const freshData = getOrCreateUser(guildId, interaction.user.id);
-                freshData.balance += totalValue;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, interaction.user.id);
-                db.prepare('DELETE FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').run(guildId, interaction.user.id);
-                incrementUserStat(guildId, interaction.user.id, 'total_fish_sold_value', totalValue);
-                incrementUserStat(guildId, interaction.user.id, 'total_fish_sold_count', inventory.length);
-                const lockedCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 1').get(guildId, interaction.user.id).c;
-                let breakdown = Object.entries(countByTier).map(([t, c]) => `> ${(FISH_TIERS.find(ft => ft.tier === t) || {emoji:'🐟'}).emoji} ${t}: **${c}**`).join('\n');
-                const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('💰 IKAN TERJUAL!')
-                    .setDescription(`Kamu menjual **${inventory.length} ikan** dan mendapatkan:\n\n🪙 **${totalValue.toLocaleString('id-ID')} Money**\n\n${breakdown}\n\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**${lockedCount > 0 ? `\n> 🔒 Ikan di-lock (tidak dijual): **${lockedCount}**` : ''}`);
-                await interaction.reply({ embeds: [embed] });
-                await checkAchievements(interaction.guild, interaction.user.id, { type: 'fish_sell' });
-                return;
-            }
-            if (subCmd === 'collection') {
-                const collected = db.prepare('SELECT * FROM fish_collection WHERE guildId = ? AND userId = ?').all(guildId, interaction.user.id);
-                const collectedIds = collected.map(c => c.fishId);
-                const totalFish = FISH_DATA.length;
-                const totalCollected = collectedIds.length;
-                const percentDex = Math.floor((totalCollected / totalFish) * 100);
-                const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
-                const tierColors2 = { Trash: '⚫', Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴', Secret: '🟤' };
-                let desc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollected}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
-                for (const tier of tiers) {
-                    const tierFish = FISH_DATA.filter(f => f.tier === tier);
-                    const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
-                    const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
-                    const progress = tierFish.length > 0 ? Math.floor((tierCollected / tierFish.length) * 10) : 0;
-                    const bar = '▰'.repeat(progress) + '▱'.repeat(10 - progress);
-                    desc += `${tierEmoji} **${tier}** — ${tierCollected}/${tierFish.length}\n> \`${bar}\`\n`;
-                }
-                desc += `\n> 🎯 *Pilih rarity di bawah untuk melihat detail!*`;
-                const row1 = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`fcol_Trash_${interaction.user.id}_0`).setLabel(`🗑️ Trash`).setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId(`fcol_Common_${interaction.user.id}_0`).setLabel(`🐟 Common`).setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId(`fcol_Uncommon_${interaction.user.id}_0`).setLabel(`🐠 Uncommon`).setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId(`fcol_Rare_${interaction.user.id}_0`).setLabel(`🐡 Rare`).setStyle(ButtonStyle.Primary)
-                );
-                const row2 = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`fcol_Epic_${interaction.user.id}_0`).setLabel(`🦈 Epic`).setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId(`fcol_Legendary_${interaction.user.id}_0`).setLabel(`🐉 Legendary`).setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId(`fcol_Mythic_${interaction.user.id}_0`).setLabel(`🌈 Mythic`).setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId(`fcol_Secret_${interaction.user.id}_0`).setLabel(`🔮 Secret`).setStyle(ButtonStyle.Danger)
-                );
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(desc).setFooter({ text: `${totalCollected}/${totalFish} ditemukan | /fish untuk memancing` })], components: [row1, row2] });
-            }
-            if (subCmd === 'lock') {
-                const fishDbId = interaction.options.getInteger('id');
-                const item = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(fishDbId, guildId, interaction.user.id);
-                if (!item) return interaction.reply({ content: '❌ Ikan tidak ditemukan! Cek ID di `/fishing inventory`.', ephemeral: true });
-                if (item.locked === 1) return interaction.reply({ content: '❌ Ikan ini sudah di-lock!', ephemeral: true });
-                db.prepare('UPDATE fish_inventory SET locked = 1 WHERE id = ?').run(fishDbId);
-                const fishDef = FISH_DATA.find(f => f.id === item.fishId);
-                return interaction.reply({ content: `🔒 **${fishDef ? fishDef.name : 'Ikan'}** (${item.weight} kg) berhasil di-lock! Ikan ini tidak akan terjual saat /fishing sell.` });
-            }
-            if (subCmd === 'unlock') {
-                const fishDbId = interaction.options.getInteger('id');
-                const item = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(fishDbId, guildId, interaction.user.id);
-                if (!item) return interaction.reply({ content: '❌ Ikan tidak ditemukan!', ephemeral: true });
-                if (item.locked === 0) return interaction.reply({ content: '❌ Ikan ini tidak di-lock!', ephemeral: true });
-                db.prepare('UPDATE fish_inventory SET locked = 0 WHERE id = ?').run(fishDbId);
-                const fishDef = FISH_DATA.find(f => f.id === item.fishId);
-                return interaction.reply({ content: `🔓 **${fishDef ? fishDef.name : 'Ikan'}** berhasil di-unlock.` });
-            }
-        }
 
         // ================= FARMING COMMANDS =================
         if (command === 'farm') {
-            const farmData = getFarmData(guildId, interaction.user.id);
-            const maxSlots = getFarmSlots(guildId, interaction.user.id);
-            const plots = getPlots(guildId, interaction.user.id);
-
-            if (subCmd === 'status') {
-                const levelInfo = FARM_LEVELS.find(l => l.level === farmData.farm_level);
-                let desc = `${levelInfo.name} — Lahan **${plots.length}/${maxSlots}** terpakai\n\n`;
-                if (plots.length === 0) { desc += '*Kebun kosong! Gunakan `/farm plant` untuk menanam.*'; }
-                else {
-                    plots.forEach((plot, i) => {
-                        const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-                        if (!crop) return;
-                        const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-                        const growTime = crop.time * (1 - fert.speedBonus) * 60000;
-                        const elapsed = Date.now() - plot.plantedAt;
-                        const needWater = (Date.now() - plot.wateredAt) > growTime * 0.6;
-                        let status = '';
-                        const dryTime = Date.now() - plot.wateredAt;
-                        const wiltThreshold = growTime * 1.5;
-                        const deadThreshold = growTime * 2.5;
-                        if (plot.status === 'dead' || dryTime > deadThreshold) { status = '☠️ Mati'; if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id); }
-                        else if (elapsed >= growTime) status = '✅ Siap Panen!';
-                        else if (dryTime > wiltThreshold) status = '🥀 Layu! (Siram segera!)';
-                        else if (needWater) status = '💧 Butuh Siram!';
-                        else { const pct = Math.min(100, Math.floor((elapsed / growTime) * 100)); status = `🌱 ${pct}%`; }
-                        desc += `**[${i+1}]** ${crop.emoji} ${crop.name} — ${status}${fert.id !== 'none' ? ` | ${fert.emoji}` : ''}\n`;
-                    });
-                }
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Kebun Kamu').setColor('#2ECC71').setDescription(desc).setFooter({ text: `/farm plant — tanam | /farm water — siram | /farm harvest — panen` })] });
-            }
-
-            if (subCmd === 'plant') {
-                if (plots.length >= maxSlots) return interaction.reply({ content: `❌ Lahan penuh! (${plots.length}/${maxSlots}) Upgrade lahan atau panen dulu.`, ephemeral: true });
-                const cropId = interaction.options.getString('bibit');
-                if (cropId === 'none') return interaction.reply({ content: '❌ Tidak punya bibit! Beli dulu di `/farm shop`.', ephemeral: true });
-                const crop = FARM_CROPS.find(c => c.id === cropId);
-                if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-                const owned = getSeedCount(guildId, interaction.user.id, cropId);
-                if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya bibit **${crop.emoji} ${crop.name}**! Beli di \`/farm shop\`.`, ephemeral: true });
-                // Konsumsi 1 bibit dari inventory
-                removeSeed(guildId, interaction.user.id, cropId, 1);
-                db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, interaction.user.id, cropId, Date.now(), Date.now());
-                const sisa = getSeedCount(guildId, interaction.user.id, cropId);
-                return interaction.reply({ content: `🌱 **${crop.emoji} ${crop.name}** ditanam! Siap panen dalam **${crop.time} menit**.\n> 📦 Sisa bibit ${crop.name}: **${sisa}**\n> 💡 Siram dengan \`/farm water\`!` });
-            }
-
-            if (subCmd === 'water') {
-                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman untuk disiram!', ephemeral: true });
-                let watered = 0;
-                for (const plot of plots) { if (plot.status !== 'dead') { db.prepare('UPDATE farm_plots SET wateredAt = ? WHERE id = ?').run(Date.now(), plot.id); watered++; } }
-                return interaction.reply({ content: `💧 Berhasil menyiram **${watered} tanaman**! Tanaman kamu tumbuh dengan baik.` });
-            }
-
-            if (subCmd === 'harvest') {
-                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman!', ephemeral: true });
-                let harvested = 0, totalItems = 0, harvestDesc = '';
-                for (const plot of plots) {
-                    const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-                    if (!crop) continue;
-                    const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-                    const growTime = crop.time * (1 - fert.speedBonus) * 60000;
-                    if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
-                        let qty = getRandomInt(crop.minYield, crop.maxYield);
-                        if (Math.random() < fert.yieldBonus) qty += getRandomInt(1, 2);
-                        addStorage(guildId, interaction.user.id, crop.id, qty);
-                        harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}\n`;
-                        harvested++; totalItems += qty;
-                        db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
-                    }
-                }
-                // Auto-remove dead plants during harvest
-                const deadPlots = plots.filter(p => p.status === 'dead');
-                let deadMsg = '';
-                if (deadPlots.length > 0) {
-                    db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, interaction.user.id);
-                    deadMsg = `\n\n🗑️ **${deadPlots.length} tanaman mati** otomatis dihapus.`;
-                }
-                if (harvested === 0 && deadPlots.length > 0) return interaction.reply({ content: `🗑️ **${deadPlots.length} tanaman mati** dihapus dari kebun! Slot sekarang tersedia untuk tanam baru.\n\n> Tidak ada tanaman yang siap dipanen.`, ephemeral: false });
-                if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman yang siap dipanen! Cek `/farm status`.', ephemeral: true });
-                incrementUserStat(guildId, interaction.user.id, 'total_harvests', harvested);
-                updateQuestProgress(guildId, interaction.user.id, 'farm_harvest', harvested);
-                addPetExp(guildId, interaction.user.id, 5);
-                addComboFeature(guildId, interaction.user.id, 'farming');
-                await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_harvest', legendary: harvestDesc.includes('Legendary') });
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!').setDescription(`Memanen **${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke \`/farm storage\`.\n> Gunakan \`/farm craft\` atau \`/farm sell\` untuk menjual.${deadMsg}`)] });
-            }
-
-            if (subCmd === 'storage') {
-                const storage = getStorage(guildId, interaction.user.id);
-                if (storage.length === 0) return interaction.reply({ content: '📦 Gudang kosong! Panen dulu dengan `/farm harvest`.', ephemeral: true });
-                let desc = '';
-                storage.forEach(s => { const crop = FARM_CROPS.find(c => c.id === s.itemId); desc += `> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : s.itemId}** x${s.quantity}\n`; });
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📦 Farm Storage').setColor('#2B2D31').setDescription(desc).setFooter({ text: '/farm sell — jual semua | /farm craft — buat resep' })] });
-            }
-
-            if (subCmd === 'sell') {
-                const storage = getStorage(guildId, interaction.user.id);
-                if (storage.length === 0) return interaction.reply({ content: '❌ Gudang kosong!', ephemeral: true });
-                let totalMoney = 0, sellDesc = '';
-                for (const s of storage) { const crop = FARM_CROPS.find(c => c.id === s.itemId); const price = crop ? crop.sellPrice * s.quantity : 0; totalMoney += price; sellDesc += `> ${crop ? crop.emoji : '📦'} ${crop ? crop.name : '?'} x${s.quantity} = 🪙 ${price}\n`; }
-                userData.balance += totalMoney;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle('💰 Hasil Panen Terjual!').setDescription(`${sellDesc}\n**Total: 🪙 ${totalMoney.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
-            }
-
-            if (subCmd === 'upgrade') {
-                const nextLevel = FARM_LEVELS.find(l => l.level === farmData.farm_level + 1);
-                if (!nextLevel) return interaction.reply({ content: '👑 Lahan kamu sudah level maksimal!', ephemeral: true });
-                if (userData.balance < nextLevel.cost) return interaction.reply({ content: `❌ Butuh 🪙 **${nextLevel.cost.toLocaleString('id-ID')}** untuk upgrade ke ${nextLevel.name} (${nextLevel.slots} slot)`, ephemeral: true });
-                userData.balance -= nextLevel.cost;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(nextLevel.level, guildId, interaction.user.id);
-                if (nextLevel.level === 6) await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_upgrade_max' });
-                return interaction.reply({ content: `🎉 **Lahan di-upgrade!**\n> ${nextLevel.name} — Sekarang punya **${nextLevel.slots} slot** tanam!` });
-            }
-
-            if (subCmd === 'craft') {
-                const recipeId = interaction.options.getString('resep');
-                const recipe = FARM_RECIPES.find(r => r.id === recipeId);
-                if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
-                // Check SEMUA bahan sekaligus
-                const missing = [];
-                for (const ing of recipe.ingredients) {
-                    const have = getStorageQty(guildId, interaction.user.id, ing.id);
-                    if (have < ing.qty) { const crop = FARM_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
-                }
-                if (missing.length > 0) {
-                    const fullList = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(', ');
-                    return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang untuk ${recipe.emoji} ${recipe.name}`).setDescription(`**Bahan yang kurang:**\n${missing.join('\n')}\n\n> 📋 **Resep lengkap:** ${fullList}\n> 💡 Tanam & panen bahan dulu di \`/farm plant\`!`)], ephemeral: true });
-                }
-                // Consume bahan
-                for (const ing of recipe.ingredients) { removeStorage(guildId, interaction.user.id, ing.id, ing.qty); }
-                // Tambah uang langsung (craft = jual produk) - atomic
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.sellPrice, guildId, interaction.user.id);
-                const freshData = getOrCreateUser(guildId, interaction.user.id);
-                incrementUserStat(guildId, interaction.user.id, 'total_crafts');
-                updateQuestProgress(guildId, interaction.user.id, 'craft', 1);
-                addComboFeature(guildId, interaction.user.id, 'farming');
-                await checkAchievements(interaction.guild, interaction.user.id, { type: 'farm_craft' });
-                const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} di-Craft!`).setDescription(`> Bahan: ${ingredients}\n> \n> 💰 **Dijual seharga 🪙 ${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)] });
-            }
-
-            if (subCmd === 'pupuk') {
-                const fertId = interaction.options.getString('jenis');
-                const slotNum = interaction.options.getInteger('slot');
-                const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
-                if (!fert || fert.id === 'none') return interaction.reply({ content: '❌ Pupuk tidak valid!', ephemeral: true });
-                if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost.toLocaleString('id-ID')}**`, ephemeral: true });
-                
-                const plots = getPlots(guildId, interaction.user.id);
-                if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman! Tanam dulu dengan `/farm plant`.', ephemeral: true });
-                if (slotNum < 1 || slotNum > plots.length) return interaction.reply({ content: `❌ Slot tidak valid! Kamu punya ${plots.length} tanaman (slot 1-${plots.length}). Cek di \`/farm status\`.`, ephemeral: true });
-                
-                const plot = plots[slotNum - 1];
-                if (plot.status === 'dead') return interaction.reply({ content: '❌ Tanaman ini sudah mati! Tidak bisa dipupuk.', ephemeral: true });
-                if (plot.fertilizer !== 'none') {
-                    const existingFert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer);
-                    return interaction.reply({ content: `❌ Tanaman ini sudah diberi pupuk **${existingFert ? existingFert.emoji + ' ' + existingFert.name : ''}**! Satu tanaman hanya bisa dipupuk sekali.`, ephemeral: true });
-                }
-                
-                userData.balance -= fert.cost;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
-                
-                const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-                const newTime = Math.round(crop.time * (1 - fert.speedBonus));
-                return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** diberikan ke **[Slot ${slotNum}] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}**!\n\n> ⏩ Waktu tumbuh: ~~${crop.time}m~~ → **${newTime}m**${fert.yieldBonus > 0 ? `\n> 📈 Bonus hasil: **+${Math.round(fert.yieldBonus*100)}%**` : ''}\n> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**` });
-            }
-
-            if (subCmd === 'shop') {
-                const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
-                let desc = '**🌱 BIBIT TANAMAN** *(masuk ke inventory, tanam dengan `/farm plant`)*\n\n';
-                for (const tier of tiers) {
-                    const crops = FARM_CROPS.filter(c => c.tier === tier);
-                    desc += `**${tier}** (${tier === 'Common' ? '2-4m' : tier === 'Uncommon' ? '8-18m' : tier === 'Rare' ? '20-35m' : tier === 'Epic' ? '50-90m' : '2.5-3.5h'})\n`;
-                    crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
-                    desc += '\n';
-                }
-                desc += '━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK**\n\n';
-                FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} ${f.name} — 🪙 ${f.cost} | ⏩ -${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus*100)}% hasil` : ''}\n`; });
-                if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
-                const components = [];
-                // Seed buy menus (split into 2 because Discord max 25 options per menu)
-                const cropsPage1 = FARM_CROPS.filter(c => ['Common','Uncommon','Rare'].includes(c.tier));
-                const cropsPage2 = FARM_CROPS.filter(c => ['Epic','Legendary'].includes(c.tier));
-                const seedMenu1 = new StringSelectMenuBuilder().setCustomId('farm_buy_seed').setPlaceholder('🌱 Bibit Common/Uncommon/Rare...').setMinValues(1).setMaxValues(1);
-                cropsPage1.slice(0, 25).forEach(c => seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
-                components.push(new ActionRowBuilder().addComponents(seedMenu1));
-                if (cropsPage2.length > 0) {
-                    const seedMenu2 = new StringSelectMenuBuilder().setCustomId('farm_buy_seed2').setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
-                    cropsPage2.slice(0, 25).forEach(c => seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.emoji} ${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)));
-                    components.push(new ActionRowBuilder().addComponents(seedMenu2));
-                }
-                // Fertilizer buy menu
-                const fertMenu = new StringSelectMenuBuilder().setCustomId('farm_buy_fertilizer').setPlaceholder('🧪 Beli Pupuk...').addOptions(
-                    ...FARM_FERTILIZERS.filter(f => f.id !== 'none').map(f => new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(f.id).setDescription(`-${Math.round(f.speedBonus*100)}% waktu${f.yieldBonus > 0 ? `, +${Math.round(f.yieldBonus*100)}% hasil` : ''}`))
-                );
-                components.push(new ActionRowBuilder().addComponents(fertMenu));
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🌾 Farm Shop').setColor('#2B2D31').setDescription(desc).setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Beli bibit → /farm plant untuk tanam` })], components });
-            }
+            return handleFarmCommand(interaction);
         }
 
         // ================= PET PANEL (Button-based) =================
@@ -1515,6 +1140,16 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
+        // --- FISHING PANEL SELECT MENUS ---
+        if (isFishingPanelSelectMenu(interaction.customId)) {
+            return handleFishingSelectMenu(interaction);
+        }
+
+        // --- FARM PANEL SELECT MENUS ---
+        if (isFarmPanelSelectMenu(interaction.customId)) {
+            return handleFarmSelectMenu(interaction);
+        }
+
         // --- PET PANEL SELECT MENUS ---
         if (isPetPanelSelectMenu(interaction.customId)) {
             return handlePetSelectMenu(interaction);
@@ -1660,6 +1295,16 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- FISHING PANEL BUTTONS ---
+        if (isFishingPanelButton(interaction.customId)) {
+            return handleFishingButton(interaction);
+        }
+
+        // --- FARM PANEL BUTTONS ---
+        if (isFarmPanelButton(interaction.customId)) {
+            return handleFarmButton(interaction);
+        }
+
         // --- PET PANEL BUTTONS ---
         if (isPetPanelButton(interaction.customId)) {
             return handlePetButton(interaction);
@@ -1776,8 +1421,8 @@ module.exports = async function handleInteractionCreate(interaction) {
             const cat = interaction.customId.replace('menu_', '');
             let content = '';
             if (cat === 'economy') content = '💰 **Economy Commands:**\n\n> `/economy balance` — Cek saldo\n> `/economy coinflip <taruhan>` — Lempar koin 50/50\n> `/economy slot <taruhan>` — Slot machine\n> `/economy gift @user <jumlah>` — Kirim money\n> `/economy redeem <kode>` — Tukar voucher\n> `/economy leaderboard` — Ranking global\n> `/daily` — Klaim hadiah harian';
-            else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing\n> `/fishing sell` — Jual ikan\n> `/fishing inventory` — Lihat ikan\n> `/fishing collection` — Pokedex ikan\n> `/fishing shop` — Beli joran & umpan\n> `/fishing stats` — Statistik\n> `/fishing lock/unlock <id>` — Kunci ikan';
-            else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm status` — Lihat kebun\n> `/farm plant <bibit>` — Tanam\n> `/farm water` — Siram semua\n> `/farm harvest` — Panen\n> `/farm sell` — Jual hasil\n> `/farm craft <resep>` — Craft produk\n> `/farm shop` — Beli bibit & pupuk\n> `/farm upgrade` — Upgrade lahan';
+            else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing (quick cast)\n> `/fishing` — 🎣 Buka Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection\n> Lock/Unlock, Sell All — semua dalam 1 panel!';
+            else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm` — 🌾 Buka Farm Panel\n> Panel: Plant, Water, Harvest, Shop\n> Storage, Craft, Upgrade, Pupuk — semua dalam 1 panel!';
             else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle\n> `/evolve` — Evolve pet ke bentuk baru';
             else if (cat === 'profile') content = '📋 **Profil Commands:**\n\n> `/me profile` — Kartu profil\n> `/me achievement` — Koleksi badge\n> `/me inventory` — Lihat item\n> `/me use <item>` — Gunakan item\n> `/me quest` — Misi harian\n> `/me streak` — Info streak\n> `/me restore` — Pulihkan streak';
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
@@ -1895,6 +1540,16 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= MODAL HANDLERS =================
     if (interaction.isModalSubmit()) {
+        // --- FISHING PANEL MODAL (Lock/Unlock) ---
+        if (isFishingPanelModal(interaction.customId)) {
+            return handleFishingModal(interaction);
+        }
+
+        // --- FARM PANEL MODAL (Seed Quantity) ---
+        if (isFarmPanelModal(interaction.customId)) {
+            return handleFarmModal(interaction);
+        }
+
         // --- PET PANEL MODAL (Rename) ---
         if (isPetPanelModal(interaction.customId)) {
             return handlePetModal(interaction);

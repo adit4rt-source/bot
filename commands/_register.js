@@ -72,17 +72,7 @@ const commands = [
         .addSubcommand(sub => sub.setName('restore').setDescription('Pulihkan streak yang putus (Max 3x sebulan)')),
     new SlashCommandBuilder()
         .setName('farm')
-        .setDescription('🌾 Sistem Farming / Kebun')
-        .addSubcommand(sub => sub.setName('status').setDescription('Lihat status kebun'))
-        .addSubcommand(sub => sub.setName('plant').setDescription('Tanam bibit').addStringOption(opt => opt.setName('bibit').setDescription('Pilih bibit').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('water').setDescription('Siram semua tanaman'))
-        .addSubcommand(sub => sub.setName('harvest').setDescription('Panen semua yang sudah matang'))
-        .addSubcommand(sub => sub.setName('shop').setDescription('Beli bibit & pupuk'))
-        .addSubcommand(sub => sub.setName('sell').setDescription('Jual semua hasil panen di storage'))
-        .addSubcommand(sub => sub.setName('upgrade').setDescription('Upgrade lahan (tambah slot)'))
-        .addSubcommand(sub => sub.setName('craft').setDescription('Craft resep dari hasil panen').addStringOption(opt => opt.setName('resep').setDescription('Pilih resep').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(sub => sub.setName('storage').setDescription('Lihat gudang hasil panen'))
-        .addSubcommand(sub => sub.setName('pupuk').setDescription('Berikan pupuk ke tanaman').addStringOption(opt => opt.setName('jenis').setDescription('Pilih jenis pupuk').setRequired(true).setAutocomplete(true)).addIntegerOption(opt => opt.setName('slot').setDescription('Nomor slot tanaman').setRequired(true))),
+        .setDescription('🌾 Farm Panel — Kelola kebun'),
     new SlashCommandBuilder()
         .setName('pet')
         .setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
@@ -90,15 +80,7 @@ const commands = [
     new SlashCommandBuilder().setName('fish').setDescription('Lempar pancing dan tangkap ikan!'),
     new SlashCommandBuilder()
         .setName('fishing')
-        .setDescription('Sistem Memancing')
-        .addSubcommand(sub => sub.setName('inventory').setDescription('Lihat ikan yang kamu punya').addIntegerOption(opt => opt.setName('page').setDescription('Halaman').setRequired(false)))
-        .addSubcommand(sub => sub.setName('shop').setDescription('Beli joran dan umpan'))
-        .addSubcommand(sub => sub.setName('stats').setDescription('Statistik memancingmu'))
-        .addSubcommand(sub => sub.setName('equip').setDescription('Lihat perlengkapan saat ini'))
-        .addSubcommand(sub => sub.setName('sell').setDescription('Jual semua ikan (kecuali yang di-lock)'))
-        .addSubcommand(sub => sub.setName('collection').setDescription('Lihat Fish Collection'))
-        .addSubcommand(sub => sub.setName('lock').setDescription('Lock ikan agar tidak terjual').addIntegerOption(opt => opt.setName('id').setDescription('ID ikan dari inventory').setRequired(true)))
-        .addSubcommand(sub => sub.setName('unlock').setDescription('Unlock ikan yang di-lock').addIntegerOption(opt => opt.setName('id').setDescription('ID ikan dari inventory').setRequired(true))),
+        .setDescription('🎣 Fishing Panel — Kelola memancing'),
     new SlashCommandBuilder()
         .setName('streak')
         .setDescription('Sistem Api Harian (Admin)')
