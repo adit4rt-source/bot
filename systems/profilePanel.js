@@ -1,9 +1,11 @@
 // systems/profilePanel.js - Profile Panel UI System (Button-based navigation)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, getSetting } = require('../database');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, getSetting, getItemCount, addItem, removeItem } = require('../database');
+const { getRandomInt } = require('../utils');
 const { ACHIEVEMENTS } = require('./achievements');
 const { getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
+const { ITEMS } = require('../data/items');
 
 
 // ============ BUILD: Main Profile Panel ============
@@ -114,7 +116,6 @@ async function handleProfileButton(interaction) {
 
     // === INVENTORY ===
     if (action === 'inventory') {
-        const { ITEMS } = require('../data/items');
         const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
         let desc = '';
         if (ownedItems.length === 0) {
@@ -130,11 +131,42 @@ async function handleProfileButton(interaction) {
             .setTitle(`\ud83c\udf92 Inventory \u2014 ${interaction.user.username}`)
             .setColor('#3498DB')
             .setDescription(desc)
-            .setFooter({ text: 'Klik item untuk menggunakan (coming soon)' });
-        const row = new ActionRowBuilder().addComponents(
+            .setFooter({ text: 'Pilih item dari menu di bawah untuk menggunakan' });
+
+        const components = [];
+
+        // Build select menu for usable items
+        const usableItems = ownedItems.filter(inv => {
+            const def = ITEMS.find(i => i.id === inv.itemId);
+            if (!def) return false;
+            if (['refine_stone', 'protection_stone'].includes(def.id)) return false;
+            return true;
+        });
+
+        if (usableItems.length > 0) {
+            const useMenu = new StringSelectMenuBuilder()
+                .setCustomId(`profpnl_useitem_${userId}`)
+                .setPlaceholder('\ud83c\udf92 Pilih item untuk digunakan...')
+                .setMinValues(1).setMaxValues(1);
+
+            usableItems.slice(0, 25).forEach(inv => {
+                const def = ITEMS.find(i => i.id === inv.itemId);
+                if (!def) return;
+                useMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(`${def.name} (x${inv.quantity})`)
+                    .setValue(def.id)
+                    .setDescription(def.desc.substring(0, 50))
+                    .setEmoji(def.emoji));
+            });
+            components.push(new ActionRowBuilder().addComponents(useMenu));
+        }
+
+        const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        components.push(backRow);
+
+        return interaction.update({ embeds: [embed], components });
     }
 
     // === STREAK ===
@@ -199,12 +231,198 @@ async function handleProfileButton(interaction) {
 
 // ============ UTILITY: Detection helper ============
 function isProfilePanelButton(customId) {
-    return customId.startsWith('profpnl_');
+    return customId.startsWith('profpnl_') && !customId.startsWith('profpnl_useitem_');
+}
+
+function isProfilePanelSelectMenu(customId) {
+    return customId.startsWith('profpnl_useitem_');
+}
+
+// ============ HANDLER: Profile panel select menu (Use Item) ============
+async function handleProfileSelectMenu(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+    const userId = customId.split('_').pop();
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '\u274c Ini bukan panel profil kamu!', ephemeral: true });
+    }
+
+    const selectedItemId = interaction.values[0];
+    const itemDef = ITEMS.find(i => i.id === selectedItemId);
+    if (!itemDef) {
+        return interaction.reply({ content: '\u274c Item tidak ditemukan!', ephemeral: true });
+    }
+
+    // Check if user owns the item
+    const qty = getItemCount(guildId, userId, selectedItemId);
+    if (qty <= 0) {
+        return interaction.reply({ content: '\u274c Kamu tidak memiliki item ini!', ephemeral: true });
+    }
+
+    // Items that cannot be used directly
+    if (['refine_stone', 'protection_stone'].includes(selectedItemId)) {
+        return interaction.reply({ content: '\u26a0\ufe0f Item ini **tidak bisa digunakan langsung**.\n> Digunakan otomatis saat refine di `/pet` \u2192 Refine.', ephemeral: true });
+    }
+
+    let resultMsg = '';
+    const userData = getOrCreateUser(guildId, userId);
+
+    // ---- ITEM EFFECTS ----
+    switch (selectedItemId) {
+        case 'xp_booster_2x': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'xp_boost_2x_until', until);
+            resultMsg = `\u26a1 **XP Booster 2x** aktif!\n> Double XP selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'xp_booster_3x': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'xp_boost_3x_until', until);
+            resultMsg = `\u26a1 **XP Booster 3x** aktif!\n> Triple XP selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'streak_shield': {
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'streak_shield_active', 1);
+            resultMsg = `\ud83d\udee1\ufe0f **Streak Shield** aktif!\n> Streak kamu terlindungi jika skip 1 hari.`;
+            break;
+        }
+        case 'lucky_charm': {
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'lucky_charm_active', 1);
+            resultMsg = `\ud83c\udf40 **Lucky Charm** aktif!\n> +15% chance menang di semua game.`;
+            break;
+        }
+        case 'money_magnet': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'money_magnet_until', until);
+            resultMsg = `\ud83e\uddf2 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'daily_doubler': {
+            incrementUserStat(guildId, userId, 'daily_doubler_active', 1);
+            resultMsg = `\ud83d\udcc5 **Daily Doubler** aktif!\n> /daily reward berikutnya akan digandakan.`;
+            break;
+        }
+        case 'tax_free_voucher': {
+            incrementUserStat(guildId, userId, 'tax_free_voucher', 1);
+            resultMsg = `\ud83e\uddfe **Tax-Free Voucher** aktif!\n> Gift berikutnya tanpa pajak (sekali pakai).`;
+            break;
+        }
+        case 'lucky_spin_token': {
+            incrementUserStat(guildId, userId, 'lucky_spin_active', 1);
+            resultMsg = `\ud83c\udfab **Lucky Spin Token** aktif!\n> Slot berikutnya dijamin minimal 2 simbol sama.`;
+            break;
+        }
+        case 'mystery_box': {
+            // Daily limit: 5 per day
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const mboxKey = `mbox_${today}`;
+            const mboxUsed = getUserStat(guildId, userId, mboxKey);
+            if (mboxUsed >= 5) {
+                return interaction.reply({ content: '\ud83d\udce6 **Mystery Box** sudah mencapai limit harian (5/5)!\n> Coba lagi besok.', ephemeral: true });
+            }
+
+            // Roll: 50% → 50-200, 30% → 200-500, 15% → 500-1000, 5% → 1000-2000
+            const roll = Math.random() * 100;
+            let money;
+            if (roll < 50) {
+                money = getRandomInt(50, 200);
+            } else if (roll < 80) {
+                money = getRandomInt(200, 500);
+            } else if (roll < 95) {
+                money = getRandomInt(500, 1000);
+            } else {
+                money = getRandomInt(1000, 2000);
+            }
+
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(money, guildId, userId);
+            incrementUserStat(guildId, userId, mboxKey, 1);
+            const tierEmoji = money >= 1000 ? '\ud83c\udf1f' : money >= 500 ? '\u2728' : money >= 200 ? '\ud83d\udcab' : '\ud83d\udce6';
+            resultMsg = `\ud83d\udce6 **Mystery Box** dibuka!\n> ${tierEmoji} Kamu mendapat \ud83e\ude99 **${money.toLocaleString('id-ID')}** money!\n> Limit hari ini: ${mboxUsed + 1}/5`;
+            break;
+        }
+        case 'auto_harvest_pass': {
+            // Set auto_harvest table
+            db.prepare('INSERT OR REPLACE INTO auto_harvest (guildId, userId, purchased, enabled) VALUES (?, ?, 1, 1)').run(guildId, userId);
+            resultMsg = `\ud83d\udd14 **Auto-Harvest Pass** diaktifkan!\n> Kamu akan mendapat notifikasi saat tanaman siap panen.`;
+            break;
+        }
+        default:
+            return interaction.reply({ content: '\u274c Item ini tidak bisa digunakan dari sini.', ephemeral: true });
+    }
+
+    // Consume item (1 unit)
+    removeItem(guildId, userId, selectedItemId, 1);
+
+    // Build result embed
+    const resultEmbed = new EmbedBuilder()
+        .setTitle(`\u2705 Item Digunakan!`)
+        .setColor('#2ECC71')
+        .setDescription(resultMsg)
+        .setFooter({ text: `${itemDef.emoji} ${itemDef.name} \u2014 Sisa: ${qty - 1}` })
+        .setTimestamp();
+
+    // Rebuild inventory panel after use
+    const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
+    let desc = '';
+    if (ownedItems.length === 0) {
+        desc = '*Inventory kosong!*\n\nBeli item di `/shop` atau dapatkan dari quest & event.';
+    } else {
+        ownedItems.forEach(inv => {
+            const def = ITEMS.find(i => i.id === inv.itemId);
+            if (!def) return;
+            desc += `> ${def.emoji} **${def.name}** x${inv.quantity}\n`;
+        });
+    }
+    const invEmbed = new EmbedBuilder()
+        .setTitle(`\ud83c\udf92 Inventory \u2014 ${interaction.user.username}`)
+        .setColor('#3498DB')
+        .setDescription(desc)
+        .setFooter({ text: 'Pilih item dari menu di bawah untuk menggunakan' });
+
+    const components = [];
+
+    // Rebuild select menu
+    const usableItems = ownedItems.filter(inv => {
+        const def = ITEMS.find(i => i.id === inv.itemId);
+        if (!def) return false;
+        if (['refine_stone', 'protection_stone'].includes(def.id)) return false;
+        return true;
+    });
+
+    if (usableItems.length > 0) {
+        const useMenu = new StringSelectMenuBuilder()
+            .setCustomId(`profpnl_useitem_${userId}`)
+            .setPlaceholder('\ud83c\udf92 Pilih item untuk digunakan...')
+            .setMinValues(1).setMaxValues(1);
+
+        usableItems.slice(0, 25).forEach(inv => {
+            const def = ITEMS.find(i => i.id === inv.itemId);
+            if (!def) return;
+            useMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`${def.name} (x${inv.quantity})`)
+                .setValue(def.id)
+                .setDescription(def.desc.substring(0, 50))
+                .setEmoji(def.emoji));
+        });
+        components.push(new ActionRowBuilder().addComponents(useMenu));
+    }
+
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+    components.push(backRow);
+
+    // Update the panel and send result as ephemeral follow-up
+    await interaction.update({ embeds: [invEmbed], components });
+    await interaction.followUp({ embeds: [resultEmbed], ephemeral: true });
 }
 
 module.exports = {
     buildProfilePanel,
     handleProfilePanelCommand,
     handleProfileButton,
-    isProfilePanelButton
+    handleProfileSelectMenu,
+    isProfilePanelButton,
+    isProfilePanelSelectMenu
 };

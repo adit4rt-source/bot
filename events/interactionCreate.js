@@ -14,7 +14,7 @@ const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('.
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
-const { handleProfilePanelCommand, handleProfileButton, isProfilePanelButton } = require('../systems/profilePanel');
+const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { handleTradeCommand, handleTradeButton, handleTradeModal, isTradePanelButton, isTradePanelModal } = require('../systems/tradePanel');
 const { catchFish, getEquipment } = require('../systems/fishing');
@@ -1074,6 +1074,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- CASINO PANEL SELECT MENUS ---
         if (isCasinoPanelSelectMenu(interaction.customId)) {
             return handleCasinoSelectMenu(interaction);
+        }
+
+        // --- PROFILE PANEL SELECT MENUS ---
+        if (isProfilePanelSelectMenu(interaction.customId)) {
+            return handleProfileSelectMenu(interaction);
         }
 
         if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); const status = unlocked ? '✅' : '🔒'; const nameStyle = unlocked ? `**${ach.name}**` : `~~${ach.name}~~`; desc += `${status} ${ach.emoji} ${nameStyle}\n> *${ach.desc}*\n> Hadiah: 🪙 ${ach.reward.toLocaleString('id-ID')} Money${unlocked ? ' ✓ Diklaim' : ''}\n\n`; } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
