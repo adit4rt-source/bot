@@ -27,11 +27,16 @@ const LISTINGS_PER_PAGE = 10;
 const SELL_MENU_LIMIT = 25; // Discord select menu hard cap
 
 
-// ============ HELPER: Expire old listings ============
+// ============ HELPER: Expire old listings (returns items to sellers) ============
 function expireOldListings(guildId) {
     const cutoff = Date.now() - LISTING_EXPIRY_MS;
-    db.prepare('UPDATE market_listings SET status = ? WHERE guildId = ? AND status = ? AND listedAt < ?')
-        .run('expired', guildId, 'active', cutoff);
+    const expiring = db.prepare('SELECT * FROM market_listings WHERE guildId = ? AND status = ? AND listedAt < ?')
+        .all(guildId, 'active', cutoff);
+    for (const listing of expiring) {
+        // Return the escrowed item to its seller before marking expired (otherwise it's lost forever).
+        returnListingItem(listing, listing.sellerId, guildId, false);
+        db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listing.id);
+    }
 }
 
 // ============ HELPER: Get item display for listing ============
@@ -113,7 +118,7 @@ function createMarketListing(guildId, userId, itemType, itemId, price) {
         if (!fish) return { ok: false, error: '❌ Ikan tidak ditemukan di inventory!' };
         const fishDef = FISH_DATA.find(f => f.id === fish.fishId);
         itemName = fishDef ? `${fishDef.name} (${fish.weight}kg)` : `Fish #${itemId}`;
-        db.prepare('DELETE FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').run(parseInt(itemId), guildId, userId);
+        db.prepare("UPDATE fish_inventory SET userId = 'MARKET_HOLD' WHERE id = ? AND guildId = ? AND userId = ?").run(parseInt(itemId), guildId, userId);
     } else if (itemType === 'relic') {
         const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
         if (!relic) return { ok: false, error: '❌ Relic tidak ditemukan!' };
@@ -167,6 +172,7 @@ function executePurchase(guildId, userId, listingId) {
     if (listing.sellerId === userId) return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
 
     if (Date.now() - listing.listedAt > LISTING_EXPIRY_MS) {
+        returnListingItem(listing, listing.sellerId, guildId, false);
         db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listingId);
         return { ok: false, error: '❌ Listing sudah expired!' };
     }
