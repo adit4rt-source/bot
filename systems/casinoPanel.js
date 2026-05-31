@@ -1,6 +1,6 @@
 // systems/casinoPanel.js - Casino Panel UI System (Button-based gambling)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStatMax, addIncome } = require('../database');
 const { getRandomInt } = require('../utils');
 const { spinSlot, getSlotResult } = require('./slots');
 const { checkAchievements } = require('./achievements');
@@ -271,6 +271,7 @@ async function handleCasinoButton(interaction) {
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_coinflips');
+        incrementUserStat(guildId, userId, 'total_bets', bet);
         updateQuestProgress(guildId, userId, 'coinflip', 1);
 
         // Show animation
@@ -291,8 +292,13 @@ async function handleCasinoButton(interaction) {
             if (won) {
                 db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(bet * 2, guildId, userId);
                 incrementUserStat(guildId, userId, 'coinflip_wins');
+                incrementUserStat(guildId, userId, 'total_gambling_wins', bet);
+                addIncome(guildId, userId, 'gambling', bet);
+                setUserStatMax(guildId, userId, 'biggest_win', bet);
                 await checkAchievements(interaction.guild, userId, { type: 'coinflip' });
             } else {
+                incrementUserStat(guildId, userId, 'coinflip_losses');
+                incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
                 await checkAchievements(interaction.guild, userId, { type: 'coinflip' });
             }
 
@@ -338,6 +344,7 @@ async function handleCasinoButton(interaction) {
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_slot_spins');
+        incrementUserStat(guildId, userId, 'total_bets', bet);
         updateQuestProgress(guildId, userId, 'slot', 1);
 
         // Show spinning
@@ -375,7 +382,14 @@ async function handleCasinoButton(interaction) {
                 db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(result.payout, guildId, userId);
                 incrementUserStat(guildId, userId, 'slot_wins');
                 incrementUserStat(guildId, userId, 'slot_total_winnings', result.payout);
+                const slotProfit = Math.max(0, result.payout - bet);
+                incrementUserStat(guildId, userId, 'total_gambling_wins', slotProfit);
+                addIncome(guildId, userId, 'gambling', slotProfit);
+                setUserStatMax(guildId, userId, 'biggest_win', slotProfit);
                 await checkAchievements(interaction.guild, userId, { type: 'slot', jackpot: result.jackpot, jackpot7: result.jackpot && reels[0].id === 'seven' });
+            } else {
+                incrementUserStat(guildId, userId, 'slot_losses');
+                incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
             }
 
             const freshData = getOrCreateUser(guildId, userId);
@@ -412,6 +426,7 @@ async function handleCasinoButton(interaction) {
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_roulette_spins');
+        incrementUserStat(guildId, userId, 'total_bets', bet);
 
         // Show spinning
         const spinEmbed = new EmbedBuilder()
@@ -445,8 +460,14 @@ async function handleCasinoButton(interaction) {
                 db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(payout, guildId, userId);
                 incrementUserStat(guildId, userId, 'roulette_wins');
                 incrementUserStat(guildId, userId, 'roulette_total_winnings', payout);
+                const rlProfit = Math.max(0, payout - bet);
+                incrementUserStat(guildId, userId, 'total_gambling_wins', rlProfit);
+                addIncome(guildId, userId, 'gambling', rlProfit);
+                setUserStatMax(guildId, userId, 'biggest_win', rlProfit);
                 await checkAchievements(interaction.guild, userId, { type: 'roulette' });
             } else {
+                incrementUserStat(guildId, userId, 'roulette_losses');
+                incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
                 await checkAchievements(interaction.guild, userId, { type: 'roulette' });
             }
 

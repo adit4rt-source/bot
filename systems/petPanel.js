@@ -8,7 +8,7 @@ const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { checkAchievements } = require('./achievements');
 const { getComboMultiplier, addComboFeature } = require('./combo');
 const { updateQuestProgress } = require('./quests');
-const { getUserStat, incrementUserStat } = require('../database');
+const { getUserStat, incrementUserStat, addIncome } = require('../database');
 const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
 
@@ -307,10 +307,12 @@ async function handlePetButton(interaction) {
             db.prepare('UPDATE pets SET hunting_until = 0 WHERE id = ?').run(pet.id);
             const success = Math.random() > 0.2;
             let embed;
+            incrementUserStat(guildId, userId, 'hunt_missions');
             if (success) {
                 const reward = getRandomInt(30, 150);
                 userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
+                addIncome(guildId, userId, 'battle', reward);
                 const expResult = addPetExp(guildId, userId, 20);
                 let lvlMsg = '';
                 if (expResult && expResult.leveledUp) lvlMsg = `\n> 🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
@@ -689,6 +691,7 @@ async function handlePetSelectMenu(interaction) {
                 db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
                 addPetExp(guildId, userId, expGain);
                 incrementUserStat(guildId, userId, 'dungeon_clears');
+                addIncome(guildId, userId, 'battle', reward);
                 updateQuestProgress(guildId, userId, 'dungeon', 1);
                 await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
             } else {
@@ -804,6 +807,7 @@ async function handlePetSelectMenu(interaction) {
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
             addPetExp(guildId, userId, expGain);
             incrementUserStat(guildId, userId, 'boss_kills');
+            addIncome(guildId, userId, 'battle', reward);
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
             if (Math.random() < 0.3) {
                 const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];

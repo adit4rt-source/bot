@@ -138,6 +138,32 @@ function incrementUserStat(guildId, userId, key, amount = 1) {
     return current + amount;
 }
 
+function setUserStatMax(guildId, userId, key, value) {
+    // Stores `value` only if it is greater than the current stored value (for "biggest" records).
+    value = Math.round(Number(value) || 0);
+    if (value <= getUserStat(guildId, userId, key)) return;
+    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, value);
+}
+
+// Tracks earned money for the /stats dashboard: per-source total, per-day total, and all-time total.
+// `source` is one of: fishing, farming, gambling, quest, daily, battle, trade, ...
+function addIncome(guildId, userId, source, amount) {
+    amount = Math.round(Number(amount) || 0);
+    if (amount <= 0) return;
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    incrementUserStat(guildId, userId, `income_${source}`, amount);
+    incrementUserStat(guildId, userId, `income_${today}`, amount);
+    incrementUserStat(guildId, userId, 'total_earned', amount);
+}
+
+// Tracks spent money for the /stats dashboard: per-category total + all-time total.
+function addSpending(guildId, userId, category, amount) {
+    amount = Math.round(Number(amount) || 0);
+    if (amount <= 0) return;
+    incrementUserStat(guildId, userId, `total_spent_${category}`, amount);
+    incrementUserStat(guildId, userId, 'total_spent', amount);
+}
+
 function getItemCount(guildId, userId, itemId) {
     const row = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId);
     return row ? row.quantity : 0;
@@ -225,4 +251,4 @@ function getAllFerts(guildId, userId) {
     return db.prepare('SELECT * FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
-module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts };
+module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts };

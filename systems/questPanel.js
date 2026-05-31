@@ -1,6 +1,6 @@
 // systems/questPanel.js - Quest Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, getSetting, getUserStat, incrementUserStat, addItem } = require('../database');
+const { db, getOrCreateUser, getSetting, getUserStat, incrementUserStat, addIncome, addItem } = require('../database');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('./quests');
 const { checkAchievements } = require('./achievements');
 
@@ -225,6 +225,7 @@ async function handleQuestButton(interaction) {
         ud.balance += tq.reward;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, userId);
         incrementUserStat(guildId, userId, 'total_quests_done');
+        addIncome(guildId, userId, 'quest', tq.reward);
         await checkAchievements(interaction.guild, userId, { type: 'quest' });
 
         if (quests.every(q => q.claimed)) {
@@ -235,6 +236,8 @@ async function handleQuestButton(interaction) {
         let bonusMsg = '';
         const streakResult = checkDailyQuestStreak(guildId, userId);
         if (streakResult) {
+            addIncome(guildId, userId, 'quest', streakResult.bonus);
+            if (streakResult.weeklyBonus) addIncome(guildId, userId, 'quest', 1000);
             bonusMsg = `\n\n\ud83c\udf81 **ALL DONE BONUS: +200 Money!**\n> \ud83c\udfc5 Perfect Days: ${streakResult.perfectDays}`;
             if (streakResult.weeklyBonus) {
                 bonusMsg += `\n\n\ud83c\udf89\ud83c\udf89 **7-DAY STREAK BONUS!** +1000 Money + \ud83d\udce6 Mystery Box! \ud83c\udf89\ud83c\udf89`;
@@ -272,6 +275,7 @@ async function handleQuestButton(interaction) {
         ud.balance += tq.reward;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, userId);
         incrementUserStat(guildId, userId, 'total_weekly_quests_done');
+        addIncome(guildId, userId, 'quest', tq.reward);
 
         // Update the panel to reflect new state
         const panel = buildWeeklyPanel(guildId, userId, interaction.user.username);

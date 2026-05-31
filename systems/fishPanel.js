@@ -1,6 +1,6 @@
 // systems/fishPanel.js - Fishing Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
@@ -391,6 +391,7 @@ async function handleFishingButton(interaction) {
         db.prepare('DELETE FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').run(guildId, userId);
         incrementUserStat(guildId, userId, 'total_fish_sold_value', totalValue);
         incrementUserStat(guildId, userId, 'total_fish_sold_count', inventory.length);
+        addIncome(guildId, userId, 'fishing', totalValue);
         const lockedCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 1').get(guildId, userId).c;
         let breakdown = Object.entries(countByTier).map(([t, c]) => `> ${(FISH_TIERS.find(ft => ft.tier === t) || { emoji: '🐟' }).emoji} ${t}: **${c}**`).join('\n');
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('💰 IKAN TERJUAL!')

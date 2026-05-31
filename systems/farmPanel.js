@@ -1,6 +1,6 @@
 // systems/farmPanel.js - Farm Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts } = require('../database');
 const { getRandomInt } = require('../utils');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('./farming');
 const { updateQuestProgress } = require('./quests');
@@ -314,6 +314,7 @@ async function handleFarmButton(interaction) {
         }
         db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalMoney, guildId, userId);
         db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ?').run(guildId, userId);
+        addIncome(guildId, userId, 'farming', totalMoney);
         const freshData = getOrCreateUser(guildId, userId);
         const embed = new EmbedBuilder().setColor('#F1C40F').setTitle('💰 Hasil Terjual!')
             .setDescription(`${sellDesc}\n**Total: 🪙 ${totalMoney.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`);
@@ -591,6 +592,7 @@ async function handleFarmSelectMenu(interaction) {
         for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
         db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.sellPrice, guildId, userId);
         incrementUserStat(guildId, userId, 'total_crafts');
+        addIncome(guildId, userId, 'farming', recipe.sellPrice);
         updateQuestProgress(guildId, userId, 'craft', 1);
         addComboFeature(guildId, userId, 'farming');
         await checkAchievements(interaction.guild, userId, { type: 'farm_craft' });

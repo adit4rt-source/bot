@@ -94,8 +94,8 @@ function buildActivityPanel(guildId, userId, username) {
     const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
     const tradesCompleted = getUserStat(guildId, userId, 'trades_completed') || 0;
     const totalBuys = getUserStat(guildId, userId, 'total_buys') || 0;
-    const fishSold = getUserStat(guildId, userId, 'total_fish_sold') || 0;
-    const dailyClaims = getUserStat(guildId, userId, 'total_daily_claims') || 0;
+    const fishSold = getUserStat(guildId, userId, 'total_fish_sold_count') || 0;
+    const dailyClaims = getUserStat(guildId, userId, 'total_dailies') || 0;
 
     // Activity chart
     const activities = [
