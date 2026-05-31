@@ -14,6 +14,10 @@ const poolAcakKata = ["DISCORD", "KOMPUTER", "INTERNET", "PROGRAMMER", "INDONESI
 
 module.exports = async function handleMessageCreate(message) {
     if (message.author.bot || !message.guild) return;
+
+    // Anti-abuse captcha: check if this message is a captcha answer
+    const { verifyCaptchaMessage } = require('../systems/captcha');
+    if (verifyCaptchaMessage(message)) return; // consumed as captcha answer, don't process further
     const guildId = message.guild.id;
 
     // Mini-event answer handling

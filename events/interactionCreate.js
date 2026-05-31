@@ -32,6 +32,7 @@ const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATION
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
+const { isBlocked, getBlockRemaining, hasPendingCaptcha, shouldTriggerCaptcha, sendCaptcha } = require('../systems/captcha');
 
 module.exports = async function handleInteractionCreate(interaction) {
     if (!interaction.guild) return interaction.reply({content: 'Hanya di Server!', ephemeral: true});
@@ -49,8 +50,24 @@ module.exports = async function handleInteractionCreate(interaction) {
     if (interaction.isChatInputCommand()) {
         const command = interaction.commandName, subCmd = interaction.options.getSubcommand(false), group = interaction.options.getSubcommandGroup(false);
         const cdKey = `${interaction.user.id}_${command}`;
-        if (slashCooldowns.has(cdKey) && Date.now() < slashCooldowns.get(cdKey)) return interaction.reply({ content: `⏳ Sabar... Tunggu sebentar sebelum memakai perintah ini lagi.`, ephemeral: true });
+        if (slashCooldowns.has(cdKey) && Date.now() < slashCooldowns.get(cdKey)) return interaction.reply({ content: `⏳ Tunggu **${Math.ceil((slashCooldowns.get(cdKey) - Date.now()) / 1000)} detik** lagi.`, ephemeral: true });
         slashCooldowns.set(cdKey, Date.now() + 3000);
+
+        // Anti-abuse: block check
+        if (isBlocked(guildId, interaction.user.id)) {
+            const rem = getBlockRemaining(guildId, interaction.user.id);
+            return interaction.reply({ content: `🚫 Kamu diblokir sementara karena gagal verifikasi.\n⏳ Coba lagi dalam **${rem} detik**.`, ephemeral: true });
+        }
+
+        // Anti-abuse: pending captcha check (must answer first)
+        if (hasPendingCaptcha(guildId, interaction.user.id)) {
+            return interaction.reply({ content: '🔒 Jawab captcha di chat dulu sebelum pakai command!', ephemeral: true });
+        }
+
+        // Anti-abuse: trigger captcha if 15 min active without verification
+        if (shouldTriggerCaptcha(guildId, interaction.user.id)) {
+            return sendCaptcha(interaction);
+        }
 
         // Track command usage analytics
         try {

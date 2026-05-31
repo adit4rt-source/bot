@@ -148,11 +148,15 @@ function wrapHandler(handlerName, handler) {
             log('ERROR', `${handlerName}: ${err.message}`, err, context);
 
             // Try to respond to user if it's an interaction
-            if (firstArg && firstArg.replied === false && firstArg.deferred === false && firstArg.reply) {
+            if (firstArg && firstArg.reply) {
                 try {
-                    await firstArg.reply({ content: '❌ Terjadi error. Silakan coba lagi.', ephemeral: true });
+                    if (!firstArg.replied && !firstArg.deferred) {
+                        await firstArg.reply({ content: '❌ Terjadi error. Silakan coba lagi.', ephemeral: true });
+                    } else if (firstArg.deferred && !firstArg.replied) {
+                        await firstArg.editReply({ content: '❌ Terjadi error. Silakan coba lagi.' });
+                    }
                 } catch (replyErr) {
-                    // Can't reply - maybe already replied or deferred
+                    // Can't reply - already replied or expired
                 }
             }
         }

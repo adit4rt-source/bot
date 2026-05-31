@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.0.1';
-const BUILD_DATE = '2026-05-31';
+const BOT_VERSION = '3.1.0';
+const BUILD_DATE = '2026-06-01';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -69,6 +69,20 @@ client.once(Events.ClientReady, async c => {
 
     log('INFO', `Bot started: v${BOT_VERSION} | ${c.guilds.cache.size} servers | ${commands.length} commands`);
 
+    // Set bot status / rich presence
+    const { ActivityType } = require('discord.js');
+    client.user.setPresence({
+        activities: [{ name: `/help | ${c.guilds.cache.size} servers`, type: ActivityType.Playing }],
+        status: 'online'
+    });
+    // Update presence every 10 minutes (server count may change)
+    setInterval(() => {
+        client.user.setPresence({
+            activities: [{ name: `/help | ${client.guilds.cache.size} servers`, type: ActivityType.Playing }],
+            status: 'online'
+        });
+    }, 10 * 60 * 1000);
+
     // One-time data reset (only if env RESET_DATA=<token> is set & not used before)
     try { maybeRunStartupReset(); } catch (e) { console.error('Startup reset error:', e); }
 
@@ -98,25 +112,27 @@ client.once(Events.ClientReady, async c => {
     // Post update changelog (only once per version, deduped)
     await postUpdateLog(client, BOT_VERSION, 
         `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-        `**🐛 Bug Fixes:**\n` +
-        `• Fix voucher, shop stock, streak, contest (panel DB mismatch)\n` +
-        `• Fix item hilang di Market (fish listing + expire)\n` +
-        `• Fix auto-harvest DM (sekarang benar-benar otomatis)\n` +
-        `• Fix farm_legendary achievement (sebelumnya mustahil)\n` +
-        `• Fix contest end sekarang bagi hadiah ke top 3\n\n` +
         `**✨ Fitur Baru:**\n` +
-        `• \`/gift @user <jumlah>\` — kirim money langsung\n` +
+        `• 🔒 **Anti-Abuse Captcha** — verifikasi random setiap 15 menit (anti macro/autoclicker)\n` +
+        `• 🎮 **Bot Status** — tampil \`/help | X servers\` di profil bot\n` +
+        `• 📥 **Guild Log** — catat server yang invite/kick bot\n` +
+        `• 📦 **Auto Changelog** — update otomatis terpost di sini\n` +
+        `• 🎁 **Welcome Embed** — link join server saat bot pertama kali dipakai\n` +
+        `• \`/gift @user\` — kirim money tanpa copy ID\n` +
         `• 🏆 Contest view di \`/fishing\` panel\n` +
         `• ♻️ Streak restore mandiri di \`/profile\`\n` +
-        `• 🌾 Auto-harvest notifier (DM otomatis saat panen siap)\n` +
-        `• 🔔 Daily reminder + Pet lapar DM otomatis\n` +
-        `• 📊 \`/stats\` dashboard sekarang keisi data real\n` +
-        `• 📥 Welcome embed + Join Server button\n` +
-        `• 📋 Guild join/leave log\n\n` +
+        `• 🌾 Auto-harvest DM (benar-benar otomatis)\n` +
+        `• 🔔 Daily reminder + Pet lapar DM\n` +
+        `• 📊 \`/stats\` dashboard data real\n\n` +
+        `**🐛 Bug Fixes:**\n` +
+        `• Fix voucher, shop stock, streak, contest crash\n` +
+        `• Fix item hilang di Market\n` +
+        `• Fix farm_legendary achievement\n` +
+        `• Fix contest end sekarang bagi hadiah\n` +
+        `• Update semua teks panel ke versi baru\n\n` +
         `**🧹 Cleanup:**\n` +
-        `• Hapus ~600 baris dead code\n` +
-        `• Update teks /help, /menu, dan semua panel\n` +
-        `• Hapus migrasi Kythia (fresh start)\n`
+        `• Hapus ~600 baris dead code + migrasi lama\n` +
+        `• Hapus tabel tidak terpakai\n`
     );
 });
 
