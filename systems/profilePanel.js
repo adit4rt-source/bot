@@ -246,9 +246,37 @@ async function handleProfileButton(interaction) {
                 `> \ud83d\udcc5 **Last Active:** ${lastDate}\n` +
                 `> \u267b\ufe0f **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
                 `*Ketik pesan setiap hari untuk menjaga streak!*\n` +
-                `*Streak restore: hubungi admin server.*`
+                `*Jika streak terputus, klik \u267b\ufe0f Restore (maks 3x/bulan).*`
             );
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_streakrestore_${userId}`).setLabel('\u267b\ufe0f Restore Streak').setStyle(ButtonStyle.Success).setDisabled(restoreCount >= 3),
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === STREAK RESTORE (user self-service, max 3x/month) ===
+    if (action === 'streakrestore') {
+        const currentMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
+        const restoreData = db.prepare('SELECT * FROM streak_restores WHERE guildId = ? AND userId = ? AND month = ?').get(guildId, userId, currentMonth);
+        const restoreCount = restoreData ? restoreData.count : 0;
+        if (restoreCount >= 3) return interaction.reply({ content: '\u274c Batas restore (3x) bulan ini sudah habis!', ephemeral: true });
+        const history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        if (!history || history.lost_count <= 1) return interaction.reply({ content: '\u274c Tidak ada streak terputus yang bisa dipulihkan.', ephemeral: true });
+        const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        const currentCount = sData ? sData.count : 0;
+        const newCount = history.lost_count + currentCount;
+        db.prepare('UPDATE streaks SET count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+        db.prepare('DELETE FROM streak_history WHERE guildId = ? AND userId = ?').run(guildId, userId);
+        if (restoreData) db.prepare('UPDATE streak_restores SET count = count + 1 WHERE guildId = ? AND userId = ? AND month = ?').run(guildId, userId, currentMonth);
+        else db.prepare('INSERT INTO streak_restores (guildId, userId, month, count) VALUES (?, ?, ?, 1)').run(guildId, userId, currentMonth);
+        const streakEmoji = getSetting(guildId, 'streak_emoji', '\ud83d\udd25');
+        const embed = new EmbedBuilder()
+            .setTitle(`${streakEmoji} Streak Dipulihkan!`)
+            .setColor('#2ECC71')
+            .setDescription(`\u2705 Streak kamu dipulihkan menjadi **${newCount} hari**!\n> \u267b\ufe0f Sisa restore bulan ini: **${2 - restoreCount}x**`);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
