@@ -372,11 +372,14 @@ module.exports = async function handleInteractionCreate(interaction) {
 
             // 🎣 FISHING section (Joran + Umpan) — Row 1
             shopDesc += '🎣 **FISHING**\n';
-            ROD_TYPES.filter(r => r.price > 0).slice(0, 4).forEach(r => { shopDesc += `> ${r.emoji} ${r.name} — 🪙 **${r.price.toLocaleString('id-ID')}** | CD: ${r.cooldown}s\n`; });
-            shopDesc += `> *...dan ${ROD_TYPES.filter(r => r.price > 0).length - 4} joran lainnya + ${BAIT_TYPES.filter(b => b.price > 0).length} umpan*\n\n`;
-            const fishingMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_fishing').setPlaceholder('🎣 Beli Joran / Umpan...').setMinValues(1).setMaxValues(1);
+            shopDesc += `> 🔧 Rod Parts — 🪙 **5.000** | Material upgrade joran\n`;
+            ROD_TYPES.filter(r => r.price > 0).slice(0, 3).forEach(r => { shopDesc += `> ${r.emoji} ${r.name} — 🪙 **${r.price.toLocaleString('id-ID')}** | CD: ${r.cooldown}s\n`; });
+            shopDesc += `> *...dan ${ROD_TYPES.filter(r => r.price > 0).length - 3} joran lainnya + ${BAIT_TYPES.filter(b => b.price > 0).length} umpan*\n\n`;
+            const fishingMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_fishing').setPlaceholder('🎣 Beli Joran / Umpan / Parts...').setMinValues(1).setMaxValues(1);
+            // Rod Parts (upgrade material)
+            fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`🔧 Rod Parts (🪙 5.000)`).setValue('item_rod_part').setDescription('Material upgrade joran (8% drop dari mancing)'));
             ROD_TYPES.filter(r => r.price > 0).forEach(r => { fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${r.name} (🪙 ${r.price.toLocaleString('id-ID')})`).setValue(`rod_${r.id}`).setDescription(`CD: ${r.cooldown}s | +${r.rareBonus}% Rare`)); });
-            BAIT_TYPES.filter(b => b.price > 0).slice(0, 14).forEach(b => { fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${b.name} (🪙 ${b.price.toLocaleString('id-ID')})`).setValue(`bait_${b.id}`).setDescription(`+${b.rareBonus}% chance ikan langka`)); });
+            BAIT_TYPES.filter(b => b.price > 0).slice(0, 13).forEach(b => { fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${b.name} (🪙 ${b.price.toLocaleString('id-ID')})`).setValue(`bait_${b.id}`).setDescription(`+${b.rareBonus}% chance ikan langka`)); });
             componentsRows.push(new ActionRowBuilder().addComponents(fishingMenu));
 
             // 🌾 FARMING section (Bibit + Pupuk) — Row 2
@@ -546,6 +549,14 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- FISHING SHOP BUY ---
         if (interaction.customId === 'fishing_buy_rod' || interaction.customId === 'fishing_buy_bait' || interaction.customId === 'shop_buy_fishing') {
             const selected = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
+            if (selected === 'item_rod_part') {
+                const price = 5000;
+                if (userData.balance < price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${price.toLocaleString('id-ID')}**`, ephemeral: true });
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(price, guildId, interaction.user.id);
+                addItem(guildId, interaction.user.id, 'rod_part', 1);
+                const owned = getItemCount(guildId, interaction.user.id, 'rod_part');
+                return interaction.reply({ content: `✅ Membeli 🔧 **Rod Parts** x1!\n> 📦 Total: **${owned}** parts\n> 💡 Upgrade joran di \`/fishing\` → 🔧 Upgrade Rod` });
+            }
             if (selected.startsWith('rod_')) {
                 const rodId = selected.substring(4), rodDef = ROD_TYPES.find(r => r.id === rodId);
                 if (!rodDef) return interaction.reply({ content: '❌ Joran tidak ditemukan!', ephemeral: true });
