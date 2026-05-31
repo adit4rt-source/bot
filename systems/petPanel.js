@@ -529,7 +529,16 @@ async function handlePetButton(interaction) {
         if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
         const evo = checkPetEvolution(guildId, userId);
         if (!evo) {
-            return interaction.reply({ content: `❌ **${pet.name}** belum bisa evolve! Cek syarat di Info panel.`, ephemeral: true });
+            // Show specific requirements
+            const { PET_EVOLUTIONS } = require('../data/pets');
+            const possibleEvo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
+            let hint = '';
+            if (possibleEvo) {
+                hint = `\n\n> 📋 **Syarat Evolve:**\n> 🐾 Pet: **${pet.petId}** ✅\n> 📈 Level: **${pet.level}** / **${possibleEvo.level}** ${pet.level >= possibleEvo.level ? '✅' : '❌'}\n> 🔄 Evolve ke: **${possibleEvo.name}**`;
+            } else {
+                hint = `\n\n> ℹ️ Pet **${pet.name}** (${pet.petId}) tidak memiliki evolusi.`;
+            }
+            return interaction.reply({ content: `❌ **${pet.name}** belum bisa evolve!${hint}`, ephemeral: true });
         }
         const result = evolvePet(guildId, userId);
         if (!result) return interaction.reply({ content: '❌ Gagal evolve!', ephemeral: true });

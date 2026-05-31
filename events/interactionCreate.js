@@ -1,7 +1,7 @@
 // events/interactionCreate.js
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
-const { getRandomInt } = require('../utils');
+const { getRandomInt, replyTemp } = require('../utils');
 const state = require('../state');
 const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
 const { addComboFeature, getComboMultiplier } = require('../systems/combo');
@@ -51,18 +51,18 @@ module.exports = async function handleInteractionCreate(interaction) {
     if (interaction.isChatInputCommand()) {
         const command = interaction.commandName, subCmd = interaction.options.getSubcommand(false), group = interaction.options.getSubcommandGroup(false);
         const cdKey = `${interaction.user.id}_${command}`;
-        if (slashCooldowns.has(cdKey) && Date.now() < slashCooldowns.get(cdKey)) return interaction.reply({ content: `⏳ Tunggu **${Math.ceil((slashCooldowns.get(cdKey) - Date.now()) / 1000)} detik** lagi.`, ephemeral: true });
+        if (slashCooldowns.has(cdKey) && Date.now() < slashCooldowns.get(cdKey)) return replyTemp(interaction, `⏳ Tunggu **${Math.ceil((slashCooldowns.get(cdKey) - Date.now()) / 1000)} detik** lagi.`);
         slashCooldowns.set(cdKey, Date.now() + 3000);
 
         // Anti-abuse: block check
         if (isBlocked(guildId, interaction.user.id)) {
             const rem = getBlockRemaining(guildId, interaction.user.id);
-            return interaction.reply({ content: `🚫 Kamu diblokir sementara karena gagal verifikasi.\n⏳ Coba lagi dalam **${rem} detik**.`, ephemeral: true });
+            return replyTemp(interaction, `🚫 Kamu diblokir sementara karena gagal verifikasi.\n⏳ Coba lagi dalam **${rem} detik**.`);
         }
 
         // Anti-abuse: pending captcha check (must answer first)
         if (hasPendingCaptcha(guildId, interaction.user.id)) {
-            return interaction.reply({ content: '🔒 Jawab captcha di chat dulu sebelum pakai command!', ephemeral: true });
+            return replyTemp(interaction, '🔒 Jawab captcha di chat dulu sebelum pakai command!');
         }
 
         // Anti-abuse: trigger captcha if 15 min active without verification
