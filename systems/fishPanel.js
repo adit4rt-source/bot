@@ -118,46 +118,48 @@ async function handleFishingButton(interaction) {
     // === LOCATION ===
     if (action === 'location') {
         const eq = getEquipment(guildId, userId);
+        const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
         const currentLoc = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river')) || FISHING_LOCATIONS[0];
-        const userLevel = userData.level;
 
         let desc = `📍 **Lokasi Saat Ini:** ${currentLoc.name}\n> *${currentLoc.desc}*\n> Bonus Rare: +${currentLoc.bonusRare}% | Tier: ${currentLoc.tiers.join(', ')}\n\n`;
-        desc += `**🗺️ Semua Lokasi:**\n`;
-        FISHING_LOCATIONS.forEach(loc => {
-            const isUnlocked = userLevel >= loc.unlockLevel;
+        desc += `🎋 **Joran:** ${rod.emoji} ${rod.name} (Tier ${rod.tier})\n\n`;
+        desc += `🗺️ **Semua Lokasi:**\n`;
+        for (const loc of FISHING_LOCATIONS) {
             const isCurrent = loc.id === currentLoc.id;
-            const statusIcon = isCurrent ? '📍' : (isUnlocked ? '✅' : '🔒');
-            desc += `${statusIcon} **${loc.name}** (Lv.${loc.unlockLevel})\n`;
-            desc += `> ${loc.desc} | +${loc.bonusRare}% rare\n`;
-        });
+            const reqRod = ROD_TYPES.find(r => r.tier === loc.requiredRodTier);
+            const hasReqRod = rod.tier >= loc.requiredRodTier;
+            const statusIcon = isCurrent ? '📍' : (hasReqRod ? '✅' : '⚠️');
+            desc += `${statusIcon} **${loc.name}**\n`;
+            desc += `> *${loc.desc}*\n`;
+            if (loc.requiredRodTier > 0) {
+                desc += `> Joran: ${reqRod ? reqRod.emoji + ' ' + reqRod.name : 'Tier ' + loc.requiredRodTier}+ ${hasReqRod ? '✅' : `| ⚠️ -${loc.luckPenalty}% luck`}\n`;
+            } else {
+                desc += `> Joran: Bebas (tidak ada penalty)\n`;
+            }
+            desc += `> Tier Ikan: ${loc.tiers.join(', ')} | +${loc.bonusRare}% rare\n\n`;
+        }
+
+        if (desc.length > 3900) desc = desc.substring(0, 3890) + '\n...';
 
         const embed = new EmbedBuilder()
             .setTitle(`📍 Fishing Locations — ${interaction.user.username}`)
             .setColor('#1ABC9C')
-            .setDescription(desc);
+            .setDescription(desc)
+            .setFooter({ text: rod.tier < currentLoc.requiredRodTier ? `⚠️ Joran di bawah rekomendasi! Luck -${currentLoc.luckPenalty}%` : '✅ Joran cukup untuk lokasi ini!' });
 
         const components = [];
-        const unlockedLocs = FISHING_LOCATIONS.filter(l => userLevel >= l.unlockLevel && l.id !== currentLoc.id);
-        if (unlockedLocs.length > 0) {
+        const otherLocs = FISHING_LOCATIONS.filter(l => l.id !== currentLoc.id);
+        if (otherLocs.length > 0) {
             const locMenu = new StringSelectMenuBuilder()
                 .setCustomId(`fish_setloc_${userId}`)
                 .setPlaceholder('📍 Pindah lokasi...')
                 .setMinValues(1).setMaxValues(1);
-            unlockedLocs.forEach(loc => {
-                locMenu.addOptions(new StringSelectMenuOptionBuilder()
-                    .setLabel(loc.name.replace(/[^\w\s]/g, '').trim())
-                    .setValue(loc.id)
-                    .setDescription(`${loc.desc.substring(0, 50)} | +${loc.bonusRare}% rare`));
+            otherLocs.forEach(loc => {
+                const hasReq = rod.tier >= loc.requiredRodTier;
+                const suffix = !hasReq ? ` | -${loc.luckPenalty}% luck` : '';
+                locMenu.addOptions({ label: loc.name.replace(/[^\w\s]/g, '').trim(), value: loc.id, description: `${loc.desc.substring(0, 45)}${suffix}` });
             });
             components.push(new ActionRowBuilder().addComponents(locMenu));
-            embed.setFooter({ text: `Level kamu: ${userLevel} | Pilih lokasi di menu atas ⬆️` });
-        } else {
-            // No other location unlocked — tell user what to aim for
-            const nextLoc = FISHING_LOCATIONS.find(l => l.unlockLevel > userLevel);
-            const hint = nextLoc
-                ? `Naik ke Level ${nextLoc.unlockLevel} untuk unlock ${nextLoc.name}!`
-                : 'Semua lokasi sudah unlocked!';
-            embed.setFooter({ text: `Level kamu: ${userLevel} | ${hint}` });
         }
         components.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
