@@ -134,8 +134,7 @@ async function handleFishingButton(interaction) {
         const embed = new EmbedBuilder()
             .setTitle(`📍 Fishing Locations — ${interaction.user.username}`)
             .setColor('#1ABC9C')
-            .setDescription(desc)
-            .setFooter({ text: `Level kamu: ${userLevel} | Pilih lokasi di bawah` });
+            .setDescription(desc);
 
         const components = [];
         const unlockedLocs = FISHING_LOCATIONS.filter(l => userLevel >= l.unlockLevel && l.id !== currentLoc.id);
@@ -151,6 +150,14 @@ async function handleFishingButton(interaction) {
                     .setDescription(`${loc.desc.substring(0, 50)} | +${loc.bonusRare}% rare`));
             });
             components.push(new ActionRowBuilder().addComponents(locMenu));
+            embed.setFooter({ text: `Level kamu: ${userLevel} | Pilih lokasi di menu atas ⬆️` });
+        } else {
+            // No other location unlocked — tell user what to aim for
+            const nextLoc = FISHING_LOCATIONS.find(l => l.unlockLevel > userLevel);
+            const hint = nextLoc
+                ? `Naik ke Level ${nextLoc.unlockLevel} untuk unlock ${nextLoc.name}!`
+                : 'Semua lokasi sudah unlocked!';
+            embed.setFooter({ text: `Level kamu: ${userLevel} | ${hint}` });
         }
         components.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
