@@ -1,56 +1,73 @@
 // =============================================================================
-// reset-data.js — ONE-TIME DATA RESET (standalone). Wipes ALL data except the
-// streak tables and server/admin config (see systems/dataReset.js PRESERVE).
-// Always backs up first and REQUIRES confirmation.
+// reset-data.js — LANGSUNG RESET (tanpa konfirmasi).
+// Hapus SEMUA DATA kecuali streak. Backup otomatis dibuat dulu.
 //
-// EASIEST WAY (recommended): don't use this file. Instead, in Pterodactyl just
-// add a Startup variable  RESET_DATA=fresh-jun1  then restart once (bot.js will
-// reset on boot), then remove the variable. See systems/dataReset.js.
-//
-// THIS STANDALONE WAY:
-//   1. Stop server. Startup tab -> Main file = reset-data.js
-//   2. Start. In Console type:  RESET   (or set env RESET_CONFIRM=RESET)
-//   3. After "✅ Reset selesai", Stop. Startup tab -> Main file = bot.js. Start.
+// CARA PAKAI:
+//   1. Stop server.
+//   2. Startup tab -> Main file = reset-data.js
+//   3. Start server. Reset langsung jalan. Tunggu "SELESAI" di console.
+//   4. Stop server.
+//   5. Startup tab -> Main file = bot.js
+//   6. Start. Beres.
 // =============================================================================
+const fs = require('fs');
+const path = require('path');
+const Database = require('better-sqlite3');
 
-const readline = require('readline');
-const { getResetPlan, backupDatabase, wipeAllExceptPreserved } = require('./systems/dataReset');
+const DB_PATH = path.join(process.cwd(), 'economy.sqlite');
+if (!fs.existsSync(DB_PATH)) { console.log('❌ economy.sqlite tidak ditemukan!'); process.exit(1); }
 
-const { keep, wipe } = getResetPlan();
-console.log('\n=== RENCANA RESET ===');
-console.log('🔒 DIPERTAHANKAN : ' + (keep.join(', ') || '(tidak ada)'));
-console.log('🗑️  DIHAPUS       : ' + (wipe.join(', ') || '(tidak ada)'));
-console.log('\n⚠️  Menghapus data SEMUA server (global) & TIDAK bisa dibatalkan (kecuali restore backup).');
+// Backup dulu
+const backupDir = path.join(process.cwd(), 'backups');
+try { fs.mkdirSync(backupDir, { recursive: true }); } catch(e) {}
+const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+const backupPath = path.join(backupDir, `economy_PRE-RESET_${ts}.sqlite`);
+fs.copyFileSync(DB_PATH, backupPath);
+console.log('💾 Backup: ' + backupPath);
 
-function run() {
-    const backupPath = backupDatabase();
-    console.log('💾 Backup dibuat: ' + backupPath);
-    const summary = wipeAllExceptPreserved();
-    console.log('\n=== SELESAI ===');
-    let total = 0;
-    summary.filter(s => s.deleted > 0).forEach(s => { total += s.deleted; console.log(`   ${s.table}: -${s.deleted} baris`); });
-    const failed = summary.filter(s => !s.ok);
-    if (failed.length) console.log('⚠️  Gagal: ' + failed.map(s => `${s.table} (${s.error})`).join(', '));
-    console.log(`   (total ${total} baris dihapus)`);
-    console.log('🔒 Dipertahankan: ' + keep.join(', '));
-    console.log('\n✅ Reset selesai!');
-    console.log('👉 JANGAN LUPA: kembalikan "Main file" ke bot.js sebelum start berikutnya.');
-    process.exit(0);
+const db = new Database(DB_PATH);
+
+// HANYA INI YANG DIPERTAHANKAN:
+const KEEP = ['streaks', 'streak_history', 'streak_restores'];
+
+// Ambil semua tabel
+const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name);
+const toWipe = allTables.filter(t => !KEEP.includes(t));
+
+console.log('\n🔒 DIPERTAHANKAN: ' + KEEP.filter(t => allTables.includes(t)).join(', '));
+console.log('🗑️  DIHAPUS: ' + toWipe.join(', '));
+console.log('\n--- MENGHAPUS ---');
+
+let total = 0;
+for (const t of toWipe) {
+    try {
+        const count = db.prepare(`SELECT COUNT(*) AS c FROM "${t}"`).get().c;
+        db.prepare(`DELETE FROM "${t}"`).run();
+        try { db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t); } catch(e) {}
+        if (count > 0) { console.log(`   ✓ ${t}: ${count} baris dihapus`); total += count; }
+    } catch(e) {
+        console.log(`   ⚠️ ${t}: ERROR - ${e.message}`);
+    }
 }
 
-if ((process.env.RESET_CONFIRM || '').toUpperCase() === 'RESET') {
-    console.log('\n✅ Konfirmasi via env RESET_CONFIRM=RESET. Melanjutkan...');
-    run();
-} else {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const timer = setTimeout(() => {
-        console.log('\n⏳ Tidak ada konfirmasi dalam 60 detik. DIBATALKAN — tidak ada data yang dihapus.');
-        rl.close(); process.exit(0);
-    }, 60000);
-    rl.question("\nKetik 'RESET' lalu Enter untuk konfirmasi (60 detik): ", (answer) => {
-        clearTimeout(timer);
-        rl.close();
-        if ((answer || '').trim().toUpperCase() === 'RESET') run();
-        else { console.log('❎ Dibatalkan (input bukan "RESET"). Tidak ada data yang dihapus.'); process.exit(0); }
-    });
-}
+// Verifikasi streak masih ada
+const streakCount = db.prepare('SELECT COUNT(*) AS c FROM streaks').get().c;
+console.log(`\n🔒 Streak tersisa: ${streakCount} baris (AMAN)`);
+console.log(`🗑️  Total dihapus: ${total} baris dari ${toWipe.length} tabel`);
+
+// Verifikasi users kosong
+try {
+    const usersLeft = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+    console.log(`📊 users (level/exp/money): ${usersLeft} baris (harus 0)`);
+} catch(e) {}
+
+try { db.exec('VACUUM'); } catch(e) {}
+db.close();
+
+console.log('\n✅ ===== RESET SELESAI =====');
+console.log('👉 STOP server → Main file = bot.js → START');
+console.log('   Level, EXP, Money, Pet, Fish, Farm, Quest, Achievement → SEMUA kosong');
+console.log('   Streak → TETAP AMAN');
+
+// Keep process alive briefly so Pterodactyl shows the output
+setTimeout(() => process.exit(0), 5000);
