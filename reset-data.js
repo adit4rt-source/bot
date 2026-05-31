@@ -25,15 +25,18 @@ const DB_PATH = path.join(process.cwd(), 'economy.sqlite');
 
 // ---- Tables to KEEP (everything else gets wiped). Edit this list if needed. ----
 const PRESERVE = [
-    'streaks',          // streak counts (the thing we keep)
+    // --- Streak (the core thing we keep) ---
+    'streaks',          // streak counts
     'streak_history',   // needed so streak restore still works
     'streak_restores',  // monthly restore counters
-    // --- If you ALSO want to keep server setup, uncomment lines below: ---
-    // 'server_settings',   // notif channels, temp-voice category, custom role price, testimoni
-    // 'config',            // XP rates / cooldowns
-    // 'shop_items', 'shop_roles', 'vouchers',  // your shop inventory
-    // 'rewards',           // level role rewards
-    // 'economy_admins',    // bankers
+    // --- Server / admin setup (Option B: keep configuration, wipe player data) ---
+    'server_settings',  // notif channels, temp-voice category, custom role price, testimoni
+    'config',           // XP rates / cooldowns
+    'shop_items',       // shop inventory
+    'shop_roles',       // shop roles
+    'vouchers',         // active vouchers
+    'rewards',          // level role rewards
+    'economy_admins',   // bankers
 ];
 
 function fail(msg) { console.error('❌ ' + msg); process.exit(1); }
@@ -70,6 +73,11 @@ function performReset() {
         }
     });
     wipe();
+    // If voucher definitions are preserved but claims were wiped, reset their use counters
+    // so the kept vouchers are fully usable again after the release reset.
+    if (keep.includes('vouchers') && toWipe.includes('voucher_claims')) {
+        try { db.prepare('UPDATE vouchers SET current_uses = 0').run(); console.log('   (vouchers.current_uses direset ke 0)'); } catch (e) { /* ignore */ }
+    }
     try { db.exec('VACUUM'); } catch (e) { /* ignore */ }
 
     console.log('\n=== SELESAI ===');
