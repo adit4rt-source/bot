@@ -6,7 +6,7 @@ const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = requir
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
-const { getContestState, addContestEntry } = require('./contest');
+const { getContestState, addContestEntry, getContestLeaderboard } = require('./contest');
 const { addPetExp } = require('../systems/pets');
 const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS } = require('../data/fish');
 const state = require('../state');
@@ -40,7 +40,8 @@ function buildFishingPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('📍 Location').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('📍 Location').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('🏆 Contest').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
@@ -79,6 +80,39 @@ async function handleFishingButton(interaction) {
     if (action === 'back') {
         const panel = buildFishingPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
+    }
+
+    // === CONTEST STATUS + LEADERBOARD ===
+    if (action === 'contest') {
+        const contestState = getContestState(guildId);
+        const isActive = contestState && contestState.active && Date.now() < contestState.endsAt;
+        const top = getContestLeaderboard(guildId, 10);
+        let desc;
+        if (!isActive && top.length === 0) {
+            desc = '📭 **Tidak ada kontes yang sedang berjalan.**\n\n> Kontes memancing dimulai oleh Admin (via `/admin`).\n> Setiap ikan yang kamu tangkap saat kontes aktif otomatis masuk ke ranking ikan **terberat**!';
+        } else {
+            let board = '';
+            top.forEach((e, i) => {
+                const medal = ['🥇', '🥈', '🥉'][i] || `**${i + 1}.**`;
+                const fishDef = FISH_DATA.find(f => f.id === e.fishId);
+                board += `${medal} <@${e.oderId}> — ${fishDef ? fishDef.emoji : '🐟'} ${fishDef ? fishDef.name : '?'} (**${e.weight} kg**)\n`;
+            });
+            if (!board) board = '*Belum ada peserta! Jadilah yang pertama dengan Cast.*';
+            const timeLine = isActive
+                ? `⏱️ Sisa waktu: **${Math.ceil((contestState.endsAt - Date.now()) / 60000)} menit**`
+                : '🏁 Kontes sudah selesai.';
+            desc = `🎯 Target: tangkap ikan **TERBERAT**!\n${timeLine}\n\n**🏆 Leaderboard:**\n${board}`;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle('🏆 Fishing Contest')
+            .setColor(isActive ? '#F1C40F' : '#95A5A6')
+            .setDescription(desc)
+            .setFooter({ text: isActive ? 'Cast terus untuk naik ranking!' : 'Pantau pengumuman untuk kontes berikutnya' });
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary).setDisabled(!isActive),
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === LOCATION ===
