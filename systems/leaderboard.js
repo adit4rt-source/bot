@@ -1,13 +1,10 @@
-// systems/leaderboard.js — /leaderboard command handler
-const { EmbedBuilder } = require('discord.js');
+// systems/leaderboard.js — /leaderboard Panel (Button-based navigation)
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getUserStat } = require('../database');
-const { FISH_DATA } = require('../data/fish');
 const { PET_DATA } = require('../data/pets');
 
-async function handleLeaderboardCommand(interaction) {
-    const guildId = interaction.guild.id;
-    const kategori = interaction.options.getString('kategori') || 'overall';
-
+// ==================== BUILD LEADERBOARD EMBED ====================
+function buildLeaderboard(guildId, kategori, userId) {
     let title, desc = '', color = '#FFD700';
 
     switch (kategori) {
@@ -26,7 +23,7 @@ async function handleLeaderboardCommand(interaction) {
         case 'fish': {
             title = '🎣 Top 10 — Fishing';
             const data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_fish_caught' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-            data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🐟 **${u.stat_value}** ikan ditangkap\n`; });
+            data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🐟 **${u.stat_value}** ikan\n`; });
             break;
         }
         case 'farm': {
@@ -48,11 +45,10 @@ async function handleLeaderboardCommand(interaction) {
             break;
         }
         case 'battle': {
-            title = '⚔️ Top 10 — Battle';
-            const pvp = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'pvp_wins' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-            const dungeon = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'dungeon_clears' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-            const boss = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'boss_kills' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-            // Combine scores: pvp*2 + dungeon*1 + boss*3
+            title = '⚔️ Top 10 — Battle Score';
+            const pvp = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'pvp_wins' ORDER BY stat_value DESC LIMIT 20").all(guildId);
+            const dungeon = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'dungeon_clears' ORDER BY stat_value DESC LIMIT 20").all(guildId);
+            const boss = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'boss_kills' ORDER BY stat_value DESC LIMIT 20").all(guildId);
             const scoreMap = {};
             for (const r of pvp) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value * 2;
             for (const r of dungeon) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value;
@@ -62,14 +58,14 @@ async function handleLeaderboardCommand(interaction) {
                 const pW = pvp.find(r => r.userId === uid)?.stat_value || 0;
                 const dC = dungeon.find(r => r.userId === uid)?.stat_value || 0;
                 const bK = boss.find(r => r.userId === uid)?.stat_value || 0;
-                desc += `${medal(i)} <@${uid}> — ⚔️ **${score}** pts (PvP:${pW} | Dg:${dC} | Boss:${bK})\n`;
+                desc += `${medal(i)} <@${uid}> — ⚔️ **${score}** (PvP:${pW} Dg:${dC} Boss:${bK})\n`;
             });
             break;
         }
         case 'gambling': {
-            title = '🎰 Top 10 — Gambling Wins';
+            title = '🎰 Top 10 — Gambling';
             const data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_gambling_wins' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-            data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🪙 **${u.stat_value.toLocaleString('id-ID')}** total menang\n`; });
+            data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🪙 **${u.stat_value.toLocaleString('id-ID')}** menang\n`; });
             break;
         }
         case 'achievement': {
@@ -80,7 +76,7 @@ async function handleLeaderboardCommand(interaction) {
         }
         case 'overall':
         default: {
-            title = '⭐ Top 10 — Overall Score (Event)';
+            title = '⭐ Top 10 — Overall Score';
             color = '#FF6B00';
             const users = db.prepare('SELECT * FROM users WHERE guildId = ?').all(guildId);
             const scored = users.map(u => {
@@ -110,19 +106,18 @@ async function handleLeaderboardCommand(interaction) {
                     + (badges * 20)
                     + (gambling * 2);
 
-                return { userId: u.userId, score, level: u.level, balance: u.balance, fish, farm, streak, petLv, dungeon, boss, pvp, badges };
+                return { userId: u.userId, score, level: u.level, balance: u.balance, fish, farm, streak, petLv, battle: dungeon+boss+pvp, badges };
             }).sort((a, b) => b.score - a.score).slice(0, 10);
 
             scored.forEach((u, i) => {
                 desc += `${medal(i)} <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n`;
-                desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.dungeon+u.boss+u.pvp} | 🏅${u.badges}\n`;
+                desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n`;
             });
 
             desc += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-            desc += `> **📐 Rumus Score:**\n`;
-            desc += `> Level×150 + Money/20 + Fish×3 + Farm×4 + Craft×8\n`;
-            desc += `> Streak×12 + Pet×5 + Dungeon×6 + Boss×15 + PvP×10\n`;
-            desc += `> Badge×20 + Gambling×2`;
+            desc += `> **📐 Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
+            desc += `> Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15\n`;
+            desc += `> PvP×10 + Badge×20 + Gambling×2`;
             break;
         }
     }
@@ -133,10 +128,56 @@ async function handleLeaderboardCommand(interaction) {
         .setTitle(title)
         .setColor(color)
         .setDescription(desc)
-        .setFooter({ text: `${interaction.guild.name} | /leaderboard <kategori>` })
+        .setFooter({ text: `Gunakan tombol di bawah untuk ganti kategori` })
         .setTimestamp();
 
-    return interaction.reply({ embeds: [embed] });
+    // Highlight current category with different button style
+    const row1 = new ActionRowBuilder().addComponents(
+        btn(`lb_overall_${userId}`, '⭐ Overall', kategori === 'overall'),
+        btn(`lb_level_${userId}`, '📈 Level', kategori === 'level'),
+        btn(`lb_money_${userId}`, '💰 Money', kategori === 'money'),
+        btn(`lb_fish_${userId}`, '🎣 Fish', kategori === 'fish'),
+        btn(`lb_farm_${userId}`, '🌾 Farm', kategori === 'farm'),
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+        btn(`lb_pet_${userId}`, '🐾 Pet', kategori === 'pet'),
+        btn(`lb_streak_${userId}`, '🔥 Streak', kategori === 'streak'),
+        btn(`lb_battle_${userId}`, '⚔️ Battle', kategori === 'battle'),
+        btn(`lb_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
+        btn(`lb_achievement_${userId}`, '🏆 Badge', kategori === 'achievement'),
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
+}
+
+function btn(customId, label, active) {
+    return new ButtonBuilder()
+        .setCustomId(customId)
+        .setLabel(label)
+        .setStyle(active ? ButtonStyle.Success : ButtonStyle.Secondary);
+}
+
+// ==================== COMMAND HANDLER ====================
+async function handleLeaderboardCommand(interaction) {
+    const kategori = interaction.options.getString('kategori') || 'overall';
+    const panel = buildLeaderboard(interaction.guild.id, kategori, interaction.user.id);
+    return interaction.reply(panel);
+}
+
+// ==================== BUTTON HANDLER ====================
+async function handleLeaderboardButton(interaction) {
+    const parts = interaction.customId.split('_'); // lb_<kategori>_<userId>
+    const kategori = parts[1];
+    const ownerId = parts[2];
+
+    // Any user can browse leaderboard (read-only, no need to restrict)
+    const panel = buildLeaderboard(interaction.guild.id, kategori, ownerId);
+    return interaction.update(panel);
+}
+
+// ==================== DETECTOR ====================
+function isLeaderboardButton(customId) {
+    return customId.startsWith('lb_');
 }
 
 // Helpers
@@ -144,4 +185,4 @@ function medal(i) { return ['🥇', '🥈', '🥉'][i] || `**${i+1}.**`; }
 function getStat(guildId, userId, key) { return getUserStat(guildId, userId, key) || 0; }
 function shortNum(n) { if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 1000) return (n/1000).toFixed(1)+'K'; return n.toString(); }
 
-module.exports = { handleLeaderboardCommand };
+module.exports = { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton };
