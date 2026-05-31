@@ -507,22 +507,16 @@ async function handleFarmSelectMenu(interaction) {
     }
 
 
-    // === BUY FERTILIZER (to inventory) ===
+    // === BUY FERTILIZER — show qty modal (like seeds) ===
     if (customId.startsWith('farm_buyfert_')) {
         const fertId = interaction.values[0];
         const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
         if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
-        if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost}**`, ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(fert.cost, guildId, userId);
-        addFert(guildId, userId, fertId, 1);
-        const owned = getFertCount(guildId, userId, fertId);
-        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✅ Membeli Pupuk!')
-            .setDescription(`${fert.emoji} **${fert.name}** x1 masuk ke inventory.\n> 📦 Total: **${owned}** | Pakai di 🧫 Pupuk\n> 💰 Saldo: 🪙 **${(userData.balance - fert.cost).toLocaleString('id-ID')}**`);
-        const backRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Beli Lagi').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [backRow] });
+        const modal = new ModalBuilder().setCustomId(`farm_fertqty_${fertId}_${userId}`).setTitle(`Beli ${fert.emoji} ${fert.name}`);
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('farm_fert_qty_input').setLabel(`Berapa? (🪙${fert.cost}/pupuk)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 5')
+        ));
+        return interaction.showModal(modal);
     }
 
     // === PUPUK FERTILIZER SELECT (from inventory) ===
@@ -663,6 +657,30 @@ async function handleFarmModal(interaction) {
         return interaction.update(panel);
     }
 
+    // === FERTILIZER QUANTITY MODAL ===
+    if (customId.startsWith('farm_fertqty_')) {
+        const remaining = customId.replace('farm_fertqty_', '');
+        const lastUnderscore = remaining.lastIndexOf('_');
+        const fertId = remaining.substring(0, lastUnderscore);
+        const userId = remaining.substring(lastUnderscore + 1);
+        if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Bukan milikmu!', ephemeral: true });
+        const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
+        if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
+        const input = interaction.fields.getTextInputValue('farm_fert_qty_input');
+        const qty = parseInt(input);
+        if (isNaN(qty) || qty < 1 || qty > 999) return interaction.reply({ content: '❌ Masukkan angka valid (1-999)!', ephemeral: true });
+        const totalCost = fert.cost * qty;
+        const userData = getOrCreateUser(guildId, userId);
+        if (userData.balance < totalCost) {
+            const affordable = Math.floor(userData.balance / fert.cost);
+            return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} pupuk.\n> Mampu beli **${affordable}** pupuk.`, ephemeral: true });
+        }
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, userId);
+        addFert(guildId, userId, fertId, qty);
+        const owned = getFertCount(guildId, userId, fertId);
+        return interaction.reply({ content: `✅ Membeli ${fert.emoji} **${fert.name}** x**${qty}**!\n> 💰 Total: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Stok pupuk: **${owned}**\n> 💡 Pakai lewat \`/farm\` → 🧪 Pupuk`, ephemeral: false });
+    }
+
     return null;
 }
 
@@ -679,7 +697,7 @@ function isFarmPanelSelectMenu(customId) {
 }
 
 function isFarmPanelModal(customId) {
-    return customId.startsWith('farm_seedqty_');
+    return customId.startsWith('farm_seedqty_') || customId.startsWith('farm_fertqty_');
 }
 
 module.exports = {
