@@ -219,11 +219,12 @@ function checkDailyQuestStreak(guildId, userId) {
 }
 
 function resetConsecutivePerfect(guildId, userId) {
-    // Called when a day passes without completing all quests
-    // We track this by checking if yesterday was a perfect day
+    // If yesterday was NOT a perfect day (all quests completed), reset the
+    // consecutive-perfect-days counter. The stat `quest_bonus_<date>` is set
+    // to 1 by checkDailyQuestStreak when all quests are claimed that day.
     const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const bonusKey = `quest_bonus_${yesterday}`;
-    const hadPerfectYesterday = getUserStat(guildId, userId, bonusKey);
+    const hadPerfectYesterday = getUserStat(guildId, userId, bonusKey) >= 1;
     if (!hadPerfectYesterday) {
         // Reset consecutive counter
         db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'quest_consecutive_perfect', 0);
@@ -292,7 +293,7 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
         const levelChannelId = getSetting(guildId, 'level_channel', null);
         const channel = levelChannelId ? member.guild.channels.cache.get(levelChannelId) : (member.guild.systemChannel || member.guild.channels.cache.filter(c => c.isTextBased()).first());
-        if (channel) channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`);
+        if (channel) channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).catch(() => {});
         await checkAchievements(member.guild, member.id, { type: 'level' });
     } else {
         db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
