@@ -191,6 +191,88 @@ async function checkMilestoneRewards(guild, userId) {
             }
         }
     }
+
+    // Update achievement-based progression role
+    await updateAchievementRole(guild, userId, totalCount);
+}
+
+// ==================== ACHIEVEMENT-BASED PROGRESSION ROLES ====================
+// Roles are auto-created per server on first need. Replace mode: only highest role active.
+const ACHIEVEMENT_ROLES = [
+    { minBadges: 5,  name: '🌱 Pemula', color: '#7ED321' },
+    { minBadges: 15, name: '⭐ Explorer', color: '#4A90D9' },
+    { minBadges: 30, name: '💎 Veteran', color: '#9B59B6' },
+    { minBadges: 50, name: '🔥 Elite', color: '#E74C3C' },
+    { minBadges: 70, name: '👑 Master', color: '#F1C40F' },
+    { minBadges: 89, name: '🏆 Completionist', color: '#FFFFFF' },
+];
+
+async function updateAchievementRole(guild, userId, badgeCount) {
+    try {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return;
+
+        // Determine which role tier the user qualifies for (highest)
+        let qualifiedTier = null;
+        for (let i = ACHIEVEMENT_ROLES.length - 1; i >= 0; i--) {
+            if (badgeCount >= ACHIEVEMENT_ROLES[i].minBadges) { qualifiedTier = ACHIEVEMENT_ROLES[i]; break; }
+        }
+
+        // Get or create all achievement roles for this server
+        const roleIds = await getOrCreateAchievementRoles(guild);
+
+        // Remove all achievement roles from the user, then add the qualified one
+        const allRoleIds = Object.values(roleIds);
+        const currentAchRoles = member.roles.cache.filter(r => allRoleIds.includes(r.id));
+        for (const [, role] of currentAchRoles) {
+            await member.roles.remove(role).catch(() => {});
+        }
+
+        if (qualifiedTier) {
+            const roleId = roleIds[qualifiedTier.minBadges];
+            if (roleId) {
+                const role = guild.roles.cache.get(roleId);
+                if (role) await member.roles.add(role).catch(() => {});
+            }
+        }
+    } catch (e) { /* silent — role assignment should never break the bot */ }
+}
+
+async function getOrCreateAchievementRoles(guild) {
+    const guildId = guild.id;
+    // Check if we already have cached role IDs for this server
+    const cached = db.prepare("SELECT value FROM server_settings WHERE guildId = ? AND key = 'achievement_roles'").get(guildId);
+    if (cached) {
+        try {
+            const parsed = JSON.parse(cached.value);
+            // Verify all roles still exist
+            let allExist = true;
+            for (const [, roleId] of Object.entries(parsed)) {
+                if (!guild.roles.cache.has(roleId)) { allExist = false; break; }
+            }
+            if (allExist) return parsed;
+        } catch (e) { /* re-create */ }
+    }
+
+    // Create roles (lowest to highest)
+    const roleIds = {};
+    for (const tier of ACHIEVEMENT_ROLES) {
+        let existingRole = guild.roles.cache.find(r => r.name === tier.name);
+        if (!existingRole) {
+            try {
+                existingRole = await guild.roles.create({
+                    name: tier.name,
+                    color: tier.color,
+                    hoist: true,
+                    reason: `Achievement Role: ${tier.minBadges}+ badges`
+                });
+            } catch (e) { continue; }
+        }
+        roleIds[tier.minBadges] = existingRole.id;
+    }
+
+    db.prepare("INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)").run(guildId, 'achievement_roles', JSON.stringify(roleIds));
+    return roleIds;
 }
 
 async function checkAchievements(guild, userId, context = {}) {
