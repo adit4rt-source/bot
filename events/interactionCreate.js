@@ -61,6 +61,32 @@ module.exports = async function handleInteractionCreate(interaction) {
         const userData = getOrCreateUser(guildId, interaction.user.id);
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
+        // === WELCOME / JOIN SERVER PROMPT (once per guild, first command usage) ===
+        const welcomeShown = getSetting(guildId, 'welcome_shown', null);
+        if (!welcomeShown) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'welcome_shown', '1');
+            const welcomeEmbed = new EmbedBuilder()
+                .setColor('#5865F2')
+                .setTitle('🎉 Terima kasih sudah menggunakan idcommunity Bot!')
+                .setDescription(
+                    `Hai **${interaction.guild.name}**! Bot ini sekarang aktif di server kalian. 🚀\n\n` +
+                    `📢 **Join Official Server** untuk:\n` +
+                    `> 🎮 Event & Giveaway eksklusif\n` +
+                    `> 🐛 Bug Report & Support\n` +
+                    `> 📦 Update & fitur terbaru\n` +
+                    `> 💬 Komunitas player lain\n\n` +
+                    `Gunakan \`/help\` atau \`/menu\` untuk mulai! 🍀`
+                )
+                .setThumbnail(interaction.client.user.displayAvatarURL({ size: 256 }))
+                .setFooter({ text: 'idcommunity Bot — Economy & RPG' })
+                .setTimestamp();
+            const welcomeRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setLabel('🔗 Join Official Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/idcommunity'),
+                new ButtonBuilder().setLabel('📖 Help').setCustomId('welcome_help').setStyle(ButtonStyle.Secondary)
+            );
+            interaction.channel.send({ embeds: [welcomeEmbed], components: [welcomeRow] }).catch(() => {});
+        }
+
         if (command === 'help') {
             const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Semua fitur kini berbasis **panel interaktif** — cukup jalankan command lalu pakai tombol/menu!\nGunakan `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
@@ -77,7 +103,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
             );
             if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel (semua pengaturan dalam 1 panel)\n> Notifikasi channel, Temp Voice, Kelola Shop & Voucher,\n> Pengaturan XP/Level, Kelola Money & Streak user, Contest`, inline: false });
-            helpEmbed.setFooter({ text: '💡 Tip: Gunakan /menu untuk navigasi dengan tombol!', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
+            helpEmbed.setFooter({ text: '💡 Tip: Gunakan /menu untuk navigasi! | Join: discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
             return interaction.reply({ embeds: [helpEmbed] });
         }
 
@@ -632,6 +658,11 @@ module.exports = async function handleInteractionCreate(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- WELCOME HELP BUTTON ---
+        if (interaction.customId === 'welcome_help') {
+            return interaction.reply({ content: '📖 Gunakan `/help` untuk panduan lengkap, atau `/menu` untuk navigasi cepat!', ephemeral: true });
+        }
+
         // --- FISHING PANEL BUTTONS ---
         if (isFishingPanelButton(interaction.customId)) {
             return handleFishingButton(interaction);
