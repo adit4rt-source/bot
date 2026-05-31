@@ -30,14 +30,14 @@ const BAIT_TYPES = [
 
 // ==================== FISH TIERS ====================
 const FISH_TIERS = [
-    { tier: 'Trash', emoji: '🗑️', chance: 25, minWeight: 0.01, maxWeight: 0.5, minValue: 1, maxValue: 10 },
-    { tier: 'Common', emoji: '🐟', chance: 35, minWeight: 0.1, maxWeight: 5, minValue: 5, maxValue: 30 },
-    { tier: 'Uncommon', emoji: '🐠', chance: 22, minWeight: 0.5, maxWeight: 15, minValue: 15, maxValue: 60 },
-    { tier: 'Rare', emoji: '🐡', chance: 12, minWeight: 1, maxWeight: 50, minValue: 40, maxValue: 150 },
-    { tier: 'Epic', emoji: '🦈', chance: 4, minWeight: 5, maxWeight: 200, minValue: 100, maxValue: 400 },
-    { tier: 'Legendary', emoji: '🐉', chance: 1.5, minWeight: 50, maxWeight: 1000, minValue: 300, maxValue: 1200 },
-    { tier: 'Mythic', emoji: '🌈', chance: 0.4, minWeight: 100, maxWeight: 5000, minValue: 800, maxValue: 3000 },
-    { tier: 'Secret', emoji: '🔮', chance: 0.1, minWeight: 500, maxWeight: 9999, minValue: 2000, maxValue: 10000 },
+    { tier: 'Trash', emoji: '🗑️', chance: 25, minWeight: 0.01, maxWeight: 0.5, minValue: 1, maxValue: 5 },
+    { tier: 'Common', emoji: '🐟', chance: 35, minWeight: 0.1, maxWeight: 5, minValue: 3, maxValue: 15 },
+    { tier: 'Uncommon', emoji: '🐠', chance: 22, minWeight: 0.5, maxWeight: 15, minValue: 8, maxValue: 35 },
+    { tier: 'Rare', emoji: '🐡', chance: 12, minWeight: 1, maxWeight: 50, minValue: 25, maxValue: 80 },
+    { tier: 'Epic', emoji: '🦈', chance: 4, minWeight: 5, maxWeight: 200, minValue: 60, maxValue: 200 },
+    { tier: 'Legendary', emoji: '🐉', chance: 1.5, minWeight: 50, maxWeight: 1000, minValue: 150, maxValue: 600 },
+    { tier: 'Mythic', emoji: '🌈', chance: 0.4, minWeight: 100, maxWeight: 5000, minValue: 400, maxValue: 1500 },
+    { tier: 'Secret', emoji: '🔮', chance: 0.1, minWeight: 500, maxWeight: 9999, minValue: 1000, maxValue: 5000 },
 ];
 
 // ==================== FISHING LOCATIONS ====================
