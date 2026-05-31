@@ -1,6 +1,6 @@
 // events/interactionCreate.js
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
+const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
 const state = require('../state');
 const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
@@ -43,19 +43,8 @@ module.exports = async function handleInteractionCreate(interaction) {
         return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
     }
 
-    // Autocomplete handler for item use
-    if (interaction.isAutocomplete()) {
-        if (interaction.commandName === 'use' || (interaction.commandName === 'me' && interaction.options.getSubcommand(false) === 'use')) {
-            const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, interaction.user.id);
-            const choices = ownedItems.map(inv => {
-                const def = ITEMS.find(i => i.id === inv.itemId);
-                if (!def) return null;
-                return { name: `${def.emoji} ${def.name} (x${inv.quantity})`, value: def.id };
-            }).filter(Boolean).slice(0, 25);
-            return interaction.respond(choices);
-        }
-        return;
-    }
+    // Autocomplete: no registered command currently uses autocomplete.
+    if (interaction.isAutocomplete()) return;
 
     if (interaction.isChatInputCommand()) {
         const command = interaction.commandName, subCmd = interaction.options.getSubcommand(false), group = interaction.options.getSubcommandGroup(false);
@@ -116,240 +105,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply({ embeds: [menuEmbed], components: [row1, row2] });
         }
 
-        if (command === 'setting') {
-            if (!isAdmin) return interaction.reply({content: '❌ Hanya Admin!', ephemeral: true});
-            if (subCmd === 'quest_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_channel', ch.id); return interaction.reply(`✅ \`/quest\` hanya bisa di <#${ch.id}>.`); }
-            if (subCmd === 'level_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'level_channel', ch.id); return interaction.reply(`✅ Level Up notif ke <#${ch.id}>.`); }
-            if (subCmd === 'achievement_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'achievement_channel', ch.id); return interaction.reply(`✅ Achievement notif ke <#${ch.id}>.`); }
-            if (subCmd === 'streak_channel') { const ch = interaction.options.getChannel('channel'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_channel', ch.id); return interaction.reply(`✅ Streak notif ke <#${ch.id}>.`); }
-            if (subCmd === 'setup_notifications') {
-                await interaction.deferReply();
-                try {
-                    const category = await interaction.guild.channels.create({ name: '📢 NOTIFICATIONS', type: ChannelType.GuildCategory });
-                    const achChannel = await interaction.guild.channels.create({ name: '🏆-achievement', type: ChannelType.GuildText, parent: category.id });
-                    const lvlChannel = await interaction.guild.channels.create({ name: '📈-level-up', type: ChannelType.GuildText, parent: category.id });
-                    const streakChannel = await interaction.guild.channels.create({ name: '🔥-streak', type: ChannelType.GuildText, parent: category.id });
-                    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'achievement_channel', achChannel.id);
-                    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'level_channel', lvlChannel.id);
-                    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_channel', streakChannel.id);
-                    return interaction.editReply(`✅ **Kategori Notification Dibuat!**\n\n📁 **${category.name}**\n> 🏆 Achievement: <#${achChannel.id}>\n> 📈 Level Up: <#${lvlChannel.id}>\n> 🔥 Streak: <#${streakChannel.id}>`);
-                } catch (err) { console.error(err); return interaction.editReply('❌ Gagal membuat channel.'); }
-            }
-        }
-
-        if (command === 'tempvoice') {
-            if (!isAdmin) return interaction.reply({content: '❌ Hanya Admin!', ephemeral: true});
-            if (subCmd === 'setup') {
-                await interaction.deferReply();
-                try {
-                    const category = await interaction.guild.channels.create({ name: '💬 PRIVATE ROOMS', type: ChannelType.GuildCategory });
-                    const interfaceChannel = await interaction.guild.channels.create({ name: '⚙️-interface', type: ChannelType.GuildText, parent: category.id });
-                    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'jtc_category', category.id);
-                    const tvEmbed = new EmbedBuilder().setTitle('🔊 TEMP VOICE CONTROL PANEL').setColor('#2B2D31').setDescription('Selamat datang di sistem Private Voice!\n\n**✨ CARA MEMBUAT CHANNEL:**\nKlik tombol biru untuk membuat channel. Waktu **60 detik** untuk bergabung.\n\n**⚙️ CARA MENGATUR:**\nGunakan tombol abu-abu/merah untuk mengatur.').setImage('https://i.imgur.com/K1LWeqW.png').setFooter({ text: 'TempVoice System' });
-                    const rowCreate = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('tv_create_private').setLabel('Private 🔒').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('tv_create_duo').setLabel('Duo 👥 (2)').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('tv_create_squad').setLabel('Squad 👥 (4)').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('tv_create_custom').setLabel('Custom 🎛️').setStyle(ButtonStyle.Success));
-                    const rowManage1 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('tv_name').setLabel('✏️ Name').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_limit').setLabel('👥 Limit').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_privacy').setLabel('🔒 Lock/Unlock').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_hide').setLabel('👁️ Hide/Unhide').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_claim').setLabel('👑 Claim Owner').setStyle(ButtonStyle.Secondary));
-                    const rowManage2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('tv_transfer').setLabel('🔄 Transfer').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_unblock').setLabel('🟢 Unblock').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('tv_kick').setLabel('👢 Kick').setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId('tv_block').setLabel('🚫 Block').setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId('tv_delete').setLabel('🗑️ Delete').setStyle(ButtonStyle.Danger));
-                    await interfaceChannel.send({ embeds: [tvEmbed], components: [rowCreate, rowManage1, rowManage2] });
-                    return interaction.editReply(`✅ **Temp Voice Dibuat!** Kategori **${category.name}** + <#${interfaceChannel.id}>`);
-                } catch (err) { console.error(err); return interaction.editReply('❌ Gagal. Cek permission bot.'); }
-            }
-        }
-
-
-        if (command === 'me' && subCmd === 'achievement') {
-            const targetUser = interaction.options.getUser('user') || interaction.user;
-            const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUser.id);
-            const unlockedIds = userAchs.map(a => a.achievementId);
-            const categories = [...new Set(ACHIEVEMENTS.map(a => a.category))];
-            const totalUnlocked = unlockedIds.length, totalAll = ACHIEVEMENTS.length;
-            const percentComplete = Math.floor((totalUnlocked / totalAll) * 100);
-
-            let desc = `> 🏆 **${totalUnlocked}** / **${totalAll}** badge terkumpul (**${percentComplete}%**)\n\n`;
-
-            for (const cat of categories) {
-                const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
-                const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️' }[cat] || '📁';
-                desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
-                catAchs.forEach(a => {
-                    if (unlockedIds.includes(a.id)) {
-                        desc += `> ${a.emoji} ${a.name}\n`;
-                    } else {
-                        desc += `> ▪️ ???\n`;
-                    }
-                });
-                desc += '\n';
-            }
-
-            // Discord embed 4096 char limit
-            if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n\n*...dan lainnya*';
-
-            const embed = new EmbedBuilder()
-                .setAuthor({ name: `Achievement Collection | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
-                .setColor('#FFD700')
-                .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
-                .setDescription(desc)
-                .setFooter({ text: 'Pilih kategori di bawah untuk melihat detail + reward' })
-                .setTimestamp();
-            const selectMenu = new StringSelectMenuBuilder().setCustomId(`ach_detail_${targetUser.id}`).setPlaceholder('📂 Lihat detail per kategori...').addOptions(categories.map(cat => {
-                const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️' }[cat] || '📁';
-                const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
-                const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-                return new StringSelectMenuOptionBuilder().setLabel(`${cat} (${catUnlocked}/${catAchs.length})`).setValue(cat).setDescription(`Lihat detail achievement ${cat}`);
-            }));
-            return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)] });
-        }
-
-        if (command === 'me' && subCmd === 'profile') {
-            // VIEW (default)
-            const targetUser = interaction.options.getUser('user') || interaction.user, targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-            if (!targetMember) return interaction.reply({content: 'User tidak ditemukan.', ephemeral: true});
-            const tData = getOrCreateUser(guildId, targetUser.id), targetXp = (tData.level + 1) * 100, percent = Math.min(100, Math.max(0, Math.floor((tData.xp / targetXp) * 100))), progressBar = '▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10)), roles = targetMember.roles.cache.filter(r => r.name !== '@everyone').sort((a, b) => b.position - a.position).map(r => `<@&${r.id}>`);
-            let displayRoles = roles.length > 0 ? roles.slice(0, 10).join(' • ') : '*Tidak ada role*'; if (roles.length > 10) displayRoles += ` *+${roles.length - 10} lainnya*`;
-            const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetUser.id), streakCount = sData ? sData.count : 0, streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
-            const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ? ORDER BY unlockedAt DESC').all(guildId, targetUser.id);
-            const totalBadges = userAchs.length;
-            let badgeDisplay = '';
-            if (userAchs.length > 0) {
-                badgeDisplay = userAchs.slice(0, 5).map(a => { const def = ACHIEVEMENTS.find(d => d.id === a.achievementId); return def ? `> ${def.emoji} **${def.name}** — *${def.desc}*` : ''; }).filter(Boolean).join('\n');
-                if (totalBadges > 5) badgeDisplay += `\n> *...+${totalBadges - 5} badge lainnya*`;
-            } else { badgeDisplay = '> *Belum ada badge.*'; }
-            const fishCaught = getUserStat(guildId, targetUser.id, 'total_fish_caught');
-            const slotWins = getUserStat(guildId, targetUser.id, 'slot_wins');
-            const cfWins = getUserStat(guildId, targetUser.id, 'coinflip_wins');
-            const harvests = getUserStat(guildId, targetUser.id, 'total_harvests');
-
-            // Pet info for profile
-            const activePet = getPetData(guildId, targetUser.id);
-            const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level}) — *${pd.tier}*` : ''; })() : '*Belum punya pet*';
-
-            const profileEmbed = new EmbedBuilder()
-                .setAuthor({ name: `Kartu Profil | ${targetUser.username}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
-                .setColor('#2B2D31')
-                .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
-                .setDescription(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-                .addFields(
-                    { name: '📊 STATISTIK UTAMA', value: `> 🏅 **Level** \`${tData.level}\` — 💰 **Saldo** \`${tData.balance.toLocaleString('id-ID')}\` — ${streakEmoji} **Streak** \`${streakCount} Hari\`\n> \n> ✨ **Progress EXP**\n> \`${progressBar}\` **${percent}%** (\`${tData.xp.toLocaleString('id-ID')}/${targetXp.toLocaleString('id-ID')}\`)`, inline: false },
-                    { name: `🏆 BADGE COLLECTION (${totalBadges}/${ACHIEVEMENTS.length})`, value: badgeDisplay, inline: false },
-                    { name: '🎮 AKTIVITAS', value: `> 🎣 Ikan: **${fishCaught}** — 🎰 Slot: **${slotWins}** — 🪙 CF: **${cfWins}** — 🌾 Panen: **${harvests}**`, inline: false },
-                    { name: '🐾 PET', value: `> ${petInfo}`, inline: false },
-                    { name: '📅 INFO AKUN', value: `> 📥 Bergabung: <t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D> — 📆 Dibuat: <t:${Math.floor(targetUser.createdTimestamp / 1000)}:D>`, inline: false },
-                    { name: `🎭 Role [${roles.length}]`, value: displayRoles, inline: false }
-                )
-                .setFooter({ text: `ID: ${targetUser.id} | /profile untuk badge & stats | /pet untuk pet`, iconURL: interaction.guild.iconURL() })
-                .setTimestamp();
-            return interaction.reply({ embeds: [profileEmbed] });
-        }
-
-        if (command === 'level') {
-            if (subCmd === 'rank') { const target = interaction.options.getUser('user') || interaction.user, tData = getOrCreateUser(guildId, target.id), targetXp = (tData.level + 1) * 100, percent = Math.min(100, Math.max(0, Math.floor((tData.xp / targetXp) * 100))); const embed = new EmbedBuilder().setAuthor({ name: target.username, iconURL: target.displayAvatarURL({ dynamic: true }) }).setTitle('🌟 Statistik Level').setColor('#2B2D31').setThumbnail(target.displayAvatarURL({ dynamic: true, size: 512 })).addFields({ name: 'Level', value: `\`${tData.level}\``, inline: true }, { name: 'EXP', value: `\`${tData.xp.toLocaleString('id-ID')} / ${targetXp.toLocaleString('id-ID')}\``, inline: true }, { name: 'Progress', value: `${'▰'.repeat(Math.floor(percent / 10)) + '▱'.repeat(10 - Math.floor(percent / 10))} **${percent}%**`, inline: false }); return interaction.reply({ embeds: [embed] }); }
-            if (subCmd === 'leaderboard') { const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY level DESC, xp DESC LIMIT 10').all(guildId); const embed = new EmbedBuilder().setTitle('🏆 Level Leaderboard').setColor('#2B2D31'); let desc = data.length ? '' : 'Belum ada data.'; data.forEach((u, i) => desc += `**${i+1}.** <@${u.userId}> — Level **${u.level}** (${u.xp}/${(u.level + 1) * 100} XP)\n`); embed.setDescription(desc); return interaction.reply({ embeds: [embed] }); }
-            if (group === 'setting') {
-                if (!isAdmin) return interaction.reply({content: '❌ Hanya Admin!', ephemeral: true});
-                if (subCmd === 'rolereward') { const action = interaction.options.getString('action'); if (action === 'add') { db.prepare('INSERT OR REPLACE INTO rewards (guildId, level, roleId, money) VALUES (?, ?, ?, ?)').run(guildId, interaction.options.getInteger('level'), interaction.options.getRole('role')?.id || null, interaction.options.getInteger('money') || 0); return interaction.reply(`✅ Diatur.`); } if (action === 'remove') { db.prepare('DELETE FROM rewards WHERE guildId = ? AND level = ?').run(guildId, interaction.options.getInteger('level')); return interaction.reply(`🗑️ Dihapus.`); } if (action === 'list') { const req = db.prepare('SELECT * FROM rewards WHERE guildId = ? ORDER BY level ASC').all(guildId); let msg = '🎁 **DAFTAR REWARD**\n'; req.forEach(r => msg += `Level ${r.level} ➔ Role: ${r.roleId ? `<@&${r.roleId}>` : '-'} | Money: ${r.money.toLocaleString('id-ID')}\n`); return interaction.reply({ content: msg || 'Kosong.', allowedMentions: { roles: [] } }); } }
-                if (subCmd === 'xp') { const tipe = interaction.options.getString('tipe'), min = interaction.options.getInteger('min_xp'), max = interaction.options.getInteger('max_xp'), cd = interaction.options.getInteger('cooldown'); if (min > max) return interaction.reply({content: '❌ Min > Max!', ephemeral: true}); db.prepare('INSERT OR REPLACE INTO config (guildId, key, value) VALUES (?, ?, ?)').run(guildId, `${tipe}_min_xp`, min); db.prepare('INSERT OR REPLACE INTO config (guildId, key, value) VALUES (?, ?, ?)').run(guildId, `${tipe}_max_xp`, max); db.prepare('INSERT OR REPLACE INTO config (guildId, key, value) VALUES (?, ?, ?)').run(guildId, `${tipe}_cooldown`, cd); let extraMsg = ''; if (tipe === 'reaction') { const awardTo = interaction.options.getString('award_to') || 'both'; db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'reaction_award_to', awardTo); extraMsg = `\n> Award To: **${awardTo.toUpperCase()}**`; } return interaction.reply(`⚙️ **Diperbarui!**\n> XP: **${min} - ${max}**\n> CD: **${cd}**${extraMsg}`); }
-            }
-        }
-
-
-        if (command === 'economy' && subCmd === 'balance') return interaction.reply(`💰 Money: **${userData.balance.toLocaleString('id-ID')}**`);
-
-        if (command === 'money') {
-            if (group === 'manage') {
-                const isOwner = interaction.user.id === interaction.guild.ownerId;
-                if (subCmd === 'add_admin' || subCmd === 'remove_admin' || subCmd === 'list_admin') {
-                    if (!isOwner) return interaction.reply({content: '🛑 Owner Only', ephemeral: true});
-                    if (subCmd === 'add_admin') { const tUser = interaction.options.getUser('user'), tRole = interaction.options.getRole('role'); if (tUser) db.prepare('INSERT OR REPLACE INTO economy_admins (guildId, adminId, type) VALUES (?, ?, ?)').run(guildId, tUser.id, 'user'); if (tRole) db.prepare('INSERT OR REPLACE INTO economy_admins (guildId, adminId, type) VALUES (?, ?, ?)').run(guildId, tRole.id, 'role'); return interaction.reply(`✅ Banker ditambah.`); }
-                    if (subCmd === 'remove_admin') { const tUser = interaction.options.getUser('user'), tRole = interaction.options.getRole('role'); if (tUser) db.prepare('DELETE FROM economy_admins WHERE guildId = ? AND adminId = ? AND type = ?').run(guildId, tUser.id, 'user'); if (tRole) db.prepare('DELETE FROM economy_admins WHERE guildId = ? AND adminId = ? AND type = ?').run(guildId, tRole.id, 'role'); return interaction.reply(`🗑️ Banker dihapus.`); }
-                    if (subCmd === 'list_admin') { const list = db.prepare('SELECT * FROM economy_admins WHERE guildId = ?').all(guildId); let txt = '🛡️ **DAFTAR BANKER:**\n'; list.forEach(adm => txt += `• ${adm.type}: <@${adm.type === 'role' ? '&' : ''}${adm.adminId}>\n`); return interaction.reply({content: txt, allowedMentions: {users: [], roles: []}}); }
-                }
-                if (subCmd === 'atur') { let authorized = isOwner; if (!authorized) { const admins = db.prepare('SELECT * FROM economy_admins WHERE guildId = ?').all(guildId); for (const admin of admins) { if (admin.type === 'user' && interaction.user.id === admin.adminId) { authorized = true; break; } if (admin.type === 'role' && interaction.member.roles.cache.has(admin.adminId)) { authorized = true; break; } } } if (!authorized) return interaction.reply({content: '🛑 Akses Ditolak', ephemeral: true}); const amt = interaction.options.getInteger('jumlah'), target = interaction.options.getUser('user'), action = interaction.options.getString('action'), tData = getOrCreateUser(guildId, target.id); if (action === 'add') tData.balance += amt; if (action === 'take') tData.balance = Math.max(0, tData.balance - amt); if (action === 'set') tData.balance = amt; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(tData.balance, guildId, target.id); return interaction.reply(`✅ Saldo <@${target.id}> = **${tData.balance.toLocaleString('id-ID')}**.`); }
-            }
-        }
-
-        if (command === 'economy' && subCmd === 'redeem') { const code = interaction.options.getString('kode').toUpperCase(); const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(guildId, code); if (!voucher) return interaction.reply({ content: '❌ Kode tidak valid!', ephemeral: true }); if (voucher.current_uses >= voucher.max_uses) return interaction.reply({ content: '❌ Kuota habis!', ephemeral: true }); if (db.prepare('SELECT * FROM voucher_claims WHERE guildId = ? AND userId = ? AND code = ?').get(guildId, interaction.user.id, code)) return interaction.reply({ content: '❌ Sudah pernah ditukar!', ephemeral: true }); db.prepare('INSERT INTO voucher_claims (guildId, userId, code) VALUES (?, ?, ?)').run(guildId, interaction.user.id, code); db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(guildId, code); userData.balance += voucher.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); await checkAchievements(interaction.guild, interaction.user.id, { type: 'redeem' }); return interaction.reply(`🎉 **BERHASIL!** Dapat **${voucher.reward.toLocaleString('id-ID')} money** gratis!`); }
-
-        if (command === 'economy' && subCmd === 'leaderboard') {
-            const kategori = interaction.options.getString('kategori') || 'overall';
-            let data, title, desc = '';
-            
-            if (kategori === 'money') {
-                title = '💰 Top Money';
-                data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY balance DESC LIMIT 10').all(guildId);
-                data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🪙 **${u.balance.toLocaleString('id-ID')}**\n`; });
-            } else if (kategori === 'level') {
-                title = '📈 Top Level';
-                data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY level DESC, xp DESC LIMIT 10').all(guildId);
-                data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — Lv.**${u.level}** (${u.xp} XP)\n`; });
-            } else if (kategori === 'fish') {
-                title = '🎣 Top Fisher';
-                data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_fish_caught' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-                data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🐟 **${u.stat_value}** ikan\n`; });
-            } else if (kategori === 'fish_weight') {
-                title = '🎣 Ikan Terberat';
-                data = db.prepare('SELECT fi.*, fd.fishId FROM fish_inventory fi WHERE fi.guildId = ? ORDER BY fi.weight DESC LIMIT 10').all(guildId);
-                data.forEach((u, i) => { const fishDef = FISH_DATA.find(f => f.id === u.fishId); desc += `**${i+1}.** <@${u.userId}> — ${fishDef ? fishDef.emoji : '🐟'} **${fishDef ? fishDef.name : '?'}** (${u.weight} kg) *${fishDef ? fishDef.tier : ''}*\n`; });
-            } else if (kategori === 'farm') {
-                title = '🌾 Top Farmer';
-                data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_harvests' ORDER BY stat_value DESC LIMIT 10").all(guildId);
-                data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🌾 **${u.stat_value}** panen\n`; });
-            } else if (kategori === 'pet') {
-                title = '🐾 Top Pet Level';
-                data = db.prepare('SELECT * FROM pets WHERE guildId = ? ORDER BY level DESC, exp DESC LIMIT 10').all(guildId);
-                data.forEach((u, i) => { const petDef = PET_DATA.find(p => p.id === u.petId); desc += `**${i+1}.** <@${u.userId}> — ${petDef ? petDef.emoji : '🐾'} **${u.name}** Lv.**${u.level}** *(${petDef ? petDef.tier : '?'})*\n`; });
-            } else if (kategori === 'streak') {
-                title = '🔥 Top Streak';
-                data = db.prepare('SELECT * FROM streaks WHERE guildId = ? ORDER BY count DESC LIMIT 10').all(guildId);
-                data.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — 🔥 **${u.count}** hari\n`; });
-            } else {
-                title = '🏆 Overall Leaderboard';
-                const users = db.prepare('SELECT * FROM users WHERE guildId = ?').all(guildId);
-                const scored = users.map(u => {
-                    const fishStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_fish_caught'").get(guildId, u.userId);
-                    const farmStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_harvests'").get(guildId, u.userId);
-                    const streakData = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
-                    const petData = db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
-                    const dungeonClears = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'dungeon_clears'").get(guildId, u.userId);
-                    const bossKills = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'boss_kills'").get(guildId, u.userId);
-                    const pvpWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'pvp_wins'").get(guildId, u.userId);
-                    const craftStat = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_crafts'").get(guildId, u.userId);
-                    const achieveCount = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
-                    const slotWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'slot_wins'").get(guildId, u.userId);
-                    const cfWins = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'coinflip_wins'").get(guildId, u.userId);
-
-                    const fish = fishStat ? fishStat.stat_value : 0;
-                    const farm = farmStat ? farmStat.stat_value : 0;
-                    const streak = streakData ? streakData.count : 0;
-                    const petLv = petData ? petData.level : 0;
-                    const dungeon = dungeonClears ? dungeonClears.stat_value : 0;
-                    const boss = bossKills ? bossKills.stat_value : 0;
-                    const pvp = pvpWins ? pvpWins.stat_value : 0;
-                    const craft = craftStat ? craftStat.stat_value : 0;
-                    const badges = achieveCount ? achieveCount.c : 0;
-                    const gambling = (slotWins ? slotWins.stat_value : 0) + (cfWins ? cfWins.stat_value : 0);
-
-                    // Scoring formula (weighted):
-                    const score = (u.level * 150)           // Level contribution (paling penting)
-                        + Math.floor(u.balance / 20)       // Wealth (diminishing)
-                        + (fish * 3)                       // Fishing activity
-                        + (farm * 4)                       // Farming activity
-                        + (craft * 8)                      // Crafting (harder)
-                        + (streak * 12)                    // Streak dedication
-                        + (petLv * 5)                      // Pet progression
-                        + (dungeon * 6)                    // Dungeon grinding
-                        + (boss * 15)                      // Boss kills (harder)
-                        + (pvp * 10)                       // PvP skill
-                        + (badges * 20)                    // Achievement collecting
-                        + (gambling * 2);                  // Gambling luck
-
-                    return { ...u, score, fish, farm, streak, petLv, dungeon, boss, pvp, badges };
-                }).sort((a, b) => b.score - a.score).slice(0, 10);
-                scored.forEach((u, i) => { desc += `**${i+1}.** <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n> Lv.${u.level} | 🪙${u.balance.toLocaleString('id-ID')} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.dungeon+u.boss+u.pvp} | 🏆${u.badges}\n`; });
-            }
-            if (!desc) desc = '*Belum ada data.*';
-            return interaction.reply({ embeds: [new EmbedBuilder().setTitle(title).setColor('#FFD700').setDescription(desc).setFooter({ text: '/economy leaderboard <kategori> untuk filter | Overall = combined score' }).setTimestamp()] });
-        }
-
         if (command === 'daily') {
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
             if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
@@ -387,6 +142,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             userData.balance += moneyReward;
             db.prepare('UPDATE users SET balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(userData.balance, today, guildId, interaction.user.id);
             incrementUserStat(guildId, interaction.user.id, 'total_dailies');
+            addIncome(guildId, interaction.user.id, 'daily', moneyReward);
             addPetExp(guildId, interaction.user.id, petExpReward);
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' });
             
@@ -402,220 +158,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             user.xp += 15;
             db.prepare('UPDATE users SET xp = ? WHERE guildId = ? AND userId = ?').run(user.xp, guildId, interaction.user.id);
             
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (command === 'economy' && subCmd === 'coinflip') {
-            if (activeCoinflips.has(interaction.user.id)) return interaction.reply({ content: '⏳ Tunggu koinmu mendarat!', ephemeral: true });
-            const taruhan = interaction.options.getInteger('taruhan');
-            if (userData.balance < taruhan) return interaction.reply({ content: `❌ Saldo kurang! 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-            activeCoinflips.add(interaction.user.id);
-            addComboFeature(guildId, interaction.user.id, 'gambling');
-            // Deduct balance atomically
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, interaction.user.id);
-            incrementUserStat(guildId, interaction.user.id, 'total_coinflips');
-            updateQuestProgress(guildId, interaction.user.id, 'coinflip', 1);
-            
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`coinflip_head_${interaction.user.id}_${taruhan}`).setLabel('🪙 Head').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`coinflip_tail_${interaction.user.id}_${taruhan}`).setLabel('🦅 Tail').setStyle(ButtonStyle.Danger)
-            );
-            const embed = new EmbedBuilder()
-                .setColor('#F1C40F')
-                .setTitle('🪙 Coinflip — Pilih Sisi!')
-                .setDescription(`> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n\n> Pilih **Head** atau **Tail** dalam 30 detik!`)
-                .setFooter({ text: `${interaction.user.username} | Klik tombol di bawah` });
-            await interaction.reply({ embeds: [embed], components: [row] });
-            
-            // Auto-expire after 30s
-            setTimeout(async () => {
-                if (activeCoinflips.has(interaction.user.id)) {
-                    activeCoinflips.delete(interaction.user.id);
-                    // Refund
-                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, interaction.user.id);
-                    const expiredEmbed = new EmbedBuilder().setColor('#95A5A6').setTitle('⏰ Coinflip Expired').setDescription(`> Kamu tidak memilih dalam 30 detik.\n> 🪙 **${taruhan.toLocaleString('id-ID')}** dikembalikan.`);
-                    interaction.editReply({ embeds: [expiredEmbed], components: [] }).catch(()=>{});
-                }
-            }, 30000);
-            return;
-        }
-
-        // ================= SLOT MACHINE =================
-        if (command === 'economy' && subCmd === 'slot') {
-            const slotCdKey = `slot_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(slotCdKey) && Date.now() < fishCooldowns.get(slotCdKey)) { const remaining = Math.ceil((fishCooldowns.get(slotCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Mesin slot masih panas! Tunggu **${remaining} detik**.`, ephemeral: true }); }
-            fishCooldowns.set(slotCdKey, Date.now() + 5000);
-            addComboFeature(guildId, interaction.user.id, 'gambling');
-            const bet = interaction.options.getInteger('taruhan');
-            if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-            
-            // Deduct balance atomically
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, interaction.user.id);
-            incrementUserStat(guildId, interaction.user.id, 'total_slot_spins');
-            updateQuestProgress(guildId, interaction.user.id, 'slot', 1);
-            
-            // Show spinning animation first
-            const spinEmbed = new EmbedBuilder()
-                .setColor('#F1C40F')
-                .setTitle('🎰 Slot Machine — Spinning...')
-                .setDescription(`> 🎰 **SLOT MACHINE**\n>\n> ╔═══════════════════╗\n> ║   ❓  ┃  ❓  ┃  ❓   ║\n> ╚═══════════════════╝\n>\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**\n> 🎲 *Memutar gulungan...*`)
-                .setFooter({ text: `${interaction.user.username} | Slot Machine` });
-            await interaction.reply({ embeds: [spinEmbed] });
-            
-            // Generate reels
-            let reels = spinSlot();
-            
-            // Lucky Spin Token check
-            const luckySpinActive = getUserStat(guildId, interaction.user.id, 'lucky_spin_active');
-            if (luckySpinActive > 0) {
-                // Force reel[1] = reel[0] to guarantee at least 2x match
-                reels[1] = reels[0];
-                incrementUserStat(guildId, interaction.user.id, 'lucky_spin_active', -1);
-            }
-            
-            const result = getSlotResult(reels, bet);
-            
-            setTimeout(async () => {
-                const slotDisplay = `> 🎰 **SLOT MACHINE**\n>\n> ╔═══════════════════╗\n> ║   ${reels[0].emoji}  ┃  ${reels[1].emoji}  ┃  ${reels[2].emoji}   ║\n> ╚═══════════════════╝`;
-                let embed;
-                const luckyTag = luckySpinActive > 0 ? '\n> 🍀 *Lucky Spin Token digunakan!*' : '';
-                
-                if (result.jackpot && reels[0].id === 'seven') {
-                    embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎰💰 MEGA JACKPOT!!! 💰🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
-                    incrementUserStat(guildId, interaction.user.id, 'slot_jackpot_7_count');
-                } else if (result.jackpot) {
-                    embed = new EmbedBuilder().setColor('#FF6B00').setTitle('🎰✨ JACKPOT! ✨🎰').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉`);
-                } else if (result.win) {
-                    embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎰 MENANG!').setDescription(`${slotDisplay}\n\n> ${result.desc}${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ✅ Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}**`);
-                } else {
-                    embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🎰 Slot Machine').setDescription(`${slotDisplay}\n\n> 😔 Tidak ada yang cocok...${luckyTag}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ❌ Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
-                }
-                
-                if (result.win) {
-                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(result.payout, guildId, interaction.user.id);
-                    incrementUserStat(guildId, interaction.user.id, 'slot_wins');
-                    incrementUserStat(guildId, interaction.user.id, 'slot_total_winnings', result.payout);
-                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'slot', jackpot: result.jackpot, jackpot7: result.jackpot && reels[0].id === 'seven' });
-                }
-                const freshData = getOrCreateUser(guildId, interaction.user.id);
-                embed.setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} money | ${interaction.user.username}` });
-                interaction.editReply({ embeds: [embed] }).catch(()=>{});
-            }, 2000);
-            return;
-        }
-
-        // ================= ROULETTE =================
-        if (command === 'economy' && subCmd === 'roulette') {
-            const rouletteCdKey = `roulette_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(rouletteCdKey) && Date.now() < fishCooldowns.get(rouletteCdKey)) { const remaining = Math.ceil((fishCooldowns.get(rouletteCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Meja roulette masih berputar! Tunggu **${remaining} detik**.`, ephemeral: true }); }
-            fishCooldowns.set(rouletteCdKey, Date.now() + 5000);
-            addComboFeature(guildId, interaction.user.id, 'gambling');
-            
-            const bet = interaction.options.getInteger('taruhan');
-            const pilihan = interaction.options.getString('pilihan').toLowerCase().trim();
-            if (userData.balance < bet) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-            
-            // Validate choice
-            const RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
-            const validChoices = ['merah', 'hitam', 'hijau', 'ganjil', 'genap'];
-            const numChoice = parseInt(pilihan);
-            const isNumber = !isNaN(numChoice) && numChoice >= 0 && numChoice <= 36;
-            if (!validChoices.includes(pilihan) && !isNumber) {
-                return interaction.reply({ content: '❌ Pilihan tidak valid! Gunakan: `Merah`, `Hitam`, `Hijau`, `Ganjil`, `Genap`, atau angka `0-36`', ephemeral: true });
-            }
-            
-            // Deduct balance atomically
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, interaction.user.id);
-            incrementUserStat(guildId, interaction.user.id, 'total_roulette_spins');
-            
-            // Show spinning animation
-            const spinEmbed = new EmbedBuilder()
-                .setColor('#8B0000')
-                .setTitle('🎯 Roulette — Spinning...')
-                .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │     ❓      │\n> │  *berputar...*  │\n> └─────────────┘\n>\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}**`)
-                .setFooter({ text: `${interaction.user.username} | Roulette` });
-            await interaction.reply({ embeds: [spinEmbed] });
-            
-            setTimeout(async () => {
-                // Determine result
-                const resultNumber = Math.floor(Math.random() * 37); // 0-36
-                let resultColor, colorEmoji, colorName;
-                if (resultNumber === 0) { resultColor = 'hijau'; colorEmoji = '🟢'; colorName = 'Hijau'; }
-                else if (RED_NUMBERS.includes(resultNumber)) { resultColor = 'merah'; colorEmoji = '🔴'; colorName = 'Merah'; }
-                else { resultColor = 'hitam'; colorEmoji = '⚫'; colorName = 'Hitam'; }
-                
-                const isOdd = resultNumber > 0 && resultNumber % 2 !== 0;
-                const isEven = resultNumber > 0 && resultNumber % 2 === 0;
-                
-                // Check win condition
-                let won = false;
-                let multiplier = 0;
-                if (isNumber && numChoice === resultNumber) { won = true; multiplier = 36; }
-                else if (pilihan === 'merah' && resultColor === 'merah') { won = true; multiplier = 2; }
-                else if (pilihan === 'hitam' && resultColor === 'hitam') { won = true; multiplier = 2; }
-                else if (pilihan === 'hijau' && resultColor === 'hijau') { won = true; multiplier = 14; }
-                else if (pilihan === 'ganjil' && isOdd) { won = true; multiplier = 2; }
-                else if (pilihan === 'genap' && isEven) { won = true; multiplier = 2; }
-                
-                const payout = won ? bet * multiplier : 0;
-                let embed;
-                
-                if (won) {
-                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(payout, guildId, interaction.user.id);
-                    incrementUserStat(guildId, interaction.user.id, 'roulette_wins');
-                    incrementUserStat(guildId, interaction.user.id, 'roulette_total_winnings', payout);
-                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'roulette' });
-                    embed = new EmbedBuilder()
-                        .setColor(resultColor === 'merah' ? '#E74C3C' : resultColor === 'hijau' ? '#2ECC71' : '#2C2F33')
-                        .setTitle('🎯🎉 ROULETTE — MENANG!')
-                        .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │  ${colorEmoji} **${resultNumber}**  │\n> │  ${colorName}  │\n> └─────────────┘\n\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}** ✅\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${payout.toLocaleString('id-ID')}** (${multiplier}x)`);
-                } else {
-                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'roulette' });
-                    embed = new EmbedBuilder()
-                        .setColor('#95A5A6')
-                        .setTitle('🎯 ROULETTE — Kalah!')
-                        .setDescription(`> 🎡 **ROULETTE TABLE**\n>\n> ┌─────────────┐\n> │  ${colorEmoji} **${resultNumber}**  │\n> │  ${colorName}  │\n> └─────────────┘\n\n> 🎯 Pilihan: **${pilihan.charAt(0).toUpperCase() + pilihan.slice(1)}** ❌\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 😔 Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
-                }
-                const freshData = getOrCreateUser(guildId, interaction.user.id);
-                embed.setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} money | ${interaction.user.username}` });
-                interaction.editReply({ embeds: [embed] }).catch(()=>{});
-            }, 2500);
-            return;
-        }
-
-        // ================= GIFT / TRANSFER =================
-        if (command === 'economy' && subCmd === 'gift') {
-            const giftCdKey = `gift_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(giftCdKey) && Date.now() < fishCooldowns.get(giftCdKey)) { const remaining = Math.ceil((fishCooldowns.get(giftCdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Tunggu **${remaining} detik** sebelum kirim gift lagi.`, ephemeral: true }); }
-            fishCooldowns.set(giftCdKey, Date.now() + 10000);
-            const targetUser = interaction.options.getUser('user');
-            const amount = interaction.options.getInteger('jumlah');
-            if (targetUser.id === interaction.user.id) return interaction.reply({ content: '❌ Tidak bisa kirim ke diri sendiri!', ephemeral: true });
-            if (targetUser.bot) return interaction.reply({ content: '❌ Tidak bisa kirim ke bot!', ephemeral: true });
-            if (userData.balance < amount) return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-            // Cek limit harian penerima
-            const receivedToday = getGiftReceivedToday(guildId, targetUser.id);
-            if (receivedToday + amount > GIFT_RECEIVE_LIMIT_PER_DAY) return interaction.reply({ content: `❌ <@${targetUser.id}> sudah mencapai batas terima harian (🪙 ${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}/hari). Sisa kuota: 🪙 ${(GIFT_RECEIVE_LIMIT_PER_DAY - receivedToday).toLocaleString('id-ID')}`, ephemeral: true });
-            // Cek tax-free voucher (stat 'tax_free_voucher' > 0)
-            const hasTaxFree = getUserStat(guildId, interaction.user.id, 'tax_free_voucher') > 0;
-            const taxAmount = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
-            const netAmount = amount - taxAmount;
-            if (hasTaxFree) incrementUserStat(guildId, interaction.user.id, 'tax_free_voucher', -1);
-            // Transfer
-            userData.balance -= amount;
-            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-            const targetData = getOrCreateUser(guildId, targetUser.id);
-            targetData.balance += netAmount;
-            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(targetData.balance, guildId, targetUser.id);
-            addGiftReceivedToday(guildId, targetUser.id, netAmount);
-            incrementUserStat(guildId, interaction.user.id, 'total_gifts_sent');
-            incrementUserStat(guildId, interaction.user.id, 'total_gift_amount', amount);
-            await checkAchievements(interaction.guild, interaction.user.id, { type: 'gift_send' });
-            await checkAchievements(interaction.guild, targetUser.id, { type: 'gift_receive' });
-            const embed = new EmbedBuilder().setColor('#FF69B4').setTitle('🎁 Gift Terkirim!')
-                .setDescription(`<@${interaction.user.id}> ➜ <@${targetUser.id}>\n\n> 💰 **Jumlah:** 🪙 ${amount.toLocaleString('id-ID')}\n> 📊 **Pajak (${hasTaxFree ? 'FREE!' : '10%'}):** 🪙 ${taxAmount.toLocaleString('id-ID')}${hasTaxFree ? ' *(Tax-Free Voucher)*' : ''}\n> ✅ **Diterima:** 🪙 ${netAmount.toLocaleString('id-ID')}`)
-                .setFooter({ text: `Saldo pengirim: ${userData.balance.toLocaleString('id-ID')} | Limit harian: ${(receivedToday + netAmount).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
-                .setTimestamp();
             return interaction.reply({ embeds: [embed] });
         }
 
@@ -675,99 +217,6 @@ module.exports = async function handleInteractionCreate(interaction) {
 
         if (command === 'fishing') {
             return handleFishingCommand(interaction);
-        }
-
-        if (command === 'sell') {
-            return interaction.reply({ content: '❌ Command `/sell` sudah dihapus! Gunakan `/fishing sell` untuk menjual ikan.', ephemeral: true });
-        }
-
-        if (command === 'me' && subCmd === 'inventory') {
-            const items = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, interaction.user.id);
-            if (items.length === 0) return interaction.reply({ content: '🎒 Inventory kosong! Beli item di `/shop` kategori Items.', ephemeral: true });
-            let desc = '';
-            for (const inv of items) {
-                const def = ITEMS.find(i => i.id === inv.itemId);
-                if (def) desc += `${def.emoji} **${def.name}** x${inv.quantity}\n> *${def.desc}*\n\n`;
-            }
-            return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎒 Item Inventory').setColor('#2B2D31').setDescription(desc).setFooter({ text: 'Gunakan item dari /profile → Inventory' })] });
-        }
-
-        if (command === 'me' && subCmd === 'use') {
-            const useCdKey = `use_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(useCdKey) && Date.now() < fishCooldowns.get(useCdKey)) { return interaction.reply({ content: '⏳ Tunggu sebentar sebelum menggunakan item lagi.', ephemeral: true }); }
-            fishCooldowns.set(useCdKey, Date.now() + 3000);
-
-            const itemId = interaction.options.getString('item');
-            const itemDef = ITEMS.find(i => i.id === itemId);
-            if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
-            if (getItemCount(guildId, interaction.user.id, itemId) <= 0) return interaction.reply({ content: '❌ Kamu tidak punya item ini! Beli di `/shop`.', ephemeral: true });
-            
-            if (itemId === 'mystery_box') {
-                const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-                const usedToday = getUserStat(guildId, interaction.user.id, `mbox_${today}`);
-                if (usedToday >= 5) return interaction.reply({ content: '❌ Kamu sudah membuka 5 Mystery Box hari ini! Tunggu besok.', ephemeral: true });
-                removeItem(guildId, interaction.user.id, itemId);
-                incrementUserStat(guildId, interaction.user.id, `mbox_${today}`);
-                let reward;
-                const roll = Math.random();
-                if (roll < 0.50) reward = getRandomInt(50, 200);
-                else if (roll < 0.80) reward = getRandomInt(200, 500);
-                else if (roll < 0.95) reward = getRandomInt(500, 1000);
-                else reward = getRandomInt(1000, 2000);
-                userData.balance += reward;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#9B59B6').setTitle('📦 Mystery Box Dibuka!').setDescription(`Kamu mendapatkan 🪙 **${reward.toLocaleString('id-ID')} Money**!\n\n> Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)] });
-            }
-            if (itemId === 'daily_doubler') {
-                removeItem(guildId, interaction.user.id, itemId);
-                incrementUserStat(guildId, interaction.user.id, 'daily_doubler_active', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! \`/daily\` berikutnya akan x2.`, ephemeral: false });
-            }
-            if (itemId === 'auto_harvest_pass') {
-                removeItem(guildId, interaction.user.id, itemId);
-                db.prepare('INSERT OR REPLACE INTO auto_harvest (guildId, userId, enabled, purchased) VALUES (?, ?, 1, 1)').run(guildId, interaction.user.id);
-                return interaction.reply({ content: `✅ 🔔 **Auto-Harvest Pass** diaktifkan!\n\n> Bot akan ping kamu saat tanaman siap dipanen.\n> Toggle on/off dengan \`/autoharvest\``, ephemeral: false });
-            }
-            if (itemId === 'lucky_spin_token') {
-                removeItem(guildId, interaction.user.id, itemId);
-                incrementUserStat(guildId, interaction.user.id, 'lucky_spin_active', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **${itemDef.name}** diaktifkan! Slot berikutnya dijamin 2 simbol sama.`, ephemeral: false });
-            }
-            if (itemId === 'xp_booster_2x') {
-                removeItem(guildId, interaction.user.id, itemId);
-                const expiry = Date.now() + 3600000; // 1 hour
-                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'xp_boost_2x_until', expiry);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **XP Booster 2x** aktif selama **1 jam**! Semua XP yang kamu dapat akan x2.`, ephemeral: false });
-            }
-            if (itemId === 'xp_booster_3x') {
-                removeItem(guildId, interaction.user.id, itemId);
-                const expiry = Date.now() + 3600000; // 1 hour
-                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'xp_boost_3x_until', expiry);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **XP Booster 3x** aktif selama **1 jam**! Semua XP yang kamu dapat akan x3.`, ephemeral: false });
-            }
-            if (itemId === 'streak_shield') {
-                removeItem(guildId, interaction.user.id, itemId);
-                incrementUserStat(guildId, interaction.user.id, 'streak_shield_count', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **Streak Shield** diaktifkan! Jika kamu lupa chat 1 hari, streak akan otomatis terlindungi.`, ephemeral: false });
-            }
-            if (itemId === 'lucky_charm') {
-                removeItem(guildId, interaction.user.id, itemId);
-                const expiry = Date.now() + 3600000; // 1 hour
-                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'lucky_charm_until', expiry);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **Lucky Charm** aktif selama **1 jam**! +15% chance menang di semua game.`, ephemeral: false });
-            }
-            if (itemId === 'money_magnet') {
-                removeItem(guildId, interaction.user.id, itemId);
-                const expiry = Date.now() + 3600000; // 1 hour
-                db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'money_magnet_until', expiry);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **Money Magnet** aktif selama **1 jam**! +50% money dari semua sumber.`, ephemeral: false });
-            }
-            if (itemId === 'tax_free_voucher') {
-                removeItem(guildId, interaction.user.id, itemId);
-                incrementUserStat(guildId, interaction.user.id, 'tax_free_voucher', 1);
-                return interaction.reply({ content: `✅ ${itemDef.emoji} **Tax-Free Voucher** diaktifkan! Gift berikutnya tanpa pajak 10%.`, ephemeral: false });
-            }
-            return interaction.reply({ content: '❌ Item tidak bisa digunakan langsung.', ephemeral: true });
         }
 
 
@@ -847,11 +296,13 @@ module.exports = async function handleInteractionCreate(interaction) {
                     if (loserCheck.balance >= taruhan) {
                         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, loser.id);
                         db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(taruhan, guildId, winner.id);
+                        addIncome(guildId, winner.id, 'battle', taruhan);
                     }
                 }
                 addPetExp(guildId, winner.id, 15);
                 addPetExp(guildId, loser.id, 5);
                 incrementUserStat(guildId, winner.id, 'pvp_wins');
+                incrementUserStat(guildId, loser.id, 'pvp_losses');
                 updateQuestProgress(guildId, interaction.user.id, 'battle', 1);
                 updateQuestProgress(guildId, target.id, 'battle', 1);
                 await checkAchievements(interaction.guild, winner.id, { type: 'pvp_win' });
@@ -862,7 +313,7 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
 
 
-        if (command === 'admin_shop') { if (!isAdmin) return interaction.reply({content: '❌ Admin Only', ephemeral: true}); if (subCmd === 'add_item') { const nama = interaction.options.getString('nama'), harga = interaction.options.getInteger('harga'), isi = interaction.options.getString('isi').replace(/\\n/g, '\n'), jumlah = interaction.options.getInteger('jumlah') || 1; const stmt = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)'); for (let i = 0; i < jumlah; i++) stmt.run(guildId, nama, harga, isi); return interaction.reply(`✅ **${jumlah} stok** barang **${nama}** ditambah.`); } if (subCmd === 'add_role') { db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, interaction.options.getRole('role').id, interaction.options.getInteger('harga')); return interaction.reply(`✅ Role ditambah.`); } if (subCmd === 'set_custom_role') { const harga = interaction.options.getInteger('harga'); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', harga.toString()); if (harga <= 0) return interaction.reply('🛑 Custom Role dimatikan.'); return interaction.reply(`✅ Harga Custom Role: 🪙 **${harga.toLocaleString('id-ID')}**.`); } if (subCmd === 'voucher_add') { const code = interaction.options.getString('kode').toUpperCase(), reward = interaction.options.getInteger('reward'), limit = interaction.options.getInteger('limit'); db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit); return interaction.reply(`🎟️ Voucher \`${code}\` dibuat!`); } if (subCmd === 'set_testimoni') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'testimoni_channel', interaction.options.getChannel('channel').id); return interaction.reply(`✅ Testimoni diatur!`); } if (subCmd === 'history') { const logs = db.prepare('SELECT * FROM logs WHERE guildId = ? ORDER BY time DESC LIMIT ?').all(guildId, Math.min(interaction.options.getInteger('jumlah') || 10, 50)); if (logs.length === 0) return interaction.reply('Kosong.'); let logTxt = '📜 **RIWAYAT TRANSAKSI**\n\n'; logs.forEach(l => { logTxt += `\`[${new Date(l.time).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}]\` <@${l.userId}> beli **${l.item}** (🪙 ${l.price.toLocaleString('id-ID')})\n`; }); return interaction.reply({ embeds: [new EmbedBuilder().setDescription(logTxt).setColor('#2B2D31')], allowedMentions: {users: []} }); } }
+        // (legacy /admin_shop command removed — shop management is now in the /admin panel)
 
         if (command === 'shop') {
             const roles = db.prepare('SELECT * FROM shop_roles WHERE guildId = ?').all(guildId);
@@ -946,18 +397,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleStatsCommand(interaction);
         }
 
-        // ================= PET EVOLUTION =================
-        if (command === 'evolve') {
-            const pet = getPetData(guildId, interaction.user.id);
-            if (!pet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
-            const evo = checkPetEvolution(guildId, interaction.user.id);
-            if (!evo) return interaction.reply({ content: `❌ **${pet.name}** belum bisa evolve!\n\n> 💡 Cek syarat evolusi di \`/pet info\`\n> Pet kamu: **${pet.petId}** Lv.${pet.level}`, ephemeral: true });
-            const result = evolvePet(guildId, interaction.user.id);
-            if (!result) return interaction.reply({ content: '❌ Gagal evolve!', ephemeral: true });
-            const oldDef = PET_DATA.find(p => p.id === evo.from);
-            return interaction.reply({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🧬 PET EVOLUTION!').setDescription(`${oldDef ? oldDef.emoji : '🐾'} **${pet.name}** berevolusi!\n\n> 🔄 **${evo.name}**\n> ${result.newPetDef.emoji} Tier: **${result.newPetDef.tier}**\n\n> ⚔️ ATK: ${result.newStats.atk} | 🛡️ DEF: ${result.newStats.def}\n> ❤️ HP: ${result.newStats.hp} | 💨 SPD: ${result.newStats.spd}\n> 🎯 CRIT: ${result.newStats.crit}%\n\n🎉 *Selamat! Pet kamu sekarang jauh lebih kuat!*`).setFooter({ text: 'Stats di-reset sesuai tier baru' })] });
-        }
-
         // ================= DAILY LOGIN CALENDAR =================
         if (command === 'calendar') {
             const calData = getLoginCalendar(guildId, interaction.user.id);
@@ -1009,68 +448,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply({ embeds: [embed] });
         }
 
-        // ================= FISHING CONTEST =================
-        if (command === 'contest') {
-            if (subCmd === 'start') {
-                if (!isAdmin) return interaction.reply({ content: '❌ Hanya Admin!', ephemeral: true });
-                const state = getContestState(guildId);
-                if (state && state.active && Date.now() < state.endsAt) return interaction.reply({ content: '❌ Kontes sedang berjalan!', ephemeral: true });
-                const durasi = interaction.options.getInteger('durasi') || 60;
-                const endsAt = startFishContest(guildId, interaction.channelId, durasi);
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle('🏆 FISHING CONTEST DIMULAI!').setDescription(`Siapa yang bisa menangkap **ikan TERBERAT** dalam ${durasi} menit?\n\n> ⏱️ Berakhir: <t:${Math.floor(endsAt/1000)}:R>\n> 🎣 Gunakan \`/fish\` untuk berpartisipasi!\n> 📊 Cek ranking: \`/contest leaderboard\`\n\n🥇 **Hadiah:** Top 3 dapat bonus money!`).setFooter({ text: 'Setiap ikan yang kamu tangkap otomatis masuk kontes' })] });
-            }
-            if (subCmd === 'status') {
-                const state = getContestState(guildId);
-                if (!state || !state.active || Date.now() > state.endsAt) return interaction.reply({ content: '📭 Tidak ada kontes yang sedang berjalan.\n> Admin bisa mulai dengan `/contest start`', ephemeral: true });
-                const remaining = Math.ceil((state.endsAt - Date.now()) / 60000);
-                const top = getContestLeaderboard(guildId, 3);
-                let topDesc = top.length > 0 ? top.map((e, i) => `> ${['🥇','🥈','🥉'][i]} <@${e.oderId}> — ${e.weight} kg`).join('\n') : '> Belum ada peserta!';
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle('🏆 Fishing Contest').setDescription(`> ⏱️ Sisa waktu: **${remaining} menit**\n> 🎯 Target: Ikan terberat!\n\n**Top 3 saat ini:**\n${topDesc}`).setFooter({ text: '/fish untuk berpartisipasi | /contest leaderboard untuk ranking lengkap' })] });
-            }
-            if (subCmd === 'leaderboard') {
-                const state = getContestState(guildId);
-                const top = getContestLeaderboard(guildId, 10);
-                if (top.length === 0) return interaction.reply({ content: '📭 Belum ada data kontes.', ephemeral: true });
-                let desc = '';
-                top.forEach((e, i) => { const fishDef = FISH_DATA.find(f => f.id === e.fishId); desc += `**${i+1}.** <@${e.oderId}> — ${fishDef ? fishDef.emoji : '🐟'} ${fishDef ? fishDef.name : '?'} (**${e.weight} kg**)\n`; });
-                const isActive = state && state.active && Date.now() < state.endsAt;
-                return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🏆 Contest Leaderboard').setColor('#FFD700').setDescription(desc).setFooter({ text: isActive ? `Kontes aktif! Sisa: ${Math.ceil((state.endsAt-Date.now())/60000)} menit` : 'Kontes selesai' })] });
-            }
-            if (subCmd === 'end') {
-                if (!isAdmin) return interaction.reply({ content: '❌ Hanya Admin!', ephemeral: true });
-                const state = getContestState(guildId);
-                if (!state || !state.active) return interaction.reply({ content: '❌ Tidak ada kontes aktif!', ephemeral: true });
-                db.prepare('UPDATE fish_contest_state SET active = 0 WHERE guildId = ?').run(guildId);
-                const top = getContestLeaderboard(guildId, 3);
-                const prizes = [3000, 1500, 800];
-                let desc = '🏆 **KONTES SELESAI!**\n\n';
-                top.forEach((e, i) => { const fishDef = FISH_DATA.find(f => f.id === e.fishId); const prize = prizes[i] || 0; desc += `${['🥇','🥈','🥉'][i]} <@${e.oderId}> — ${fishDef ? fishDef.emoji : '🐟'} **${e.weight} kg** → 🪙 +${prize}\n`; db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.oderId); });
-                if (top.length === 0) desc += '*Tidak ada peserta!*';
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 Fishing Contest — Hasil!').setDescription(desc).setFooter({ text: 'Hadiah sudah dibagikan!' })] });
-            }
-        }
-
-        // ================= AUTO-HARVEST TOGGLE =================
-        if (command === 'autoharvest') {
-            let ahData = db.prepare('SELECT * FROM auto_harvest WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
-            if (!ahData) { db.prepare('INSERT INTO auto_harvest (guildId, userId) VALUES (?, ?)').run(guildId, interaction.user.id); ahData = { purchased: 0, enabled: 0 }; }
-            if (!ahData.purchased) return interaction.reply({ content: '❌ Kamu belum punya **🔔 Auto-Harvest Pass**!\n\n> Beli di `/shop` kategori Items seharga 🪙 5,000\n> Setelah beli, gunakan dari `/profile` → Inventory untuk aktivasi.', ephemeral: true });
-            const newState = ahData.enabled ? 0 : 1;
-            db.prepare('UPDATE auto_harvest SET enabled = ? WHERE guildId = ? AND userId = ?').run(newState, guildId, interaction.user.id);
-            return interaction.reply({ content: newState ? '🔔 **Auto-Harvest Notification AKTIF!**\n> Bot akan ping kamu saat tanaman siap dipanen.' : '🔕 **Auto-Harvest Notification DIMATIKAN.**\n> Kamu tidak akan di-ping lagi.', ephemeral: true });
-        }
-
-        // ================= STREAK (user: via /me, admin: via /streak) =================
-        if (command === 'me' && subCmd === 'streak') { const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id), emoji = getSetting(guildId, 'streak_emoji', '🔥'), count = sData ? sData.count : 0; return interaction.reply({content: `${emoji} **Streak:** \`${count} Hari\` berturut-turut!`}); }
-        if (command === 'me' && subCmd === 'restore') { const currentMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7); let restoreData = db.prepare('SELECT * FROM streak_restores WHERE guildId = ? AND userId = ? AND month = ?').get(guildId, interaction.user.id, currentMonth); const restoreCount = restoreData ? restoreData.count : 0; if (restoreCount >= 3) return interaction.reply({ content: '❌ Batas restore (3x) bulan ini habis!', ephemeral: true }); const history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!history || history.lost_count <= 1) return interaction.reply({ content: '❌ Tidak ada streak terputus.', ephemeral: true }); const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id), currentCount = sData ? sData.count : 0, newCount = history.lost_count + currentCount; db.prepare('UPDATE streaks SET count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, interaction.user.id); db.prepare('DELETE FROM streak_history WHERE guildId = ? AND userId = ?').run(guildId, interaction.user.id); if (restoreData) db.prepare('UPDATE streak_restores SET count = count + 1 WHERE guildId = ? AND userId = ? AND month = ?').run(guildId, interaction.user.id, currentMonth); else db.prepare('INSERT INTO streak_restores (guildId, userId, month, count) VALUES (?, ?, ?, 1)').run(guildId, interaction.user.id, currentMonth); return interaction.reply({ content: `✅ Streak dipulihkan! Total: **${newCount} Hari**. (Sisa: ${2 - restoreCount}x)`, ephemeral: true }); }
-
-        if (command === 'streak') {
-            if (!isAdmin) return interaction.reply({content: '❌ Hanya Admin!', ephemeral: true});
-            if (subCmd === 'setting') { const status = interaction.options.getString('status'), autoNick = interaction.options.getString('autonick'), minHari = interaction.options.getInteger('min_hari'), emoji = interaction.options.getString('emoji') || '🔥'; db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_enabled', status); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_auto_nick', autoNick); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_min', minHari.toString()); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_emoji', emoji); return interaction.reply(`✅ Streak: ${status === 'true' ? 'ON' : 'OFF'} | Nick: ${autoNick === 'true' ? 'Ya' : 'Tidak'} | Min: ${minHari} | Emoji: ${emoji}`); }
-            if (subCmd === 'admin_set') { const target = interaction.options.getUser('user'), amount = interaction.options.getInteger('jumlah'), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, target.id, amount, today); return interaction.reply(`✅ Streak <@${target.id}> = **${amount}**.`); }
-            if (subCmd === 'admin_reset') { const target = interaction.options.getUser('user'); db.prepare('DELETE FROM streaks WHERE guildId = ? AND userId = ?').run(guildId, target.id); db.prepare('DELETE FROM streak_history WHERE guildId = ? AND userId = ?').run(guildId, target.id); return interaction.reply(`🗑️ Streak <@${target.id}> reset ke 0.`); }
-            if (subCmd === 'admin_restore') { const target = interaction.options.getUser('user'), history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, target.id); if (!history || history.lost_count <= 1) return interaction.reply({ content: '❌ Tidak ada streak terputus.', ephemeral: true }); const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, target.id), currentCount = sData ? sData.count : 0, newCount = history.lost_count + currentCount, today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, target.id, newCount, sData ? sData.last_date : today); db.prepare('DELETE FROM streak_history WHERE guildId = ? AND userId = ?').run(guildId, target.id); return interaction.reply(`✅ Streak <@${target.id}> dipulihkan: **${newCount}**.`); }
-        }
     }
 
 
@@ -1551,6 +928,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                     addPetExp(guildId, memberId, boss.exp);
                     addItem(guildId, memberId, 'refine_stone', getRandomInt(1, 2));
                     incrementUserStat(guildId, memberId, 'boss_kills');
+                    addIncome(guildId, memberId, 'battle', reward);
                     await checkAchievements(interaction.guild, memberId, { type: 'boss_kill' });
                     if (Math.random() < 0.2) { const slot = ['weapon','armor','accessory'][Math.floor(Math.random()*3)]; const rarity = Math.random()<0.1?'Legendary':Math.random()<0.3?'Epic':'Rare'; const names = RELIC_NAMES[slot]; const name = names[Math.floor(Math.random()*names.length)]; const st = slot==='weapon'?'atk':slot==='armor'?'def':(Math.random()<0.5?'spd':'crit'); const sv = rarity==='Legendary'?getRandomInt(50,80):rarity==='Epic'?getRandomInt(35,50):getRandomInt(20,35); db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, memberId, name, slot, rarity, st, sv); }
                 }
@@ -1565,12 +943,12 @@ module.exports = async function handleInteractionCreate(interaction) {
             return;
         }
 
-        if (interaction.customId === 'airdrop_claim') { if (activeMiniEvents.has(guildId)) activeMiniEvents.delete(guildId); const reward = getRandomInt(300, 600); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'event_wins'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'event_win' }); return interaction.update({ content: `🎉 <@${interaction.user.id}> klaim Air Drop! 🪙 **${reward}**`, embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('x').setLabel(`Diklaim ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setDisabled(true))] }); }
+        if (interaction.customId === 'airdrop_claim') { if (activeMiniEvents.has(guildId)) activeMiniEvents.delete(guildId); const reward = getRandomInt(300, 600); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'event_wins'); addIncome(guildId, interaction.user.id, 'event', reward); await checkAchievements(interaction.guild, interaction.user.id, { type: 'event_win' }); return interaction.update({ content: `🎉 <@${interaction.user.id}> klaim Air Drop! 🪙 **${reward}**`, embeds: [], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('x').setLabel(`Diklaim ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setDisabled(true))] }); }
         // Legacy claim_quest_ and claim_weekly_ buttons (kept for backward compat with old messages)
-        if (interaction.customId.startsWith('claim_quest_')) { const qi = parseInt(interaction.customId.replace('claim_quest_', '')), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!row || row.date !== today) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, interaction.user.id); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_quests_done'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'quest' }); if (quests.every(q => q.claimed)) await checkAchievements(interaction.guild, interaction.user.id, { type: 'all_quest_day' }); let bonusMsg = ''; const streakResult = checkDailyQuestStreak(guildId, interaction.user.id); if (streakResult) { bonusMsg = `\n\n\ud83c\udf81 **ALL DONE BONUS: +200 Money!**\n> \ud83c\udfc5 Perfect Days: ${streakResult.perfectDays}`; if (streakResult.weeklyBonus) bonusMsg += `\n\n\ud83c\udf89\ud83c\udf89 **7-DAY STREAK BONUS!** +1000 Money + \ud83d\udce6 Mystery Box! \ud83c\udf89\ud83c\udf89`; } return interaction.reply(`\u2705 Dapat \ud83e\ude99 **${tq.reward}**!${bonusMsg}`); }
-        if (interaction.customId.startsWith('claim_weekly_')) { const qi = parseInt(interaction.customId.replace('claim_weekly_', '')); const week = getWeekId(); let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week); if (!row) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai atau sudah diklaim!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done'); return interaction.reply(`\u2705 Weekly Quest selesai! Dapat \ud83e\ude99 **${tq.reward.toLocaleString('id-ID')}**!`); }
+        if (interaction.customId.startsWith('claim_quest_')) { const qi = parseInt(interaction.customId.replace('claim_quest_', '')), today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id); if (!row || row.date !== today) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, interaction.user.id); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_quests_done'); addIncome(guildId, interaction.user.id, 'quest', tq.reward); await checkAchievements(interaction.guild, interaction.user.id, { type: 'quest' }); if (quests.every(q => q.claimed)) await checkAchievements(interaction.guild, interaction.user.id, { type: 'all_quest_day' }); let bonusMsg = ''; const streakResult = checkDailyQuestStreak(guildId, interaction.user.id); if (streakResult) { addIncome(guildId, interaction.user.id, 'quest', streakResult.bonus); if (streakResult.weeklyBonus) addIncome(guildId, interaction.user.id, 'quest', 1000); bonusMsg = `\n\n\ud83c\udf81 **ALL DONE BONUS: +200 Money!**\n> \ud83c\udfc5 Perfect Days: ${streakResult.perfectDays}`; if (streakResult.weeklyBonus) bonusMsg += `\n\n\ud83c\udf89\ud83c\udf89 **7-DAY STREAK BONUS!** +1000 Money + \ud83d\udce6 Mystery Box! \ud83c\udf89\ud83c\udf89`; } return interaction.reply(`\u2705 Dapat \ud83e\ude99 **${tq.reward}**!${bonusMsg}`); }
+        if (interaction.customId.startsWith('claim_weekly_')) { const qi = parseInt(interaction.customId.replace('claim_weekly_', '')); const week = getWeekId(); let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week); if (!row) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai atau sudah diklaim!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done'); addIncome(guildId, interaction.user.id, 'quest', tq.reward); return interaction.reply(`\u2705 Weekly Quest selesai! Dapat \ud83e\ude99 **${tq.reward.toLocaleString('id-ID')}**!`); }
         if (interaction.customId === 'cancel_buy') return interaction.update({ content: '\u274c Dibatalkan.', components: [] });
-        if (interaction.customId.startsWith('confirm_')) { const selected = interaction.customId.substring(8), userData = getOrCreateUser(guildId, interaction.user.id); let finalItemName = '', finalPrice = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); const itemPrice = parseInt(parts.pop()); const itemName = parts.join('_'); const item = db.prepare('SELECT * FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, itemPrice); if (!item) return interaction.update({content: '❌ Habis!', components: []}); if (userData.balance < item.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); try { await interaction.user.send(`🛍️ **${item.name}**:\n\`\`\`\n${item.content}\n\`\`\``); } catch(e) { return interaction.update({content: '❌ DM tertutup!', components: []}); } userData.balance -= item.price; finalItemName = item.name; finalPrice = item.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id); } if (selected.startsWith('role_')) { const roleId = selected.substring(5), sr = db.prepare('SELECT * FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!sr) return interaction.update({content: '❌ Tidak dijual.', components: []}); if (userData.balance < sr.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); if (interaction.member.roles.cache.has(roleId)) return interaction.update({content: '❌ Sudah punya!', components: []}); userData.balance -= sr.price; const role = interaction.guild.roles.cache.get(roleId); finalItemName = role ? `Role ${role.name}` : 'Role'; finalPrice = sr.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); if (role) await interaction.member.roles.add(role).catch(()=>{}); } incrementUserStat(guildId, interaction.user.id, 'total_buys'); if (finalPrice > 0) updateQuestProgress(guildId, interaction.user.id, 'spend_money', finalPrice); await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', finalItemName, finalPrice); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor('#2B2D31').setDescription(`<@${interaction.user.id}> beli **${finalItemName}** (🪙 ${finalPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.update({content: `✅ Berhasil beli **${finalItemName}**!`, components: []}); }
+        if (interaction.customId.startsWith('confirm_')) { const selected = interaction.customId.substring(8), userData = getOrCreateUser(guildId, interaction.user.id); let finalItemName = '', finalPrice = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); const itemPrice = parseInt(parts.pop()); const itemName = parts.join('_'); const item = db.prepare('SELECT * FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, itemPrice); if (!item) return interaction.update({content: '❌ Habis!', components: []}); if (userData.balance < item.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); try { await interaction.user.send(`🛍️ **${item.name}**:\n\`\`\`\n${item.content}\n\`\`\``); } catch(e) { return interaction.update({content: '❌ DM tertutup!', components: []}); } userData.balance -= item.price; finalItemName = item.name; finalPrice = item.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id); } if (selected.startsWith('role_')) { const roleId = selected.substring(5), sr = db.prepare('SELECT * FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!sr) return interaction.update({content: '❌ Tidak dijual.', components: []}); if (userData.balance < sr.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); if (interaction.member.roles.cache.has(roleId)) return interaction.update({content: '❌ Sudah punya!', components: []}); userData.balance -= sr.price; const role = interaction.guild.roles.cache.get(roleId); finalItemName = role ? `Role ${role.name}` : 'Role'; finalPrice = sr.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); if (role) await interaction.member.roles.add(role).catch(()=>{}); } incrementUserStat(guildId, interaction.user.id, 'total_buys'); if (finalPrice > 0) { updateQuestProgress(guildId, interaction.user.id, 'spend_money', finalPrice); addSpending(guildId, interaction.user.id, 'shop', finalPrice); } await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', finalItemName, finalPrice); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor('#2B2D31').setDescription(`<@${interaction.user.id}> beli **${finalItemName}** (🪙 ${finalPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.update({content: `✅ Berhasil beli **${finalItemName}**!`, components: []}); }
     }
 
 
