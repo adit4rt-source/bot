@@ -140,6 +140,10 @@ function incrementUserStat(guildId, userId, key, amount = 1) {
     return current + amount;
 }
 
+function setUserStat(guildId, userId, key, value) {
+    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, Math.round(Number(value) || 0));
+}
+
 function setUserStatMax(guildId, userId, key, value) {
     // Stores `value` only if it is greater than the current stored value (for "biggest" records).
     value = Math.round(Number(value) || 0);
@@ -253,4 +257,4 @@ function getAllFerts(guildId, userId) {
     return db.prepare('SELECT * FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
-module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts };
+module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts };

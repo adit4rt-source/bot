@@ -26,6 +26,9 @@ const { startBackupSchedule } = require('./systems/backup');
 // Load auto-harvest notifier
 const { startAutoHarvestSchedule } = require('./systems/autoHarvest');
 
+// Load daily + pet reminders
+const { startReminderSchedules } = require('./systems/reminders');
+
 // ================= SETUP BOT =================
 const TOKEN = process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 const CLIENT_ID = process.env.CLIENT_ID || '1058955900389445672';
@@ -67,6 +70,10 @@ client.once(Events.ClientReady, async c => {
     // Start auto-harvest notifier (DMs users with the Auto-Harvest Pass when crops are ready)
     startAutoHarvestSchedule(client);
     console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
+
+    // Start daily-reward + hungry-pet reminders (automatic DMs)
+    startReminderSchedules(client);
+    console.log('🔔 Reminder: daily (1 jam) + pet lapar (10 menit)');
 
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);
