@@ -32,6 +32,9 @@ const { startReminderSchedules } = require('./systems/reminders');
 // One-time data reset hook (env-gated)
 const { maybeRunStartupReset } = require('./systems/dataReset');
 
+// Guild join/leave logger + update log
+const { onGuildCreate, onGuildDelete, postUpdateLog } = require('./systems/guildLog');
+
 // ================= SETUP BOT =================
 const TOKEN = process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 const CLIENT_ID = process.env.CLIENT_ID || '1058955900389445672';
@@ -91,6 +94,30 @@ client.once(Events.ClientReady, async c => {
         console.error('❌ Failed to sync commands:', error);
         log('ERROR', 'Failed to sync slash commands', error);
     }
+
+    // Post update changelog (only once per version, deduped)
+    await postUpdateLog(client, BOT_VERSION, 
+        `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
+        `**🐛 Bug Fixes:**\n` +
+        `• Fix voucher, shop stock, streak, contest (panel DB mismatch)\n` +
+        `• Fix item hilang di Market (fish listing + expire)\n` +
+        `• Fix auto-harvest DM (sekarang benar-benar otomatis)\n` +
+        `• Fix farm_legendary achievement (sebelumnya mustahil)\n` +
+        `• Fix contest end sekarang bagi hadiah ke top 3\n\n` +
+        `**✨ Fitur Baru:**\n` +
+        `• \`/gift @user <jumlah>\` — kirim money langsung\n` +
+        `• 🏆 Contest view di \`/fishing\` panel\n` +
+        `• ♻️ Streak restore mandiri di \`/profile\`\n` +
+        `• 🌾 Auto-harvest notifier (DM otomatis saat panen siap)\n` +
+        `• 🔔 Daily reminder + Pet lapar DM otomatis\n` +
+        `• 📊 \`/stats\` dashboard sekarang keisi data real\n` +
+        `• 📥 Welcome embed + Join Server button\n` +
+        `• 📋 Guild join/leave log\n\n` +
+        `**🧹 Cleanup:**\n` +
+        `• Hapus ~600 baris dead code\n` +
+        `• Update teks /help, /menu, dan semua panel\n` +
+        `• Hapus migrasi Kythia (fresh start)\n`
+    );
 });
 
 // ================= EVENT HANDLERS (wrapped with error catching) =================
@@ -98,5 +125,9 @@ client.on(Events.MessageCreate, wrapHandler('messageCreate', handleMessageCreate
 client.on(Events.VoiceStateUpdate, wrapHandler('voiceStateUpdate', handleVoiceStateUpdate));
 client.on(Events.MessageReactionAdd, wrapHandler('reactionAdd', handleReactionAdd));
 client.on(Events.InteractionCreate, wrapHandler('interactionCreate', handleInteractionCreate));
+
+// Guild join/leave logging
+client.on(Events.GuildCreate, (guild) => onGuildCreate(client, guild));
+client.on(Events.GuildDelete, (guild) => onGuildDelete(client, guild));
 
 client.login(TOKEN);
