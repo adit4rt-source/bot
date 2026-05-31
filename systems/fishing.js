@@ -77,8 +77,17 @@ function catchFish(guildId, userId) {
     const normalized = adjustedTiers.map(t => { cumulative += (t.chance / finalTotal) * 100; return { ...t, cumChance: cumulative }; });
     for (const t of normalized) { if (roll <= t.cumChance) { selectedTier = t; break; } }
 
-    // Filter fish by the selected tier
-    const tierFish = FISH_DATA.filter(f => f.tier === selectedTier.tier);
+    // Filter fish by the selected tier AND location.
+    // - Fish with no exclusiveLocation can appear anywhere their tier is allowed.
+    // - Fish with an exclusiveLocation ONLY appear when fishing at that exact location.
+    let tierFish = FISH_DATA.filter(f =>
+        f.tier === selectedTier.tier &&
+        (!f.exclusiveLocation || f.exclusiveLocation === location.id)
+    );
+    // Safety fallback: if filtering left nothing (shouldn't happen), use all fish of the tier.
+    if (tierFish.length === 0) {
+        tierFish = FISH_DATA.filter(f => f.tier === selectedTier.tier);
+    }
     const fish = tierFish[Math.floor(Math.random() * tierFish.length)];
     const weight = parseFloat((Math.random() * (selectedTier.maxWeight - selectedTier.minWeight) + selectedTier.minWeight).toFixed(2));
     const weightRatio = (weight - selectedTier.minWeight) / (selectedTier.maxWeight - selectedTier.minWeight);

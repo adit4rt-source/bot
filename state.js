@@ -10,4 +10,8 @@ const guildMessageCounters = new Map();
 const activeFishEvents = new Map();
 const guildFishEventCounters = new Map();
 const activeBossParties = new Map();
-module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties };
+// Short-lived selections between a select-menu pick and the follow-up modal.
+// Keyed by `${guildId}_${userId}`.
+const pendingMarketSell = new Map(); // => { itemType, itemId, itemName }
+const pendingTradeGive = new Map();  // => { type, id, display }
+module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties, pendingMarketSell, pendingTradeGive };

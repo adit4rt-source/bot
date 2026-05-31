@@ -223,19 +223,25 @@ async function handleCasinoButton(interaction) {
     }
 
     // === COINFLIP BET PANEL ===
-    if (action === 'coinflip') {
+    // Guard against `casino_cf_bet_X` (action 'cf') — only catch the plain panel button.
+    if (action === 'coinflip' && parts[2] !== 'bet') {
         const panel = buildCoinflipBetPanel(guildId, userId);
         return interaction.update(panel);
     }
 
     // === SLOT BET PANEL ===
-    if (action === 'slot') {
+    // IMPORTANT: `casino_slot_${userId}` (panel) and `casino_slot_bet_X_${userId}` (execute)
+    // both have parts[1] === 'slot'. Without this guard the panel branch intercepts the bet
+    // click and just re-renders the bet panel instead of spinning. Guard on parts[2] !== 'bet'
+    // so bet selections fall through to the execution branch below.
+    if (action === 'slot' && parts[2] !== 'bet') {
         const panel = buildSlotBetPanel(guildId, userId);
         return interaction.update(panel);
     }
 
     // === ROULETTE CHOICE PANEL ===
-    if (action === 'roulette') {
+    // Guard against `casino_rl_spin_*` (action 'rl') — only catch the plain panel button.
+    if (action === 'roulette' && parts[2] !== 'bet') {
         const panel = buildRouletteBetPanel(guildId, userId);
         return interaction.update(panel);
     }

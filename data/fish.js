@@ -343,6 +343,42 @@ const FISH_DATA = [
     { id: 'quantum_leviathan', name: 'Quantum Leviathan', tier: 'Secret', emoji: '🔮' },
     { id: 'primordial_serpent', name: 'Primordial Serpent', tier: 'Secret', emoji: '🔮' },
     { id: 'eternal_whale', name: 'Eternal Whale', tier: 'Secret', emoji: '🔮' },
+
+    // ================= LOCATION-EXCLUSIVE FISH =================
+    // These fish ONLY appear when fishing at their `exclusiveLocation`.
+    // Their `tier` must be within that location's allowed tiers (see FISHING_LOCATIONS).
+
+    // ---- LAKE exclusives (Common-Epic) ----
+    { id: 'lake_mirror_carp', name: 'Mirror Carp Danau', tier: 'Uncommon', emoji: '🐠', exclusiveLocation: 'lake' },
+    { id: 'lake_moonperch', name: 'Moonperch', tier: 'Rare', emoji: '🐡', exclusiveLocation: 'lake' },
+    { id: 'lake_emerald_pike', name: 'Emerald Pike', tier: 'Rare', emoji: '🐡', exclusiveLocation: 'lake' },
+    { id: 'lake_glacier_trout', name: 'Glacier Trout', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'lake' },
+    { id: 'lake_highland_sturgeon', name: 'Highland Sturgeon', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'lake' },
+
+    // ---- OCEAN exclusives (Uncommon-Legendary) ----
+    { id: 'ocean_coral_angel', name: 'Coral Angelfish', tier: 'Uncommon', emoji: '🐠', exclusiveLocation: 'ocean' },
+    { id: 'ocean_reef_emperor', name: 'Reef Emperor', tier: 'Rare', emoji: '🐡', exclusiveLocation: 'ocean' },
+    { id: 'ocean_azure_marlin', name: 'Azure Marlin', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'ocean' },
+    { id: 'ocean_tidal_orca', name: 'Tidal Orca', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'ocean' },
+    { id: 'ocean_pearl_leviathan', name: 'Pearl Leviathan', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'ocean' },
+    { id: 'ocean_storm_serpent', name: 'Storm Sea Serpent', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'ocean' },
+
+    // ---- DEEP SEA exclusives (Rare-Mythic) ----
+    { id: 'deep_lantern_horror', name: 'Lantern Horror', tier: 'Rare', emoji: '🐡', exclusiveLocation: 'deep_sea' },
+    { id: 'deep_abyss_angler', name: 'Abyss Anglerfish', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'deep_sea' },
+    { id: 'deep_trench_wyrm', name: 'Trench Wyrm', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'deep_sea' },
+    { id: 'deep_hadal_titan', name: 'Hadal Titan', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'deep_sea' },
+    { id: 'deep_obsidian_kraken', name: 'Obsidian Kraken', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'deep_sea' },
+    { id: 'deep_pressure_god', name: 'Pressure Sovereign', tier: 'Mythic', emoji: '🌈', exclusiveLocation: 'deep_sea' },
+
+    // ---- VOID RIFT exclusives (Epic-Secret) ----
+    { id: 'void_phantom_ray', name: 'Phantom Void Ray', tier: 'Epic', emoji: '🦈', exclusiveLocation: 'void_rift' },
+    { id: 'void_rift_stalker', name: 'Rift Stalker', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'void_rift' },
+    { id: 'void_starless_eel', name: 'Starless Eel', tier: 'Legendary', emoji: '🐉', exclusiveLocation: 'void_rift' },
+    { id: 'void_nebula_whale', name: 'Nebula Whale', tier: 'Mythic', emoji: '🌈', exclusiveLocation: 'void_rift' },
+    { id: 'void_entropy_serpent', name: 'Entropy Serpent', tier: 'Mythic', emoji: '🌈', exclusiveLocation: 'void_rift' },
+    { id: 'void_singularity', name: 'The Singularity', tier: 'Secret', emoji: '🔮', exclusiveLocation: 'void_rift' },
+    { id: 'void_oblivion_maw', name: 'Oblivion Maw', tier: 'Secret', emoji: '🔮', exclusiveLocation: 'void_rift' },
 ];
 
 

@@ -1,10 +1,11 @@
 // systems/marketPanel.js - Market/Auction House Panel UI System
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { db, getOrCreateUser } = require('../database');
 const { notifyMarketSold } = require('./notifications');
 const { FISH_DATA } = require('../data/fish');
 const { PET_DATA } = require('../data/pets');
 const { ITEMS } = require('../data/items');
+const { pendingMarketSell } = require('../state');
 
 // ============ DATABASE SETUP ============
 db.exec(`CREATE TABLE IF NOT EXISTS market_listings (
@@ -23,6 +24,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS market_listings (
 const LISTING_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_LISTINGS_PER_USER = 10;
 const LISTINGS_PER_PAGE = 10;
+const SELL_MENU_LIMIT = 25; // Discord select menu hard cap
 
 
 // ============ HELPER: Expire old listings ============
@@ -37,6 +39,154 @@ function getListingDisplay(listing) {
     const typeEmoji = { fish: '🐟', relic: '💎', pet: '🐾', item: '📦' }[listing.itemType] || '❓';
     return `${typeEmoji} **${listing.itemName}**`;
 }
+
+// ============ HELPER: Gather a player's sellable items ============
+// Returns [{ type, id, label, desc }] ready to be turned into select options.
+function getSellableItems(guildId, userId) {
+    const out = [];
+
+    // Relics (high value, usually few)
+    const relics = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    for (const r of relics) {
+        out.push({ type: 'relic', id: String(r.id), label: `💎 ${r.name} [${r.rarity}]`, desc: `+${r.stat_value} ${r.stat_type}` });
+    }
+
+    // Pets
+    const pets = db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    for (const p of pets) {
+        const pd = PET_DATA.find(x => x.id === p.petId);
+        out.push({ type: 'pet', id: String(p.id), label: `${pd ? pd.emoji : '🐾'} ${p.name} (Lv.${p.level})`, desc: pd ? pd.name : 'Pet' });
+    }
+
+    // Game items
+    const inv = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
+    for (const it of inv) {
+        const def = ITEMS.find(x => x.id === it.itemId);
+        if (def) out.push({ type: 'item', id: it.itemId, label: `${def.emoji} ${def.name}`, desc: `Punya x${it.quantity}` });
+    }
+
+    // Fish (not locked, heaviest first — usually the most valuable)
+    const fish = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0 ORDER BY weight DESC').all(guildId, userId);
+    for (const f of fish) {
+        const fd = FISH_DATA.find(x => x.id === f.fishId);
+        out.push({ type: 'fish', id: String(f.id), label: `${fd ? fd.emoji : '🐟'} ${fd ? fd.name : 'Fish'} (${f.weight}kg)`, desc: fd ? fd.tier : 'Fish' });
+    }
+
+    return out;
+}
+
+// ============ HELPER: Resolve a sellable item's display name (for ownership check) ============
+function resolveSellItemName(guildId, userId, itemType, itemId) {
+    if (itemType === 'fish') {
+        const fish = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!fish) return null;
+        const fishDef = FISH_DATA.find(f => f.id === fish.fishId);
+        return fishDef ? `${fishDef.name} (${fish.weight}kg)` : `Fish #${itemId}`;
+    }
+    if (itemType === 'relic') {
+        const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!relic) return null;
+        return `${relic.name} [${relic.rarity}] +${relic.stat_value} ${relic.stat_type}`;
+    }
+    if (itemType === 'pet') {
+        const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!pet) return null;
+        const petDef = PET_DATA.find(p => p.id === pet.petId);
+        return petDef ? `${pet.name} (${petDef.name} Lv.${pet.level})` : `Pet #${itemId}`;
+    }
+    if (itemType === 'item') {
+        const itemDef = ITEMS.find(i => i.id === itemId);
+        if (!itemDef) return null;
+        const qty = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId);
+        if (!qty || qty.quantity < 1) return null;
+        return `${itemDef.emoji} ${itemDef.name}`;
+    }
+    return null;
+}
+
+// ============ HELPER: Remove item from seller & create the listing ============
+function createMarketListing(guildId, userId, itemType, itemId, price) {
+    let itemName = '';
+
+    if (itemType === 'fish') {
+        const fish = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!fish) return { ok: false, error: '❌ Ikan tidak ditemukan di inventory!' };
+        const fishDef = FISH_DATA.find(f => f.id === fish.fishId);
+        itemName = fishDef ? `${fishDef.name} (${fish.weight}kg)` : `Fish #${itemId}`;
+        db.prepare('DELETE FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').run(parseInt(itemId), guildId, userId);
+    } else if (itemType === 'relic') {
+        const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!relic) return { ok: false, error: '❌ Relic tidak ditemukan!' };
+        itemName = `${relic.name} [${relic.rarity}] +${relic.stat_value} ${relic.stat_type}`;
+        db.prepare('UPDATE relics SET userId = ?, equipped_pet_id = 0 WHERE id = ? AND guildId = ?').run('MARKET_HOLD', parseInt(itemId), guildId);
+    } else if (itemType === 'pet') {
+        const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
+        if (!pet) return { ok: false, error: '❌ Pet tidak ditemukan!' };
+        const petDef = PET_DATA.find(p => p.id === pet.petId);
+        itemName = petDef ? `${pet.name} (${petDef.name} Lv.${pet.level})` : `Pet #${itemId}`;
+        db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run('MARKET_HOLD', parseInt(itemId), guildId);
+    } else if (itemType === 'item') {
+        const itemDef = ITEMS.find(i => i.id === itemId);
+        if (!itemDef) return { ok: false, error: '❌ Item tidak ditemukan!' };
+        const qty = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId);
+        if (!qty || qty.quantity < 1) return { ok: false, error: '❌ Kamu tidak punya item ini!' };
+        itemName = `${itemDef.emoji} ${itemDef.name}`;
+        const newQty = qty.quantity - 1;
+        if (newQty <= 0) db.prepare('DELETE FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, itemId);
+        else db.prepare('UPDATE item_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(newQty, guildId, userId, itemId);
+    } else {
+        return { ok: false, error: '❌ Tipe item tidak valid!' };
+    }
+
+    db.prepare('INSERT INTO market_listings (guildId, sellerId, itemType, itemId, itemName, price, listedAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(guildId, userId, itemType, itemId, itemName, price, Date.now(), 'active');
+    const listingId = db.prepare('SELECT last_insert_rowid() as id').get().id;
+    return { ok: true, itemName, listingId };
+}
+
+// ============ HELPER: Return a listed item to its owner ============
+function returnListingItem(listing, toUserId, guildId, unequip) {
+    if (listing.itemType === 'fish') {
+        db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(toUserId, parseInt(listing.itemId), guildId);
+    } else if (listing.itemType === 'relic') {
+        if (unequip) db.prepare('UPDATE relics SET userId = ?, equipped_pet_id = 0 WHERE id = ? AND guildId = ?').run(toUserId, parseInt(listing.itemId), guildId);
+        else db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(toUserId, parseInt(listing.itemId), guildId);
+    } else if (listing.itemType === 'pet') {
+        db.prepare('UPDATE pets SET userId = ? WHERE id = ? AND guildId = ?').run(toUserId, parseInt(listing.itemId), guildId);
+    } else if (listing.itemType === 'item') {
+        const existing = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, toUserId, listing.itemId);
+        if (existing) db.prepare('UPDATE item_inventory SET quantity = quantity + 1 WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, toUserId, listing.itemId);
+        else db.prepare('INSERT INTO item_inventory (guildId, userId, itemId, quantity) VALUES (?, ?, ?, 1)').run(guildId, toUserId, listing.itemId);
+    }
+}
+
+// ============ HELPER: Execute a purchase (returns result for caller to reply) ============
+function executePurchase(guildId, userId, listingId) {
+    const listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND status = ?').get(listingId, guildId, 'active');
+    if (!listing) return { ok: false, error: '❌ Listing tidak ditemukan atau sudah tidak aktif!' };
+    if (listing.sellerId === userId) return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
+
+    if (Date.now() - listing.listedAt > LISTING_EXPIRY_MS) {
+        db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listingId);
+        return { ok: false, error: '❌ Listing sudah expired!' };
+    }
+
+    const buyerData = getOrCreateUser(guildId, userId);
+    if (buyerData.balance < listing.price) {
+        return { ok: false, error: `❌ Saldo kurang! Kamu punya 🪙 ${buyerData.balance.toLocaleString('id-ID')}, butuh 🪙 ${listing.price.toLocaleString('id-ID')}` };
+    }
+
+    // Money transfer
+    db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, userId);
+    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, listing.sellerId);
+
+    // Transfer item to buyer
+    returnListingItem(listing, userId, guildId, true);
+
+    db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('sold', listingId);
+    return { ok: true, listing };
+}
+
 
 // ============ BUILD: Main Market Panel ============
 function buildMarketPanel(guildId, userId, username) {
@@ -53,8 +203,8 @@ function buildMarketPanel(guildId, userId, username) {
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📊 Active Listings: **${activeCount}** | 💰 Saldo: **${userData.balance.toLocaleString('id-ID')}**\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 📋 **Browse** — Lihat & beli listing aktif\n` +
-            `> 📤 **Sell** — Jual item di market\n` +
+            `> 📋 **Browse** — Lihat & beli listing (pilih dari menu)\n` +
+            `> 📤 **Sell** — Jual item (pilih dari daftar item kamu)\n` +
             `> 📦 **My Listings** — Kelola listing kamu\n\n` +
             `💡 *Listing expired setelah 7 hari*`
         )
@@ -71,7 +221,52 @@ function buildMarketPanel(guildId, userId, username) {
 }
 
 
-// ============ BUILD: Browse Page ============
+// ============ BUILD: Sell — select menu of player's items ============
+function buildSellMenu(guildId, userId, username) {
+    const items = getSellableItems(guildId, userId);
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📤 Market — Jual Item`)
+        .setColor('#2ECC71')
+        .setFooter({ text: 'Pilih item dari daftar, lalu masukkan harga' });
+
+    if (items.length === 0) {
+        embed.setDescription('📭 Kamu tidak punya item yang bisa dijual.\n\n> Yang bisa dijual: 🐟 ikan (tidak terkunci), 💎 relic, 🐾 pet, 📦 item game.');
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return { embeds: [embed], components: [row] };
+    }
+
+    const shown = items.slice(0, SELL_MENU_LIMIT);
+    embed.setDescription(
+        `Menampilkan **${shown.length}** dari **${items.length}** item milikmu.\n` +
+        (items.length > SELL_MENU_LIMIT ? `> ⚠️ Hanya ${SELL_MENU_LIMIT} item teratas yang muncul (batas Discord).\n` : '') +
+        `\n👇 Pilih item yang ingin dijual:`
+    );
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`market_sellitem_${userId}`)
+        .setPlaceholder('📤 Pilih item untuk dijual...')
+        .setMinValues(1).setMaxValues(1);
+    shown.forEach(it => {
+        menu.addOptions(new StringSelectMenuOptionBuilder()
+            .setLabel(it.label.substring(0, 100))
+            .setValue(`${it.type}:${it.id}`.substring(0, 100))
+            .setDescription((it.desc || '').substring(0, 100)));
+    });
+
+    const components = [
+        new ActionRowBuilder().addComponents(menu),
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        )
+    ];
+    return { embeds: [embed], components };
+}
+
+
+// ============ BUILD: Browse Page (with buy select menu) ============
 function buildBrowsePage(guildId, userId, username, page) {
     expireOldListings(guildId);
 
@@ -101,24 +296,43 @@ function buildBrowsePage(guildId, userId, username, page) {
         .setTitle(`📋 Market — Browse`)
         .setColor('#3498DB')
         .setDescription(desc)
-        .setFooter({ text: 'Klik Buy dan masukkan ID listing untuk membeli' });
+        .setFooter({ text: 'Pilih listing dari menu untuk membeli' });
 
-    const row = new ActionRowBuilder().addComponents(
+    const components = [];
+
+    // Buy select menu — each active listing on this page is an option
+    if (listings.length > 0) {
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`market_buyselect_${userId}`)
+            .setPlaceholder('🛒 Pilih listing untuk dibeli...')
+            .setMinValues(1).setMaxValues(1);
+        listings.forEach(l => {
+            const typeEmoji = { fish: '🐟', relic: '💎', pet: '🐾', item: '📦' }[l.itemType] || '❓';
+            menu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`#${l.id} ${l.itemName}`.substring(0, 100))
+                .setValue(String(l.id))
+                .setDescription(`🪙 ${l.price.toLocaleString('id-ID')}`.substring(0, 100))
+                .setEmoji(typeEmoji));
+        });
+        components.push(new ActionRowBuilder().addComponents(menu));
+    }
+
+    const navRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`market_browse_${userId}_${Math.max(0, safePage - 1)}`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
-        new ButtonBuilder().setCustomId(`market_buy_${userId}`).setLabel('🛒 Buy').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`market_browse_${userId}_${Math.min(maxPage, safePage + 1)}`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= maxPage),
         new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
+    components.push(navRow);
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components };
 }
 
 
-// ============ BUILD: My Listings Page ============
+// ============ BUILD: My Listings Page (with cancel select menu) ============
 function buildMyListings(guildId, userId, username) {
     expireOldListings(guildId);
 
-    const listings = db.prepare('SELECT * FROM market_listings WHERE guildId = ? AND sellerId = ? AND status = ? ORDER BY listedAt DESC LIMIT 10')
+    const listings = db.prepare('SELECT * FROM market_listings WHERE guildId = ? AND sellerId = ? AND status = ? ORDER BY listedAt DESC LIMIT 25')
         .all(guildId, userId, 'active');
 
     let desc = `━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -137,14 +351,29 @@ function buildMyListings(guildId, userId, username) {
         .setTitle(`📦 My Listings — ${username}`)
         .setColor('#9B59B6')
         .setDescription(desc)
-        .setFooter({ text: 'Klik Cancel untuk membatalkan listing' });
+        .setFooter({ text: 'Pilih listing dari menu untuk membatalkan' });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`market_cancel_${userId}`).setLabel('❌ Cancel Listing').setStyle(ButtonStyle.Danger).setDisabled(listings.length === 0),
+    const components = [];
+    if (listings.length > 0) {
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`market_cancelselect_${userId}`)
+            .setPlaceholder('❌ Pilih listing untuk dibatalkan...')
+            .setMinValues(1).setMaxValues(1);
+        listings.forEach(l => {
+            const typeEmoji = { fish: '🐟', relic: '💎', pet: '🐾', item: '📦' }[l.itemType] || '❓';
+            menu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`#${l.id} ${l.itemName}`.substring(0, 100))
+                .setValue(String(l.id))
+                .setDescription(`🪙 ${l.price.toLocaleString('id-ID')}`.substring(0, 100))
+                .setEmoji(typeEmoji));
+        });
+        components.push(new ActionRowBuilder().addComponents(menu));
+    }
+    components.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
+    ));
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components };
 }
 
 // ============ HANDLER: /market command ============
@@ -161,7 +390,7 @@ async function handleMarketButton(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
     const parts = customId.split('_');
-    // market_ACTION_USERID or market_ACTION_USERID_PAGE
+    // market_ACTION_USERID[_EXTRA]
     const action = parts[1];
     const userId = parts[2];
 
@@ -180,61 +409,9 @@ async function handleMarketButton(interaction) {
         return interaction.update(buildBrowsePage(guildId, userId, interaction.user.username, page));
     }
 
-    // === SELL: Show Modal ===
+    // === SELL: Show select menu of owned items ===
     if (action === 'sell') {
-        const modal = new ModalBuilder()
-            .setCustomId(`market_modal_sell_${userId}`)
-            .setTitle('📤 Jual Item di Market');
-
-        const typeInput = new TextInputBuilder()
-            .setCustomId('market_item_type')
-            .setLabel('Tipe Item (fish/relic/pet/item)')
-            .setPlaceholder('fish, relic, pet, atau item')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-
-        const idInput = new TextInputBuilder()
-            .setCustomId('market_item_id')
-            .setLabel('Item ID (DB row ID)')
-            .setPlaceholder('Contoh: 5 (lihat di inventory)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(20);
-
-        const priceInput = new TextInputBuilder()
-            .setCustomId('market_price')
-            .setLabel('Harga jual (money)')
-            .setPlaceholder('Contoh: 5000')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(typeInput),
-            new ActionRowBuilder().addComponents(idInput),
-            new ActionRowBuilder().addComponents(priceInput)
-        );
-
-        return interaction.showModal(modal);
-    }
-
-    // === BUY: Show Modal ===
-    if (action === 'buy') {
-        const modal = new ModalBuilder()
-            .setCustomId(`market_modal_buy_${userId}`)
-            .setTitle('🛒 Beli dari Market');
-
-        const idInput = new TextInputBuilder()
-            .setCustomId('market_listing_id')
-            .setLabel('Listing ID')
-            .setPlaceholder('Contoh: 5')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-
-        modal.addComponents(new ActionRowBuilder().addComponents(idInput));
-        return interaction.showModal(modal);
+        return interaction.update(buildSellMenu(guildId, userId, interaction.user.username));
     }
 
     // === MY LISTINGS ===
@@ -242,177 +419,22 @@ async function handleMarketButton(interaction) {
         return interaction.update(buildMyListings(guildId, userId, interaction.user.username));
     }
 
-    // === CANCEL: Show Modal ===
-    if (action === 'cancel') {
-        const modal = new ModalBuilder()
-            .setCustomId(`market_modal_cancel_${userId}`)
-            .setTitle('❌ Cancel Listing');
-
-        const idInput = new TextInputBuilder()
-            .setCustomId('market_listing_id')
-            .setLabel('Listing ID yang mau dibatalkan')
-            .setPlaceholder('Contoh: 5')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-
-        modal.addComponents(new ActionRowBuilder().addComponents(idInput));
-        return interaction.showModal(modal);
-    }
-}
-
-
-// ============ HANDLER: Market modal submissions ============
-async function handleMarketModal(interaction) {
-    const guildId = interaction.guild.id;
-    const customId = interaction.customId;
-    const parts = customId.split('_');
-    const userId = parts[parts.length - 1];
-    const action = parts[2]; // modal_sell, modal_buy, modal_cancel
-
-    if (interaction.user.id !== userId) {
-        return interaction.reply({ content: '❌ Ini bukan modal kamu!', ephemeral: true });
-    }
-
-    // === SELL SUBMISSION ===
-    if (action === 'sell') {
-        const itemType = interaction.fields.getTextInputValue('market_item_type').trim().toLowerCase();
-        const itemId = interaction.fields.getTextInputValue('market_item_id').trim();
-        const priceStr = interaction.fields.getTextInputValue('market_price').trim();
-        const price = parseInt(priceStr);
-
-        if (!['fish', 'relic', 'pet', 'item'].includes(itemType)) {
-            return interaction.reply({ content: '❌ Tipe harus: `fish`, `relic`, `pet`, atau `item`', ephemeral: true });
-        }
-        if (isNaN(price) || price < 1 || price > 10000000) {
-            return interaction.reply({ content: '❌ Harga harus 1 - 10,000,000!', ephemeral: true });
+    // === BUY CONFIRM: execute purchase ===  market_buyconfirm_USERID_LISTINGID
+    if (action === 'buyconfirm') {
+        const listingId = parseInt(parts[3]);
+        const result = executePurchase(guildId, userId, listingId);
+        if (!result.ok) {
+            return interaction.update({
+                embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('🛒 Pembelian Gagal').setDescription(result.error)],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`market_browse_${userId}_0`).setLabel('🔙 Browse').setStyle(ButtonStyle.Secondary)
+                )]
+            });
         }
 
-        // Check user listing limit
-        const userListings = db.prepare('SELECT COUNT(*) as cnt FROM market_listings WHERE guildId = ? AND sellerId = ? AND status = ?')
-            .get(guildId, userId, 'active').cnt;
-        if (userListings >= MAX_LISTINGS_PER_USER) {
-            return interaction.reply({ content: `❌ Max ${MAX_LISTINGS_PER_USER} listing aktif!`, ephemeral: true });
-        }
-
-        let itemName = '';
-
-        // Validate ownership based on type
-        if (itemType === 'fish') {
-            const fish = db.prepare('SELECT * FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
-            if (!fish) return interaction.reply({ content: '❌ Ikan tidak ditemukan di inventory!', ephemeral: true });
-            const fishDef = FISH_DATA.find(f => f.id === fish.fishId);
-            itemName = fishDef ? `${fishDef.name} (${fish.weight}kg)` : `Fish #${itemId}`;
-            // Remove fish from inventory
-            db.prepare('DELETE FROM fish_inventory WHERE id = ? AND guildId = ? AND userId = ?').run(parseInt(itemId), guildId, userId);
-        } else if (itemType === 'relic') {
-            const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
-            if (!relic) return interaction.reply({ content: '❌ Relic tidak ditemukan!', ephemeral: true });
-            itemName = `${relic.name} [${relic.rarity}] +${relic.stat_value} ${relic.stat_type}`;
-            // Remove relic (unequip if equipped)
-            db.prepare('UPDATE relics SET userId = ?, equipped_pet_id = 0 WHERE id = ? AND guildId = ?').run('MARKET_HOLD', parseInt(itemId), guildId);
-        } else if (itemType === 'pet') {
-            const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(itemId), guildId, userId);
-            if (!pet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
-            const petDef = PET_DATA.find(p => p.id === pet.petId);
-            itemName = petDef ? `${pet.name} (${petDef.name} Lv.${pet.level})` : `Pet #${itemId}`;
-            // Remove pet from user (hold in market)
-            db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run('MARKET_HOLD', parseInt(itemId), guildId);
-        } else if (itemType === 'item') {
-            const itemDef = ITEMS.find(i => i.id === itemId);
-            if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan! Gunakan item ID (contoh: xp_booster_2x)', ephemeral: true });
-            const qty = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId);
-            if (!qty || qty.quantity < 1) return interaction.reply({ content: '❌ Kamu tidak punya item ini!', ephemeral: true });
-            itemName = `${itemDef.emoji} ${itemDef.name}`;
-            // Deduct 1 from inventory
-            const newQty = qty.quantity - 1;
-            if (newQty <= 0) db.prepare('DELETE FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, itemId);
-            else db.prepare('UPDATE item_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(newQty, guildId, userId, itemId);
-        }
-
-        // Create listing
-        db.prepare('INSERT INTO market_listings (guildId, sellerId, itemType, itemId, itemName, price, listedAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(guildId, userId, itemType, itemId, itemName, price, Date.now(), 'active');
-        const listingId = db.prepare('SELECT last_insert_rowid() as id').get().id;
-
-        const embed = new EmbedBuilder()
-            .setColor('#2ECC71')
-            .setTitle('📤 Listed on Market!')
-            .setDescription(
-                `Item berhasil di-list di market!\n\n` +
-                `> 🆔 Listing: **#${listingId}**\n` +
-                `> 📦 Item: **${itemName}**\n` +
-                `> 💰 Harga: 🪙 **${price.toLocaleString('id-ID')}**\n` +
-                `> ⏱️ Expire: 7 hari\n\n` +
-                `Player lain bisa membeli dari Browse.`
-            )
-            .setTimestamp();
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-
-        return interaction.reply({ embeds: [embed], components: [row] });
-    }
-
-
-    // === BUY SUBMISSION ===
-    if (action === 'buy') {
-        const listingIdStr = interaction.fields.getTextInputValue('market_listing_id').trim();
-        const listingId = parseInt(listingIdStr);
-
-        if (isNaN(listingId)) {
-            return interaction.reply({ content: '❌ Listing ID harus angka!', ephemeral: true });
-        }
-
-        const listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND status = ?')
-            .get(listingId, guildId, 'active');
-        if (!listing) {
-            return interaction.reply({ content: '❌ Listing tidak ditemukan atau sudah tidak aktif!', ephemeral: true });
-        }
-        if (listing.sellerId === userId) {
-            return interaction.reply({ content: '❌ Tidak bisa membeli listing sendiri!', ephemeral: true });
-        }
-
-        // Check expiry
-        if (Date.now() - listing.listedAt > LISTING_EXPIRY_MS) {
-            db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listingId);
-            return interaction.reply({ content: '❌ Listing sudah expired!', ephemeral: true });
-        }
-
-        // Check buyer balance
-        const buyerData = getOrCreateUser(guildId, userId);
-        if (buyerData.balance < listing.price) {
-            return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 ${buyerData.balance.toLocaleString('id-ID')}, butuh 🪙 ${listing.price.toLocaleString('id-ID')}`, ephemeral: true });
-        }
-
-        // Execute purchase: deduct buyer, give seller
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, userId);
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, listing.sellerId);
-
-        // Transfer item to buyer
-        if (listing.itemType === 'fish') {
-            db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'relic') {
-            db.prepare('UPDATE relics SET userId = ?, equipped_pet_id = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'pet') {
-            db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'item') {
-            const existing = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, listing.itemId);
-            if (existing) {
-                db.prepare('UPDATE item_inventory SET quantity = quantity + 1 WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, listing.itemId);
-            } else {
-                db.prepare('INSERT INTO item_inventory (guildId, userId, itemId, quantity) VALUES (?, ?, ?, 1)').run(guildId, userId, listing.itemId);
-            }
-        }
-
-        // Mark as sold
-        db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('sold', listingId);
-
-        // Notify seller
-        try {
-            await notifyMarketSold(interaction.client, guildId, listing.sellerId, listing.itemName, listing.price, interaction.user.username);
-        } catch (e) { /* notification failure should not block */ }
+        const listing = result.listing;
+        // Notify seller (non-blocking)
+        try { await notifyMarketSold(interaction.client, guildId, listing.sellerId, listing.itemName, listing.price, interaction.user.username); } catch (e) { /* ignore */ }
 
         const embed = new EmbedBuilder()
             .setColor('#2ECC71')
@@ -425,24 +447,95 @@ async function handleMarketModal(interaction) {
                 `Item sudah masuk ke inventory kamu.`
             )
             .setTimestamp();
-
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_browse_${userId}_0`).setLabel('📋 Browse Lagi').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+}
 
-        return interaction.reply({ embeds: [embed], components: [row] });
+
+// ============ HANDLER: Market select menus ============
+async function handleMarketSelectMenu(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
     }
 
+    // === SELL: item picked -> store & show price modal ===
+    if (customId.startsWith('market_sellitem_')) {
+        const val = interaction.values[0];
+        const sep = val.indexOf(':');
+        const itemType = val.substring(0, sep);
+        const itemId = val.substring(sep + 1);
 
-    // === CANCEL SUBMISSION ===
-    if (action === 'cancel') {
-        const listingIdStr = interaction.fields.getTextInputValue('market_listing_id').trim();
-        const listingId = parseInt(listingIdStr);
-
-        if (isNaN(listingId)) {
-            return interaction.reply({ content: '❌ Listing ID harus angka!', ephemeral: true });
+        // Verify still owned and get display name
+        const itemName = resolveSellItemName(guildId, userId, itemType, itemId);
+        if (!itemName) {
+            return interaction.reply({ content: '❌ Item itu sudah tidak ada di inventory kamu!', ephemeral: true });
         }
 
+        // Listing limit check before asking for price
+        const userListings = db.prepare('SELECT COUNT(*) as cnt FROM market_listings WHERE guildId = ? AND sellerId = ? AND status = ?')
+            .get(guildId, userId, 'active').cnt;
+        if (userListings >= MAX_LISTINGS_PER_USER) {
+            return interaction.reply({ content: `❌ Max ${MAX_LISTINGS_PER_USER} listing aktif!`, ephemeral: true });
+        }
+
+        pendingMarketSell.set(`${guildId}_${userId}`, { itemType, itemId, itemName });
+
+        const modal = new ModalBuilder()
+            .setCustomId(`market_modal_sellprice_${userId}`)
+            .setTitle('📤 Tentukan Harga Jual');
+        const priceInput = new TextInputBuilder()
+            .setCustomId('market_price')
+            .setLabel(`Harga (item: ${itemName}`.substring(0, 42) + ')')
+            .setPlaceholder('Contoh: 5000')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(10);
+        modal.addComponents(new ActionRowBuilder().addComponents(priceInput));
+        return interaction.showModal(modal);
+    }
+
+    // === BUY: listing picked -> confirmation ===
+    if (customId.startsWith('market_buyselect_')) {
+        const listingId = parseInt(interaction.values[0]);
+        const listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND status = ?').get(listingId, guildId, 'active');
+        if (!listing) {
+            return interaction.reply({ content: '❌ Listing tidak ditemukan atau sudah terjual!', ephemeral: true });
+        }
+        if (listing.sellerId === userId) {
+            return interaction.reply({ content: '❌ Tidak bisa membeli listing sendiri!', ephemeral: true });
+        }
+        const buyerData = getOrCreateUser(guildId, userId);
+        const canAfford = buyerData.balance >= listing.price;
+
+        const embed = new EmbedBuilder()
+            .setColor(canAfford ? '#F1C40F' : '#E74C3C')
+            .setTitle('🛒 Konfirmasi Pembelian')
+            .setDescription(
+                `> 📦 Item: ${getListingDisplay(listing)}\n` +
+                `> 💰 Harga: 🪙 **${listing.price.toLocaleString('id-ID')}**\n` +
+                `> 👤 Seller: <@${listing.sellerId}>\n` +
+                `> 💳 Saldo kamu: 🪙 **${buyerData.balance.toLocaleString('id-ID')}**\n\n` +
+                (canAfford ? `Klik **Konfirmasi Beli** untuk melanjutkan.` : `❌ Saldo kamu tidak cukup!`)
+            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_buyconfirm_${userId}_${listingId}`).setLabel('✅ Konfirmasi Beli').setStyle(ButtonStyle.Success).setDisabled(!canAfford),
+            new ButtonBuilder().setCustomId(`market_browse_${userId}_0`).setLabel('🔙 Batal').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === CANCEL: listing picked -> cancel directly ===
+    if (customId.startsWith('market_cancelselect_')) {
+        const listingId = parseInt(interaction.values[0]);
         const listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND sellerId = ? AND status = ?')
             .get(listingId, guildId, userId, 'active');
         if (!listing) {
@@ -450,22 +543,7 @@ async function handleMarketModal(interaction) {
         }
 
         // Return item to seller
-        if (listing.itemType === 'fish') {
-            db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'relic') {
-            db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'pet') {
-            db.prepare('UPDATE pets SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(listing.itemId), guildId);
-        } else if (listing.itemType === 'item') {
-            const existing = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, listing.itemId);
-            if (existing) {
-                db.prepare('UPDATE item_inventory SET quantity = quantity + 1 WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, listing.itemId);
-            } else {
-                db.prepare('INSERT INTO item_inventory (guildId, userId, itemId, quantity) VALUES (?, ?, ?, 1)').run(guildId, userId, listing.itemId);
-            }
-        }
-
-        // Mark as cancelled
+        returnListingItem(listing, userId, guildId, false);
         db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('cancelled', listingId);
 
         const embed = new EmbedBuilder()
@@ -478,18 +556,88 @@ async function handleMarketModal(interaction) {
                 `Item dikembalikan ke inventory kamu.`
             )
             .setTimestamp();
-
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_mylist_${userId}`).setLabel('📦 My Listings').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+}
 
+
+// ============ HANDLER: Market modal submissions ============
+async function handleMarketModal(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+    const action = parts[2]; // sellprice
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan modal kamu!', ephemeral: true });
+    }
+
+    // === SELL PRICE SUBMISSION ===
+    if (action === 'sellprice') {
+        const pendingKey = `${guildId}_${userId}`;
+        const pending = pendingMarketSell.get(pendingKey);
+        if (!pending) {
+            return interaction.reply({ content: '❌ Sesi penjualan kadaluarsa. Silakan pilih item lagi dari menu Sell.', ephemeral: true });
+        }
+
+        const priceStr = interaction.fields.getTextInputValue('market_price').trim();
+        const price = parseInt(priceStr);
+        if (isNaN(price) || price < 1 || price > 10000000) {
+            return interaction.reply({ content: '❌ Harga harus angka 1 - 10,000,000!', ephemeral: true });
+        }
+
+        // Re-check listing limit
+        const userListings = db.prepare('SELECT COUNT(*) as cnt FROM market_listings WHERE guildId = ? AND sellerId = ? AND status = ?')
+            .get(guildId, userId, 'active').cnt;
+        if (userListings >= MAX_LISTINGS_PER_USER) {
+            pendingMarketSell.delete(pendingKey);
+            return interaction.reply({ content: `❌ Max ${MAX_LISTINGS_PER_USER} listing aktif!`, ephemeral: true });
+        }
+
+        const result = createMarketListing(guildId, userId, pending.itemType, pending.itemId, price);
+        pendingMarketSell.delete(pendingKey);
+        if (!result.ok) {
+            return interaction.reply({ content: result.error, ephemeral: true });
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor('#2ECC71')
+            .setTitle('📤 Listed on Market!')
+            .setDescription(
+                `Item berhasil di-list di market!\n\n` +
+                `> 🆔 Listing: **#${result.listingId}**\n` +
+                `> 📦 Item: **${result.itemName}**\n` +
+                `> 💰 Harga: 🪙 **${price.toLocaleString('id-ID')}**\n` +
+                `> ⏱️ Expire: 7 hari\n\n` +
+                `Player lain bisa membeli dari Browse.`
+            )
+            .setTimestamp();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`market_mylist_${userId}`).setLabel('📦 My Listings').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
         return interaction.reply({ embeds: [embed], components: [row] });
     }
 }
 
 // ============ UTILITY: Detection helpers ============
 function isMarketPanelButton(customId) {
-    return customId.startsWith('market_') && !customId.startsWith('market_modal_');
+    return customId.startsWith('market_')
+        && !customId.startsWith('market_modal_')
+        && !customId.startsWith('market_sellitem_')
+        && !customId.startsWith('market_buyselect_')
+        && !customId.startsWith('market_cancelselect_');
+}
+
+function isMarketPanelSelectMenu(customId) {
+    return customId.startsWith('market_sellitem_')
+        || customId.startsWith('market_buyselect_')
+        || customId.startsWith('market_cancelselect_');
 }
 
 function isMarketPanelModal(customId) {
@@ -500,7 +648,9 @@ module.exports = {
     buildMarketPanel,
     handleMarketCommand,
     handleMarketButton,
+    handleMarketSelectMenu,
     handleMarketModal,
     isMarketPanelButton,
+    isMarketPanelSelectMenu,
     isMarketPanelModal
 };
