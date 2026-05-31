@@ -29,6 +29,9 @@ const { startAutoHarvestSchedule } = require('./systems/autoHarvest');
 // Load daily + pet reminders
 const { startReminderSchedules } = require('./systems/reminders');
 
+// One-time data reset hook (env-gated)
+const { maybeRunStartupReset } = require('./systems/dataReset');
+
 // ================= SETUP BOT =================
 const TOKEN = process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 const CLIENT_ID = process.env.CLIENT_ID || '1058955900389445672';
@@ -62,6 +65,9 @@ client.once(Events.ClientReady, async c => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     log('INFO', `Bot started: v${BOT_VERSION} | ${c.guilds.cache.size} servers | ${commands.length} commands`);
+
+    // One-time data reset (only if env RESET_DATA=<token> is set & not used before)
+    try { maybeRunStartupReset(); } catch (e) { console.error('Startup reset error:', e); }
 
     // Start auto-backup schedule (every 6 hours + immediate backup)
     startBackupSchedule();
