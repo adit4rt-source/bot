@@ -232,8 +232,10 @@ async function handleProfileButton(interaction) {
     if (action === 'streak') {
         const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
         const streakCount = sData ? sData.count : 0;
-        const lastDate = sData ? sData.lastDate : 'Belum pernah';
-        const restoreCount = getUserStat(guildId, userId, 'streak_restores_this_month') || 0;
+        const lastDate = (sData && sData.last_date) ? sData.last_date : 'Belum pernah';
+        const currentMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
+        const restoreRow = db.prepare('SELECT count FROM streak_restores WHERE guildId = ? AND userId = ? AND month = ?').get(guildId, userId, currentMonth);
+        const restoreCount = restoreRow ? restoreRow.count : 0;
         const streakEmoji = getSetting(guildId, 'streak_emoji', '\ud83d\udd25');
 
         const embed = new EmbedBuilder()

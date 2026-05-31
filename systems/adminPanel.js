@@ -302,7 +302,7 @@ async function handleAdminButton(interaction) {
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('item_name').setLabel('Nama Barang').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: VIP Pass')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('item_price').setLabel('Harga (angka)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: 10000')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('item_content').setLabel('Isi DM (yang dikirim ke pembeli)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Isi pesan yang dikirim ke DM pembeli')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('item_stock').setLabel('Stok (kosongkan = unlimited)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Contoh: 10'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('item_stock').setLabel('Stok (jumlah unit, kosong = 1)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Contoh: 10'))
         );
         return interaction.showModal(modal);
     }
@@ -481,7 +481,7 @@ async function handleAdminButton(interaction) {
         if (state && state.active) {
             return interaction.reply({ content: '\u274c Sudah ada kontes aktif! Akhiri dulu.', ephemeral: true });
         }
-        startFishContest(guildId, 60);
+        startFishContest(guildId, interaction.channelId, 60);
         const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Started!').setColor('#FFD700')
             .setDescription('\u2705 Fishing contest dimulai! Durasi: **60 menit**\n\nGunakan `/contest status` untuk cek.');
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
@@ -495,7 +495,7 @@ async function handleAdminButton(interaction) {
             return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', ephemeral: true });
         }
         // Mark contest inactive - rewards distributed via /contest end command
-        db.prepare('UPDATE fishing_contests SET active = 0 WHERE guildId = ? AND active = 1').run(guildId);
+        db.prepare('UPDATE fish_contest_state SET active = 0 WHERE guildId = ? AND active = 1').run(guildId);
         const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Ended!').setColor('#E74C3C')
             .setDescription('\u2705 Kontes diakhiri.\n\nGunakan `/contest leaderboard` untuk lihat hasil.\n*Hadiah otomatis dibagikan.*');
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
@@ -531,13 +531,14 @@ async function handleAdminModal(interaction) {
         const content = interaction.fields.getTextInputValue('item_content');
         const stockRaw = interaction.fields.getTextInputValue('item_stock');
         if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', ephemeral: true });
-        const stock = stockRaw ? parseInt(stockRaw) : null;
-        if (stock !== null) {
-            db.prepare('INSERT INTO shop_items (guildId, name, price, content, quantity) VALUES (?, ?, ?, ?, ?)').run(guildId, name, price, content, stock);
-        } else {
-            db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)').run(guildId, name, price, content);
-        }
-        return interaction.reply({ content: `\u2705 Item **${name}** ditambah! Harga: \ud83e\ude99 **${price.toLocaleString('id-ID')}**${stock ? ` | Stok: ${stock}` : ' | Unlimited'}` });
+        // shop_items stores ONE ROW PER STOCK UNIT (the /shop list uses COUNT(*) and buying does DELETE).
+        // There is no `quantity` column, so insert N rows. Blank stock defaults to 1.
+        let stock = stockRaw ? parseInt(stockRaw) : 1;
+        if (isNaN(stock) || stock < 1) stock = 1;
+        const insertItem = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)');
+        const insertManyItems = db.transaction((n) => { for (let i = 0; i < n; i++) insertItem.run(guildId, name, price, content); });
+        insertManyItems(stock);
+        return interaction.reply({ content: `\u2705 Item **${name}** ditambah! Harga: \ud83e\ude99 **${price.toLocaleString('id-ID')}** | Stok: **${stock}**` });
     }
 
 
@@ -547,7 +548,7 @@ async function handleAdminModal(interaction) {
         const reward = parseInt(interaction.fields.getTextInputValue('voucher_reward'));
         const limit = parseInt(interaction.fields.getTextInputValue('voucher_limit'));
         if (isNaN(reward) || isNaN(limit)) return interaction.reply({ content: '\u274c Angka tidak valid!', ephemeral: true });
-        db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, maxClaims, claims) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit);
+        db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit);
         return interaction.reply({ content: `\u2705 Voucher **${code}** dibuat! Reward: \ud83e\ude99 **${reward.toLocaleString('id-ID')}** | Limit: **${limit}x**` });
     }
 
@@ -602,7 +603,7 @@ async function handleAdminModal(interaction) {
         if (act === 'set') {
             const amount = parseInt(interaction.fields.getTextInputValue('streak_amount'));
             if (isNaN(amount) || amount < 0) return interaction.reply({ content: '\u274c Angka tidak valid!', ephemeral: true });
-            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, lastDate) VALUES (?, ?, ?, ?)').run(guildId, targetId, amount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
+            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, targetId, amount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
             return interaction.reply({ content: `\u2705 Streak <@${targetId}> diset ke **${amount}** hari.`, allowedMentions: { users: [] } });
         }
         if (act === 'reset') {
@@ -612,8 +613,12 @@ async function handleAdminModal(interaction) {
         if (act === 'restore') {
             const row = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetId);
             if (!row) return interaction.reply({ content: '\u274c User tidak punya data streak!', ephemeral: true });
-            const prevCount = row.count > 0 ? row.count : (row.prevCount || 1);
-            db.prepare('UPDATE streaks SET count = ?, lastDate = ? WHERE guildId = ? AND userId = ?').run(prevCount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), guildId, targetId);
+            // Try to recover the streak the user had before it was lost (streak_history.lost_count),
+            // otherwise keep the current count (min 1).
+            const history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, targetId);
+            const prevCount = (history && history.lost_count > 0) ? history.lost_count : (row.count > 0 ? row.count : 1);
+            db.prepare('UPDATE streaks SET count = ?, last_date = ? WHERE guildId = ? AND userId = ?').run(prevCount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), guildId, targetId);
+            db.prepare('DELETE FROM streak_history WHERE guildId = ? AND userId = ?').run(guildId, targetId);
             return interaction.reply({ content: `\u267b\ufe0f Streak <@${targetId}> dipulihkan ke **${prevCount}** hari.`, allowedMentions: { users: [] } });
         }
     }

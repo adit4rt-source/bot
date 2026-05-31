@@ -73,21 +73,21 @@ module.exports = async function handleInteractionCreate(interaction) {
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
         if (command === 'help') {
-            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Gunakan `/menu` untuk navigasi cepat dengan tombol!\n\n**Daftar Command:**').addFields(
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI** (`/economy`)', inline: false },
-                { name: '\u200b', value: `> \`/economy balance\` — Cek saldo\n> \`/economy coinflip <taruhan>\` — Lempar koin 50/50\n> \`/economy slot <taruhan>\` — Slot machine (max 25x!)\n> \`/economy gift @user <jumlah>\` — Kirim money\n> \`/economy redeem <kode>\` — Tukar voucher\n> \`/economy leaderboard\` — Ranking global\n> \`/daily\` — Klaim hadiah harian\n> \`/shop\` — Toko lengkap`, inline: false },
+            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Semua fitur kini berbasis **panel interaktif** — cukup jalankan command lalu pakai tombol/menu!\nGunakan `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
+                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, roulette)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
-                { name: '\u200b', value: `> \`/fish\` — Lempar pancing\n> \`/fishing sell\` — Jual ikan\n> \`/fishing inventory\` — Lihat ikan\n> \`/fishing collection\` — Pokedex ikan\n> \`/fishing shop\` — Beli joran & umpan\n> \`/fishing stats\` — Statistik`, inline: false },
+                { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection, Lokasi`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING** (`/farm`)', inline: false },
-                { name: '\u200b', value: `> \`/farm status\` — Lihat kebun\n> \`/farm plant\` — Tanam bibit\n> \`/farm water\` — Siram\n> \`/farm harvest\` — Panen\n> \`/farm craft\` — Craft resep\n> \`/farm shop\` — Bibit & pupuk\n> \`/farm upgrade\` — Upgrade lahan`, inline: false },
+                { name: '\u200b', value: `> \`/farm\` — 🌾 Farm Panel\n> Panel: Plant, Water, Harvest, Craft, Shop, Upgrade, Storage`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
-                { name: '\u200b', value: `> \`/pet\` — 🐾 Buka Pet Panel (button-based)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine\n> Semua diakses dari panel interaktif!\n> \`/battle @user\` — PvP auto-battle\n> \`/evolve\` — Evolve pet`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST** (`/profile` + `/quest`)', inline: false },
-                { name: '\u200b', value: `> \`/profile\` — 📋 Profile Panel (profil, badge, inventory, stats)\n> \`/quest\` — 📜 Quest Panel (Daily & Weekly)\n> \`/levelpanel\` — 🌟 Level Panel (rank, leaderboard)\n> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem)`, inline: false },
+                { name: '\u200b', value: `> \`/pet\` — 🐾 Pet Panel (button-based)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, **Evolve**\n> Semua diakses dari panel interaktif!\n> \`/battle @user\` — ⚔️ PvP auto-battle`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST**', inline: false },
+                { name: '\u200b', value: `> \`/profile\` — 📋 Profile Panel (profil, badge, inventory, streak, stats)\n> \`/quest\` — 📜 Quest Panel (Daily & Weekly)\n> \`/levelpanel\` — 🌟 Level Panel (rank, leaderboard)\n> \`/stats\` — 📊 Stats Dashboard`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **EVENTS & VOICE**', inline: false },
                 { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
             );
-            if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/setting\` — Atur channels notifikasi\n> \`/admin_shop\` — Kelola toko\n> \`/tempvoice setup\` — Setup voice\n> \`/level setting\` — Atur XP\n> \`/money manage\` — Kelola uang user\n> \`/streak\` — Kelola streak user`, inline: false });
+            if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel (semua pengaturan dalam 1 panel)\n> Notifikasi channel, Temp Voice, Kelola Shop & Voucher,\n> Pengaturan XP/Level, Kelola Money & Streak user, Contest`, inline: false });
             helpEmbed.setFooter({ text: '💡 Tip: Gunakan /menu untuk navigasi dengan tombol!', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
             return interaction.reply({ embeds: [helpEmbed] });
         }
@@ -1455,10 +1455,10 @@ module.exports = async function handleInteractionCreate(interaction) {
         if (interaction.customId.startsWith('menu_')) {
             const cat = interaction.customId.replace('menu_', '');
             let content = '';
-            if (cat === 'economy') content = '💰 **Economy Commands:**\n\n> `/economy balance` — Cek saldo\n> `/economy coinflip <taruhan>` — Lempar koin 50/50\n> `/economy slot <taruhan>` — Slot machine\n> `/economy gift @user <jumlah>` — Kirim money\n> `/economy redeem <kode>` — Tukar voucher\n> `/economy leaderboard` — Ranking global\n> `/daily` — Klaim hadiah harian';
+            if (cat === 'economy') content = '💰 **Economy & Casino:**\n\n> `/wallet` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> `/casino` — 🎰 Casino Panel (coinflip, slot, roulette)\n> `/daily` — 🎁 Klaim hadiah harian\n> `/calendar` — 📅 Kalender login & reward\n> `/levelpanel` — 🌟 Rank & leaderboard';
             else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing (quick cast)\n> `/fishing` — 🎣 Buka Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection\n> Lock/Unlock, Sell All — semua dalam 1 panel!';
             else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm` — 🌾 Buka Farm Panel\n> Panel: Plant, Water, Harvest, Shop\n> Storage, Craft, Upgrade, Pupuk — semua dalam 1 panel!';
-            else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle\n> `/evolve` — Evolve pet ke bentuk baru';
+            else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle';
             else if (cat === 'profile') content = '📋 **Profil:**\n\n> `/profile` — 📋 Profile Panel\n> Profil, Achievement, Inventory, Streak, Stats\n> Semua dalam 1 panel interaktif!';
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
             else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';

@@ -203,10 +203,10 @@ async function handleEconomyModal(interaction) {
         const code = interaction.fields.getTextInputValue('voucher_code').toUpperCase().trim();
         const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(guildId, code);
         if (!voucher) return interaction.reply({ content: '\u274c Kode tidak valid!', ephemeral: true });
-        if (voucher.claims >= voucher.maxClaims) return interaction.reply({ content: '\u274c Voucher sudah habis!', ephemeral: true });
+        if (voucher.current_uses >= voucher.max_uses) return interaction.reply({ content: '\u274c Voucher sudah habis!', ephemeral: true });
         const alreadyClaimed = db.prepare('SELECT * FROM voucher_claims WHERE guildId = ? AND code = ? AND userId = ?').get(guildId, code, userId);
         if (alreadyClaimed) return interaction.reply({ content: '\u274c Kamu sudah klaim voucher ini!', ephemeral: true });
-        db.prepare('UPDATE vouchers SET claims = claims + 1 WHERE guildId = ? AND code = ?').run(guildId, code);
+        db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(guildId, code);
         db.prepare('INSERT INTO voucher_claims (guildId, code, userId) VALUES (?, ?, ?)').run(guildId, code, userId);
         const userData = getOrCreateUser(guildId, userId);
         userData.balance += voucher.reward;
