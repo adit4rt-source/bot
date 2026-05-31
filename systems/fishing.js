@@ -1,7 +1,7 @@
 // systems/fishing.js — Catch logic (v3.1.0 Location-Based Overhaul)
 // All locations accessible to all players. Rod determines luck penalty.
 const { db } = require('../database');
-const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS } = require('../data/fish');
+const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE } = require('../data/fish');
 
 function getEquipment(guildId, userId) {
     let eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
@@ -105,7 +105,15 @@ function catchFish(guildId, userId) {
     db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish.id, weight, Date.now());
     db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId) VALUES (?, ?, ?)').run(guildId, userId, fish.id);
 
-    return { fish, tier: selectedTier, weight, value, location, luckPenalty: luckPenaltyApplied };
+    // Rod Part drop chance (8% base)
+    let droppedPart = false;
+    if (Math.random() * 100 < ROD_PART_DROP_CHANCE) {
+        const { addItem } = require('../database');
+        addItem(guildId, userId, 'rod_part', 1);
+        droppedPart = true;
+    }
+
+    return { fish, tier: selectedTier, weight, value, location, luckPenalty: luckPenaltyApplied, droppedPart };
 }
 
 module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation };

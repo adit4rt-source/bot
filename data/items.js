@@ -10,7 +10,8 @@ const ITEMS = [
     { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', desc: 'Random 50-2000 money', price: 1000, category: 'Special' },
     { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', desc: 'Material untuk upgrade relic (+1)', price: 3000, category: 'Battle' },
     { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', desc: 'Refine gagal tidak turun level', price: 8000, category: 'Battle' },
-    { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 5000, category: 'Special' }
+    { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 5000, category: 'Special' },
+    { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', desc: 'Material upgrade joran (dari mancing/shop)', price: 5000, category: 'Fishing' },
 ];
 
 const CRAFT_RECIPES = [

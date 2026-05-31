@@ -149,4 +149,21 @@ const FISH_DATA = [
     { id: 'reality_breaker', name: 'Reality Breaker', tier: 'Secret', emoji: '💫', location: 'void_rift' },
 ];
 
-module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS };
+// ==================== ROD UPGRADE REQUIREMENTS ====================
+// upgradeFrom tier -> upgradeTo tier. Parts = rod_part item count needed.
+const ROD_UPGRADES = [
+    { from: 0, to: 1, parts: 3, cost: 1000, successRate: 100 },
+    { from: 1, to: 2, parts: 5, cost: 3000, successRate: 100 },
+    { from: 2, to: 3, parts: 8, cost: 8000, successRate: 100 },
+    { from: 3, to: 4, parts: 12, cost: 20000, successRate: 90 },
+    { from: 4, to: 5, parts: 18, cost: 50000, successRate: 80 },
+    { from: 5, to: 6, parts: 25, cost: 100000, successRate: 70 },
+    { from: 6, to: 7, parts: 35, cost: 200000, successRate: 60 },
+    { from: 7, to: 8, parts: 50, cost: 350000, successRate: 50 },
+    { from: 8, to: 9, parts: 75, cost: 500000, successRate: 40 },
+];
+
+// Drop chance for rod_part when fishing (base %, before bonuses)
+const ROD_PART_DROP_CHANCE = 8; // 8% per cast
+
+module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE };

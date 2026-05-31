@@ -1,6 +1,6 @@
 // systems/fishPanel.js - Fishing Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getItemCount, addItem, removeItem, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
@@ -8,7 +8,7 @@ const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
 const { getContestState, addContestEntry, getContestLeaderboard } = require('./contest');
 const { addPetExp } = require('../systems/pets');
-const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS } = require('../data/fish');
+const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE } = require('../data/fish');
 const state = require('../state');
 const { fishCooldowns, activeFishEvents } = state;
 
@@ -50,7 +50,10 @@ function buildFishingPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('💰 Sell All').setStyle(ButtonStyle.Danger)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('🔧 Upgrade Rod').setStyle(ButtonStyle.Success)
+    );
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 
@@ -210,6 +213,7 @@ async function handleFishingButton(interaction) {
                 `> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n` +
                 `> 🎋 Joran: **${rod.name}**\n` +
                 `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}` +
+                (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
                 contestMsg + comboMsg
             );
 
@@ -445,6 +449,90 @@ async function handleFishingButton(interaction) {
         await interaction.update({ embeds: [embed], components: [backRow] });
         await checkAchievements(interaction.guild, userId, { type: 'fish_sell' });
         return;
+    }
+
+    // === UPGRADE ROD ===
+    if (action === 'upgrade') {
+        const eq = getEquipment(guildId, userId);
+        const currentRod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
+        const upgrade = ROD_UPGRADES.find(u => u.from === currentRod.tier);
+        const nextRod = ROD_TYPES.find(r => r.tier === (currentRod.tier + 1));
+        const partsOwned = getItemCount(guildId, userId, 'rod_part');
+
+        if (!upgrade || !nextRod) {
+            const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🔧 Upgrade Rod — MAX!')
+                .setDescription(`${currentRod.emoji} **${currentRod.name}** (Tier ${currentRod.tier})\n\n> 👑 Joran kamu sudah **MAX TIER**! Tidak bisa di-upgrade lagi.\n> 🔧 Rod Parts: **${partsOwned}**`);
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+
+        const canAfford = userData.balance >= upgrade.cost;
+        const hasParts = partsOwned >= upgrade.parts;
+
+        let desc = `**Joran Saat Ini:**\n> ${currentRod.emoji} **${currentRod.name}** (Tier ${currentRod.tier})\n> CD: ${currentRod.cooldown}s | Rare+: ${currentRod.rareBonus}%\n\n`;
+        desc += `**⬆️ Upgrade ke:**\n> ${nextRod.emoji} **${nextRod.name}** (Tier ${nextRod.tier})\n> CD: ${nextRod.cooldown}s | Rare+: ${nextRod.rareBonus}%\n\n`;
+        desc += `**📋 Syarat:**\n`;
+        desc += `> 🔧 Rod Parts: **${partsOwned}** / **${upgrade.parts}** ${hasParts ? '✅' : '❌'}\n`;
+        desc += `> 🪙 Money: **${userData.balance.toLocaleString('id-ID')}** / **${upgrade.cost.toLocaleString('id-ID')}** ${canAfford ? '✅' : '❌'}\n`;
+        desc += `> 🎯 Success Rate: **${upgrade.successRate}%**${upgrade.successRate < 100 ? ' ⚠️' : ''}\n`;
+        if (upgrade.successRate < 100) desc += `> ⚠️ *Gagal = material hilang, rod TETAP (tidak turun)*`;
+
+        const embed = new EmbedBuilder().setColor(canAfford && hasParts ? '#2ECC71' : '#E74C3C').setTitle('🔧 Upgrade Rod').setDescription(desc);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_doupgrade_${userId}`).setLabel(`🔧 Upgrade! (${upgrade.successRate}%)`).setStyle(ButtonStyle.Success).setDisabled(!canAfford || !hasParts),
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === DO UPGRADE (execute) ===
+    if (action === 'doupgrade') {
+        const eq = getEquipment(guildId, userId);
+        const currentRod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
+        const upgrade = ROD_UPGRADES.find(u => u.from === currentRod.tier);
+        const nextRod = ROD_TYPES.find(r => r.tier === (currentRod.tier + 1));
+        if (!upgrade || !nextRod) return interaction.reply({ content: '❌ Sudah MAX!', ephemeral: true });
+
+        const partsOwned = getItemCount(guildId, userId, 'rod_part');
+        if (partsOwned < upgrade.parts) return interaction.reply({ content: `❌ Rod Parts kurang! (${partsOwned}/${upgrade.parts})`, ephemeral: true });
+        if (userData.balance < upgrade.cost) return interaction.reply({ content: `❌ Money kurang! (🪙 ${userData.balance.toLocaleString('id-ID')}/${upgrade.cost.toLocaleString('id-ID')})`, ephemeral: true });
+
+        // Consume materials
+        removeItem(guildId, userId, 'rod_part', upgrade.parts);
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(upgrade.cost, guildId, userId);
+
+        // Roll success
+        const roll = Math.random() * 100;
+        const success = roll < upgrade.successRate;
+
+        let embed;
+        if (success) {
+            db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(nextRod.id, guildId, userId);
+            embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎉 UPGRADE BERHASIL!')
+                .setDescription(
+                    `${currentRod.emoji} ${currentRod.name} → ${nextRod.emoji} **${nextRod.name}**\n\n` +
+                    `> ✅ Tier: **${currentRod.tier}** → **${nextRod.tier}**\n` +
+                    `> ⏱️ Cooldown: ${currentRod.cooldown}s → **${nextRod.cooldown}s**\n` +
+                    `> 🎯 Rare Bonus: ${currentRod.rareBonus}% → **${nextRod.rareBonus}%**\n\n` +
+                    `> 🔧 Parts: -${upgrade.parts} | 🪙 Money: -${upgrade.cost.toLocaleString('id-ID')}`
+                );
+            await checkAchievements(interaction.guild, userId, { type: 'fish_rod', rod: nextRod.id });
+        } else {
+            embed = new EmbedBuilder().setColor('#E74C3C').setTitle('❌ UPGRADE GAGAL!')
+                .setDescription(
+                    `${currentRod.emoji} **${currentRod.name}** tidak berubah.\n\n` +
+                    `> ❌ Roll: ${roll.toFixed(1)}% (butuh < ${upgrade.successRate}%)\n` +
+                    `> 🔧 Parts: -${upgrade.parts} (hilang)\n` +
+                    `> 🪙 Money: -${upgrade.cost.toLocaleString('id-ID')} (hilang)\n` +
+                    `> 🎋 Rod: **AMAN** (tidak turun tier)\n\n` +
+                    `*Coba lagi! Kumpulkan Rod Parts dari mancing.*`
+                );
+        }
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('🔧 Upgrade Lagi').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     return null;
