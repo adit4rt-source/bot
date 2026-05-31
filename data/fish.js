@@ -3,16 +3,16 @@
 
 // ==================== ROD TYPES ====================
 const ROD_TYPES = [
-    { id: 'basic', name: 'Joran Bambu', emoji: '🎋', price: 0, cooldown: 12, rareBonus: 0, tier: 0 },
-    { id: 'fiber', name: 'Joran Fiber', emoji: '🎣', price: 1500, cooldown: 10, rareBonus: 3, tier: 1 },
-    { id: 'carbon', name: 'Joran Carbon', emoji: '🏹', price: 5000, cooldown: 9, rareBonus: 6, tier: 2 },
-    { id: 'titanium', name: 'Joran Titanium', emoji: '⚙️', price: 15000, cooldown: 8, rareBonus: 9, tier: 3 },
-    { id: 'pro', name: 'Joran Pro', emoji: '🏆', price: 40000, cooldown: 7, rareBonus: 12, tier: 4 },
-    { id: 'enchanted', name: 'Joran Enchanted', emoji: '✨', price: 80000, cooldown: 6, rareBonus: 16, tier: 5 },
-    { id: 'mythic_rod', name: 'Joran Mythic', emoji: '🔱', price: 150000, cooldown: 5, rareBonus: 20, tier: 6 },
-    { id: 'celestial', name: 'Joran Celestial', emoji: '🌟', price: 300000, cooldown: 4, rareBonus: 24, tier: 7 },
-    { id: 'divine_rod', name: 'Joran Divine', emoji: '👑', price: 500000, cooldown: 3, rareBonus: 28, tier: 8 },
-    { id: 'void_rod', name: 'Joran Void', emoji: '🕳️', price: 1000000, cooldown: 3, rareBonus: 32, tier: 9 },
+    { id: 'basic', name: 'Joran Bambu', emoji: '<:JoranBambu:1510791122820268093>', price: 0, cooldown: 12, rareBonus: 0, tier: 0 },
+    { id: 'fiber', name: 'Joran Fiber', emoji: '<:JoranFiber:1510791121180168293>', price: 1500, cooldown: 10, rareBonus: 3, tier: 1 },
+    { id: 'carbon', name: 'Joran Carbon', emoji: '<:JoranCarbon:1510791119611494431>', price: 5000, cooldown: 9, rareBonus: 6, tier: 2 },
+    { id: 'titanium', name: 'Joran Titanium', emoji: '<:JoranTitanium:1510791117317341276>', price: 15000, cooldown: 8, rareBonus: 9, tier: 3 },
+    { id: 'pro', name: 'Joran Pro', emoji: '<:JoranPro:1510791115765321819>', price: 40000, cooldown: 7, rareBonus: 12, tier: 4 },
+    { id: 'enchanted', name: 'Joran Enchanted', emoji: '<:JoranEnchanted:1510791113932406975>', price: 80000, cooldown: 6, rareBonus: 16, tier: 5 },
+    { id: 'mythic_rod', name: 'Joran Mythic', emoji: '<:JoranMythic:1510791109360488548>', price: 150000, cooldown: 5, rareBonus: 20, tier: 6 },
+    { id: 'celestial', name: 'Joran Celestial', emoji: '<:JoranCelestial:1510791105694793818>', price: 300000, cooldown: 4, rareBonus: 24, tier: 7 },
+    { id: 'divine_rod', name: 'Joran Divine', emoji: '<:JoranDivine:1510791103987843203>', price: 500000, cooldown: 3, rareBonus: 28, tier: 8 },
+    { id: 'void_rod', name: 'Joran Void', emoji: '<:JoranVoid:1510791102075109446>', price: 1000000, cooldown: 3, rareBonus: 32, tier: 9 },
 ];
 
 // ==================== BAIT TYPES ====================
