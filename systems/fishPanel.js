@@ -212,7 +212,8 @@ async function handleFishingButton(interaction) {
                 `> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n` +
                 `> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n` +
                 `> 🎋 Joran: **${rod.name}**\n` +
-                `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}` +
+                `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}\n` +
+                `> 📍 Lokasi: **${result.location.name}**` +
                 (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
                 contestMsg + comboMsg
             );
