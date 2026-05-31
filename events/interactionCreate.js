@@ -121,7 +121,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '\u200b', value: `> 🎮 **Mini-Event** muncul setiap 30 pesan\n> 🎣 **Fishing Tournament** setiap 100 pesan\n> 🎶 **Temp Voice** — Buat voice privat`, inline: false }
             );
             if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel (semua pengaturan dalam 1 panel)\n> Notifikasi channel, Temp Voice, Kelola Shop & Voucher,\n> Pengaturan XP/Level, Kelola Money & Streak user, Contest`, inline: false });
-            helpEmbed.setFooter({ text: '💡 Tip: Gunakan /menu untuk navigasi! | Join: discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
+            helpEmbed.setFooter({ text: '💡 /menu navigasi | /leaderboard ranking | /gift kirim money | discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
             return interaction.reply({ embeds: [helpEmbed] });
         }
 
