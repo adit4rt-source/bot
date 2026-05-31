@@ -75,17 +75,6 @@ async function notifyTradeAccepted(client, guildId, senderId, receiverId, tradeI
     );
 }
 
-// Quest completed notification
-async function notifyQuestComplete(client, guildId, userId, questName, reward) {
-    return sendNotification(client, guildId, userId, 'quest',
-        `📜 **Quest Complete!**\n\n` +
-        `Selamat! Kamu menyelesaikan quest:\n` +
-        `> 🎯 **${questName}**\n` +
-        `> 🪙 Reward: **${reward.toLocaleString('id-ID')}** money\n\n` +
-        `Gunakan \`/quest\` untuk klaim reward!`
-    );
-}
-
 // Pet hungry notification
 async function notifyPetHungry(client, guildId, userId, petName, hunger) {
     return sendNotification(client, guildId, userId, 'pet',
@@ -134,7 +123,6 @@ module.exports = {
     sendNotification,
     notifyTradeReceived,
     notifyTradeAccepted,
-    notifyQuestComplete,
     notifyPetHungry,
     notifyFarmReady,
     notifyDailyReady,

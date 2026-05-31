@@ -119,7 +119,7 @@ async function handleLevelButton(interaction) {
     // === REWARDS ===
     if (action === 'rewards') {
         const rewards = db.prepare('SELECT * FROM rewards WHERE guildId = ? ORDER BY level ASC').all(guildId);
-        let desc = rewards.length ? '' : '*Belum ada reward yang diatur.*\n\nAdmin bisa atur dengan `/level setting rolereward add`';
+        let desc = rewards.length ? '' : '*Belum ada reward yang diatur.*\n\nReward level diatur oleh admin server.';
         rewards.forEach(r => {
             desc += `> \ud83c\udf81 **Level ${r.level}** \u2192 `;
             if (r.roleId) desc += `Role: <@&${r.roleId}> `;

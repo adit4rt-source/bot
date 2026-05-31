@@ -26,6 +26,27 @@ const MAX_LISTINGS_PER_USER = 10;
 const LISTINGS_PER_PAGE = 10;
 const SELL_MENU_LIMIT = 25; // Discord select menu hard cap
 
+// ============ ONE-TIME RECOVERY ============
+// Older versions marked listings expired/cancelled WITHOUT returning the escrowed
+// relic/pet to the seller, leaving items stranded under userId='MARKET_HOLD'.
+// This idempotently returns any such stranded items to their original seller.
+(function recoverStrandedMarketItems() {
+    try {
+        const stranded = db.prepare("SELECT * FROM market_listings WHERE status IN ('expired','cancelled') AND itemType IN ('relic','pet')").all();
+        for (const l of stranded) {
+            const id = parseInt(l.itemId);
+            if (!id) continue;
+            if (l.itemType === 'relic') {
+                const r = db.prepare("SELECT userId FROM relics WHERE id = ? AND guildId = ?").get(id, l.guildId);
+                if (r && r.userId === 'MARKET_HOLD') db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(l.sellerId, id, l.guildId);
+            } else if (l.itemType === 'pet') {
+                const p = db.prepare("SELECT userId FROM pets WHERE id = ? AND guildId = ?").get(id, l.guildId);
+                if (p && p.userId === 'MARKET_HOLD') db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(l.sellerId, id, l.guildId);
+            }
+        }
+    } catch (e) { /* recovery is best-effort, never block startup */ }
+})();
+
 
 // ============ HELPER: Expire old listings (returns items to sellers) ============
 function expireOldListings(guildId) {

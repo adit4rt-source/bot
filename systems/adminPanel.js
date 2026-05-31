@@ -170,7 +170,7 @@ function buildContestSubPanel(guildId) {
             `Kelola fishing contest:\n\n` +
             `> \u25b6\ufe0f **Start** \u2014 Mulai kontes baru\n` +
             `> \u23f9\ufe0f **End** \u2014 Akhiri kontes & bagi hadiah\n\n` +
-            `*Gunakan \`/contest status\` untuk cek status aktif*`
+            `*Player cek status & ranking via \`/fishing\` → 🏆 Contest*`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -483,7 +483,7 @@ async function handleAdminButton(interaction) {
         }
         startFishContest(guildId, interaction.channelId, 60);
         const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Started!').setColor('#FFD700')
-            .setDescription('\u2705 Fishing contest dimulai! Durasi: **60 menit**\n\nGunakan `/contest status` untuk cek.');
+            .setDescription('\u2705 Fishing contest dimulai! Durasi: **60 menit**\n\nPlayer ikut dengan memancing & cek ranking via `/fishing` → 🏆 Contest.');
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -494,10 +494,26 @@ async function handleAdminButton(interaction) {
         if (!state || !state.active) {
             return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', ephemeral: true });
         }
-        // Mark contest inactive - rewards distributed via /contest end command
+        // Mark contest inactive and distribute prizes to the top 3 heaviest catches.
+        const { getContestLeaderboard } = require('./contest');
+        const { FISH_DATA } = require('../data/fish');
+        const { addIncome } = require('../database');
         db.prepare('UPDATE fish_contest_state SET active = 0 WHERE guildId = ? AND active = 1').run(guildId);
-        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Ended!').setColor('#E74C3C')
-            .setDescription('\u2705 Kontes diakhiri.\n\nGunakan `/contest leaderboard` untuk lihat hasil.\n*Hadiah otomatis dibagikan.*');
+        const top = getContestLeaderboard(guildId, 3);
+        const prizes = [3000, 1500, 800];
+        let desc = '\u2705 **Kontes diakhiri!** Hadiah dibagikan ke Top 3:\n\n';
+        top.forEach((e, i) => {
+            const fishDef = FISH_DATA.find(f => f.id === e.fishId);
+            const prize = prizes[i] || 0;
+            desc += `${['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'][i]} <@${e.oderId}> \u2014 ${fishDef ? fishDef.emoji : '\ud83d\udc1f'} **${e.weight} kg** \u2192 \ud83e\ude99 +${prize.toLocaleString('id-ID')}\n`;
+            if (prize > 0) {
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.oderId);
+                addIncome(guildId, e.oderId, 'event', prize);
+            }
+        });
+        if (top.length === 0) desc += '*Tidak ada peserta.*';
+        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Ended!').setColor('#FFD700')
+            .setDescription(desc).setFooter({ text: 'Hadiah sudah dibagikan otomatis!' });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
         return interaction.update({ embeds: [embed], components: [row] });
     }

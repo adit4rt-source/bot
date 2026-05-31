@@ -196,7 +196,7 @@ async function handleFarmButton(interaction) {
     if (action === 'harvest') {
         const plots = getPlots(guildId, userId);
         if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman!', ephemeral: true });
-        let harvested = 0, totalItems = 0, harvestDesc = '';
+        let harvested = 0, totalItems = 0, harvestDesc = '', harvestedLegendary = false;
         for (const plot of plots) {
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
             if (!crop) continue;
@@ -206,6 +206,7 @@ async function handleFarmButton(interaction) {
                 let qty = getRandomInt(crop.minYield, crop.maxYield);
                 if (Math.random() < fert.yieldBonus) qty += getRandomInt(1, 2);
                 addStorage(guildId, userId, crop.id, qty);
+                if (crop.tier === 'Legendary') harvestedLegendary = true;
                 harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}\n`;
                 harvested++; totalItems += qty;
                 db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
@@ -228,7 +229,7 @@ async function handleFarmButton(interaction) {
         updateQuestProgress(guildId, userId, 'farm_harvest', harvested);
         addPetExp(guildId, userId, 5);
         addComboFeature(guildId, userId, 'farming');
-        await checkAchievements(interaction.guild, userId, { type: 'farm_harvest', legendary: harvestDesc.includes('Legendary') });
+        await checkAchievements(interaction.guild, userId, { type: 'farm_harvest', legendary: harvestedLegendary });
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!')
             .setDescription(`**${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}${deadMsg}\n> Hasil masuk ke Storage.`);
         const backRow = new ActionRowBuilder().addComponents(

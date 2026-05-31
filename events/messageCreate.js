@@ -140,7 +140,7 @@ module.exports = async function handleMessageCreate(message) {
             let newStatus = activePet.status;
             if (newHunger <= 0 && activePet.status !== 'sick') newStatus = 'sick';
             db.prepare('UPDATE pets SET hunger = ?, happiness = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newStatus, activePet.id);
-            if (newHunger <= 20 && newHunger > 0) message.reply({ content: `🐾 Pet kamu **${activePet.name}** lapar! (🍖 ${newHunger}%) Kasih makan dengan \`/pet feed\`!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 10000); }).catch(() => {});
+            if (newHunger <= 20 && newHunger > 0) message.reply({ content: `🐾 Pet kamu **${activePet.name}** lapar! (🍖 ${newHunger}%) Kasih makan lewat \`/pet\` → 🍖 Feed!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 10000); }).catch(() => {});
             else if (newStatus === 'sick' && activePet.status !== 'sick') message.reply({ content: `🐾⚠️ Pet kamu **${activePet.name}** SAKIT! 🤒 Segera kasih makan!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
         }
     }
@@ -164,8 +164,8 @@ module.exports = async function handleMessageCreate(message) {
                 else if (dryTime > growTime * 1.2) needWaterCount++;
             }
             let notifParts = [];
-            if (readyCount > 0) notifParts.push(`✅ **${readyCount} tanaman** siap dipanen! (\`/farm harvest\`)`);
-            if (needWaterCount > 0) notifParts.push(`💧 **${needWaterCount} tanaman** butuh disiram! (\`/farm water\`)`);
+            if (readyCount > 0) notifParts.push(`✅ **${readyCount} tanaman** siap dipanen! (\`/farm\` → 🌾 Harvest)`);
+            if (needWaterCount > 0) notifParts.push(`💧 **${needWaterCount} tanaman** butuh disiram! (\`/farm\` → 💧 Water)`);
             if (deadCount > 0) notifParts.push(`☠️ **${deadCount} tanaman** mati karena tidak disiram`);
             if (notifParts.length > 0) {
                 // In-chat reminder for active players only. The Auto-Harvest Pass DM is sent
