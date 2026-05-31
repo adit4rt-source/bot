@@ -168,11 +168,9 @@ module.exports = async function handleMessageCreate(message) {
             if (needWaterCount > 0) notifParts.push(`💧 **${needWaterCount} tanaman** butuh disiram! (\`/farm water\`)`);
             if (deadCount > 0) notifParts.push(`☠️ **${deadCount} tanaman** mati karena tidak disiram`);
             if (notifParts.length > 0) {
+                // In-chat reminder for active players only. The Auto-Harvest Pass DM is sent
+                // automatically (independent of chat) by the scheduler in systems/autoHarvest.js.
                 message.reply({ content: `🌾 **Farm Reminder:**\n${notifParts.join('\n')}`, allowedMentions: { users: [message.author.id] } }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
-                if (readyCount > 0) {
-                    const ahData = db.prepare('SELECT * FROM auto_harvest WHERE guildId = ? AND userId = ? AND enabled = 1 AND purchased = 1').get(guildId, message.author.id);
-                    if (ahData) { const ahCdKey = `ah_dm_${guildId}_${message.author.id}`; if (!state.fishCooldowns.has(ahCdKey) || Date.now() > state.fishCooldowns.get(ahCdKey)) { state.fishCooldowns.set(ahCdKey, Date.now() + 600000); message.author.send(`🔔 **Auto-Harvest Notification**\n\n> 🌾 **${readyCount} tanaman** siap dipanen di **${message.guild.name}**!\n> Gunakan \`/farm harvest\` sekarang!`).catch(() => {}); } }
-                }
             }
         }
     }

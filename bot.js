@@ -66,7 +66,7 @@ client.once(Events.ClientReady, async c => {
 
     // Start auto-harvest notifier (DMs users with the Auto-Harvest Pass when crops are ready)
     startAutoHarvestSchedule(client);
-    console.log('🌾 Auto-harvest notifier: cek setiap 5 menit');
+    console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
 
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);

@@ -8,7 +8,8 @@ const { notifyFarmReady } = require('./notifications');
 let log = () => {};
 try { ({ log } = require('./logger')); } catch (e) { /* logger optional */ }
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+const CHECK_INTERVAL_MS = 2 * 60 * 1000; // every 2 minutes (feels near-instant without spamming)
+const STARTUP_DELAY_MS = 20 * 1000;       // first check 20s after boot
 
 // Mirror of the readiness calc used by the farm panel (farmPanel.js).
 function isPlotReady(plot) {
@@ -59,9 +60,10 @@ async function runAutoHarvestCheck(client) {
 }
 
 function startAutoHarvestSchedule(client) {
-    const timer = setInterval(() => { runAutoHarvestCheck(client).catch(() => {}); }, CHECK_INTERVAL_MS);
-    if (timer.unref) timer.unref();
-    return timer;
+    // Run once shortly after boot (catches crops that ripened while the bot was offline),
+    // then on a fixed interval. Not unref'd so the loop never drops the timer.
+    setTimeout(() => { runAutoHarvestCheck(client).catch(() => {}); }, STARTUP_DELAY_MS);
+    return setInterval(() => { runAutoHarvestCheck(client).catch(() => {}); }, CHECK_INTERVAL_MS);
 }
 
 module.exports = { startAutoHarvestSchedule, runAutoHarvestCheck, isPlotReady, CHECK_INTERVAL_MS };
