@@ -26,6 +26,20 @@ const commands = [
     new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
     new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
+    new SlashCommandBuilder().setName('leaderboard').setDescription('🏆 Leaderboard — Ranking pemain')
+        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori ranking').setRequired(false)
+            .addChoices(
+                { name: '⭐ Overall (Event)', value: 'overall' },
+                { name: '📈 Level', value: 'level' },
+                { name: '💰 Money', value: 'money' },
+                { name: '🎣 Fishing', value: 'fish' },
+                { name: '🌾 Farming', value: 'farm' },
+                { name: '🐾 Pet', value: 'pet' },
+                { name: '🔥 Streak', value: 'streak' },
+                { name: '⚔️ Battle', value: 'battle' },
+                { name: '🎰 Gambling', value: 'gambling' },
+                { name: '🏆 Achievement', value: 'achievement' }
+            )),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),

@@ -19,6 +19,7 @@ const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = requi
 const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTradeModal, isTradePanelButton, isTradePanelSelectMenu, isTradePanelModal } = require('../systems/tradePanel');
 const { handleMarketCommand, handleMarketButton, handleMarketSelectMenu, handleMarketModal, isMarketPanelButton, isMarketPanelSelectMenu, isMarketPanelModal } = require('../systems/marketPanel');
 const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
+const { handleLeaderboardCommand } = require('../systems/leaderboard');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
@@ -441,6 +442,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // ================= STATS DASHBOARD =================
         if (command === 'stats') {
             return handleStatsCommand(interaction);
+        }
+
+        // ================= LEADERBOARD =================
+        if (command === 'leaderboard') {
+            return handleLeaderboardCommand(interaction);
         }
 
         // ================= DAILY LOGIN CALENDAR =================
