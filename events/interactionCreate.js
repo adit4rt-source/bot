@@ -843,27 +843,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             const tier = parts[1];
             const targetUserId = parts[2];
             const page = parseInt(parts[3]) || 0;
-            const perPage = 20;
+            const perPage = 15;
             const collected = db.prepare('SELECT * FROM fish_collection WHERE guildId = ? AND userId = ?').all(guildId, targetUserId);
             const collectedIds = collected.map(c => c.fishId);
-            const tierFish = FISH_DATA.filter(f => f.tier === tier);
-            const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
-            const totalPages = Math.ceil(tierFish.length / perPage);
-            const startIdx = page * perPage;
-            const pageFish = tierFish.slice(startIdx, startIdx + perPage);
-            const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
-            let desc = `${tierEmoji} **${tier}** — ${tierCollected}/${tierFish.length} ditemukan\n\n`;
-            pageFish.forEach(f => {
-                if (collectedIds.includes(f.id)) desc += `> ${f.emoji} ${f.name} ✅\n`;
-                else desc += `> ▪️ ??? 🔒\n`;
-            });
-            if (desc.length > 3900) desc = desc.substring(0, 3890) + '\n...';
-            const navRow = new ActionRowBuilder();
-            if (page > 0) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page-1}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary));
-            navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_back_${targetUserId}_0`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Primary));
-            if (page < totalPages - 1) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page+1}`).setLabel('Next ▶').setStyle(ButtonStyle.Secondary));
-            
-            if (parts[1] === 'back') {
+
+            if (tier === 'back') {
                 // Go back to main collection view
                 const totalFish = FISH_DATA.length;
                 const totalCollectedAll = collectedIds.length;
@@ -871,11 +855,36 @@ module.exports = async function handleInteractionCreate(interaction) {
                 const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
                 let mainDesc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollectedAll}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
                 for (const t of tiers) { const tf = FISH_DATA.filter(f => f.tier === t); const tc = tf.filter(f => collectedIds.includes(f.id)).length; const te = (FISH_TIERS.find(x => x.tier === t)||{emoji:'🐟'}).emoji; const p = tf.length > 0 ? Math.floor((tc/tf.length)*10) : 0; mainDesc += `${te} **${t}** — ${tc}/${tf.length}\n> \`${'▰'.repeat(p)}${'▱'.repeat(10-p)}\`\n`; }
-                mainDesc += `\n> 🎯 *Pilih rarity di bawah untuk melihat detail!*`;
+                mainDesc += `\n> 🎯 *Pilih rarity untuk detail! Setiap ikan menampilkan lokasi mancingnya.*`;
                 const row1 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Trash_${targetUserId}_0`).setLabel('🗑️ Trash').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Common_${targetUserId}_0`).setLabel('🐟 Common').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Uncommon_${targetUserId}_0`).setLabel('🐠 Uncommon').setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId(`fcol_Rare_${targetUserId}_0`).setLabel('🐡 Rare').setStyle(ButtonStyle.Primary));
-                const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Epic_${targetUserId}_0`).setLabel('🦈 Epic').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`fcol_Legendary_${targetUserId}_0`).setLabel('🐉 Legendary').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Mythic_${targetUserId}_0`).setLabel('🌈 Mythic').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Secret_${targetUserId}_0`).setLabel('🔮 Secret').setStyle(ButtonStyle.Danger));
-                return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(mainDesc).setFooter({ text: `${totalCollectedAll}/${totalFish} ditemukan` })], components: [row1, row2] });
+                const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Epic_${targetUserId}_0`).setLabel('🦈 Epic').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`fcol_Legendary_${targetUserId}_0`).setLabel('🐉 Legend').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Mythic_${targetUserId}_0`).setLabel('🌈 Mythic').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Secret_${targetUserId}_0`).setLabel('🔮 Secret').setStyle(ButtonStyle.Danger));
+                const row3 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Kembali ke Panel').setStyle(ButtonStyle.Primary));
+                return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(mainDesc).setFooter({ text: `${totalCollectedAll}/${totalFish} ditemukan` })], components: [row1, row2, row3] });
             }
+
+            // Tier detail view — show fish WITH location
+            const tierFish = FISH_DATA.filter(f => f.tier === tier);
+            const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
+            const totalPages = Math.ceil(tierFish.length / perPage) || 1;
+            const startIdx = page * perPage;
+            const pageFish = tierFish.slice(startIdx, startIdx + perPage);
+            const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || {emoji:'🐟'}).emoji;
+            let desc = `${tierEmoji} **${tier}** — ${tierCollected}/${tierFish.length} ditemukan\n\n`;
+            pageFish.forEach(f => {
+                const loc = FISHING_LOCATIONS.find(l => l.id === f.location);
+                const locName = loc ? loc.name : '???';
+                if (collectedIds.includes(f.id)) {
+                    desc += `> ${f.emoji} **${f.name}** ✅ — 📍 ${locName}\n`;
+                } else {
+                    desc += `> ▪️ ??? 🔒 — 📍 ${locName}\n`;
+                }
+            });
+            if (desc.length > 3900) desc = desc.substring(0, 3890) + '\n...';
+            const navRow = new ActionRowBuilder();
+            if (page > 0) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page-1}`).setLabel('◀').setStyle(ButtonStyle.Secondary));
+            navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_back_${targetUserId}_0`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Primary));
+            if (page < totalPages - 1) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page+1}`).setLabel('▶').setStyle(ButtonStyle.Secondary));
+            navRow.addComponents(new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Panel').setStyle(ButtonStyle.Success));
             return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Collection`).setColor('#3498DB').setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan` })], components: [navRow] });
         }
 
