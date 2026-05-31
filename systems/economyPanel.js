@@ -151,7 +151,7 @@ async function handleEconomyButton(interaction) {
             .setTitle('\ud83c\udfc6 Money Leaderboard')
             .setColor('#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Top 10 Money | /economy leaderboard untuk kategori lain' });
+            .setFooter({ text: 'Top 10 Money 💰 | /levelpanel untuk ranking level' });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`ecopnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
@@ -188,57 +188,8 @@ async function handleEconomyModal(interaction) {
     if (parts[2] === 'gift') {
         const targetId = interaction.fields.getTextInputValue('gift_target').trim();
         const amount = parseInt(interaction.fields.getTextInputValue('gift_amount'));
-        if (isNaN(amount) || amount < 1 || amount > GIFT_MAX_PER_TRANSACTION) return interaction.reply({ content: `\u274c Jumlah tidak valid (1-${GIFT_MAX_PER_TRANSACTION.toLocaleString('id-ID')})!`, ephemeral: true });
         if (!/^\d{16,20}$/.test(targetId)) return interaction.reply({ content: '\u274c User ID tidak valid! Klik kanan user > Copy ID.', ephemeral: true });
-        if (targetId === userId) return interaction.reply({ content: '\u274c Tidak bisa kirim ke diri sendiri!', ephemeral: true });
-
-        // Cooldown (10s per sender)
-        const cdKey = `${guildId}_${userId}`;
-        if (giftCooldowns.has(cdKey) && Date.now() < giftCooldowns.get(cdKey)) {
-            const remaining = Math.ceil((giftCooldowns.get(cdKey) - Date.now()) / 1000);
-            return interaction.reply({ content: `\u23f3 Tunggu **${remaining} detik** sebelum kirim gift lagi.`, ephemeral: true });
-        }
-
-        // Target must be a real, non-bot member of this guild
-        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: '\u274c User tidak ditemukan di server ini!', ephemeral: true });
-        if (targetMember.user.bot) return interaction.reply({ content: '\u274c Tidak bisa kirim ke bot!', ephemeral: true });
-
-        const userData = getOrCreateUser(guildId, userId);
-        if (userData.balance < amount) return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-
-        // Daily receive limit for the recipient
-        const receivedToday = getGiftReceivedToday(guildId, targetId);
-        if (receivedToday + amount > GIFT_RECEIVE_LIMIT_PER_DAY) {
-            const sisa = Math.max(0, GIFT_RECEIVE_LIMIT_PER_DAY - receivedToday);
-            return interaction.reply({ content: `\u274c <@${targetId}> sudah mencapai batas terima harian (\ud83e\ude99 ${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}/hari). Sisa kuota: \ud83e\ude99 ${sisa.toLocaleString('id-ID')}`, allowedMentions: { users: [] }, ephemeral: true });
-        }
-
-        // Tax-free voucher (consumes 1 if active)
-        const hasTaxFree = getUserStat(guildId, userId, 'tax_free_voucher') > 0;
-        const tax = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
-        const net = amount - tax;
-        if (hasTaxFree) incrementUserStat(guildId, userId, 'tax_free_voucher', -1);
-
-        giftCooldowns.set(cdKey, Date.now() + 10000);
-
-        // Transfer
-        userData.balance -= amount;
-        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
-        const tData = getOrCreateUser(guildId, targetId);
-        tData.balance += net;
-        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(tData.balance, guildId, targetId);
-        addGiftReceivedToday(guildId, targetId, net);
-        incrementUserStat(guildId, userId, 'total_gifts_sent');
-        incrementUserStat(guildId, userId, 'total_gift_amount', amount);
-        await checkAchievements(interaction.guild, userId, { type: 'gift_send' });
-        await checkAchievements(interaction.guild, targetId, { type: 'gift_receive' });
-
-        const embed = new EmbedBuilder().setColor('#FF69B4').setTitle('\ud83c\udf81 Gift Terkirim!')
-            .setDescription(`<@${userId}> \u279c <@${targetId}>\n\n> \ud83d\udcb0 **Jumlah:** \ud83e\ude99 ${amount.toLocaleString('id-ID')}\n> \ud83d\udcca **Pajak (${hasTaxFree ? 'FREE!' : '10%'}):** \ud83e\ude99 ${tax.toLocaleString('id-ID')}${hasTaxFree ? ' *(Tax-Free Voucher)*' : ''}\n> \u2705 **Diterima:** \ud83e\ude99 ${net.toLocaleString('id-ID')}`)
-            .setFooter({ text: `Saldo kamu: ${userData.balance.toLocaleString('id-ID')} | Limit harian penerima: ${(receivedToday + net).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], allowedMentions: { users: [] } });
+        return processGift(interaction, userId, targetId, amount);
     }
 
     // === REDEEM MODAL ===
@@ -267,11 +218,74 @@ function isEconomyPanelModal(customId) {
     return customId.startsWith('ecopnl_modal_');
 }
 
+// Shared gift logic used by both the /wallet panel modal and the /gift slash command.
+async function processGift(interaction, senderId, targetId, amount) {
+    const guildId = interaction.guild.id;
+    if (isNaN(amount) || amount < 1 || amount > GIFT_MAX_PER_TRANSACTION) return interaction.reply({ content: `\u274c Jumlah tidak valid (1-${GIFT_MAX_PER_TRANSACTION.toLocaleString('id-ID')})!`, ephemeral: true });
+    if (targetId === senderId) return interaction.reply({ content: '\u274c Tidak bisa kirim ke diri sendiri!', ephemeral: true });
+
+    // Cooldown (10s per sender)
+    const cdKey = `${guildId}_${senderId}`;
+    if (giftCooldowns.has(cdKey) && Date.now() < giftCooldowns.get(cdKey)) {
+        const remaining = Math.ceil((giftCooldowns.get(cdKey) - Date.now()) / 1000);
+        return interaction.reply({ content: `\u23f3 Tunggu **${remaining} detik** sebelum kirim gift lagi.`, ephemeral: true });
+    }
+
+    // Target must be a real, non-bot member of this guild
+    const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+    if (!targetMember) return interaction.reply({ content: '\u274c User tidak ditemukan di server ini!', ephemeral: true });
+    if (targetMember.user.bot) return interaction.reply({ content: '\u274c Tidak bisa kirim ke bot!', ephemeral: true });
+
+    const userData = getOrCreateUser(guildId, senderId);
+    if (userData.balance < amount) return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
+
+    // Daily receive limit for the recipient
+    const receivedToday = getGiftReceivedToday(guildId, targetId);
+    if (receivedToday + amount > GIFT_RECEIVE_LIMIT_PER_DAY) {
+        const sisa = Math.max(0, GIFT_RECEIVE_LIMIT_PER_DAY - receivedToday);
+        return interaction.reply({ content: `\u274c <@${targetId}> sudah mencapai batas terima harian (\ud83e\ude99 ${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}/hari). Sisa kuota: \ud83e\ude99 ${sisa.toLocaleString('id-ID')}`, allowedMentions: { users: [] }, ephemeral: true });
+    }
+
+    // Tax-free voucher (consumes 1 if active)
+    const hasTaxFree = getUserStat(guildId, senderId, 'tax_free_voucher') > 0;
+    const tax = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
+    const net = amount - tax;
+    if (hasTaxFree) incrementUserStat(guildId, senderId, 'tax_free_voucher', -1);
+
+    giftCooldowns.set(cdKey, Date.now() + 10000);
+
+    // Transfer
+    userData.balance -= amount;
+    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, senderId);
+    const tData = getOrCreateUser(guildId, targetId);
+    tData.balance += net;
+    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(tData.balance, guildId, targetId);
+    addGiftReceivedToday(guildId, targetId, net);
+    incrementUserStat(guildId, senderId, 'total_gifts_sent');
+    incrementUserStat(guildId, senderId, 'total_gift_amount', amount);
+    await checkAchievements(interaction.guild, senderId, { type: 'gift_send' });
+    await checkAchievements(interaction.guild, targetId, { type: 'gift_receive' });
+
+    const embed = new EmbedBuilder().setColor('#FF69B4').setTitle('\ud83c\udf81 Gift Terkirim!')
+        .setDescription(`<@${senderId}> \u279c <@${targetId}>\n\n> \ud83d\udcb0 **Jumlah:** \ud83e\ude99 ${amount.toLocaleString('id-ID')}\n> \ud83d\udcca **Pajak (${hasTaxFree ? 'FREE!' : '10%'}):** \ud83e\ude99 ${tax.toLocaleString('id-ID')}${hasTaxFree ? ' *(Tax-Free Voucher)*' : ''}\n> \u2705 **Diterima:** \ud83e\ude99 ${net.toLocaleString('id-ID')}`)
+        .setFooter({ text: `Saldo kamu: ${userData.balance.toLocaleString('id-ID')} | Limit harian penerima: ${(receivedToday + net).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
+        .setTimestamp();
+    return interaction.reply({ embeds: [embed], allowedMentions: { users: [] } });
+}
+
+// /gift @user <jumlah> slash command
+async function handleGiftCommand(interaction) {
+    const target = interaction.options.getUser('user');
+    const amount = interaction.options.getInteger('jumlah');
+    return processGift(interaction, interaction.user.id, target.id, amount);
+}
+
 module.exports = {
     buildEconomyPanel,
     handleEconomyPanelCommand,
     handleEconomyButton,
     handleEconomyModal,
+    handleGiftCommand,
     isEconomyPanelButton,
     isEconomyPanelModal
 };

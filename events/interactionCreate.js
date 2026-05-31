@@ -13,7 +13,7 @@ const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmMod
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
-const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
+const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
 const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTradeModal, isTradePanelButton, isTradePanelSelectMenu, isTradePanelModal } = require('../systems/tradePanel');
@@ -248,6 +248,10 @@ module.exports = async function handleInteractionCreate(interaction) {
         // ================= ECONOMY PANEL (Button-based) =================
         if (command === 'wallet') {
             return handleEconomyPanelCommand(interaction);
+        }
+
+        if (command === 'gift') {
+            return handleGiftCommand(interaction);
         }
 
         // ================= PROFILE PANEL (Button-based) =================
@@ -545,12 +549,12 @@ module.exports = async function handleInteractionCreate(interaction) {
             if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost}**`, ephemeral: true });
             // Check if there's any unfertilized plot
             const plot = db.prepare("SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND fertilizer = 'none' AND status != 'dead' ORDER BY plantedAt ASC LIMIT 1").get(guildId, interaction.user.id);
-            if (!plot) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk! Semua sudah dipupuk atau tidak ada tanaman.\n> Gunakan `/farm pupuk` untuk pilih tanaman spesifik.', ephemeral: true });
+            if (!plot) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk! Semua sudah dipupuk atau tidak ada tanaman.\n> Pilih tanaman spesifik lewat `/farm` → 🧪 Pupuk.', ephemeral: true });
             userData.balance -= fert.cost;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
             db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Gunakan \`/farm pupuk\` untuk memilih tanaman spesifik!*` });
+            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Atur pupuk per tanaman lewat `/farm` → 🧪 Pupuk!*` });
         }
         if (interaction.customId === 'shop_buy_farming') {
             const selected = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
@@ -570,7 +574,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
                 if (userData.balance < fert.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${fert.cost}**`, ephemeral: true });
                 const plot = db.prepare("SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND fertilizer = 'none' AND status != 'dead' ORDER BY plantedAt ASC LIMIT 1").get(guildId, interaction.user.id);
-                if (!plot) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!\n> Gunakan `/farm pupuk` untuk pilih tanaman spesifik.', ephemeral: true });
+                if (!plot) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!\n> Pilih tanaman spesifik lewat `/farm` → 🧪 Pupuk.', ephemeral: true });
                 userData.balance -= fert.cost;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
                 db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
@@ -595,7 +599,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 addPetFood(guildId, interaction.user.id, foodId, 1);
                 updateQuestProgress(guildId, interaction.user.id, 'spend_money', food.price);
                 const owned = getPetFoodCount(guildId, interaction.user.id, foodId);
-                return interaction.reply({ content: `✅ Membeli ${food.emoji} **${food.name}**! Masuk ke inventory makanan.\n> 📦 Total ${food.name}: **${owned}**\n> 💡 Pakai dengan \`/pet feed\`` });
+                return interaction.reply({ content: `✅ Membeli ${food.emoji} **${food.name}**! Masuk ke inventory makanan.\n> 📦 Total ${food.name}: **${owned}**\n> 💡 Pakai lewat `/pet` → 🍖 Feed` });
             }
             if (eggId) {
                 const egg = PET_EGGS.find(e => e.id === eggId);
@@ -619,7 +623,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 if (selectedTier === 'Mythic') title = '🌟✨ MYTHIC PET!!! ✨🌟';
                 else if (selectedTier === 'Legendary') title = '⭐ LEGENDARY PET! ⭐';
                 else if (selectedTier === 'Epic') title = '💜 EPIC PET! 💜';
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor(tierColors[selectedTier] || '#2B2D31').setTitle(title).setDescription(`${wonPet.emoji} **${wonPet.name}**\n> Tier: **${selectedTier}**\n> Bonus: +${wonPet.bonus.value}% ${wonPet.bonus.type.replace(/_/g, ' ')}\n\n${isFirst ? '✅ Langsung aktif!' : 'Gunakan `/pet swap` untuk mengaktifkan.'}`)] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor(tierColors[selectedTier] || '#2B2D31').setTitle(title).setDescription(`${wonPet.emoji} **${wonPet.name}**\n> Tier: **${selectedTier}**\n> Bonus: +${wonPet.bonus.value}% ${wonPet.bonus.type.replace(/_/g, ' ')}\n\n${isFirst ? '✅ Langsung aktif!' : 'Aktifkan lewat `/pet` → 🔄 Swap.'}`)] });
             }
         }
         if (interaction.customId === 'shop_buy_item' || interaction.customId === 'shop_buy_role' || interaction.customId === 'shop_buy_role_misc') { const selected = interaction.values[0]; let itemName = '', price = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); price = parseInt(parts.pop()); itemName = parts.join('_'); const itemInfo = db.prepare('SELECT price FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, price); if (!itemInfo) return interaction.reply({ content: '❌ Habis!', ephemeral: true }); price = itemInfo.price; } else if (selected.startsWith('role_')) { const roleId = selected.substring(5), roleInfo = db.prepare('SELECT price FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!roleInfo) return interaction.reply({ content: '❌ Tidak dijual!', ephemeral: true }); const roleObj = interaction.guild.roles.cache.get(roleId); itemName = roleObj ? `Role: ${roleObj.name}` : 'Role'; price = roleInfo.price; } const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`confirm_${selected}`).setLabel('✅ Beli').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('cancel_buy').setLabel('❌ Batal').setStyle(ButtonStyle.Danger)); return interaction.reply({ content: `🧾 **${itemName}** — 🪙 **${price.toLocaleString('id-ID')}**\n\nLanjutkan pembelian?`, components: [row], ephemeral: true }); }
@@ -1012,7 +1016,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
             addSeed(guildId, interaction.user.id, cropId, qty);
             const owned = getSeedCount(guildId, interaction.user.id, cropId);
-            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**!\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam dengan \`/farm plant\`` });
+            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**!\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam lewat `/farm` → 🌱 Plant` });
         }
     }
 };

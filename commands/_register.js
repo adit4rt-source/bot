@@ -20,6 +20,9 @@ const commands = [
         .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
     new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
+    new SlashCommandBuilder().setName('gift').setDescription('🎁 Kirim money ke player lain')
+        .addUserOption(opt => opt.setName('user').setDescription('Penerima gift').setRequired(true))
+        .addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (pajak 10%)').setRequired(true).setMinValue(1)),
     new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
     new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
