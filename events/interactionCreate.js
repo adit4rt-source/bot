@@ -10,6 +10,7 @@ const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, a
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
+const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -531,6 +532,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleExpeditionSelectMenu(interaction);
         }
 
+        // --- FUSION SELECT MENUS ---
+        if (isFusionSelectMenu(interaction.customId)) {
+            return handleFusionSelectMenu(interaction);
+        }
+
         // --- CASINO PANEL SELECT MENUS ---
         if (isCasinoPanelSelectMenu(interaction.customId)) {
             return handleCasinoSelectMenu(interaction);
@@ -730,6 +736,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
         if (isExpeditionConfirm(interaction.customId)) {
             return handleExpeditionConfirm(interaction);
+        }
+
+        // --- FUSION PANEL BUTTONS ---
+        if (isFusionButton(interaction.customId)) {
+            return handleFusionButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---

@@ -96,8 +96,8 @@ function buildMainPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`pet_boss_${userId}`).setLabel('👹 Boss').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`pet_expedition_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`pet_evolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`pet_fusion_${userId}`).setLabel('🧬 Fusion').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`pet_evolve_${userId}`).setLabel('⬆️ More').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1, row2, row3] };
@@ -463,6 +463,46 @@ async function handlePetButton(interaction) {
         const { buildExpeditionPanel } = require('./expedition');
         const panel = buildExpeditionPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
+    }
+
+    // === FUSION (redirect to fusion panel) ===
+    if (action === 'fusion') {
+        const { buildFusionPanel } = require('./petFusion');
+        const panel = buildFusionPanel(guildId, userId, interaction.user.username);
+        return interaction.update(panel);
+    }
+
+    // === EVOLVE (now serves as "More" menu with Refine + Evolve) ===
+    if (action === 'evolve') {
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+        const petDef = PET_DATA.find(p => p.id === pet.petId);
+        const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
+
+        let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level})\n\n`;
+        desc += `**⬆️ Fitur Upgrade:**\n`;
+        desc += `> 📿 **Refine** — Upgrade relic equipment\n`;
+        desc += `> 🧬 **Evolve** — Evolusi pet ke bentuk baru\n`;
+        if (evo) {
+            const evoPetDef = PET_DATA.find(p => p.id === evo.to);
+            const canEvolve = pet.level >= evo.level;
+            desc += `\n**🧬 Evolution:**\n`;
+            desc += `> ${evo.name}\n`;
+            desc += `> → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}\n`;
+            desc += `> ${canEvolve ? '✅ **SIAP EVOLVE!**' : `🔒 Butuh Lv.${evo.level}`}\n`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('⬆️ Upgrade Menu')
+            .setColor('#9B59B6')
+            .setDescription(desc);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_doevolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success).setDisabled(!evo || pet.level < evo.level),
+            new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === DUNGEON (select menu of tiers) ===
