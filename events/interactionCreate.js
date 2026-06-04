@@ -12,6 +12,7 @@ const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConf
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
+const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -453,6 +454,68 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply(panel);
         }
 
+        // ================= BLACKJACK =================
+        if (command === 'blackjack') {
+            const bet = interaction.options.getInteger('taruhan') || 500;
+            const result = startBlackjack(guildId, interaction.user.id, bet);
+            if (!result.success) {
+                return interaction.reply({ content: result.error, ephemeral: true });
+            }
+
+            const { buildGameEmbed, buildGameButtons } = require('../systems/blackjack');
+            // Inline embed/button builders since they're internal to the module
+            // We'll use the game data directly
+            const game = result.game;
+
+            if (result.immediate) {
+                // Natural blackjack or immediate result
+                const embed = new EmbedBuilder()
+                    .setTitle(result.result.result === 'blackjack' ? '🃏✨ BLACKJACK! ✨🃏' : '🃏 Blackjack')
+                    .setColor(result.result.result === 'blackjack' || result.result.result === 'win' ? '#2ECC71' : result.result.result === 'push' ? '#F1C40F' : '#E74C3C')
+                    .setDescription(
+                        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `**🎰 Taruhan:** 🪙 ${game.bet.toLocaleString('id-ID')}\n\n` +
+                        `**🃏 Dealer:**\n> ${game.dealerHand.map(c => `\`${c.rank}${c.suit}\``).join(' ')} = **${game.dealerHand.reduce((sum, c) => { let v = parseInt(c.rank) || (['J','Q','K'].includes(c.rank) ? 10 : 11); return sum + v; }, 0) > 21 ? '💥' : handValue(game.dealerHand)}**\n\n` +
+                        `**🧑 Kamu:**\n> ${game.playerHand.map(c => `\`${c.rank}${c.suit}\``).join(' ')} = **${handValue(game.playerHand)}**\n\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `**${result.result.label}**\n` +
+                        (result.result.payout > 0 && result.result.result !== 'push' ? `> 🪙 Menang: **+${result.result.payout.toLocaleString('id-ID')}**\n` : result.result.result === 'push' ? `> 🪙 Dikembalikan: **${result.result.payout.toLocaleString('id-ID')}**\n` : `> 🪙 Kalah: **-${game.bet.toLocaleString('id-ID')}**\n`) +
+                        `━━━━━━━━━━━━━━━━━━━━━━`
+                    )
+                    .setFooter({ text: 'Game selesai!' });
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`bj_newgame_${interaction.user.id}`).setLabel('🃏 Main Lagi').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId(`bj_quit_${interaction.user.id}`).setLabel('🚪 Selesai').setStyle(ButtonStyle.Secondary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+
+            // Normal game start
+            const playerVal = handValue(game.playerHand);
+            const firstDealerCard = game.dealerHand[0];
+            const embed = new EmbedBuilder()
+                .setTitle('🃏 Blackjack')
+                .setColor('#3498DB')
+                .setDescription(
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `**🎰 Taruhan:** 🪙 ${game.bet.toLocaleString('id-ID')}\n\n` +
+                    `**🃏 Dealer:**\n> \`${firstDealerCard.rank}${firstDealerCard.suit}\` \`??\` = **${getCardValue(firstDealerCard)}+?**\n\n` +
+                    `**🧑 Kamu:**\n> ${game.playerHand.map(c => `\`${c.rank}${c.suit}\``).join(' ')} = **${playerVal}**\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━`
+                )
+                .setFooter({ text: 'Hit = ambil kartu | Stand = berhenti | Double = 2x taruhan + 1 kartu' });
+
+            const userData2 = getOrCreateUser(guildId, interaction.user.id);
+            const canDouble = userData2.balance >= bet;
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`bj_hit_${interaction.user.id}`).setLabel('🃏 Hit').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`bj_stand_${interaction.user.id}`).setLabel('✋ Stand').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`bj_double_${interaction.user.id}`).setLabel('💰 Double').setStyle(ButtonStyle.Danger).setDisabled(!canDouble)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
         // ================= STATS DASHBOARD =================
         if (command === 'stats') {
             return handleStatsCommand(interaction);
@@ -753,6 +816,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- WORLD BOSS BUTTONS ---
         if (isWorldBossButton(interaction.customId)) {
             return handleWorldBossButton(interaction);
+        }
+
+        // --- BLACKJACK BUTTONS ---
+        if (isBlackjackButton(interaction.customId)) {
+            return handleBlackjackButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---

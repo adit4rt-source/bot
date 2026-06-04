@@ -28,6 +28,8 @@ const commands = [
     new SlashCommandBuilder().setName('globalmarket').setDescription('🌍 Global Market — Jual beli item lintas server'),
     new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
     new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
+    new SlashCommandBuilder().setName('blackjack').setDescription('🃏 Blackjack — Main kartu 21')
+        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (100-5000)').setRequired(true).setMinValue(100).setMaxValue(5000)),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
     new SlashCommandBuilder().setName('leaderboard').setDescription('🏆 Leaderboard — Ranking pemain')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori ranking').setRequired(false)
