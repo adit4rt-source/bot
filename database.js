@@ -6,13 +6,6 @@ const path = require('path');
 const _rawDb = new Database('economy.sqlite');
 
 // ================= GLOBAL-MODE DB PROXY =================
-// When the database has been migrated to global mode (no guildId columns
-// on core tables), this proxy transparently rewrites all raw db.prepare()
-// queries so that references to guildId are stripped out automatically.
-// This means ALL existing code across every system file continues to work
-// without needing individual edits — the proxy handles it at query time.
-
-// Tables that were migrated to global mode (no guildId column)
 const GLOBAL_TABLES = new Set([
     'users', 'user_stats', 'achievements', 'pets', 'relics',
     'item_inventory', 'pet_food_inventory', 'seed_inventory', 'fertilizer_inventory',
@@ -22,55 +15,33 @@ const GLOBAL_TABLES = new Set([
     'command_summary', 'pet_evolution_history'
 ]);
 
-// Tables that stay per-server (keep guildId)
-// streaks, server_settings, config, rewards, shop_roles, shop_items,
-// vouchers, voucher_claims, economy_admins, daily_quests,
-// temp_voices, streak_restores, streak_history, logs, migration_status
-
 function isGlobalTable(sql) {
-    // Extract first table name from SQL
     const m = sql.match(/(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)/i);
     return m ? GLOBAL_TABLES.has(m[1]) : false;
 }
 
 function rewriteQuery(sql) {
     if (!isGlobalTable(sql)) return sql;
-    
-    // Remove guildId from WHERE clauses: "guildId = ? AND " or "AND guildId = ?"
     let q = sql;
     q = q.replace(/\bguildId\s*=\s*\?\s*AND\s*/gi, '');
     q = q.replace(/\s*AND\s*guildId\s*=\s*\?/gi, '');
     q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1');
-    
-    // Remove guildId from INSERT column lists and VALUES
-    // Pattern: INSERT INTO table (guildId, col2, col3) VALUES (?, ?, ?)
     q = q.replace(/\(guildId,\s*/gi, '(');
     q = q.replace(/,\s*guildId\b/gi, '');
-    
-    // Remove guildId from UPDATE SET: "SET guildId = ?, " — rare but handle
     q = q.replace(/SET\s+guildId\s*=\s*\?,\s*/gi, 'SET ');
-    
-    // Clean up: "WHERE 1=1 AND" -> "WHERE"
     q = q.replace(/WHERE\s+1=1\s+AND\s+/gi, 'WHERE ');
     q = q.replace(/WHERE\s+1=1\s*$/gi, '');
-    
-    // PRIMARY KEY INSERT OR REPLACE / INSERT OR IGNORE: handled by above
     return q;
 }
 
 function findGuildIdParamPositions(sql) {
-    // Returns sorted list of 0-based param indices that correspond to guildId values
     const positions = [];
-
-    // INSERT INTO table (guildId, col2, ...) — guildId is a column
     const insertMatch = sql.match(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)/i);
     if (insertMatch) {
         const cols = insertMatch[1].split(',').map(c => c.trim());
         cols.forEach((col, i) => { if (col.toLowerCase() === 'guildid') positions.push(i); });
         return positions;
     }
-
-    // WHERE / SET: scan for "guildId = ?" and track which ? index it is
     const sqlLower = sql.toLowerCase();
     let searchPos = 0;
     while (searchPos < sqlLower.length) {
@@ -78,7 +49,6 @@ function findGuildIdParamPositions(sql) {
         const qPos = sql.indexOf('?', searchPos);
         if (qPos === -1) break;
         if (gidPos !== -1 && gidPos < qPos) {
-            // Check "guildId = ?"
             const afterGid = sqlLower.slice(gidPos + 7).trimStart();
             if (afterGid.startsWith('=')) {
                 const eqPos = sql.indexOf('=', gidPos + 7);
@@ -102,14 +72,12 @@ function rewriteParams(sql, params) {
     const positions = findGuildIdParamPositions(sql);
     if (!positions.length) return params;
     const result = [...params];
-    // Remove from highest to lowest to preserve indices
     for (const pos of positions.slice().reverse()) {
         if (pos < result.length) result.splice(pos, 1);
     }
     return result;
 }
 
-// Create a proxy around db that rewrites queries transparently
 function createGlobalProxy(rawDb) {
     return new Proxy(rawDb, {
         get(target, prop) {
@@ -117,7 +85,6 @@ function createGlobalProxy(rawDb) {
                 return function(sql) {
                     const rewrittenSql = rewriteQuery(sql);
                     const stmt = target.prepare(rewrittenSql);
-                    // Wrap statement methods to also rewrite params
                     return new Proxy(stmt, {
                         get(stmtTarget, stmtProp) {
                             if (stmtProp === 'get' || stmtProp === 'all' || stmtProp === 'run') {
@@ -136,19 +103,36 @@ function createGlobalProxy(rawDb) {
     });
 }
 
+// ================= HELPER: checkGlobalMode (needs _rawDb, defined early) =================
+let isGlobalMode = null;
+function checkGlobalMode() {
+    if (isGlobalMode === null) {
+        try {
+            const userTable = _rawDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+            if (!userTable) return false;
+            const columns = _rawDb.pragma('table_info(users)');
+            isGlobalMode = !columns.some(col => col.name === 'guildId');
+        } catch (e) {
+            isGlobalMode = false;
+        }
+    }
+    return isGlobalMode;
+}
 
-// db will be set to proxy after checkGlobalMode is available (see below)
+// ================= ACTIVATE PROXY =================
+// Must be declared BEFORE any usage of `db`
+const db = checkGlobalMode() ? createGlobalProxy(_rawDb) : _rawDb;
+if (checkGlobalMode()) {
+    console.log('🌐 Database running in GLOBAL mode (guildId proxy active)');
+}
 
 // ================= BACKUP SYSTEM =================
-// Backup database on startup (optional, for safety)
 function createBackup() {
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupPath = path.join(path.dirname('economy.sqlite'), `economy.backup-${timestamp}.sqlite`);
         fs.copyFileSync('economy.sqlite', backupPath);
         console.log(`✅ Database backed up: ${backupPath}`);
-        
-        // Keep only last 5 backups
         const backupDir = path.dirname('economy.sqlite');
         const backupFiles = fs.readdirSync(backupDir)
             .filter(f => f.startsWith('economy.backup-') && f.endsWith('.sqlite'))
@@ -165,8 +149,8 @@ function createBackup() {
     }
 }
 
-// Run backup if migration needed
-const isMigrationNeeded = !db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_global'").get();
+// Now db is defined, safe to use it
+const isMigrationNeeded = !_rawDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_global'").get();
 if (isMigrationNeeded) {
     console.log('📦 Creating backup before migration...');
     createBackup();
@@ -205,14 +189,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS pet_food_inventory (guildId TEXT, userId TEX
 db.exec(`CREATE TABLE IF NOT EXISTS seed_inventory (guildId TEXT, userId TEXT, cropId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, cropId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS fertilizer_inventory (guildId TEXT, userId TEXT, fertId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, fertId))`);
 
-// Farming
 db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing')`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_storage (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_level INTEGER DEFAULT 1, PRIMARY KEY(guildId, userId))`);
-// Auto-harvest notifier dedup flag (1 = user already notified that this plot is ready)
 try { db.exec(`ALTER TABLE farm_plots ADD COLUMN notified INTEGER DEFAULT 0`); } catch(e) {}
 
-// Pets
 db.exec(`CREATE TABLE IF NOT EXISTS pets (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, petId TEXT, name TEXT, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, happiness INTEGER DEFAULT 100, hunger INTEGER DEFAULT 100, status TEXT DEFAULT 'happy', active INTEGER DEFAULT 0, adoptedAt INTEGER)`);
 try { db.exec(`ALTER TABLE pets ADD COLUMN hunting_until INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN skills TEXT DEFAULT '[]'`); } catch(e) {}
@@ -225,91 +206,44 @@ try { db.exec(`ALTER TABLE pets ADD COLUMN spd INTEGER DEFAULT 10`); } catch(e) 
 try { db.exec(`ALTER TABLE pets ADD COLUMN crit INTEGER DEFAULT 5`); } catch(e) {}
 db.exec(`CREATE TABLE IF NOT EXISTS relics (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, name TEXT, slot TEXT, rarity TEXT, stat_type TEXT, stat_value INTEGER, refine_level INTEGER DEFAULT 0, equipped_pet_id INTEGER DEFAULT 0)`);
 
-// Trading
 db.exec(`CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, senderId TEXT, receiverId TEXT, status TEXT DEFAULT 'pending', createdAt INTEGER, senderOffer TEXT, receiverOffer TEXT)`);
-
-// Command Analytics
 db.exec(`CREATE TABLE IF NOT EXISTS command_summary (guildId TEXT, command TEXT, count INTEGER DEFAULT 0, lastUsed INTEGER, PRIMARY KEY(guildId, command))`);
 
-// Pet Evolution
 try { db.exec(`ALTER TABLE pets ADD COLUMN evolved INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN evoStage INTEGER DEFAULT 0`); } catch(e) {}
 
-// Auto-Harvest
 db.exec(`CREATE TABLE IF NOT EXISTS auto_harvest (guildId TEXT, userId TEXT, enabled INTEGER DEFAULT 0, purchased INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId))`);
-
-// Combo
 db.exec(`CREATE TABLE IF NOT EXISTS combo_tracker (guildId TEXT, userId TEXT, features TEXT DEFAULT '[]', lastAction INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId))`);
-
-// Weekly Quests
 db.exec(`CREATE TABLE IF NOT EXISTS weekly_quests (guildId TEXT, userId TEXT, week TEXT, data TEXT, PRIMARY KEY(guildId, userId, week))`);
-
-// Calendar
 db.exec(`CREATE TABLE IF NOT EXISTS login_calendar (guildId TEXT, userId TEXT, month TEXT, days TEXT DEFAULT '[]', claimed TEXT DEFAULT '[]', PRIMARY KEY(guildId, userId, month))`);
-
-// Fishing Contest
 db.exec(`CREATE TABLE IF NOT EXISTS fish_contest (guildId TEXT, oderId TEXT, odent TEXT, weight REAL DEFAULT 0, fishId TEXT, startedAt INTEGER, PRIMARY KEY(guildId, oderId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS fish_contest_state (guildId TEXT PRIMARY KEY, active INTEGER DEFAULT 0, startedAt INTEGER, endsAt INTEGER, channelId TEXT)`);
-
-// Fishing Location
 try { db.exec(`ALTER TABLE fish_equipment ADD COLUMN location TEXT DEFAULT 'river'`); } catch(e) {}
-
-// Farm Decorations
 db.exec(`CREATE TABLE IF NOT EXISTS farm_decorations (guildId TEXT, userId TEXT, decoId TEXT, purchasedAt INTEGER, PRIMARY KEY(guildId, userId, decoId))`);
 
 // ================= RUN GLOBAL PROGRESSION MIGRATION =================
-// This converts per-server progression to global progression
-// Only runs once per database
 try {
     const { runGlobalMigration } = require('./systems/migration-global');
     runGlobalMigration(db);
 } catch (e) {
     console.error('⚠️  Migration warning:', e.message);
-    // Continue anyway - migration might not apply to all databases
 }
 
 // ================= HELPER FUNCTIONS =================
 
-// Helper to check if database is in GLOBAL mode (post-migration)
-let isGlobalMode = null;
-function checkGlobalMode() {
-    if (isGlobalMode === null) {
-        try {
-            const userTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
-            if (!userTable) return false;
-            
-            // Check if users table has guildId column
-            const columns = db.pragma('table_info(users)');
-            isGlobalMode = !columns.some(col => col.name === 'guildId');
-        } catch (e) {
-            isGlobalMode = false;
-        }
-    }
-    return isGlobalMode;
-}
-
-// Activate the global-mode proxy now that checkGlobalMode is available
-const db = checkGlobalMode() ? createGlobalProxy(_rawDb) : _rawDb;
-if (checkGlobalMode()) {
-    console.log('🌐 Database running in GLOBAL mode (guildId proxy active)');
-}
-
 function getOrCreateUser(guildId, userId) {
-    // NEW: Global mode (no guildId)
     if (checkGlobalMode()) {
         let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
-        if (!user) { 
-            db.prepare('INSERT INTO users (userId) VALUES (?)').run(userId); 
-            user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId); 
+        if (!user) {
+            db.prepare('INSERT INTO users (userId) VALUES (?)').run(userId);
+            user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
         }
         return user;
     }
-    
-    // OLD: Per-server mode (with guildId) - for backward compatibility
     let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    if (!user) { 
-        db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); 
-        user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); 
+    if (!user) {
+        db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId);
+        user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
     }
     return user;
 }
@@ -325,12 +259,10 @@ function getSetting(guildId, key, defaultVal) {
 }
 
 function getUserStat(guildId, userId, key) {
-    // NEW: Global mode
     if (checkGlobalMode()) {
         const row = db.prepare('SELECT stat_value FROM user_stats WHERE userId = ? AND stat_key = ?').get(userId, key);
         return row ? row.stat_value : 0;
     }
-    // OLD: Per-server mode
     const row = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, key);
     return row ? row.stat_value : 0;
 }
@@ -355,14 +287,11 @@ function setUserStat(guildId, userId, key, value) {
 }
 
 function setUserStatMax(guildId, userId, key, value) {
-    // Stores `value` only if it is greater than the current stored value (for "biggest" records).
     value = Math.round(Number(value) || 0);
     if (value <= getUserStat(guildId, userId, key)) return;
     setUserStat(guildId, userId, key, value);
 }
 
-// Tracks earned money for the /stats dashboard: per-source total, per-day total, and all-time total.
-// `source` is one of: fishing, farming, gambling, quest, daily, battle, trade, ...
 function addIncome(guildId, userId, source, amount) {
     amount = Math.round(Number(amount) || 0);
     if (amount <= 0) return;
@@ -372,7 +301,6 @@ function addIncome(guildId, userId, source, amount) {
     incrementUserStat(guildId, userId, 'total_earned', amount);
 }
 
-// Tracks spent money for the /stats dashboard: per-category total + all-time total.
 function addSpending(guildId, userId, category, amount) {
     amount = Math.round(Number(amount) || 0);
     if (amount <= 0) return;
@@ -528,14 +456,9 @@ function getAllFerts(guildId, userId) {
     return db.prepare('SELECT * FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
-module.exports = { db, checkGlobalMode, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, getUsersForDailyReminder, updateUserBalance, addUserBalance, subtractUserBalance, getActivePetsHungry, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel };
-
 // ================= GLOBAL-MODE-AWARE DB HELPERS =================
-// These helpers abstract away guildId for tables that were migrated to global mode.
 
-// --- users table ---
 function getUsersForDailyReminder(today, cutoff) {
-    // In global mode, users table has no guildId column — use userId only
     if (checkGlobalMode()) {
         return _rawDb.prepare('SELECT userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff)
             .map(r => ({ guildId: null, userId: r.userId }));
@@ -567,7 +490,6 @@ function subtractUserBalance(guildId, userId, amount) {
     }
 }
 
-// --- pets table ---
 function getActivePetsHungry(hungerThreshold) {
     if (checkGlobalMode()) {
         return _rawDb.prepare("SELECT userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold)
@@ -576,7 +498,6 @@ function getActivePetsHungry(hungerThreshold) {
     return _rawDb.prepare("SELECT guildId, userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold);
 }
 
-// --- farm_decorations table ---
 function getFarmDecorations(guildId, userId) {
     if (checkGlobalMode()) {
         return db.prepare('SELECT decoId FROM farm_decorations WHERE userId = ?').all(userId);
@@ -599,7 +520,6 @@ function addFarmDecoration(guildId, userId, decoId) {
     }
 }
 
-// --- farm_plots table ---
 function getFarmPlot(guildId, userId, plotId) {
     if (checkGlobalMode()) {
         return db.prepare('SELECT * FROM farm_plots WHERE id = ? AND userId = ?').get(plotId, userId);
@@ -623,7 +543,6 @@ function deleteDeadFarmPlots(guildId, userId) {
     }
 }
 
-// --- farm_storage table ---
 function clearFarmStorage(guildId, userId) {
     if (checkGlobalMode()) {
         db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(userId);
@@ -632,7 +551,6 @@ function clearFarmStorage(guildId, userId) {
     }
 }
 
-// --- farm_data table ---
 function upgradeFarmLevel(guildId, userId, newLevel) {
     if (checkGlobalMode()) {
         db.prepare('UPDATE farm_data SET farm_level = ? WHERE userId = ?').run(newLevel, userId);
@@ -640,3 +558,21 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
         db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(newLevel, guildId, userId);
     }
 }
+
+// ================= EXPORTS (always at the very bottom) =================
+module.exports = {
+    db, checkGlobalMode,
+    getOrCreateUser, getConf, getSetting,
+    getUserStat, incrementUserStat, setUserStat, setUserStatMax,
+    addIncome, addSpending,
+    getItemCount, addItem, removeItem,
+    getPetFoodCount, addPetFood, removePetFood, getAllPetFood,
+    getSeedCount, addSeed, removeSeed, getAllSeeds,
+    getFertCount, addFert, removeFert, getAllFerts,
+    getUsersForDailyReminder,
+    updateUserBalance, addUserBalance, subtractUserBalance,
+    getActivePetsHungry,
+    getFarmDecorations, hasFarmDecoration, addFarmDecoration,
+    getFarmPlot, insertFarmPlot, deleteDeadFarmPlots,
+    clearFarmStorage, upgradeFarmLevel,
+};
