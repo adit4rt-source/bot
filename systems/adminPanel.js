@@ -1,6 +1,9 @@
 // systems/adminPanel.js - Admin Panel UI System (Button-based admin controls)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, getOrCreateUser, getSetting } = require('../database');
+const fs = require('fs');
+const path = require('path');
+const Database = require('better-sqlite3');
 
 // ============ BOT OWNER CONFIG ============
 // Hanya ID ini yang bisa menggunakan SEMUA fitur Money (Add, Take, Set, Add/Remove Banker).
@@ -32,6 +35,7 @@ function buildAdminPanel(guildId) {
             `> \ud83c\udf99\ufe0f **TempVoice** \u2014 Setup voice channel privat\n` +
             `> 🏆 **Contest** — Fishing contest\n` +
             `> 📊 **Analytics** — Command usage stats\n` +
+            `> 🔧 **DB Tools** — Cek & restore data user (Owner only)\n` +
             `━━━━━━━━━━━━━━━━━━━━━━`
         )
         .setFooter({ text: 'Hanya Admin yang bisa menggunakan panel ini' })
@@ -49,8 +53,11 @@ function buildAdminPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83c\udfc6 Contest').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary)
     );
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔧 DB Tools').setStyle(ButtonStyle.Danger)
+    );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 
@@ -271,6 +278,11 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
     if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
+
+    // === DB TOOLS (Owner Only) ===
+    if (customId.startsWith('admpnl_dbtools')) {
+        return handleDbToolsButton(interaction);
+    }
 
     // === ANALYTICS ===
     if (customId === 'admpnl_analytics') {
@@ -544,6 +556,11 @@ async function handleAdminModal(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
 
+    // === DB TOOLS MODALS (Owner Only) ===
+    if (customId === 'admpnl_modal_petlookup' || customId === 'admpnl_modal_restorepet') {
+        return handleDbToolsModal(interaction);
+    }
+
     if (!isAdminUser(interaction)) {
         return interaction.reply({ content: '\u274c Hanya Admin!', flags: 1 << 6 });
     }
@@ -684,11 +701,294 @@ function isAdminPanelModal(customId) {
     return customId.startsWith('admpnl_modal_');
 }
 
+// ============ BUILD: DB Tools sub-panel (Owner Only) ============
+function buildDbToolsPanel(userId) {
+    const isOwner = isBotOwner(userId);
+    const { listBackups } = require('./backup');
+    const backups = listBackups();
+
+    const embed = new EmbedBuilder()
+        .setTitle('🔧 DB TOOLS — Database Manager')
+        .setColor('#E74C3C')
+        .setDescription(
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            (!isOwner ? `> ⛔ *Hanya pemilik bot yang bisa menggunakan fitur ini.*\n` :
+            `> 🔍 **Pet Lookup** — Cek semua pet milik user\n` +
+            `> 🔄 **Restore Pet** — Restore pet dari backup ke akun user\n` +
+            `> 💾 **List Backup** — Lihat daftar backup tersedia\n` +
+            `> 🛠️ **Force Backup** — Buat backup manual sekarang\n`) +
+            `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `**💾 Backup Terbaru:**\n` +
+            (backups.length === 0 ? '> *Belum ada backup*\n' :
+            backups.slice(0, 5).map(b => {
+                const ago = Math.floor((Date.now() - b.created) / 60000);
+                const agoStr = ago < 60 ? `${ago}m lalu` : ago < 1440 ? `${Math.floor(ago/60)}j lalu` : `${Math.floor(ago/1440)}h lalu`;
+                return `> 📁 \`${b.name.replace('economy_','').replace('.sqlite','')}\` — ${b.sizeMB}MB (${agoStr})`;
+            }).join('\n') + '\n') +
+            (backups.length > 5 ? `> *...dan ${backups.length - 5} backup lainnya*\n` : '')
+        )
+        .setFooter({ text: '⚠️ Fitur ini hanya untuk Bot Owner' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_dbtools_petlookup').setLabel('🔍 Pet Lookup').setStyle(ButtonStyle.Primary).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_dbtools_restorepet').setLabel('🔄 Restore Pet').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Secondary).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+// ============ HANDLER: DB Tools buttons ============
+async function handleDbToolsButton(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+
+    if (!isBotOwner(interaction.user.id)) {
+        return interaction.reply({ content: '⛔ Hanya pemilik bot yang bisa menggunakan DB Tools!', flags: 1 << 6 });
+    }
+
+    // === Main DB Tools panel ===
+    if (customId === 'admpnl_dbtools') {
+        return interaction.update(buildDbToolsPanel(interaction.user.id));
+    }
+
+    // === Pet Lookup (show modal) ===
+    if (customId === 'admpnl_dbtools_petlookup') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_petlookup').setTitle('🔍 Pet Lookup');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('target_user_id').setLabel('Discord User ID').setStyle(TextInputStyle.Short)
+                    .setRequired(true).setPlaceholder('Contoh: 123456789012345678')
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === Restore Pet (show modal) ===
+    if (customId === 'admpnl_dbtools_restorepet') {
+        const { listBackups } = require('./backup');
+        const backups = listBackups();
+        if (backups.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada backup tersedia!', flags: 1 << 6 });
+        }
+
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_restorepet').setTitle('🔄 Restore Pet dari Backup');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('target_user_id').setLabel('Discord User ID target').setStyle(TextInputStyle.Short)
+                    .setRequired(true).setPlaceholder('Contoh: 123456789012345678')
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('backup_name').setLabel('Nama backup (kosong = backup terbaru)')
+                    .setStyle(TextInputStyle.Short).setRequired(false)
+                    .setPlaceholder(backups[0]?.name.replace('economy_','').replace('.sqlite','') || 'YYYY-MM-DD_HH-MM-SS')
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === Force Backup ===
+    if (customId === 'admpnl_dbtools_forcebackup') {
+        await interaction.deferUpdate();
+        const { createBackup, listBackups } = require('./backup');
+        const success = createBackup();
+        const backups = listBackups();
+        const latest = backups[0];
+
+        const embed = new EmbedBuilder()
+            .setTitle(success ? '✅ Backup Berhasil!' : '❌ Backup Gagal!')
+            .setColor(success ? '#2ECC71' : '#E74C3C')
+            .setDescription(
+                success
+                ? `💾 Database berhasil di-backup!\n\n> 📁 File: \`${latest?.name || 'unknown'}\`\n> 📦 Size: ${latest?.sizeMB || '?'} MB\n> 🕐 Waktu: <t:${Math.floor(Date.now()/1000)}:R>`
+                : `Backup gagal. Cek log server untuk detail.`
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔙 DB Tools').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🏠 Main').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.editReply({ embeds: [embed], components: [row] });
+    }
+}
+
+// ============ HANDLER: DB Tools modals ============
+async function handleDbToolsModal(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+
+    if (!isBotOwner(interaction.user.id)) {
+        return interaction.reply({ content: '⛔ Hanya pemilik bot!', flags: 1 << 6 });
+    }
+
+    // === Pet Lookup Modal ===
+    if (customId === 'admpnl_modal_petlookup') {
+        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+
+        // Query pets dari database utama (semua userId matching, termasuk GLOBAL_MARKET)
+        const allPets = db.prepare('SELECT * FROM pets WHERE userId = ? ORDER BY active DESC, level DESC').all(targetId);
+        const activePet = allPets.find(p => p.active === 1);
+
+        // Cek apakah ada pet di Global Market
+        const marketPets = db.prepare("SELECT * FROM pets WHERE userId = 'GLOBAL_MARKET'").all();
+        const { PET_DATA } = require('../data/pets');
+
+        let desc = `**User ID:** \`${targetId}\`\n`;
+        desc += `**Total pet di DB:** ${allPets.length}\n\n`;
+
+        if (allPets.length === 0) {
+            desc += `> ❌ Tidak ada pet ditemukan untuk user ini.\n`;
+        } else {
+            desc += `**📋 Daftar Pet:**\n`;
+            allPets.forEach(p => {
+                const pd = PET_DATA.find(x => x.id === p.petId);
+                const status = p.active ? '⭐ AKTIF' : '▪️ Nonaktif';
+                desc += `> ${status} **#${p.id}** ${pd ? pd.emoji : '🐾'} **${p.name}** (Lv.${p.level}) — ${pd ? pd.tier : '?'}\n`;
+                desc += `>   ATK:${p.atk} DEF:${p.def} HP:${p.hp} | status: \`${p.status}\`\n`;
+            });
+        }
+
+        // Cek pet yang mungkin terjebak di Global Market (sellerId = targetId)
+        const listedInMarket = db.prepare("SELECT * FROM global_market WHERE sellerId = ? AND status = 'active' AND itemType = 'pet'").all(targetId);
+        if (listedInMarket.length > 0) {
+            desc += `\n**🌍 Pet di Global Market (listing aktif):**\n`;
+            listedInMarket.forEach(l => {
+                desc += `> 🏷️ **${l.itemName}** — 🪙 ${l.price.toLocaleString('id-ID')} | ID listing: #${l.id}\n`;
+            });
+            desc += `> ⚠️ Pet ini bisa di-cancel di Global Market untuk kembali ke owner.\n`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔍 Pet Lookup — User ${targetId}`)
+            .setColor('#3498DB')
+            .setDescription(desc);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔙 DB Tools').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🏠 Main').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.reply({ embeds: [embed], components: [row], flags: 1 << 6 });
+    }
+
+    // === Restore Pet from Backup Modal ===
+    if (customId === 'admpnl_modal_restorepet') {
+        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+        const backupInput = interaction.fields.getTextInputValue('backup_name').trim();
+
+        const { listBackups } = require('./backup');
+        const BACKUP_DIR = path.join(__dirname, '..', 'backups');
+        const backups = listBackups();
+
+        if (backups.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada backup tersedia!', flags: 1 << 6 });
+        }
+
+        // Cari file backup
+        let backupFile;
+        if (!backupInput) {
+            backupFile = path.join(BACKUP_DIR, backups[0].name);
+        } else {
+            const matched = backups.find(b =>
+                b.name.includes(backupInput) || b.name === `economy_${backupInput}.sqlite`
+            );
+            if (!matched) {
+                return interaction.reply({ content: `❌ Backup \`${backupInput}\` tidak ditemukan!\n\nBackup tersedia:\n${backups.slice(0,5).map(b=>b.name).join('\n')}`, flags: 1 << 6 });
+            }
+            backupFile = path.join(BACKUP_DIR, matched.name);
+        }
+
+        await interaction.deferReply({ flags: 1 << 6 });
+
+        try {
+            // Buka backup database (read-only)
+            const backupDb = new Database(backupFile, { readonly: true });
+            const { PET_DATA } = require('../data/pets');
+
+            // Ambil semua pet dari backup untuk user ini
+            let backupPets;
+            try {
+                backupPets = backupDb.prepare('SELECT * FROM pets WHERE userId = ?').all(targetId);
+            } catch (e) {
+                backupPets = [];
+            }
+            backupDb.close();
+
+            if (backupPets.length === 0) {
+                return interaction.editReply({ content: `❌ Tidak ada pet ditemukan untuk user \`${targetId}\` di backup \`${path.basename(backupFile)}\`.` });
+            }
+
+            // Bandingkan dengan pet yang ada sekarang
+            const currentPets = db.prepare('SELECT * FROM pets WHERE userId = ?').all(targetId);
+            const currentIds = new Set(currentPets.map(p => p.id));
+
+            // Restore pet yang hilang (ada di backup tapi tidak ada di current)
+            let restored = 0;
+            const restoredList = [];
+
+            for (const pet of backupPets) {
+                if (!currentIds.has(pet.id)) {
+                    // Pet ini hilang — restore!
+                    try {
+                        db.prepare(`INSERT OR IGNORE INTO pets 
+                            (id, guildId, userId, petId, name, level, exp, happiness, hunger, status, active, adoptedAt, hunting_until, skills, class, element, hp, atk, def, spd, crit, evolved, evoStage)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                        ).run(
+                            pet.id, pet.guildId || guildId, targetId, pet.petId, pet.name,
+                            pet.level, pet.exp, pet.happiness || 80, pet.hunger || 80,
+                            pet.status || 'happy', pet.adoptedAt || Date.now(),
+                            pet.hunting_until || 0, pet.skills || '[]',
+                            pet.class || 'warrior', pet.element || 'fire',
+                            pet.hp, pet.atk, pet.def, pet.spd, pet.crit,
+                            pet.evolved || 0, pet.evoStage || 0
+                        );
+                        restored++;
+                        const pd = PET_DATA.find(x => x.id === pet.petId);
+                        restoredList.push(`> ${pd ? pd.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) — ${pd ? pd.tier : '?'}`);
+                    } catch (e) {
+                        restoredList.push(`> ⚠️ **${pet.name}** gagal restore: ${e.message}`);
+                    }
+                }
+            }
+
+            let desc = `**User:** <@${targetId}>\n`;
+            desc += `**Backup:** \`${path.basename(backupFile)}\`\n`;
+            desc += `**Pet di backup:** ${backupPets.length} | **Pet sekarang:** ${currentPets.length}\n\n`;
+
+            if (restored === 0) {
+                desc += `✅ Tidak ada pet yang perlu di-restore.\n`;
+                desc += `> Semua ${backupPets.length} pet dari backup sudah ada di database.`;
+            } else {
+                desc += `✅ **${restored} pet berhasil di-restore!**\n\n`;
+                desc += `**Pet yang dikembalikan:**\n${restoredList.join('\n')}\n\n`;
+                desc += `> ⚠️ Pet di-restore sebagai **nonaktif** (active=0).\n`;
+                desc += `> Player bisa aktifkan lewat \`/pet\` → 📦 Collection → 🔄 Swap.`;
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle(restored > 0 ? `✅ Restore Berhasil — ${restored} pet` : '✅ Tidak Ada yang Perlu Restore')
+                .setColor(restored > 0 ? '#2ECC71' : '#F1C40F')
+                .setDescription(desc);
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔙 DB Tools').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('admpnl_back').setLabel('🏠 Main').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.editReply({ embeds: [embed], components: [row] });
+
+        } catch (e) {
+            return interaction.editReply({ content: `❌ Error saat restore: \`${e.message}\`` });
+        }
+    }
+}
+
 module.exports = {
     buildAdminPanel,
     handleAdminCommand,
     handleAdminButton,
     handleAdminModal,
+    handleDbToolsButton,
+    handleDbToolsModal,
     isAdminPanelButton,
     isAdminPanelModal
 };
