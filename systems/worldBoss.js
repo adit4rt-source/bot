@@ -43,7 +43,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS world_boss (
 )`);
 
 db.exec(`CREATE TABLE IF NOT EXISTS world_boss_damage (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
     weekId TEXT,
     userId TEXT,
     username TEXT,
@@ -52,8 +51,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS world_boss_damage (
     lastAttack INTEGER DEFAULT 0,
     PRIMARY KEY (weekId, userId)
 )`);
-// Recreate without AUTOINCREMENT since we have composite PK
-try { db.exec(`CREATE TABLE IF NOT EXISTS world_boss_damage (weekId TEXT, userId TEXT, username TEXT, totalDamage INTEGER DEFAULT 0, attacks INTEGER DEFAULT 0, lastAttack INTEGER DEFAULT 0, PRIMARY KEY (weekId, userId))`); } catch(e) {}
 
 // ==================== HELPERS ====================
 function getWeekId() {
