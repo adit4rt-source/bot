@@ -20,72 +20,103 @@ function isGlobalTable(sql) {
     return m ? GLOBAL_TABLES.has(m[1]) : false;
 }
 
+// Split a VALUES expression by top-level commas (ignores commas inside nested parens)
+function splitTopLevel(str) {
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < str.length; i++) {
+        if (str[i] === '(') depth++;
+        else if (str[i] === ')') depth--;
+        else if (str[i] === ',' && depth === 0) {
+            parts.push(str.slice(start, i).trim());
+            start = i + 1;
+        }
+    }
+    parts.push(str.slice(start).trim());
+    return parts;
+}
+
+// Strip guildId = ? from inside a single VALUES token (e.g. a COALESCE subquery)
+function stripGuildIdFromToken(token) {
+    let t = token;
+    t = t.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');
+    t = t.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');
+    t = t.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1');
+    t = t.replace(/WHERE\s+1=1\s+AND\s+/gi, 'WHERE ');
+    t = t.replace(/WHERE\s+1=1\s*(?=\))/gi, '');
+    return t;
+}
+
 function rewriteQuery(sql) {
     if (!isGlobalTable(sql)) return sql;
     let q = sql;
 
-    // --- INSERT: strip guildId from column list AND the matching ? from VALUES ---
-    // Pattern: INSERT [OR x] INTO table (col1, col2, ...) VALUES (?, ?, ...)
-    // We must remove the ?-at-same-index from VALUES when we remove guildId from columns.
-    const insertRe = /(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\()([^)]+)(\)\s*VALUES\s*\()([^)]+)(\))/gi;
-    q = q.replace(insertRe, (match, pre, cols, mid, vals, post) => {
-        const colArr = cols.split(',').map(c => c.trim());
-        const valArr = vals.split(',').map(v => v.trim());
-        // Collect indices where guildId lives
-        const dropIdx = new Set(
-            colArr.map((c, i) => c.toLowerCase() === 'guildid' ? i : -1).filter(i => i !== -1)
-        );
-        const newCols = colArr.filter((_, i) => !dropIdx.has(i)).join(', ');
-        const newVals = valArr.filter((_, i) => !dropIdx.has(i)).join(', ');
-        return pre + newCols + mid + newVals + post;
-    });
+    // --- INSERT with column list: strip guildId column AND its VALUES slot ---
+    // Uses paren-depth tracking so COALESCE(...) subqueries inside VALUES are handled correctly.
+    const insertHeadRe = /(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\()([^)]+)(\)\s*VALUES\s*\()/i;
+    const headMatch = q.match(insertHeadRe);
+    if (headMatch) {
+        const colArr = headMatch[2].split(',').map(c => c.trim());
+        const dropIdx = colArr.findIndex(c => c.toLowerCase() === 'guildid');
+        if (dropIdx !== -1) {
+            const valuesStart = headMatch.index + headMatch[0].length;
+            let depth = 1, pos = valuesStart;
+            while (pos < q.length && depth > 0) {
+                if (q[pos] === '(') depth++;
+                else if (q[pos] === ')') depth--;
+                pos++;
+            }
+            const valuesContent = q.slice(valuesStart, pos - 1);
+            const valArr = splitTopLevel(valuesContent);
+            const newCols = colArr.filter((_, i) => i !== dropIdx).join(', ');
+            const newVals = valArr
+                .filter((_, i) => i !== dropIdx)
+                .map(stripGuildIdFromToken)
+                .join(', ');
+            q = q.slice(0, headMatch.index)
+                + headMatch[1] + newCols + ') VALUES (' + newVals + ')'
+                + q.slice(pos);
+        }
+    }
 
-    // --- WHERE: strip guildId = ? (leading, trailing, or standalone) ---
-    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');    // guildId = ? AND ...
-    q = q.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');       // ... AND guildId = ?
-    q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1'); // WHERE guildId = ?
-
-    // --- UPDATE SET: strip "SET guildId = ?, " (rare) ---
+    // --- WHERE / SET guildId = ? anywhere not already handled ---
+    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');
+    q = q.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');
+    q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1');
     q = q.replace(/\bSET\s+guildId\s*=\s*\?,\s*/gi, 'SET ');
-
-    // --- Cleanup artifacts ---
     q = q.replace(/WHERE\s+1=1\s+AND\s+/gi, 'WHERE ');
+    q = q.replace(/WHERE\s+1=1\s*(?=\))/gi, '');
     q = q.replace(/WHERE\s+1=1\s*$/gi, '');
 
     return q;
 }
 
 /**
- * Given the ORIGINAL sql (before rewrite) and the params array,
- * remove params that correspond to guildId placeholders.
- *
- * Strategy: tokenise the original SQL to find every `?` position,
- * then find which ones are preceded by `guildId =` or are in the
- * guildId column position of an INSERT column list.
+ * Given the ORIGINAL sql, find ALL param indices that are guildId values —
+ * both the column-list position in INSERT and any WHERE guildId = ? occurrences
+ * (including those inside subqueries within VALUES/COALESCE).
  */
 function findGuildIdParamPositions(sql) {
     const sqlLower = sql.toLowerCase();
+    const positions = [];
 
-    // --- Case 1: INSERT with explicit column list ---
+    // Part 1: INSERT column list — positional index of guildId column
     const insertMatch = sql.match(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)/i);
     if (insertMatch) {
         const cols = insertMatch[1].split(',').map(c => c.trim().toLowerCase());
-        const positions = [];
         cols.forEach((col, i) => { if (col === 'guildid') positions.push(i); });
-        return positions;
     }
 
-    // --- Case 2: WHERE / SET with `guildId = ?` ---
-    const positions = [];
-    // Find all `guildId = ?` occurrences and map to their `?` index
+    // Part 2: ALL guildId = ? anywhere in the SQL (main WHERE + subqueries in VALUES)
     const pattern = /\bguildid\s*=\s*\?/gi;
     let match;
     while ((match = pattern.exec(sqlLower)) !== null) {
-        // Count how many `?` appear before this match's `?`
         const qMarkPos = sqlLower.indexOf('?', match.index);
+        if (qMarkPos === -1) continue;
         const precedingQMarks = sqlLower.slice(0, qMarkPos).split('?').length - 1;
         positions.push(precedingQMarks);
     }
+
     return [...new Set(positions)].sort((a, b) => a - b);
 }
 
