@@ -134,8 +134,76 @@ async function handleFarmButton(interaction) {
         return interaction.reply({ content: '❌ Ini bukan panel farm kamu!', ephemeral: true });
     }
 
-    const action = parts[1];
     const userData = getOrCreateUser(guildId, userId);
+
+    // === PUPUK MODE BUTTONS (special parsing) ===
+    if (customId.startsWith('farm_pupuk_single_')) {
+        const plots = getPlots(guildId, userId);
+        const unfertilized = plots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
+        if (unfertilized.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!', ephemeral: true });
+        }
+        const ownedFerts = getAllFerts(guildId, userId);
+        if (ownedFerts.length === 0) {
+            const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman').setColor('#E74C3C')
+                .setDescription('❌ Tidak punya pupuk! Beli dulu di 🛒 Shop.');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+        const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_pupukfert_${userId}`).setPlaceholder('🧫 Pilih pupuk dari inventory...').setMinValues(1).setMaxValues(1);
+        ownedFerts.forEach(inv => {
+            const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId);
+            if (!f) return;
+            fertMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`${f.name} (x${inv.quantity})`)
+                .setValue(f.id)
+                .setDescription(`-${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | +${Math.round(f.yieldBonus * 100)}% hasil` : ''}`));
+        });
+        const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman (Satu Per Satu)').setColor('#F39C12')
+            .setDescription(`Pilih pupuk untuk diterapkan ke satu tanaman:\n\n${ownedFerts.map(inv => { const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId); return f ? `> ${f.emoji} ${f.name} x**${inv.quantity}**` : ''; }).filter(Boolean).join('\n')}`);
+        const row1 = new ActionRowBuilder().addComponents(fertMenu);
+        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+    }
+
+    if (customId.startsWith('farm_pupuk_all_')) {
+        const plots = getPlots(guildId, userId);
+        const unfertilized = plots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
+        if (unfertilized.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!', ephemeral: true });
+        }
+        const ownedFerts = getAllFerts(guildId, userId);
+        if (ownedFerts.length === 0) {
+            const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman').setColor('#E74C3C')
+                .setDescription('❌ Tidak punya pupuk! Beli dulu di 🛒 Shop.');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+        const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_pupukfert_all_${userId}`).setPlaceholder('🧫 Pilih pupuk untuk semua tanaman...').setMinValues(1).setMaxValues(1);
+        ownedFerts.forEach(inv => {
+            const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId);
+            if (!f) return;
+            const needed = unfertilized.length;
+            const canApply = Math.min(needed, inv.quantity);
+            fertMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`${f.name} (x${inv.quantity})`)
+                .setValue(f.id)
+                .setDescription(`Bisa pupuk ${canApply}/${needed} tanaman | -${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | +${Math.round(f.yieldBonus * 100)}% hasil` : ''}`));
+        });
+        const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman (Semua Sekaligus)').setColor('#1ABC9C')
+            .setDescription(`📊 Tanaman yang akan dipupuk: **${unfertilized.length}**\n\nPilih pupuk untuk diterapkan ke semua tanaman yang belum dipupuk:\n\n${ownedFerts.map(inv => { const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId); return f ? `> ${f.emoji} ${f.name} x**${inv.quantity}**` : ''; }).filter(Boolean).join('\n')}`);
+        const row1 = new ActionRowBuilder().addComponents(fertMenu);
+        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+    }
+
+    const action = parts[1];
 
     // === BACK TO MAIN PANEL ===
     if (action === 'back' || action === 'refresh') {
@@ -400,74 +468,6 @@ async function handleFarmButton(interaction) {
             new ButtonBuilder().setCustomId(`farm_pupuk_all_${userId}`).setLabel('🌾 Semua Sekaligus').setStyle(ButtonStyle.Success)
         );
         const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
-    }
-
-    // === PUPUK SINGLE (show pupuk select for one-by-one fertilizing) ===
-    if (action === 'pupuk_single') {
-        const plots = getPlots(guildId, userId);
-        const unfertilized = plots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
-        if (unfertilized.length === 0) {
-            return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!', ephemeral: true });
-        }
-        const ownedFerts = getAllFerts(guildId, userId);
-        if (ownedFerts.length === 0) {
-            const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman').setColor('#E74C3C')
-                .setDescription('❌ Tidak punya pupuk! Beli dulu di 🛒 Shop.');
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.update({ embeds: [embed], components: [row] });
-        }
-        const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_pupukfert_${userId}`).setPlaceholder('🧫 Pilih pupuk dari inventory...').setMinValues(1).setMaxValues(1);
-        ownedFerts.forEach(inv => {
-            const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId);
-            if (!f) return;
-            fertMenu.addOptions(new StringSelectMenuOptionBuilder()
-                .setLabel(`${f.name} (x${inv.quantity})`)
-                .setValue(f.id)
-                .setDescription(`-${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | +${Math.round(f.yieldBonus * 100)}% hasil` : ''}`));
-        });
-        const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman (Satu Per Satu)').setColor('#F39C12')
-            .setDescription(`Pilih pupuk untuk diterapkan ke satu tanaman:\n\n${ownedFerts.map(inv => { const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId); return f ? `> ${f.emoji} ${f.name} x**${inv.quantity}**` : ''; }).filter(Boolean).join('\n')}`);
-        const row1 = new ActionRowBuilder().addComponents(fertMenu);
-        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
-    }
-
-    // === PUPUK ALL (show pupuk select for all fertilizing) ===
-    if (action === 'pupuk_all') {
-        const plots = getPlots(guildId, userId);
-        const unfertilized = plots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
-        if (unfertilized.length === 0) {
-            return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!', ephemeral: true });
-        }
-        const ownedFerts = getAllFerts(guildId, userId);
-        if (ownedFerts.length === 0) {
-            const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman').setColor('#E74C3C')
-                .setDescription('❌ Tidak punya pupuk! Beli dulu di 🛒 Shop.');
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.update({ embeds: [embed], components: [row] });
-        }
-        const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_pupukfert_all_${userId}`).setPlaceholder('🧫 Pilih pupuk untuk semua tanaman...').setMinValues(1).setMaxValues(1);
-        ownedFerts.forEach(inv => {
-            const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId);
-            if (!f) return;
-            const needed = unfertilized.length;
-            const canApply = Math.min(needed, inv.quantity);
-            fertMenu.addOptions(new StringSelectMenuOptionBuilder()
-                .setLabel(`${f.name} (x${inv.quantity})`)
-                .setValue(f.id)
-                .setDescription(`Bisa pupuk ${canApply}/${needed} tanaman | -${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | +${Math.round(f.yieldBonus * 100)}% hasil` : ''}`));
-        });
-        const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman (Semua Sekaligus)').setColor('#1ABC9C')
-            .setDescription(`📊 Tanaman yang akan dipupuk: **${unfertilized.length}**\n\nPilih pupuk untuk diterapkan ke semua tanaman yang belum dipupuk:\n\n${ownedFerts.map(inv => { const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId); return f ? `> ${f.emoji} ${f.name} x**${inv.quantity}**` : ''; }).filter(Boolean).join('\n')}`);
-        const row1 = new ActionRowBuilder().addComponents(fertMenu);
-        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
         return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
