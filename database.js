@@ -23,55 +23,75 @@ function isGlobalTable(sql) {
 function rewriteQuery(sql) {
     if (!isGlobalTable(sql)) return sql;
     let q = sql;
-    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s*/gi, '');
-    q = q.replace(/\s*AND\s*guildId\s*=\s*\?/gi, '');
-    q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1');
-    q = q.replace(/\(guildId,\s*/gi, '(');
-    q = q.replace(/,\s*guildId\b/gi, '');
-    q = q.replace(/SET\s+guildId\s*=\s*\?,\s*/gi, 'SET ');
+
+    // --- INSERT: strip guildId from column list ---
+    // Handles: (guildId, a, b), (a, guildId, b), (a, b, guildId)
+    q = q.replace(
+        /(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\()([^)]+)(\))/gi,
+        (match, pre, cols, post) => {
+            const newCols = cols.split(',')
+                .map(c => c.trim())
+                .filter(c => c.toLowerCase() !== 'guildid')
+                .join(', ');
+            return pre + newCols + post;
+        }
+    );
+
+    // --- WHERE: strip guildId = ? (leading, trailing, or standalone) ---
+    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');   // guildId = ? AND ...
+    q = q.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');      // ... AND guildId = ?
+    q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1'); // WHERE guildId = ?
+
+    // --- UPDATE SET: strip "SET guildId = ?, " (rare) ---
+    q = q.replace(/\bSET\s+guildId\s*=\s*\?,\s*/gi, 'SET ');
+
+    // --- Cleanup artifacts ---
     q = q.replace(/WHERE\s+1=1\s+AND\s+/gi, 'WHERE ');
     q = q.replace(/WHERE\s+1=1\s*$/gi, '');
+
     return q;
 }
 
+/**
+ * Given the ORIGINAL sql (before rewrite) and the params array,
+ * remove params that correspond to guildId placeholders.
+ *
+ * Strategy: tokenise the original SQL to find every `?` position,
+ * then find which ones are preceded by `guildId =` or are in the
+ * guildId column position of an INSERT column list.
+ */
 function findGuildIdParamPositions(sql) {
-    const positions = [];
+    const sqlLower = sql.toLowerCase();
+
+    // --- Case 1: INSERT with explicit column list ---
     const insertMatch = sql.match(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)/i);
     if (insertMatch) {
-        const cols = insertMatch[1].split(',').map(c => c.trim());
-        cols.forEach((col, i) => { if (col.toLowerCase() === 'guildid') positions.push(i); });
+        const cols = insertMatch[1].split(',').map(c => c.trim().toLowerCase());
+        const positions = [];
+        cols.forEach((col, i) => { if (col === 'guildid') positions.push(i); });
         return positions;
     }
-    const sqlLower = sql.toLowerCase();
-    let searchPos = 0;
-    while (searchPos < sqlLower.length) {
-        const gidPos = sqlLower.indexOf('guildid', searchPos);
-        const qPos = sql.indexOf('?', searchPos);
-        if (qPos === -1) break;
-        if (gidPos !== -1 && gidPos < qPos) {
-            const afterGid = sqlLower.slice(gidPos + 7).trimStart();
-            if (afterGid.startsWith('=')) {
-                const eqPos = sql.indexOf('=', gidPos + 7);
-                const paramPos = sql.indexOf('?', eqPos);
-                if (paramPos !== -1) {
-                    positions.push(sql.slice(0, paramPos).split('?').length - 1);
-                    searchPos = paramPos + 1;
-                    continue;
-                }
-            }
-            searchPos = gidPos + 7;
-        } else {
-            searchPos = qPos + 1;
-        }
+
+    // --- Case 2: WHERE / SET with `guildId = ?` ---
+    const positions = [];
+    // Find all `guildId = ?` occurrences and map to their `?` index
+    const pattern = /\bguildid\s*=\s*\?/gi;
+    let match;
+    while ((match = pattern.exec(sqlLower)) !== null) {
+        // Count how many `?` appear before this match's `?`
+        const qMarkPos = sqlLower.indexOf('?', match.index);
+        const precedingQMarks = sqlLower.slice(0, qMarkPos).split('?').length - 1;
+        positions.push(precedingQMarks);
     }
     return [...new Set(positions)].sort((a, b) => a - b);
 }
 
 function rewriteParams(sql, params) {
-    if (!params || !isGlobalTable(sql)) return params;
+    if (!params || params.length === 0 || !isGlobalTable(sql)) return params;
     const positions = findGuildIdParamPositions(sql);
     if (!positions.length) return params;
-    const result = [...params];
+    const result = Array.isArray(params) ? [...params] : [...params];
+    // Remove from highest index to lowest so earlier indices stay valid
     for (const pos of positions.slice().reverse()) {
         if (pos < result.length) result.splice(pos, 1);
     }
@@ -84,13 +104,30 @@ function createGlobalProxy(rawDb) {
             if (prop === 'prepare') {
                 return function(sql) {
                     const rewrittenSql = rewriteQuery(sql);
-                    const stmt = target.prepare(rewrittenSql);
+                    let stmt;
+                    try {
+                        stmt = target.prepare(rewrittenSql);
+                    } catch (e) {
+                        console.error('[DB PROXY] Failed to prepare rewritten SQL:');
+                        console.error('  Original :', sql);
+                        console.error('  Rewritten:', rewrittenSql);
+                        throw e;
+                    }
                     return new Proxy(stmt, {
                         get(stmtTarget, stmtProp) {
                             if (stmtProp === 'get' || stmtProp === 'all' || stmtProp === 'run') {
                                 return function(...args) {
                                     const newArgs = rewriteParams(sql, args);
-                                    return stmtTarget[stmtProp](...newArgs);
+                                    try {
+                                        return stmtTarget[stmtProp](...newArgs);
+                                    } catch (e) {
+                                        console.error('[DB PROXY] Query execution failed:');
+                                        console.error('  Original SQL :', sql);
+                                        console.error('  Rewritten SQL:', rewrittenSql);
+                                        console.error('  Original params:', JSON.stringify(args));
+                                        console.error('  Rewritten params:', JSON.stringify(newArgs));
+                                        throw e;
+                                    }
                                 };
                             }
                             return stmtTarget[stmtProp];
