@@ -3,7 +3,6 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getSetting } = require('../database');
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
 
 // ============ BOT OWNER CONFIG ============
 // Hanya ID ini yang bisa menggunakan SEMUA fitur Money (Add, Take, Set, Add/Remove Banker).
@@ -902,6 +901,7 @@ async function handleDbToolsModal(interaction) {
 
         try {
             // Buka backup database (read-only)
+            const Database = require('better-sqlite3');
             const backupDb = new Database(backupFile, { readonly: true });
             const { PET_DATA } = require('../data/pets');
 
