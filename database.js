@@ -24,22 +24,25 @@ function rewriteQuery(sql) {
     if (!isGlobalTable(sql)) return sql;
     let q = sql;
 
-    // --- INSERT: strip guildId from column list ---
-    // Handles: (guildId, a, b), (a, guildId, b), (a, b, guildId)
-    q = q.replace(
-        /(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\()([^)]+)(\))/gi,
-        (match, pre, cols, post) => {
-            const newCols = cols.split(',')
-                .map(c => c.trim())
-                .filter(c => c.toLowerCase() !== 'guildid')
-                .join(', ');
-            return pre + newCols + post;
-        }
-    );
+    // --- INSERT: strip guildId from column list AND the matching ? from VALUES ---
+    // Pattern: INSERT [OR x] INTO table (col1, col2, ...) VALUES (?, ?, ...)
+    // We must remove the ?-at-same-index from VALUES when we remove guildId from columns.
+    const insertRe = /(INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\()([^)]+)(\)\s*VALUES\s*\()([^)]+)(\))/gi;
+    q = q.replace(insertRe, (match, pre, cols, mid, vals, post) => {
+        const colArr = cols.split(',').map(c => c.trim());
+        const valArr = vals.split(',').map(v => v.trim());
+        // Collect indices where guildId lives
+        const dropIdx = new Set(
+            colArr.map((c, i) => c.toLowerCase() === 'guildid' ? i : -1).filter(i => i !== -1)
+        );
+        const newCols = colArr.filter((_, i) => !dropIdx.has(i)).join(', ');
+        const newVals = valArr.filter((_, i) => !dropIdx.has(i)).join(', ');
+        return pre + newCols + mid + newVals + post;
+    });
 
     // --- WHERE: strip guildId = ? (leading, trailing, or standalone) ---
-    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');   // guildId = ? AND ...
-    q = q.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');      // ... AND guildId = ?
+    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s+/gi, '');    // guildId = ? AND ...
+    q = q.replace(/\s+AND\s+guildId\s*=\s*\?/gi, '');       // ... AND guildId = ?
     q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1'); // WHERE guildId = ?
 
     // --- UPDATE SET: strip "SET guildId = ?, " (rare) ---
