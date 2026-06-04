@@ -4,51 +4,82 @@ const { db, getUserStat } = require('../database');
 const { PET_DATA } = require('../data/pets');
 
 // ==================== BUILD LEADERBOARD EMBED ====================
-function buildLeaderboard(guildId, kategori, userId) {
+function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
     let title, desc = '', color = '#FFD700';
+    const scopePrefix = isGlobal ? '🌍 GLOBAL • ' : '';
 
     switch (kategori) {
         case 'level': {
-            title = '📈 Top 10 — Level';
-            const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY level DESC, xp DESC LIMIT 10').all(guildId);
+            title = `${scopePrefix}📈 Top 10 — Level`;
+            let query = 'SELECT * FROM users';
+            if (!isGlobal) query += ' WHERE guildId = ?';
+            query += ' ORDER BY level DESC, xp DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — Lv.**${u.level}** (${u.xp}/${(u.level+1)*100} XP)\n`; });
             break;
         }
         case 'money': {
-            title = '💰 Top 10 — Money';
-            const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY balance DESC LIMIT 10').all(guildId);
+            title = `${scopePrefix}💰 Top 10 — Money`;
+            let query = 'SELECT * FROM users';
+            if (!isGlobal) query += ' WHERE guildId = ?';
+            query += ' ORDER BY balance DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🪙 **${u.balance.toLocaleString('id-ID')}**\n`; });
             break;
         }
         case 'fish': {
-            title = '🎣 Top 10 — Fishing';
-            const data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_fish_caught' ORDER BY stat_value DESC LIMIT 10").all(guildId);
+            title = `${scopePrefix}🎣 Top 10 — Fishing`;
+            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_fish_caught'";
+            if (!isGlobal) query += ' AND guildId = ?';
+            query += ' ORDER BY stat_value DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🐟 **${u.stat_value}** ikan\n`; });
             break;
         }
         case 'farm': {
-            title = '🌾 Top 10 — Farming';
-            const data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_harvests' ORDER BY stat_value DESC LIMIT 10").all(guildId);
+            title = `${scopePrefix}🌾 Top 10 — Farming`;
+            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_harvests'";
+            if (!isGlobal) query += ' AND guildId = ?';
+            query += ' ORDER BY stat_value DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🌾 **${u.stat_value}** panen\n`; });
             break;
         }
         case 'pet': {
-            title = '🐾 Top 10 — Pet Level';
-            const data = db.prepare('SELECT * FROM pets WHERE guildId = ? AND active = 1 ORDER BY level DESC, exp DESC LIMIT 10').all(guildId);
+            title = `${scopePrefix}🐾 Top 10 — Pet Level`;
+            let query = 'SELECT * FROM pets WHERE active = 1';
+            if (!isGlobal) query += ' AND guildId = ?';
+            query += ' ORDER BY level DESC, exp DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { const pd = PET_DATA.find(p => p.id === u.petId); desc += `${medal(i)} <@${u.userId}> — ${pd ? pd.emoji : '🐾'} **${u.name}** Lv.**${u.level}**\n`; });
             break;
         }
         case 'streak': {
-            title = '🔥 Top 10 — Streak';
-            const data = db.prepare('SELECT * FROM streaks WHERE guildId = ? ORDER BY count DESC LIMIT 10').all(guildId);
+            title = `${scopePrefix}🔥 Top 10 — Streak`;
+            let query = 'SELECT * FROM streaks';
+            if (!isGlobal) query += ' WHERE guildId = ?';
+            query += ' ORDER BY count DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🔥 **${u.count}** hari\n`; });
             break;
         }
         case 'battle': {
-            title = '⚔️ Top 10 — Battle Score';
-            const pvp = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'pvp_wins' ORDER BY stat_value DESC LIMIT 20").all(guildId);
-            const dungeon = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'dungeon_clears' ORDER BY stat_value DESC LIMIT 20").all(guildId);
-            const boss = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'boss_kills' ORDER BY stat_value DESC LIMIT 20").all(guildId);
+            title = `${scopePrefix}⚔️ Top 10 — Battle Score`;
+            let pvpQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'pvp_wins'";
+            if (!isGlobal) pvpQuery += ' AND guildId = ?';
+            pvpQuery += ' ORDER BY stat_value DESC LIMIT 20';
+            const pvp = isGlobal ? db.prepare(pvpQuery).all() : db.prepare(pvpQuery).all(guildId);
+
+            let dungeonQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'dungeon_clears'";
+            if (!isGlobal) dungeonQuery += ' AND guildId = ?';
+            dungeonQuery += ' ORDER BY stat_value DESC LIMIT 20';
+            const dungeon = isGlobal ? db.prepare(dungeonQuery).all() : db.prepare(dungeonQuery).all(guildId);
+
+            let bossQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'boss_kills'";
+            if (!isGlobal) bossQuery += ' AND guildId = ?';
+            bossQuery += ' ORDER BY stat_value DESC LIMIT 20';
+            const boss = isGlobal ? db.prepare(bossQuery).all() : db.prepare(bossQuery).all(guildId);
+
             const scoreMap = {};
             for (const r of pvp) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value * 2;
             for (const r of dungeon) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value;
@@ -63,35 +94,67 @@ function buildLeaderboard(guildId, kategori, userId) {
             break;
         }
         case 'gambling': {
-            title = '🎰 Top 10 — Gambling';
-            const data = db.prepare("SELECT userId, stat_value FROM user_stats WHERE guildId = ? AND stat_key = 'total_gambling_wins' ORDER BY stat_value DESC LIMIT 10").all(guildId);
+            title = `${scopePrefix}🎰 Top 10 — Gambling`;
+            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_gambling_wins'";
+            if (!isGlobal) query += ' AND guildId = ?';
+            query += ' ORDER BY stat_value DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🪙 **${u.stat_value.toLocaleString('id-ID')}** menang\n`; });
             break;
         }
         case 'achievement': {
-            title = '🏆 Top 10 — Achievement';
-            const data = db.prepare('SELECT userId, COUNT(*) as cnt FROM achievements WHERE guildId = ? GROUP BY userId ORDER BY cnt DESC LIMIT 10').all(guildId);
+            title = `${scopePrefix}🏆 Top 10 — Achievement`;
+            let query = 'SELECT userId, COUNT(*) as cnt FROM achievements';
+            if (!isGlobal) query += ' WHERE guildId = ?';
+            query += ' GROUP BY userId ORDER BY cnt DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
             data.forEach((u, i) => { desc += `${medal(i)} <@${u.userId}> — 🏅 **${u.cnt}** badge\n`; });
             break;
         }
         case 'overall':
         default: {
-            title = '⭐ Top 10 — Overall Score';
+            title = `${scopePrefix}⭐ Top 10 — Overall Score`;
             color = '#FF6B00';
-            const users = db.prepare('SELECT * FROM users WHERE guildId = ?').all(guildId);
+            let usersQuery = 'SELECT * FROM users';
+            if (!isGlobal) usersQuery += ' WHERE guildId = ?';
+            const users = isGlobal ? db.prepare(usersQuery).all() : db.prepare(usersQuery).all(guildId);
+            
             const scored = users.map(u => {
-                const fish = getStat(guildId, u.userId, 'total_fish_caught');
-                const farm = getStat(guildId, u.userId, 'total_harvests');
-                const craft = getStat(guildId, u.userId, 'total_crafts');
-                const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
+                const fish = isGlobal ? getGlobalStat(u.userId, 'total_fish_caught') : getStat(guildId, u.userId, 'total_fish_caught');
+                const farm = isGlobal ? getGlobalStat(u.userId, 'total_harvests') : getStat(guildId, u.userId, 'total_harvests');
+                const craft = isGlobal ? getGlobalStat(u.userId, 'total_crafts') : getStat(guildId, u.userId, 'total_crafts');
+                
+                let streakRow;
+                if (isGlobal) {
+                    streakRow = db.prepare('SELECT count FROM streaks WHERE userId = ? ORDER BY count DESC LIMIT 1').get(u.userId);
+                } else {
+                    streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
+                }
                 const streak = streakRow ? streakRow.count : 0;
-                const petRow = db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
+                
+                let petRow;
+                if (isGlobal) {
+                    petRow = db.prepare('SELECT level FROM pets WHERE userId = ? ORDER BY level DESC LIMIT 1').get(u.userId);
+                } else {
+                    petRow = db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
+                }
                 const petLv = petRow ? petRow.level : 0;
-                const dungeon = getStat(guildId, u.userId, 'dungeon_clears');
-                const boss = getStat(guildId, u.userId, 'boss_kills');
-                const pvp = getStat(guildId, u.userId, 'pvp_wins');
-                const badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId).c;
-                const gambling = getStat(guildId, u.userId, 'slot_wins') + getStat(guildId, u.userId, 'coinflip_wins') + getStat(guildId, u.userId, 'roulette_wins');
+                
+                const dungeon = isGlobal ? getGlobalStat(u.userId, 'dungeon_clears') : getStat(guildId, u.userId, 'dungeon_clears');
+                const boss = isGlobal ? getGlobalStat(u.userId, 'boss_kills') : getStat(guildId, u.userId, 'boss_kills');
+                const pvp = isGlobal ? getGlobalStat(u.userId, 'pvp_wins') : getStat(guildId, u.userId, 'pvp_wins');
+                
+                let badges;
+                if (isGlobal) {
+                    badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(u.userId).c;
+                } else {
+                    badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId).c;
+                }
+                
+                const slot = isGlobal ? getGlobalStat(u.userId, 'slot_wins') : getStat(guildId, u.userId, 'slot_wins');
+                const coin = isGlobal ? getGlobalStat(u.userId, 'coinflip_wins') : getStat(guildId, u.userId, 'coinflip_wins');
+                const roulette = isGlobal ? getGlobalStat(u.userId, 'roulette_wins') : getStat(guildId, u.userId, 'roulette_wins');
+                const gambling = slot + coin + roulette;
 
                 const score = (u.level * 150)
                     + Math.floor(u.balance / 20)
@@ -128,26 +191,33 @@ function buildLeaderboard(guildId, kategori, userId) {
         .setTitle(title)
         .setColor(color)
         .setDescription(desc)
-        .setFooter({ text: `Gunakan tombol di bawah untuk ganti kategori` })
+        .setFooter({ text: isGlobal ? `🌍 Mode GLOBAL | Gunakan tombol untuk ganti kategori` : `Gunakan tombol di bawah untuk ganti kategori` })
         .setTimestamp();
 
     // Highlight current category with different button style
+    const modePrefix = isGlobal ? 'lbg' : 'lb';
     const row1 = new ActionRowBuilder().addComponents(
-        btn(`lb_overall_${userId}`, '⭐ Overall', kategori === 'overall'),
-        btn(`lb_level_${userId}`, '📈 Level', kategori === 'level'),
-        btn(`lb_money_${userId}`, '💰 Money', kategori === 'money'),
-        btn(`lb_fish_${userId}`, '🎣 Fish', kategori === 'fish'),
-        btn(`lb_farm_${userId}`, '🌾 Farm', kategori === 'farm'),
+        btn(`${modePrefix}_overall_${userId}`, '⭐ Overall', kategori === 'overall'),
+        btn(`${modePrefix}_level_${userId}`, '📈 Level', kategori === 'level'),
+        btn(`${modePrefix}_money_${userId}`, '💰 Money', kategori === 'money'),
+        btn(`${modePrefix}_fish_${userId}`, '🎣 Fish', kategori === 'fish'),
+        btn(`${modePrefix}_farm_${userId}`, '🌾 Farm', kategori === 'farm'),
     );
     const row2 = new ActionRowBuilder().addComponents(
-        btn(`lb_pet_${userId}`, '🐾 Pet', kategori === 'pet'),
-        btn(`lb_streak_${userId}`, '🔥 Streak', kategori === 'streak'),
-        btn(`lb_battle_${userId}`, '⚔️ Battle', kategori === 'battle'),
-        btn(`lb_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
-        btn(`lb_achievement_${userId}`, '🏆 Badge', kategori === 'achievement'),
+        btn(`${modePrefix}_pet_${userId}`, '🐾 Pet', kategori === 'pet'),
+        btn(`${modePrefix}_streak_${userId}`, '🔥 Streak', kategori === 'streak'),
+        btn(`${modePrefix}_battle_${userId}`, '⚔️ Battle', kategori === 'battle'),
+        btn(`${modePrefix}_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
+        btn(`${modePrefix}_achievement_${userId}`, '🏆 Badge', kategori === 'achievement'),
+    );
+    
+    // Toggle button between Server and Global
+    const row3 = new ActionRowBuilder().addComponents(
+        btn(`lb_server_${userId}`, isGlobal ? '📍 Server' : '📍 Server', !isGlobal),
+        btn(`lbg_global_${userId}`, isGlobal ? '🌍 Global' : '🌍 Global', isGlobal),
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 function btn(customId, label, active) {
@@ -166,23 +236,33 @@ async function handleLeaderboardCommand(interaction) {
 
 // ==================== BUTTON HANDLER ====================
 async function handleLeaderboardButton(interaction) {
-    const parts = interaction.customId.split('_'); // lb_<kategori>_<userId>
-    const kategori = parts[1];
+    const isGlobalMode = interaction.customId.startsWith('lbg_');
+    const prefix = isGlobalMode ? 'lbg' : 'lb';
+    const parts = interaction.customId.split('_');
+    let kategori = parts[1];
     const ownerId = parts[2];
 
-    // Any user can browse leaderboard (read-only, no need to restrict)
-    const panel = buildLeaderboard(interaction.guild.id, kategori, ownerId);
+    // Handle mode toggle buttons
+    if (kategori === 'server' || kategori === 'global') {
+        kategori = 'overall'; // Default to overall when switching modes
+    }
+
+    const panel = buildLeaderboard(interaction.guild.id, kategori, ownerId, isGlobalMode);
     return interaction.update(panel);
 }
 
 // ==================== DETECTOR ====================
 function isLeaderboardButton(customId) {
-    return customId.startsWith('lb_');
+    return customId.startsWith('lb_') || customId.startsWith('lbg_');
 }
 
 // Helpers
 function medal(i) { return ['🥇', '🥈', '🥉'][i] || `**${i+1}.**`; }
 function getStat(guildId, userId, key) { return getUserStat(guildId, userId, key) || 0; }
+function getGlobalStat(userId, key) {
+    const row = db.prepare('SELECT stat_value FROM user_stats WHERE userId = ? AND stat_key = ? ORDER BY stat_value DESC LIMIT 1').get(userId, key);
+    return row ? row.stat_value : 0;
+}
 function shortNum(n) { if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 1000) return (n/1000).toFixed(1)+'K'; return n.toString(); }
 
 module.exports = { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton };
