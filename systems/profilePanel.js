@@ -8,6 +8,7 @@ const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings } = require('./notifications');
+const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles } = require('./titles');
 
 
 // ============ BUILD: Main Profile Panel ============
@@ -36,14 +37,22 @@ function buildProfilePanel(guildId, userId, username, member) {
     const achievementTitle = achievementTitleRow ? achievementTitleRow.stat_value : null;
     const titleLine = achievementTitle ? `\n\ud83c\udfc6 **Title:** ${achievementTitle}` : '';
 
+    // Get rank title from score
+    const rankTitle = getUserTitle(guildId, userId);
+    const titleProgress = getTitleProgress(guildId, userId);
+    const rankLine = `\n${rankTitle.emoji} **Rank:** ${rankTitle.name}`;
+    const progressLine = titleProgress.next 
+        ? `\n> ${formatProgressBar(titleProgress.progress)} ${titleProgress.progress}% → ${titleProgress.next.emoji} ${titleProgress.next.name} (${titleProgress.remaining.toLocaleString('id-ID')} pts lagi)`
+        : `\n> ${formatProgressBar(100)} **MAX RANK!** ⭐ ${titleProgress.score.toLocaleString('id-ID')} pts`;
+
     const embed = new EmbedBuilder()
         .setTitle(`\ud83d\udccb PROFIL \u2014 ${username}`)
-        .setColor('#2B2D31')
+        .setColor(rankTitle.color || '#2B2D31')
         .setThumbnail(member ? member.displayAvatarURL({ dynamic: true, size: 256 }) : null)
         .setDescription(
             `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
             `\ud83c\udfc5 **Level** \`${userData.level}\` \u2014 \ud83d\udcb0 **Saldo** \`${userData.balance.toLocaleString('id-ID')}\`\n` +
-            `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}\n\n` +
+            `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}${rankLine}${progressLine}\n\n` +
             `\u2728 **EXP:** \`${progressBar}\` **${percent}%** (${userData.xp}/${targetXp})\n\n` +
             `\ud83c\udfc6 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}\n` +
             `\ud83d\udc3e **Pet:** ${petInfo}\n` +
@@ -56,7 +65,7 @@ function buildProfilePanel(guildId, userId, username, member) {
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('\ud83c\udfc6 Achievement').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('\ud83c\udf92 Inventory').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`profpnl_rank_${userId}`).setLabel('\ud83c\udfc5 Rank').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('\ud83d\udcca Stats').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('\ud83d\udd14 Notifs').setStyle(ButtonStyle.Secondary)
     );
@@ -226,6 +235,43 @@ async function handleProfileButton(interaction) {
         components.push(craftBackRow);
 
         return interaction.update({ embeds: [embed], components });
+    }
+
+    // === RANK TITLE ===
+    if (action === 'rank') {
+        const titleInfo = getTitleProgress(guildId, userId);
+        const allTitles = getAllTitles();
+        
+        let desc = `**⭐ Score Kamu:** \`${titleInfo.score.toLocaleString('id-ID')}\` pts\n`;
+        desc += `**${titleInfo.current.emoji} Rank:** ${titleInfo.current.name}\n`;
+        if (titleInfo.next) {
+            desc += `**Next:** ${titleInfo.next.emoji} ${titleInfo.next.name} (butuh ${titleInfo.remaining.toLocaleString('id-ID')} pts lagi)\n`;
+            desc += `> ${formatProgressBar(titleInfo.progress)} **${titleInfo.progress}%**\n`;
+        } else {
+            desc += `> 🏆 **RANK TERTINGGI TERCAPAI!**\n`;
+        }
+        desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+        desc += `**📋 Semua Rank:**\n\n`;
+        
+        allTitles.forEach((tier, i) => {
+            const isCurrent = tier.id === titleInfo.current.id;
+            const isUnlocked = titleInfo.score >= tier.minScore;
+            const marker = isCurrent ? ' ◀ *KAMU*' : '';
+            const lock = isUnlocked ? '✅' : '🔒';
+            desc += `${lock} ${tier.emoji} **${tier.name}** — ${tier.minScore.toLocaleString('id-ID')}+ pts${marker}\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🏅 Rank System — ${interaction.user.username}`)
+            .setColor(titleInfo.current.color || '#FFD700')
+            .setDescription(desc)
+            .setFooter({ text: 'Score = Level×150 + Money/20 + Fish×3 + Farm×4 + Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15 + PvP×10 + Badge×20 + Gambling×2' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel('🔥 Streak').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === STREAK ===

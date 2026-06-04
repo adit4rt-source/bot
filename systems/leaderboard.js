@@ -2,6 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getUserStat } = require('../database');
 const { PET_DATA } = require('../data/pets');
+const { getTitleFromScore } = require('./titles');
 
 // ==================== BUILD LEADERBOARD EMBED ====================
 function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
@@ -173,7 +174,8 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
             }).sort((a, b) => b.score - a.score).slice(0, 10);
 
             scored.forEach((u, i) => {
-                desc += `${medal(i)} <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n`;
+                const rankTitle = getTitleFromScore(u.score);
+                desc += `${medal(i)} <@${u.userId}> ${rankTitle.emoji} — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n`;
                 if (isGlobal) {
                     desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n`;
                 } else {
