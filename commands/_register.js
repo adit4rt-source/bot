@@ -27,6 +27,7 @@ const commands = [
     new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
     new SlashCommandBuilder().setName('globalmarket').setDescription('🌍 Global Market — Jual beli item lintas server'),
     new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
+    new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
     new SlashCommandBuilder().setName('leaderboard').setDescription('🏆 Leaderboard — Ranking pemain')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori ranking').setRequired(false)

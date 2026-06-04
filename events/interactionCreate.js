@@ -11,6 +11,7 @@ const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, 
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
+const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -446,6 +447,12 @@ module.exports = async function handleInteractionCreate(interaction) {
             return interaction.reply(panel);
         }
 
+        // ================= WORLD BOSS =================
+        if (command === 'worldboss') {
+            const panel = buildWorldBossPanel(guildId, interaction.user.id, interaction.user.username);
+            return interaction.reply(panel);
+        }
+
         // ================= STATS DASHBOARD =================
         if (command === 'stats') {
             return handleStatsCommand(interaction);
@@ -741,6 +748,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- FUSION PANEL BUTTONS ---
         if (isFusionButton(interaction.customId)) {
             return handleFusionButton(interaction);
+        }
+
+        // --- WORLD BOSS BUTTONS ---
+        if (isWorldBossButton(interaction.customId)) {
+            return handleWorldBossButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---
