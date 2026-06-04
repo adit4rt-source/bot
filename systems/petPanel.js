@@ -95,6 +95,7 @@ function buildMainPanel(guildId, userId, username) {
     const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`pet_boss_${userId}`).setLabel('👹 Boss').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`pet_expedition_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_evolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success)
     );
@@ -300,6 +301,10 @@ async function handlePetButton(interaction) {
         const pet = getPetData(guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
         if (pet.happiness < 50) return interaction.reply({ content: '❌ Pet terlalu sedih untuk berburu! (Happiness harus > 50)', ephemeral: true });
+        // Check if pet is on expedition
+        const { getActiveExpedition } = require('./expedition');
+        const activeExp = getActiveExpedition(guildId, userId);
+        if (activeExp) return interaction.reply({ content: '❌ Pet sedang dalam ekspedisi! Tunggu sampai selesai.', ephemeral: true });
         const petDef = PET_DATA.find(p => p.id === pet.petId);
 
         // Check if hunt finished - collect rewards
@@ -452,6 +457,13 @@ async function handlePetButton(interaction) {
         return interaction.showModal(modal);
     }
 
+
+    // === EXPEDITION (redirect to expedition panel) ===
+    if (action === 'expedition') {
+        const { buildExpeditionPanel } = require('./expedition');
+        const panel = buildExpeditionPanel(guildId, userId, interaction.user.username);
+        return interaction.update(panel);
+    }
 
     // === DUNGEON (select menu of tiers) ===
     if (action === 'dungeon') {

@@ -8,6 +8,7 @@ const { addComboFeature, getComboMultiplier } = require('../systems/combo');
 const { getContestState, startFishContest, addContestEntry, getContestLeaderboard } = require('../systems/contest');
 const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet } = require('../systems/pets');
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
+const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -510,6 +511,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handlePetSelectMenu(interaction);
         }
 
+        // --- EXPEDITION SELECT MENUS ---
+        if (isExpeditionSelectMenu(interaction.customId)) {
+            return handleExpeditionSelectMenu(interaction);
+        }
+
         // --- CASINO PANEL SELECT MENUS ---
         if (isCasinoPanelSelectMenu(interaction.customId)) {
             return handleCasinoSelectMenu(interaction);
@@ -696,6 +702,14 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- PET PANEL BUTTONS ---
         if (isPetPanelButton(interaction.customId)) {
             return handlePetButton(interaction);
+        }
+
+        // --- EXPEDITION PANEL BUTTONS ---
+        if (isExpeditionButton(interaction.customId)) {
+            return handleExpeditionButton(interaction);
+        }
+        if (isExpeditionConfirm(interaction.customId)) {
+            return handleExpeditionConfirm(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---
