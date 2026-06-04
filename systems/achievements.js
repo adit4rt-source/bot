@@ -117,7 +117,7 @@ const ACHIEVEMENTS = [
 ];
 
 function hasAchievement(guildId, userId, achievementId) {
-    return !!db.prepare('SELECT 1 FROM achievements WHERE guildId = ? AND userId = ? AND achievementId = ?').get(guildId, userId, achievementId);
+    return !!db.prepare('SELECT 1 FROM achievements WHERE userId = ? AND achievementId = ?').get(userId, achievementId);
 }
 
 async function grantAchievement(guild, userId, achievementId) {
@@ -125,10 +125,10 @@ async function grantAchievement(guild, userId, achievementId) {
     if (hasAchievement(guildId, userId, achievementId)) return false;
     const achDef = ACHIEVEMENTS.find(a => a.id === achievementId);
     if (!achDef) return false;
-    db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, achievementId, Date.now());
+    db.prepare('INSERT OR IGNORE INTO achievements (userId, achievementId, unlockedAt) VALUES (?, ?, ?)').run(userId, achievementId, Date.now());
     const user = getOrCreateUser(guildId, userId);
     user.balance += achDef.reward;
-    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(user.balance, guildId, userId);
+    db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(user.balance, userId);
     const achChannelId = getSetting(guildId, 'achievement_channel', null);
     if (achChannelId) {
         const channel = guild.channels.cache.get(achChannelId);
@@ -151,7 +151,7 @@ async function grantAchievement(guild, userId, achievementId) {
 
 async function checkMilestoneRewards(guild, userId) {
     const guildId = guild.id;
-    const totalAchs = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    const totalAchs = db.prepare('SELECT COUNT(*) as cnt FROM achievements WHERE userId = ?').get(userId);
     const totalCount = totalAchs ? totalAchs.cnt : 0;
 
     for (const milestone of ACHIEVEMENT_MILESTONES) {

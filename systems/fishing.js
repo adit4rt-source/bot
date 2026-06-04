@@ -4,8 +4,8 @@ const { db } = require('../database');
 const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE } = require('../data/fish');
 
 function getEquipment(guildId, userId) {
-    let eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    if (!eq) { db.prepare('INSERT INTO fish_equipment (guildId, userId) VALUES (?, ?)').run(guildId, userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
+    let eq = db.prepare('SELECT * FROM fish_equipment WHERE userId = ?').get(userId);
+    if (!eq) { db.prepare('INSERT INTO fish_equipment (userId) VALUES (?)').run(userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
     if (!eq.location) eq.location = 'river';
     return eq;
 }
@@ -16,7 +16,7 @@ function getPlayerLocation(guildId, userId) {
 }
 
 function setPlayerLocation(guildId, userId, locationId) {
-    db.prepare('UPDATE fish_equipment SET location = ? WHERE guildId = ? AND userId = ?').run(locationId, guildId, userId);
+    db.prepare('UPDATE fish_equipment SET location = ? WHERE userId = ?').run(locationId, userId);
 }
 
 function catchFish(guildId, userId) {

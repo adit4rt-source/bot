@@ -202,11 +202,11 @@ function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
 }
 
 function getPetData(guildId, userId) {
-    return db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(guildId, userId);
+    return db.prepare('SELECT * FROM pets WHERE userId = ? AND active = 1').get(userId);
 }
 
 function getAllPets(guildId, userId) {
-    return db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    return db.prepare('SELECT * FROM pets WHERE userId = ?').all(userId);
 }
 
 function getExpNeeded(level) {

@@ -23,18 +23,18 @@ function isPlotReady(plot) {
 async function runAutoHarvestCheck(client) {
     let enabledRows;
     try {
-        enabledRows = db.prepare('SELECT guildId, userId FROM auto_harvest WHERE enabled = 1 AND purchased = 1').all();
+        enabledRows = db.prepare('SELECT userId FROM auto_harvest WHERE enabled = 1 AND purchased = 1').all();
     } catch (e) {
         log('ERROR', 'autoHarvest: failed to read auto_harvest table', e);
         return;
     }
 
-    for (const { guildId, userId } of enabledRows) {
+    for (const { userId } of enabledRows) {
         try {
             // Plots that are alive and not yet notified for this planting.
             const plots = db.prepare(
-                "SELECT * FROM farm_plots WHERE guildId = ? AND userId = ? AND status != 'dead' AND COALESCE(notified, 0) = 0"
-            ).all(guildId, userId);
+                "SELECT * FROM farm_plots WHERE userId = ? AND status != 'dead' AND COALESCE(notified, 0) = 0"
+            ).all(userId);
 
             const readyPlots = plots.filter(isPlotReady);
             if (readyPlots.length === 0) continue;
