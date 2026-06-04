@@ -3,16 +3,12 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getSetting } = require('../database');
 
 // ============ BOT OWNER CONFIG ============
-// Isi dengan Discord User ID kamu (pemilik bot).
-// Hanya ID yang ada di sini yang bisa Add/Remove Banker di SEMUA server.
-// Cara cari ID: Discord > Settings > Advanced > Developer Mode ON > klik kanan profil > Copy ID
-const BOT_OWNER_IDS = (process.env.BOT_OWNER_IDS || '')
-    .split(',')
-    .map(id => id.trim())
-    .filter(Boolean);
+// Hanya ID ini yang bisa menggunakan SEMUA fitur Money (Add, Take, Set, Add/Remove Banker).
+// Admin server biasa TIDAK bisa menggunakan fitur Money sama sekali.
+const BOT_OWNER_ID = '515920253910253569';
 
 function isBotOwner(userId) {
-    return BOT_OWNER_IDS.includes(userId);
+    return userId === BOT_OWNER_ID;
 }
 
 // ============ HELPER: Check admin permission ============
@@ -89,7 +85,7 @@ function buildShopSubPanel() {
 
 // ============ BUILD: Money sub-panel ============
 function buildMoneySubPanel(userId) {
-    const canManageBanker = isBotOwner(userId);
+    const isOwner = isBotOwner(userId);
 
     const embed = new EmbedBuilder()
         .setTitle('\ud83d\udcb0 ADMIN MONEY')
@@ -99,28 +95,21 @@ function buildMoneySubPanel(userId) {
             `> \u2795 **Add Money** \u2014 Tambah uang ke user\n` +
             `> \u2796 **Take Money** \u2014 Ambil uang dari user\n` +
             `> \ud83d\udccc **Set Money** \u2014 Set jumlah uang user\n` +
-            `> \ud83d\udee1\ufe0f **Add Banker** \u2014 Beri izin banker ${canManageBanker ? '' : '*(Bot Owner only)*'}\n` +
-            `> \ud83d\uddd1\ufe0f **Remove Banker** \u2014 Cabut izin banker ${canManageBanker ? '' : '*(Bot Owner only)*'}\n` +
-            `> \ud83d\udccb **List Banker** \u2014 Lihat daftar banker`
+            `> \ud83d\udee1\ufe0f **Add Banker** \u2014 Beri izin banker\n` +
+            `> \ud83d\uddd1\ufe0f **Remove Banker** \u2014 Cabut izin banker\n` +
+            `> \ud83d\udccb **List Banker** \u2014 Lihat daftar banker\n\n` +
+            (!isOwner ? `> \u26d4 *Semua fitur Money hanya untuk pemilik bot.*` : `> \u2705 *Kamu adalah pemilik bot.*`)
         );
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_money_add').setLabel('\u2795 Add').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_money_take').setLabel('\u2796 Take').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('admpnl_money_set').setLabel('\ud83d\udccc Set').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_money_add').setLabel('\u2795 Add').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_money_take').setLabel('\u2796 Take').setStyle(ButtonStyle.Danger).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_money_set').setLabel('\ud83d\udccc Set').setStyle(ButtonStyle.Primary).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_money_listbanker').setLabel('\ud83d\udccb List Banker').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('admpnl_money_addbanker')
-            .setLabel('\ud83d\udee1\ufe0f Add Banker')
-            .setStyle(ButtonStyle.Success)
-            .setDisabled(!canManageBanker),
-        new ButtonBuilder()
-            .setCustomId('admpnl_money_removebanker')
-            .setLabel('\ud83d\uddd1\ufe0f Remove Banker')
-            .setStyle(ButtonStyle.Danger)
-            .setDisabled(!canManageBanker),
+        new ButtonBuilder().setCustomId('admpnl_money_addbanker').setLabel('\ud83d\udee1\ufe0f Add Banker').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_money_removebanker').setLabel('\ud83d\uddd1\ufe0f Remove Banker').setStyle(ButtonStyle.Danger).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
@@ -367,7 +356,11 @@ async function handleAdminButton(interaction) {
     }
 
     // === MONEY: Add/Take/Set (Modals) ===
+    // 🔒 HANYA BOT OWNER — block di handler level juga, bukan cuma disable tombol
     if (customId === 'admpnl_money_add' || customId === 'admpnl_money_take' || customId === 'admpnl_money_set') {
+        if (!isBotOwner(interaction.user.id)) {
+            return interaction.reply({ content: '🛑 Fitur Money hanya untuk **pemilik bot**!', ephemeral: true });
+        }
         const actionMap = { 'admpnl_money_add': 'add', 'admpnl_money_take': 'take', 'admpnl_money_set': 'set' };
         const labelMap = { add: 'Add Money', take: 'Take Money', set: 'Set Money' };
         const act = actionMap[customId];
@@ -381,11 +374,12 @@ async function handleAdminButton(interaction) {
 
 
     // === MONEY: Add/Remove Banker (Modal) ===
-    // 🔒 HANYA BOT OWNER yang bisa akses — bukan owner server biasa
+    // 🔒 HANYA BOT OWNER
     if (customId === 'admpnl_money_addbanker' || customId === 'admpnl_money_removebanker') {
         if (!isBotOwner(interaction.user.id)) {
             return interaction.reply({
-                content: '🛑 Fitur ini hanya bisa digunakan oleh **pemilik bot**.\nAdmin server tidak memiliki akses ke fitur ini.',
+                content: '🛑 Fitur ini hanya bisa digunakan oleh **pemilik bot**.
+Admin server tidak memiliki akses ke fitur ini.',
                 ephemeral: true
             });
         }
@@ -602,7 +596,11 @@ async function handleAdminModal(interaction) {
     }
 
     // === MONEY: Add/Take/Set ===
+    // 🔒 Double-check di modal — anti bypass
     if (customId.startsWith('admpnl_modal_money_')) {
+        if (!isBotOwner(interaction.user.id)) {
+            return interaction.reply({ content: '🛑 Hanya **pemilik bot** yang bisa menggunakan fitur Money!', ephemeral: true });
+        }
         const act = customId.replace('admpnl_modal_money_', '');
         const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
         const amount = parseInt(interaction.fields.getTextInputValue('amount'));
