@@ -9,6 +9,7 @@ const { getContestState, startFishContest, addContestEntry, getContestLeaderboar
 const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet } = require('../systems/pets');
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
+const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -430,6 +431,20 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleMarketCommand(interaction);
         }
 
+        // ================= GLOBAL MARKET =================
+        if (command === 'globalmarket') {
+            const { buildGlobalMarketPanel } = require('../systems/globalMarket');
+            const panel = buildGlobalMarketPanel(guildId, interaction.user.id, interaction.user.username);
+            return interaction.reply(panel);
+        }
+
+        // ================= EXPEDITION =================
+        if (command === 'expedition') {
+            const { buildExpeditionPanel } = require('../systems/expedition');
+            const panel = buildExpeditionPanel(guildId, interaction.user.id, interaction.user.username);
+            return interaction.reply(panel);
+        }
+
         // ================= STATS DASHBOARD =================
         if (command === 'stats') {
             return handleStatsCommand(interaction);
@@ -529,6 +544,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- MARKET PANEL SELECT MENUS ---
         if (isMarketPanelSelectMenu(interaction.customId)) {
             return handleMarketSelectMenu(interaction);
+        }
+
+        // --- GLOBAL MARKET SELECT MENUS ---
+        if (isGlobalMarketSelectMenu(interaction.customId)) {
+            return handleGlobalMarketSelectMenu(interaction);
         }
 
         // --- TRADE PANEL SELECT MENUS ---
@@ -750,6 +770,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- MARKET PANEL BUTTONS ---
         if (isMarketPanelButton(interaction.customId)) {
             return handleMarketButton(interaction);
+        }
+
+        // --- GLOBAL MARKET BUTTONS ---
+        if (isGlobalMarketButton(interaction.customId)) {
+            return handleGlobalMarketButton(interaction);
         }
 
         // --- STATS PANEL BUTTONS ---
@@ -1070,6 +1095,11 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- MARKET PANEL MODAL ---
         if (isMarketPanelModal(interaction.customId)) {
             return handleMarketModal(interaction);
+        }
+
+        // --- GLOBAL MARKET MODAL ---
+        if (isGlobalMarketModal(interaction.customId)) {
+            return handleGlobalMarketModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }
