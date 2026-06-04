@@ -1,6 +1,6 @@
 // systems/achievements.js
 const { EmbedBuilder } = require('discord.js');
-const { db, getOrCreateUser, getSetting, getUserStat, addItem, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, getSetting, getUserStat, addItem, incrementUserStat, updateUserBalance, addUserBalance } = require('../database');
 
 const ACHIEVEMENT_MILESTONES = [
     { count: 10, reward: { money: 5000, item: 'mystery_box', title: '🎖️ Collector' }, desc: '10 Badge' },
@@ -128,7 +128,7 @@ async function grantAchievement(guild, userId, achievementId) {
     db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, achievementId, Date.now());
     const user = getOrCreateUser(guildId, userId);
     user.balance += achDef.reward;
-    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(user.balance, guildId, userId);
+    updateUserBalance(guildId, userId, user.balance);
     const achChannelId = getSetting(guildId, 'achievement_channel', null);
     if (achChannelId) {
         const channel = guild.channels.cache.get(achChannelId);
@@ -161,7 +161,7 @@ async function checkMilestoneRewards(guild, userId) {
             if (alreadyClaimed) continue;
 
             // Grant milestone reward
-            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(milestone.reward.money, guildId, userId);
+            addUserBalance(guildId, userId, milestone.reward.money);
             if (milestone.reward.item) {
                 addItem(guildId, userId, milestone.reward.item, 1);
             }

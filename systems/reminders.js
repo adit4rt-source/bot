@@ -1,6 +1,6 @@
 // systems/reminders.js - Automatic DM reminders (daily reward + hungry pet)
 // Runs on timers, independent of chat, with per-user dedup so users aren't spammed.
-const { db, getUserStat, setUserStat } = require('../database');
+const { getUserStat, setUserStat, getUsersForDailyReminder, getActivePetsHungry } = require('../database');
 const { notifyDailyReady, notifyPetHungry } = require('./notifications');
 
 let log = () => {};
@@ -24,9 +24,7 @@ async function runDailyReminderCheck(client) {
         const today = wibDate(0);
         const cutoff = wibDate(-2); // only remind users active within the last 2 days
         const todayInt = parseInt(today.replace(/-/g, ''), 10);
-        const rows = db.prepare(
-            'SELECT guildId, userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?'
-        ).all(today, cutoff);
+        const rows = getUsersForDailyReminder(today, cutoff);
 
         for (const { guildId, userId } of rows) {
             try {
@@ -43,9 +41,7 @@ async function runDailyReminderCheck(client) {
 // ---- Hungry / sick pet reminder ----
 async function runPetHungryCheck(client) {
     try {
-        const pets = db.prepare(
-            "SELECT guildId, userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')"
-        ).all(PET_HUNGER_THRESHOLD);
+        const pets = getActivePetsHungry(PET_HUNGER_THRESHOLD);
 
         const now = Date.now();
         for (const pet of pets) {

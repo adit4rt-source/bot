@@ -1,6 +1,6 @@
 // systems/farmPanel.js - Farm Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, addUserBalance, subtractUserBalance, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel } = require('../database');
 const { getRandomInt } = require('../utils');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('./farming');
 const { updateQuestProgress } = require('./quests');
@@ -30,7 +30,7 @@ function buildFarmPanel(guildId, userId, username) {
     }).length;
 
     // Decoration display
-    const ownedDecos = db.prepare('SELECT decoId FROM farm_decorations WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    const ownedDecos = getFarmDecorations(guildId, userId);
     let decoDisplay = '';
     if (ownedDecos.length > 0) {
         decoDisplay = ownedDecos.map(d => {
@@ -283,7 +283,7 @@ async function handleFarmButton(interaction) {
         const deadPlots = plots.filter(p => p.status === 'dead');
         let deadMsg = '';
         if (deadPlots.length > 0) {
-            db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, userId);
+            deleteDeadFarmPlots(guildId, userId);
             deadMsg = `\n🗑️ **${deadPlots.length} tanaman mati** dihapus.`;
         }
         if (harvested === 0 && deadPlots.length > 0) {
@@ -381,8 +381,8 @@ async function handleFarmButton(interaction) {
             totalMoney += price;
             sellDesc += `> ${crop ? crop.emoji : '📦'} ${crop ? crop.name : '?'} x${s.quantity} = 🪙 ${price}\n`;
         }
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalMoney, guildId, userId);
-        db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ?').run(guildId, userId);
+        addUserBalance(guildId, userId, totalMoney);
+        clearFarmStorage(guildId, userId);
         addIncome(guildId, userId, 'farming', totalMoney);
         const freshData = getOrCreateUser(guildId, userId);
         const embed = new EmbedBuilder().setColor('#F1C40F').setTitle('💰 Hasil Terjual!')
@@ -428,8 +428,8 @@ async function handleFarmButton(interaction) {
             const backRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
             return interaction.update({ embeds: [embed], components: [backRow] });
         }
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(nextLevel.cost, guildId, userId);
-        db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(nextLevel.level, guildId, userId);
+        subtractUserBalance(guildId, userId, nextLevel.cost);
+        upgradeFarmLevel(guildId, userId, nextLevel.level);
         if (nextLevel.level === 6) await checkAchievements(interaction.guild, userId, { type: 'farm_upgrade_max' });
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🎉 Lahan Di-Upgrade!')
             .setDescription(`> ${nextLevel.name} — **${nextLevel.slots} slot** tanam!`);
@@ -473,7 +473,7 @@ async function handleFarmButton(interaction) {
 
     // === DECO (Farm Decorations) ===
     if (action === 'deco') {
-        const ownedDecos = db.prepare('SELECT decoId FROM farm_decorations WHERE guildId = ? AND userId = ?').all(guildId, userId);
+        const ownedDecos = getFarmDecorations(guildId, userId);
         const ownedIds = ownedDecos.map(d => d.decoId);
 
         let desc = '**🎨 DEKORASI KEBUN**\n\n';
@@ -546,7 +546,7 @@ async function handleFarmSelectMenu(interaction) {
         const plots = getPlots(guildId, userId);
         if (plots.length >= maxSlots) return interaction.reply({ content: '❌ Lahan penuh!', ephemeral: true });
         removeSeed(guildId, userId, cropId, 1);
-        db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, cropId, Date.now(), Date.now());
+        insertFarmPlot(guildId, userId, cropId, Date.now(), Date.now());
         const sisa = getSeedCount(guildId, userId, cropId);
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle(`🌱 ${crop.emoji} ${crop.name} Ditanam!`)
             .setDescription(`> Siap panen dalam **${crop.time} menit**\n> 📦 Sisa bibit: **${sisa}**`);
@@ -657,7 +657,7 @@ async function handleFarmSelectMenu(interaction) {
         if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
         const owned = getFertCount(guildId, userId, fertId);
         if (owned <= 0) return interaction.reply({ content: `❌ Stok ${fert.emoji} **${fert.name}** habis! Beli lagi di Shop.`, ephemeral: true });
-        const plot = db.prepare('SELECT * FROM farm_plots WHERE id = ? AND guildId = ? AND userId = ?').get(plotId, guildId, userId);
+        const plot = getFarmPlot(guildId, userId, plotId);
         if (!plot) return interaction.reply({ content: '❌ Tanaman tidak ditemukan!', ephemeral: true });
         if (plot.fertilizer !== 'none') return interaction.reply({ content: '❌ Tanaman ini sudah dipupuk!', ephemeral: true });
         removeFert(guildId, userId, fertId, 1);
@@ -687,7 +687,7 @@ async function handleFarmSelectMenu(interaction) {
             return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], ephemeral: true });
         }
         for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.sellPrice, guildId, userId);
+        addUserBalance(guildId, userId, recipe.sellPrice);
         incrementUserStat(guildId, userId, 'total_crafts');
         addIncome(guildId, userId, 'farming', recipe.sellPrice);
         updateQuestProgress(guildId, userId, 'craft', 1);
@@ -710,11 +710,11 @@ async function handleFarmSelectMenu(interaction) {
         const deco = FARM_DECORATIONS.find(d => d.id === decoId);
         if (!deco) return interaction.reply({ content: '❌ Dekorasi tidak ditemukan!', ephemeral: true });
         // Check if already owned
-        const existing = db.prepare('SELECT 1 FROM farm_decorations WHERE guildId = ? AND userId = ? AND decoId = ?').get(guildId, userId, decoId);
+        const existing = hasFarmDecoration(guildId, userId, decoId);
         if (existing) return interaction.reply({ content: `❌ Kamu sudah punya ${deco.emoji} **${deco.name}**!`, ephemeral: true });
         if (userData.balance < deco.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${deco.price.toLocaleString('id-ID')}**`, ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(deco.price, guildId, userId);
-        db.prepare('INSERT INTO farm_decorations (guildId, userId, decoId, purchasedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, decoId, Date.now());
+        subtractUserBalance(guildId, userId, deco.price);
+        addFarmDecoration(guildId, userId, decoId);
         const freshData = getOrCreateUser(guildId, userId);
         const embed = new EmbedBuilder().setColor('#E91E63').setTitle('🎨 Dekorasi Dibeli!')
             .setDescription(`${deco.emoji} **${deco.name}**\n> *${deco.desc}*\n\n> 💰 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**\n> Dekorasi akan muncul di header Farm Panel!`);
@@ -752,7 +752,7 @@ async function handleFarmModal(interaction) {
             const affordable = Math.floor(userData.balance / crop.cost);
             return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} bibit.\n> Mampu beli **${affordable}** bibit.`, ephemeral: true });
         }
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, userId);
+        subtractUserBalance(guildId, userId, totalCost);
         addSeed(guildId, userId, cropId, qty);
         const owned = getSeedCount(guildId, userId, cropId);
         const panel = buildFarmPanel(guildId, userId, interaction.user.username);
@@ -777,7 +777,7 @@ async function handleFarmModal(interaction) {
             const affordable = Math.floor(userData.balance / fert.cost);
             return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} pupuk.\n> Mampu beli **${affordable}** pupuk.`, ephemeral: true });
         }
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, userId);
+        subtractUserBalance(guildId, userId, totalCost);
         addFert(guildId, userId, fertId, qty);
         const owned = getFertCount(guildId, userId, fertId);
         return interaction.reply({ content: `✅ Membeli ${fert.emoji} **${fert.name}** x**${qty}**!\n> 💰 Total: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Stok pupuk: **${owned}**\n> 💡 Pakai lewat \`/farm\` → 🧪 Pupuk`, ephemeral: false });

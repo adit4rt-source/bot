@@ -388,4 +388,114 @@ function getAllFerts(guildId, userId) {
     return db.prepare('SELECT * FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
-module.exports = { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts };
+module.exports = { db, checkGlobalMode, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, setUserStat, setUserStatMax, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, getUsersForDailyReminder, updateUserBalance, addUserBalance, subtractUserBalance, getActivePetsHungry, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel };
+
+// ================= GLOBAL-MODE-AWARE DB HELPERS =================
+// These helpers abstract away guildId for tables that were migrated to global mode.
+
+// --- users table ---
+function getUsersForDailyReminder(today, cutoff) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff)
+            .map(r => ({ guildId: null, userId: r.userId }));
+    }
+    return db.prepare('SELECT guildId, userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff);
+}
+
+function updateUserBalance(guildId, userId, newBalance) {
+    if (checkGlobalMode()) {
+        db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(newBalance, userId);
+    } else {
+        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(newBalance, guildId, userId);
+    }
+}
+
+function addUserBalance(guildId, userId, amount) {
+    if (checkGlobalMode()) {
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(amount, userId);
+    } else {
+        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+    }
+}
+
+function subtractUserBalance(guildId, userId, amount) {
+    if (checkGlobalMode()) {
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(amount, userId);
+    } else {
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+    }
+}
+
+// --- pets table ---
+function getActivePetsHungry(hungerThreshold) {
+    if (checkGlobalMode()) {
+        return db.prepare("SELECT userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold)
+            .map(r => ({ ...r, guildId: null }));
+    }
+    return db.prepare("SELECT guildId, userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold);
+}
+
+// --- farm_decorations table ---
+function getFarmDecorations(guildId, userId) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT decoId FROM farm_decorations WHERE userId = ?').all(userId);
+    }
+    return db.prepare('SELECT decoId FROM farm_decorations WHERE guildId = ? AND userId = ?').all(guildId, userId);
+}
+
+function hasFarmDecoration(guildId, userId, decoId) {
+    if (checkGlobalMode()) {
+        return !!db.prepare('SELECT 1 FROM farm_decorations WHERE userId = ? AND decoId = ?').get(userId, decoId);
+    }
+    return !!db.prepare('SELECT 1 FROM farm_decorations WHERE guildId = ? AND userId = ? AND decoId = ?').get(guildId, userId, decoId);
+}
+
+function addFarmDecoration(guildId, userId, decoId) {
+    if (checkGlobalMode()) {
+        db.prepare('INSERT INTO farm_decorations (userId, decoId, purchasedAt) VALUES (?, ?, ?)').run(userId, decoId, Date.now());
+    } else {
+        db.prepare('INSERT INTO farm_decorations (guildId, userId, decoId, purchasedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, decoId, Date.now());
+    }
+}
+
+// --- farm_plots table ---
+function getFarmPlot(guildId, userId, plotId) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT * FROM farm_plots WHERE id = ? AND userId = ?').get(plotId, userId);
+    }
+    return db.prepare('SELECT * FROM farm_plots WHERE id = ? AND guildId = ? AND userId = ?').get(plotId, guildId, userId);
+}
+
+function insertFarmPlot(guildId, userId, cropId, plantedAt, wateredAt) {
+    if (checkGlobalMode()) {
+        db.prepare('INSERT INTO farm_plots (userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?)').run(userId, cropId, plantedAt, wateredAt);
+    } else {
+        db.prepare('INSERT INTO farm_plots (guildId, userId, cropId, plantedAt, wateredAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, cropId, plantedAt, wateredAt);
+    }
+}
+
+function deleteDeadFarmPlots(guildId, userId) {
+    if (checkGlobalMode()) {
+        db.prepare("DELETE FROM farm_plots WHERE userId = ? AND status = 'dead'").run(userId);
+    } else {
+        db.prepare("DELETE FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'dead'").run(guildId, userId);
+    }
+}
+
+// --- farm_storage table ---
+function clearFarmStorage(guildId, userId) {
+    if (checkGlobalMode()) {
+        db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(userId);
+    } else {
+        db.prepare('DELETE FROM farm_storage WHERE guildId = ? AND userId = ?').run(guildId, userId);
+    }
+}
+
+// --- farm_data table ---
+function upgradeFarmLevel(guildId, userId, newLevel) {
+    if (checkGlobalMode()) {
+        db.prepare('UPDATE farm_data SET farm_level = ? WHERE userId = ?').run(newLevel, userId);
+    } else {
+        db.prepare('UPDATE farm_data SET farm_level = ? WHERE guildId = ? AND userId = ?').run(newLevel, guildId, userId);
+    }
+}
