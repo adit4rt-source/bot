@@ -12,7 +12,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS notification_settings (
     notif_farm INTEGER DEFAULT 1,
     PRIMARY KEY(guildId, userId)
 )`);
-
+// Migration: add new columns if missing
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_expedition INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_worldboss INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_streak INTEGER DEFAULT 1`); } catch(e) {}
 // ============ GET NOTIFICATION SETTINGS ============
 function getNotifSettings(guildId, userId) {
     let row = db.prepare('SELECT * FROM notification_settings WHERE guildId = ? AND userId = ?').get(guildId, userId);
