@@ -731,6 +731,7 @@ function buildDbToolsPanel(userId) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_dbtools_petlookup').setLabel('🔍 Pet Lookup').setStyle(ButtonStyle.Primary).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_dbtools_restorepet').setLabel('🔄 Restore Pet').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_dbtools_restoreall').setLabel('🔄 Restore ALL Pets').setStyle(ButtonStyle.Danger).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Secondary).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
@@ -785,6 +786,86 @@ async function handleDbToolsButton(interaction) {
             )
         );
         return interaction.showModal(modal);
+    }
+
+    // === Restore ALL Pets (from backup) ===
+    if (customId === 'admpnl_dbtools_restoreall') {
+        await interaction.deferUpdate();
+        try {
+            const { listBackups } = require('./backup');
+            const BACKUP_DIR = path.join(__dirname, '..', 'backups');
+            const backups = listBackups();
+            if (backups.length === 0) {
+                return interaction.editReply({ content: '❌ Tidak ada backup tersedia!' });
+            }
+
+            const backupFile = path.join(BACKUP_DIR, backups[0].name);
+            const Database = require('better-sqlite3');
+            const backupDb = new Database(backupFile, { readonly: true });
+            const { PET_DATA } = require('../data/pets');
+
+            // Ambil semua pet dari backup
+            let backupPets;
+            try { backupPets = backupDb.prepare('SELECT * FROM pets').all(); } catch (e) { backupPets = []; }
+            backupDb.close();
+
+            if (backupPets.length === 0) {
+                return interaction.editReply({ content: '❌ Backup tidak memiliki data pet!' });
+            }
+
+            // Ambil semua pet saat ini
+            const currentPets = db.prepare('SELECT id FROM pets').all();
+            const currentIds = new Set(currentPets.map(p => p.id));
+
+            // Restore semua pet yang hilang
+            let restored = 0;
+            let failed = 0;
+            const affectedUsers = new Set();
+
+            for (const pet of backupPets) {
+                if (!currentIds.has(pet.id)) {
+                    try {
+                        db.prepare(`INSERT OR IGNORE INTO pets 
+                            (id, guildId, userId, petId, name, level, exp, happiness, hunger, status, active, adoptedAt, hunting_until, skills, class, element, hp, atk, def, spd, crit, evolved, evoStage)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                        ).run(
+                            pet.id, pet.guildId || '', pet.userId, pet.petId, pet.name,
+                            pet.level, pet.exp, pet.happiness || 80, pet.hunger || 80,
+                            pet.status || 'happy', pet.active || 0, pet.adoptedAt || Date.now(),
+                            pet.hunting_until || 0, pet.skills || '[]',
+                            pet.class || 'warrior', pet.element || 'fire',
+                            pet.hp || 100, pet.atk || 20, pet.def || 10, pet.spd || 10, pet.crit || 5,
+                            pet.evolved || 0, pet.evoStage || 0
+                        );
+                        restored++;
+                        affectedUsers.add(pet.userId);
+                    } catch (e) { failed++; }
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle(restored > 0 ? `✅ Mass Restore Complete!` : '✅ Tidak Ada yang Hilang')
+                .setColor(restored > 0 ? '#2ECC71' : '#F1C40F')
+                .setDescription(
+                    `**📁 Backup:** \`${backups[0].name}\`\n` +
+                    `**🐾 Pet di backup:** ${backupPets.length}\n` +
+                    `**🐾 Pet di DB saat ini:** ${currentPets.length}\n\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `> ✅ Pet restored: **${restored}**\n` +
+                    `> ❌ Gagal: **${failed}**\n` +
+                    `> 👥 User terdampak: **${affectedUsers.size}**\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    (restored > 0 ? `> ⚠️ Pet di-restore sebagai **nonaktif**.\n> Player bisa aktifkan lewat \`/pet\` → Collection → Swap.` : `> Semua pet di backup sudah ada di database.`)
+                );
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔙 DB Tools').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('admpnl_back').setLabel('🏠 Main').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.editReply({ embeds: [embed], components: [row] });
+        } catch (e) {
+            return interaction.editReply({ content: `❌ Error: \`${e.message}\`` });
+        }
     }
 
     // === Force Backup ===
