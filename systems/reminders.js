@@ -167,33 +167,104 @@ async function runStreakReminderCheck(client) {
 }
 
 // ---- Farm ready reminder ----
+// Rules:
+// 1. Plot harus status 'growing' (bukan dead/harvested)
+// 2. Notified = 0 (belum pernah dikirim DM)
+// 3. Crop BENAR-BENAR sudah matang (termasuk fertilizer speedBonus)
+// 4. Plot TIDAK layu/mati berdasarkan waktu (dryTime < deadThreshold)
+// 5. Hanya kirim 1 DM per user per batch (grouping semua tanaman siap)
+// 6. Cooldown per-user 12 jam — tidak bisa spam walau ada banyak plot
 async function runFarmReadyCheck(client) {
     try {
         const now = Date.now();
+        const FARM_DM_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 jam cooldown per user
 
-        // Find plots that are ready to harvest (growing + time elapsed + not notified)
-        const plots = db.prepare("SELECT * FROM farm_plots WHERE status = 'growing' AND notified = 0").all();
+        // Hanya cek plot yang: growing, belum dinotif, ada data
+        const plots = db.prepare(
+            "SELECT * FROM farm_plots WHERE status = 'growing' AND notified = 0"
+        ).all();
 
-        // Get crop data
-        let FARM_CROPS;
-        try { ({ FARM_CROPS } = require('../data/farming')); } catch (e) { return; }
+        let FARM_CROPS, FARM_FERTILIZERS;
+        try {
+            ({ FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming'));
+        } catch (e) { return; }
+
+        // Kelompokkan plot siap panen per user
+        const readyByUser = {};
 
         for (const plot of plots) {
             try {
                 const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-                if (!crop) continue;
+                if (!crop) {
+                    // Plot tidak valid, mark notified supaya tidak loop terus
+                    db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plot.id);
+                    continue;
+                }
 
-                // Check if crop is ready (plantedAt + growTime)
-                const growTimeMs = crop.time * 60 * 1000; // time is in minutes
+                // Hitung waktu tumbuh dengan fertilizer
+                const fert = (FARM_FERTILIZERS || []).find(f => f.id === plot.fertilizer);
+                const speedBonus = fert ? (fert.speedBonus || 0) : 0;
+                const growTimeMs = crop.time * (1 - speedBonus) * 60 * 1000;
                 const readyAt = plot.plantedAt + growTimeMs;
+
+                // Belum matang → skip
                 if (now < readyAt) continue;
 
-                // Mark as notified
-                db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plot.id);
+                // Cek apakah sudah mati (dryTime > 2.5x growTime)
+                const dryTime = now - (plot.wateredAt || plot.plantedAt);
+                const deadThreshold = growTimeMs * 2.5;
+                if (dryTime > deadThreshold) {
+                    // Sudah mati, tandai notified agar tidak dikirim DM
+                    db.prepare("UPDATE farm_plots SET notified = 1, status = 'dead' WHERE id = ?").run(plot.id);
+                    continue;
+                }
 
-                // Send DM
-                await notifyFarmReady(client, plot.guildId, plot.userId, crop.name).catch(() => {});
-            } catch (e) { log('ERROR', `farmReady failed for plot ${plot.id}`, e); }
+                // Plot ini siap panen dan masih hidup → kumpulkan per user
+                const key = `${plot.guildId}_${plot.userId}`;
+                if (!readyByUser[key]) {
+                    readyByUser[key] = { guildId: plot.guildId, userId: plot.userId, crops: [], plotIds: [] };
+                }
+                readyByUser[key].crops.push(crop.name);
+                readyByUser[key].plotIds.push(plot.id);
+
+            } catch (e) { log('ERROR', `farmReady plot check failed for plot ${plot.id}`, e); }
+        }
+
+        // Kirim 1 DM per user (semua tanaman siap digabung)
+        for (const [key, data] of Object.entries(readyByUser)) {
+            try {
+                // Cek cooldown per user (12 jam)
+                const lastDm = getUserStat(data.guildId, data.userId, 'farm_ready_dm_at');
+                if (lastDm && (now - lastDm) < FARM_DM_COOLDOWN_MS) {
+                    // Masih dalam cooldown, tapi tandai notified supaya tidak re-check
+                    for (const plotId of data.plotIds) {
+                        db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plotId);
+                    }
+                    continue;
+                }
+
+                // Tandai semua plot sebagai sudah dinotif
+                for (const plotId of data.plotIds) {
+                    db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plotId);
+                }
+
+                // Catat waktu DM terakhir
+                setUserStat(data.guildId, data.userId, 'farm_ready_dm_at', now);
+
+                // Buat daftar tanaman unik
+                const uniqueCrops = [...new Set(data.crops)];
+                const cropList = uniqueCrops.slice(0, 5).join(', ');
+                const extraCount = data.crops.length - uniqueCrops.slice(0, 5).length;
+
+                await sendNotification(client, data.guildId, data.userId, 'farm',
+                    `🌾 **Siap Panen!**\n\n` +
+                    `**${data.crops.length}** tanaman kamu sudah siap dipanen!\n` +
+                    `> 🌱 ${cropList}${extraCount > 0 ? ` +${extraCount} lainnya` : ''}\n\n` +
+                    `Gunakan \`/farm\` → 🌾 Harvest untuk memanen.\n` +
+                    `> ⚠️ *Siram jika layu agar tidak mati!*`
+                ).catch(() => {});
+
+            } catch (e) { log('ERROR', `farmReady DM failed for ${data.userId}`, e); }
         }
     } catch (e) {
         log('ERROR', 'farmReady check failed', e);
@@ -239,6 +310,27 @@ async function runWorldBossReminderCheck(client) {
 }
 
 function startReminderSchedules(client) {
+    // Startup: bersihkan plot mati/invalid yang masih notified=0 agar tidak spam
+    try {
+        const { FARM_CROPS } = require('../data/farming');
+        const { FARM_FERTILIZERS } = require('../data/farming');
+        const now = Date.now();
+        const orphanedPlots = db.prepare("SELECT * FROM farm_plots WHERE status = 'growing' AND notified = 0").all();
+        for (const plot of orphanedPlots) {
+            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            if (!crop) { db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plot.id); continue; }
+            const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer);
+            const speedBonus = fert ? (fert.speedBonus || 0) : 0;
+            const growTimeMs = crop.time * (1 - speedBonus) * 60 * 1000;
+            const dryTime = now - (plot.wateredAt || plot.plantedAt);
+            const deadThreshold = growTimeMs * 2.5;
+            if (dryTime > deadThreshold) {
+                db.prepare("UPDATE farm_plots SET notified = 1, status = 'dead' WHERE id = ?").run(plot.id);
+            }
+        }
+        console.log('🌾 Farm plots cleanup done on startup');
+    } catch (e) { /* non-critical */ }
+
     // Initial checks after startup delay
     setTimeout(() => {
         runDailyReminderCheck(client).catch(() => {});
