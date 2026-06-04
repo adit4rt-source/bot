@@ -344,9 +344,11 @@ function buildBrowsePage(guildId, userId, username, page) {
         components.push(new ActionRowBuilder().addComponents(menu));
     }
 
+    const prevPage = Math.max(0, safePage - 1);
+    const nextPage = Math.min(maxPage, safePage + 1);
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`market_browse_${userId}_${Math.max(0, safePage - 1)}`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
-        new ButtonBuilder().setCustomId(`market_browse_${userId}_${Math.min(maxPage, safePage + 1)}`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= maxPage),
+        new ButtonBuilder().setCustomId(`market_browse_${userId}_${prevPage}_prev`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
+        new ButtonBuilder().setCustomId(`market_browse_${userId}_${nextPage}_next`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= maxPage),
         new ButtonBuilder().setCustomId(`market_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
     components.push(navRow);

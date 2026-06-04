@@ -264,7 +264,7 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_analytics') {
         const topCommands = db.prepare('SELECT command, SUM(count) as total, MAX(lastUsed) as lastUsed FROM command_summary WHERE guildId = ? GROUP BY command ORDER BY total DESC LIMIT 10').all(guildId);
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-        const activeToday = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM users WHERE guildId = ? AND userId IN (SELECT DISTINCT userId FROM command_summary WHERE guildId = ? AND lastUsed > ?)').get(guildId, guildId, todayStart.getTime());
+        const activeToday = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM users WHERE userId IN (SELECT DISTINCT userId FROM command_summary WHERE lastUsed > ?)').get(todayStart.getTime());
 
         let cmdList = topCommands.length ? topCommands.map((c, i) => `> **${i+1}.** \`/${c.command}\` — ${c.total.toLocaleString('id-ID')}x`).join('\n') : '> *Belum ada data*';
 

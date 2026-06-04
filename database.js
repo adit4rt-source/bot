@@ -3,7 +3,141 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 
-const db = new Database('economy.sqlite');
+const _rawDb = new Database('economy.sqlite');
+
+// ================= GLOBAL-MODE DB PROXY =================
+// When the database has been migrated to global mode (no guildId columns
+// on core tables), this proxy transparently rewrites all raw db.prepare()
+// queries so that references to guildId are stripped out automatically.
+// This means ALL existing code across every system file continues to work
+// without needing individual edits — the proxy handles it at query time.
+
+// Tables that were migrated to global mode (no guildId column)
+const GLOBAL_TABLES = new Set([
+    'users', 'user_stats', 'achievements', 'pets', 'relics',
+    'item_inventory', 'pet_food_inventory', 'seed_inventory', 'fertilizer_inventory',
+    'fish_inventory', 'fish_collection', 'fish_equipment',
+    'farm_plots', 'farm_storage', 'farm_data', 'farm_decorations',
+    'auto_harvest', 'combo_tracker', 'trades', 'market_listings',
+    'command_summary', 'pet_evolution_history'
+]);
+
+// Tables that stay per-server (keep guildId)
+// streaks, server_settings, config, rewards, shop_roles, shop_items,
+// vouchers, voucher_claims, economy_admins, daily_quests,
+// temp_voices, streak_restores, streak_history, logs, migration_status
+
+function isGlobalTable(sql) {
+    // Extract first table name from SQL
+    const m = sql.match(/(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)/i);
+    return m ? GLOBAL_TABLES.has(m[1]) : false;
+}
+
+function rewriteQuery(sql) {
+    if (!isGlobalTable(sql)) return sql;
+    
+    // Remove guildId from WHERE clauses: "guildId = ? AND " or "AND guildId = ?"
+    let q = sql;
+    q = q.replace(/\bguildId\s*=\s*\?\s*AND\s*/gi, '');
+    q = q.replace(/\s*AND\s*guildId\s*=\s*\?/gi, '');
+    q = q.replace(/\bWHERE\s+guildId\s*=\s*\?/gi, 'WHERE 1=1');
+    
+    // Remove guildId from INSERT column lists and VALUES
+    // Pattern: INSERT INTO table (guildId, col2, col3) VALUES (?, ?, ?)
+    q = q.replace(/\(guildId,\s*/gi, '(');
+    q = q.replace(/,\s*guildId\b/gi, '');
+    
+    // Remove guildId from UPDATE SET: "SET guildId = ?, " — rare but handle
+    q = q.replace(/SET\s+guildId\s*=\s*\?,\s*/gi, 'SET ');
+    
+    // Clean up: "WHERE 1=1 AND" -> "WHERE"
+    q = q.replace(/WHERE\s+1=1\s+AND\s+/gi, 'WHERE ');
+    q = q.replace(/WHERE\s+1=1\s*$/gi, '');
+    
+    // PRIMARY KEY INSERT OR REPLACE / INSERT OR IGNORE: handled by above
+    return q;
+}
+
+function findGuildIdParamPositions(sql) {
+    // Returns sorted list of 0-based param indices that correspond to guildId values
+    const positions = [];
+
+    // INSERT INTO table (guildId, col2, ...) — guildId is a column
+    const insertMatch = sql.match(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)/i);
+    if (insertMatch) {
+        const cols = insertMatch[1].split(',').map(c => c.trim());
+        cols.forEach((col, i) => { if (col.toLowerCase() === 'guildid') positions.push(i); });
+        return positions;
+    }
+
+    // WHERE / SET: scan for "guildId = ?" and track which ? index it is
+    const sqlLower = sql.toLowerCase();
+    let searchPos = 0;
+    while (searchPos < sqlLower.length) {
+        const gidPos = sqlLower.indexOf('guildid', searchPos);
+        const qPos = sql.indexOf('?', searchPos);
+        if (qPos === -1) break;
+        if (gidPos !== -1 && gidPos < qPos) {
+            // Check "guildId = ?"
+            const afterGid = sqlLower.slice(gidPos + 7).trimStart();
+            if (afterGid.startsWith('=')) {
+                const eqPos = sql.indexOf('=', gidPos + 7);
+                const paramPos = sql.indexOf('?', eqPos);
+                if (paramPos !== -1) {
+                    positions.push(sql.slice(0, paramPos).split('?').length - 1);
+                    searchPos = paramPos + 1;
+                    continue;
+                }
+            }
+            searchPos = gidPos + 7;
+        } else {
+            searchPos = qPos + 1;
+        }
+    }
+    return [...new Set(positions)].sort((a, b) => a - b);
+}
+
+function rewriteParams(sql, params) {
+    if (!params || !isGlobalTable(sql)) return params;
+    const positions = findGuildIdParamPositions(sql);
+    if (!positions.length) return params;
+    const result = [...params];
+    // Remove from highest to lowest to preserve indices
+    for (const pos of positions.slice().reverse()) {
+        if (pos < result.length) result.splice(pos, 1);
+    }
+    return result;
+}
+
+// Create a proxy around db that rewrites queries transparently
+function createGlobalProxy(rawDb) {
+    return new Proxy(rawDb, {
+        get(target, prop) {
+            if (prop === 'prepare') {
+                return function(sql) {
+                    const rewrittenSql = rewriteQuery(sql);
+                    const stmt = target.prepare(rewrittenSql);
+                    // Wrap statement methods to also rewrite params
+                    return new Proxy(stmt, {
+                        get(stmtTarget, stmtProp) {
+                            if (stmtProp === 'get' || stmtProp === 'all' || stmtProp === 'run') {
+                                return function(...args) {
+                                    const newArgs = rewriteParams(sql, args);
+                                    return stmtTarget[stmtProp](...newArgs);
+                                };
+                            }
+                            return stmtTarget[stmtProp];
+                        }
+                    });
+                };
+            }
+            return target[prop];
+        }
+    });
+}
+
+
+// db will be set to proxy after checkGlobalMode is available (see below)
 
 // ================= BACKUP SYSTEM =================
 // Backup database on startup (optional, for safety)
@@ -152,6 +286,12 @@ function checkGlobalMode() {
         }
     }
     return isGlobalMode;
+}
+
+// Activate the global-mode proxy now that checkGlobalMode is available
+const db = checkGlobalMode() ? createGlobalProxy(_rawDb) : _rawDb;
+if (checkGlobalMode()) {
+    console.log('🌐 Database running in GLOBAL mode (guildId proxy active)');
 }
 
 function getOrCreateUser(guildId, userId) {
@@ -395,11 +535,12 @@ module.exports = { db, checkGlobalMode, getOrCreateUser, getConf, getSetting, ge
 
 // --- users table ---
 function getUsersForDailyReminder(today, cutoff) {
+    // In global mode, users table has no guildId column — use userId only
     if (checkGlobalMode()) {
-        return db.prepare('SELECT userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff)
+        return _rawDb.prepare('SELECT userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff)
             .map(r => ({ guildId: null, userId: r.userId }));
     }
-    return db.prepare('SELECT guildId, userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff);
+    return _rawDb.prepare('SELECT guildId, userId FROM users WHERE lastDaily IS NOT NULL AND lastDaily < ? AND lastDaily >= ?').all(today, cutoff);
 }
 
 function updateUserBalance(guildId, userId, newBalance) {
@@ -429,10 +570,10 @@ function subtractUserBalance(guildId, userId, amount) {
 // --- pets table ---
 function getActivePetsHungry(hungerThreshold) {
     if (checkGlobalMode()) {
-        return db.prepare("SELECT userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold)
+        return _rawDb.prepare("SELECT userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold)
             .map(r => ({ ...r, guildId: null }));
     }
-    return db.prepare("SELECT guildId, userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold);
+    return _rawDb.prepare("SELECT guildId, userId, name, hunger, status FROM pets WHERE active = 1 AND status != 'dead' AND (hunger <= ? OR status = 'sick')").all(hungerThreshold);
 }
 
 // --- farm_decorations table ---
