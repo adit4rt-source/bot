@@ -124,13 +124,12 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
                 const farm = isGlobal ? getGlobalStat(u.userId, 'total_harvests') : getStat(guildId, u.userId, 'total_harvests');
                 const craft = isGlobal ? getGlobalStat(u.userId, 'total_crafts') : getStat(guildId, u.userId, 'total_crafts');
                 
-                let streakRow;
-                if (isGlobal) {
-                    streakRow = db.prepare('SELECT count FROM streaks WHERE userId = ? ORDER BY count DESC LIMIT 1').get(u.userId);
-                } else {
-                    streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
+                // Streak TIDAK dihitung di leaderboard GLOBAL (bisa dimanipulasi admin server)
+                let streak = 0;
+                if (!isGlobal) {
+                    const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
+                    streak = streakRow ? streakRow.count : 0;
                 }
-                const streak = streakRow ? streakRow.count : 0;
                 
                 let petRow;
                 if (isGlobal) {
@@ -156,6 +155,7 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
                 const roulette = isGlobal ? getGlobalStat(u.userId, 'roulette_wins') : getStat(guildId, u.userId, 'roulette_wins');
                 const gambling = slot + coin + roulette;
 
+                // Di mode GLOBAL, streak tidak dihitung (bobot 0)
                 const score = (u.level * 150)
                     + Math.floor(u.balance / 20)
                     + (fish * 3)
@@ -174,13 +174,24 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
 
             scored.forEach((u, i) => {
                 desc += `${medal(i)} <@${u.userId}> — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n`;
-                desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n`;
+                if (isGlobal) {
+                    desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n`;
+                } else {
+                    desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm} | 🔥${u.streak} | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n`;
+                }
             });
 
             desc += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-            desc += `> **📐 Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
-            desc += `> Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15\n`;
-            desc += `> PvP×10 + Badge×20 + Gambling×2`;
+            if (isGlobal) {
+                desc += `> **📐 Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
+                desc += `> Craft×8 + Pet×5 + Dungeon×6 + Boss×15\n`;
+                desc += `> PvP×10 + Badge×20 + Gambling×2\n`;
+                desc += `> ⚠️ *Streak tidak dihitung di Global (anti-abuse)*`;
+            } else {
+                desc += `> **📐 Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
+                desc += `> Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15\n`;
+                desc += `> PvP×10 + Badge×20 + Gambling×2`;
+            }
             break;
         }
     }
@@ -203,13 +214,19 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
         btn(`${modePrefix}_fish_${userId}`, '🎣 Fish', kategori === 'fish'),
         btn(`${modePrefix}_farm_${userId}`, '🌾 Farm', kategori === 'farm'),
     );
-    const row2 = new ActionRowBuilder().addComponents(
+    // Di mode Global, streak dihilangkan karena bisa dimanipulasi admin server
+    const row2Buttons = [
         btn(`${modePrefix}_pet_${userId}`, '🐾 Pet', kategori === 'pet'),
-        btn(`${modePrefix}_streak_${userId}`, '🔥 Streak', kategori === 'streak'),
+    ];
+    if (!isGlobal) {
+        row2Buttons.push(btn(`${modePrefix}_streak_${userId}`, '🔥 Streak', kategori === 'streak'));
+    }
+    row2Buttons.push(
         btn(`${modePrefix}_battle_${userId}`, '⚔️ Battle', kategori === 'battle'),
         btn(`${modePrefix}_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
         btn(`${modePrefix}_achievement_${userId}`, '🏆 Badge', kategori === 'achievement'),
     );
+    const row2 = new ActionRowBuilder().addComponents(...row2Buttons);
     
     // Toggle button between Server and Global
     const row3 = new ActionRowBuilder().addComponents(
