@@ -241,7 +241,7 @@ function buildTempVoiceSubPanel() {
 // ============ HANDLER: /admin command ============
 async function handleAdminCommand(interaction) {
     if (!isAdminUser(interaction)) {
-        return interaction.reply({ content: '\u274c Hanya Admin yang bisa menggunakan panel ini!', ephemeral: true });
+        return interaction.reply({ content: '\u274c Hanya Admin yang bisa menggunakan panel ini!', flags: 1 << 6 });
     }
     const panel = buildAdminPanel(interaction.guild.id);
     return interaction.reply(panel);
@@ -254,7 +254,7 @@ async function handleAdminButton(interaction) {
 
     // Validate admin permission
     if (!isAdminUser(interaction)) {
-        return interaction.reply({ content: '\u274c Hanya Admin!', ephemeral: true });
+        return interaction.reply({ content: '\u274c Hanya Admin!', flags: 1 << 6 });
     }
 
     // === BACK TO MAIN ===
@@ -359,7 +359,7 @@ async function handleAdminButton(interaction) {
     // 🔒 HANYA BOT OWNER — block di handler level juga, bukan cuma disable tombol
     if (customId === 'admpnl_money_add' || customId === 'admpnl_money_take' || customId === 'admpnl_money_set') {
         if (!isBotOwner(interaction.user.id)) {
-            return interaction.reply({ content: '🛑 Fitur Money hanya untuk **pemilik bot**!', ephemeral: true });
+            return interaction.reply({ content: '🛑 Fitur Money hanya untuk **pemilik bot**!', flags: 1 << 6 });
         }
         const actionMap = { 'admpnl_money_add': 'add', 'admpnl_money_take': 'take', 'admpnl_money_set': 'set' };
         const labelMap = { add: 'Add Money', take: 'Take Money', set: 'Set Money' };
@@ -378,9 +378,8 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_money_addbanker' || customId === 'admpnl_money_removebanker') {
         if (!isBotOwner(interaction.user.id)) {
             return interaction.reply({
-                content: '🛑 Fitur ini hanya bisa digunakan oleh **pemilik bot**.
-Admin server tidak memiliki akses ke fitur ini.',
-                ephemeral: true
+                content: '🛑 Fitur ini hanya bisa digunakan oleh **pemilik bot**.\nAdmin server tidak memiliki akses ke fitur ini.',
+                flags: 1 << 6
             });
         }
         const isAdd = customId === 'admpnl_money_addbanker';
@@ -449,7 +448,7 @@ Admin server tidak memiliki akses ke fitur ini.',
             return interaction.editReply({ embeds: [embed], components: [row] });
         } catch (err) {
             console.error(err);
-            return interaction.followUp({ content: '\u274c Gagal membuat channel. Cek permission bot.', ephemeral: true });
+            return interaction.followUp({ content: '\u274c Gagal membuat channel. Cek permission bot.', flags: 1 << 6 });
         }
     }
 
@@ -490,7 +489,7 @@ Admin server tidak memiliki akses ke fitur ini.',
             return interaction.editReply({ embeds: [embed], components: [row] });
         } catch (err) {
             console.error(err);
-            return interaction.followUp({ content: '\u274c Gagal. Cek permission bot.', ephemeral: true });
+            return interaction.followUp({ content: '\u274c Gagal. Cek permission bot.', flags: 1 << 6 });
         }
     }
 
@@ -500,7 +499,7 @@ Admin server tidak memiliki akses ke fitur ini.',
         const { getContestState, startFishContest } = require('./contest');
         const state = getContestState(guildId);
         if (state && state.active) {
-            return interaction.reply({ content: '\u274c Sudah ada kontes aktif! Akhiri dulu.', ephemeral: true });
+            return interaction.reply({ content: '\u274c Sudah ada kontes aktif! Akhiri dulu.', flags: 1 << 6 });
         }
         startFishContest(guildId, interaction.channelId, 60);
         const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Started!').setColor('#FFD700')
@@ -513,7 +512,7 @@ Admin server tidak memiliki akses ke fitur ini.',
         const { getContestState } = require('./contest');
         const state = getContestState(guildId);
         if (!state || !state.active) {
-            return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', ephemeral: true });
+            return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', flags: 1 << 6 });
         }
         const { getContestLeaderboard } = require('./contest');
         const { FISH_DATA } = require('../data/fish');
@@ -546,16 +545,16 @@ async function handleAdminModal(interaction) {
     const customId = interaction.customId;
 
     if (!isAdminUser(interaction)) {
-        return interaction.reply({ content: '\u274c Hanya Admin!', ephemeral: true });
+        return interaction.reply({ content: '\u274c Hanya Admin!', flags: 1 << 6 });
     }
 
     // === ADD ROLE TO SHOP ===
     if (customId === 'admpnl_modal_addrole') {
         const roleId = interaction.fields.getTextInputValue('role_id').trim();
         const price = parseInt(interaction.fields.getTextInputValue('role_price'));
-        if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', ephemeral: true });
+        if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', flags: 1 << 6 });
         const role = interaction.guild.roles.cache.get(roleId);
-        if (!role) return interaction.reply({ content: '\u274c Role tidak ditemukan! Pastikan ID benar.', ephemeral: true });
+        if (!role) return interaction.reply({ content: '\u274c Role tidak ditemukan! Pastikan ID benar.', flags: 1 << 6 });
         db.prepare('INSERT OR REPLACE INTO shop_roles (guildId, roleId, price) VALUES (?, ?, ?)').run(guildId, roleId, price);
         return interaction.reply({ content: `\u2705 Role <@&${roleId}> ditambah ke shop! Harga: \ud83e\ude99 **${price.toLocaleString('id-ID')}**`, allowedMentions: { roles: [] } });
     }
@@ -566,7 +565,7 @@ async function handleAdminModal(interaction) {
         const price = parseInt(interaction.fields.getTextInputValue('item_price'));
         const content = interaction.fields.getTextInputValue('item_content');
         const stockRaw = interaction.fields.getTextInputValue('item_stock');
-        if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', ephemeral: true });
+        if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', flags: 1 << 6 });
         let stock = stockRaw ? parseInt(stockRaw) : 1;
         if (isNaN(stock) || stock < 1) stock = 1;
         const insertItem = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)');
@@ -581,7 +580,7 @@ async function handleAdminModal(interaction) {
         const code = interaction.fields.getTextInputValue('voucher_code').toUpperCase();
         const reward = parseInt(interaction.fields.getTextInputValue('voucher_reward'));
         const limit = parseInt(interaction.fields.getTextInputValue('voucher_limit'));
-        if (isNaN(reward) || isNaN(limit)) return interaction.reply({ content: '\u274c Angka tidak valid!', ephemeral: true });
+        if (isNaN(reward) || isNaN(limit)) return interaction.reply({ content: '\u274c Angka tidak valid!', flags: 1 << 6 });
         db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit);
         return interaction.reply({ content: `\u2705 Voucher **${code}** dibuat! Reward: \ud83e\ude99 **${reward.toLocaleString('id-ID')}** | Limit: **${limit}x**` });
     }
@@ -589,7 +588,7 @@ async function handleAdminModal(interaction) {
     // === CUSTOM ROLE PRICE ===
     if (customId === 'admpnl_modal_crprice') {
         const price = parseInt(interaction.fields.getTextInputValue('cr_price'));
-        if (isNaN(price) || price < 0) return interaction.reply({ content: '\u274c Angka tidak valid!', ephemeral: true });
+        if (isNaN(price) || price < 0) return interaction.reply({ content: '\u274c Angka tidak valid!', flags: 1 << 6 });
         db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'custom_role_price', price.toString());
         if (price === 0) return interaction.reply({ content: '\u2705 Fitur Custom Role **dimatikan**.' });
         return interaction.reply({ content: `\u2705 Harga Custom Role: \ud83e\ude99 **${price.toLocaleString('id-ID')}**` });
@@ -599,12 +598,12 @@ async function handleAdminModal(interaction) {
     // 🔒 Double-check di modal — anti bypass
     if (customId.startsWith('admpnl_modal_money_')) {
         if (!isBotOwner(interaction.user.id)) {
-            return interaction.reply({ content: '🛑 Hanya **pemilik bot** yang bisa menggunakan fitur Money!', ephemeral: true });
+            return interaction.reply({ content: '🛑 Hanya **pemilik bot** yang bisa menggunakan fitur Money!', flags: 1 << 6 });
         }
         const act = customId.replace('admpnl_modal_money_', '');
         const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
         const amount = parseInt(interaction.fields.getTextInputValue('amount'));
-        if (isNaN(amount) || amount < 1) return interaction.reply({ content: '\u274c Jumlah tidak valid!', ephemeral: true });
+        if (isNaN(amount) || amount < 1) return interaction.reply({ content: '\u274c Jumlah tidak valid!', flags: 1 << 6 });
         const tData = getOrCreateUser(guildId, targetId);
         if (act === 'add') tData.balance += amount;
         if (act === 'take') tData.balance = Math.max(0, tData.balance - amount);
@@ -621,13 +620,13 @@ async function handleAdminModal(interaction) {
         if (!isBotOwner(interaction.user.id)) {
             return interaction.reply({
                 content: '🛑 Hanya **pemilik bot** yang bisa mengelola banker!',
-                ephemeral: true
+                flags: 1 << 6
             });
         }
         const act = customId.replace('admpnl_modal_banker_', '');
         const bankerId = interaction.fields.getTextInputValue('banker_id').trim();
         const bankerType = interaction.fields.getTextInputValue('banker_type').trim().toLowerCase();
-        if (!['user', 'role'].includes(bankerType)) return interaction.reply({ content: '\u274c Tipe harus `user` atau `role`!', ephemeral: true });
+        if (!['user', 'role'].includes(bankerType)) return interaction.reply({ content: '\u274c Tipe harus `user` atau `role`!', flags: 1 << 6 });
         if (act === 'add') {
             db.prepare('INSERT OR REPLACE INTO economy_admins (guildId, adminId, type) VALUES (?, ?, ?)').run(guildId, bankerId, bankerType);
             return interaction.reply({ content: `\u2705 Banker (${bankerType}) <@${bankerType === 'role' ? '&' : ''}${bankerId}> ditambahkan!`, allowedMentions: { users: [], roles: [] } });
@@ -644,7 +643,7 @@ async function handleAdminModal(interaction) {
 
         if (act === 'set') {
             const amount = parseInt(interaction.fields.getTextInputValue('streak_amount'));
-            if (isNaN(amount) || amount < 0) return interaction.reply({ content: '\u274c Angka tidak valid!', ephemeral: true });
+            if (isNaN(amount) || amount < 0) return interaction.reply({ content: '\u274c Angka tidak valid!', flags: 1 << 6 });
             db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, targetId, amount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
             return interaction.reply({ content: `\u2705 Streak <@${targetId}> diset ke **${amount}** hari.`, allowedMentions: { users: [] } });
         }
@@ -654,7 +653,7 @@ async function handleAdminModal(interaction) {
         }
         if (act === 'restore') {
             const row = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetId);
-            if (!row) return interaction.reply({ content: '\u274c User tidak punya data streak!', ephemeral: true });
+            if (!row) return interaction.reply({ content: '\u274c User tidak punya data streak!', flags: 1 << 6 });
             const history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, targetId);
             const prevCount = (history && history.lost_count > 0) ? history.lost_count : (row.count > 0 ? row.count : 1);
             db.prepare('UPDATE streaks SET count = ?, last_date = ? WHERE guildId = ? AND userId = ?').run(prevCount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), guildId, targetId);
@@ -670,7 +669,7 @@ async function handleAdminModal(interaction) {
         const channelId = interaction.fields.getTextInputValue('channel_id').trim();
         const keyMap = { quest: 'quest_channel', level: 'level_channel', achievement: 'achievement_channel', streak: 'streak_channel' };
         const key = keyMap[type];
-        if (!key) return interaction.reply({ content: '\u274c Error!', ephemeral: true });
+        if (!key) return interaction.reply({ content: '\u274c Error!', flags: 1 << 6 });
         db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, channelId);
         return interaction.reply({ content: `\u2705 Channel **${type}** diatur ke <#${channelId}>.` });
     }
