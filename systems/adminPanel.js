@@ -2,6 +2,18 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, getOrCreateUser, getSetting } = require('../database');
 
+// ============ BOT OWNER CONFIG ============
+// Isi dengan Discord User ID kamu (pemilik bot).
+// Hanya ID yang ada di sini yang bisa Add/Remove Banker di SEMUA server.
+// Cara cari ID: Discord > Settings > Advanced > Developer Mode ON > klik kanan profil > Copy ID
+const BOT_OWNER_IDS = (process.env.BOT_OWNER_IDS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+
+function isBotOwner(userId) {
+    return BOT_OWNER_IDS.includes(userId);
+}
 
 // ============ HELPER: Check admin permission ============
 function isAdminUser(interaction) {
@@ -76,7 +88,9 @@ function buildShopSubPanel() {
 
 
 // ============ BUILD: Money sub-panel ============
-function buildMoneySubPanel() {
+function buildMoneySubPanel(userId) {
+    const canManageBanker = isBotOwner(userId);
+
     const embed = new EmbedBuilder()
         .setTitle('\ud83d\udcb0 ADMIN MONEY')
         .setColor('#F1C40F')
@@ -85,8 +99,8 @@ function buildMoneySubPanel() {
             `> \u2795 **Add Money** \u2014 Tambah uang ke user\n` +
             `> \u2796 **Take Money** \u2014 Ambil uang dari user\n` +
             `> \ud83d\udccc **Set Money** \u2014 Set jumlah uang user\n` +
-            `> \ud83d\udee1\ufe0f **Add Banker** \u2014 Beri izin banker (Owner)\n` +
-            `> \ud83d\uddd1\ufe0f **Remove Banker** \u2014 Cabut izin banker (Owner)\n` +
+            `> \ud83d\udee1\ufe0f **Add Banker** \u2014 Beri izin banker ${canManageBanker ? '' : '*(Bot Owner only)*'}\n` +
+            `> \ud83d\uddd1\ufe0f **Remove Banker** \u2014 Cabut izin banker ${canManageBanker ? '' : '*(Bot Owner only)*'}\n` +
             `> \ud83d\udccb **List Banker** \u2014 Lihat daftar banker`
         );
 
@@ -97,8 +111,16 @@ function buildMoneySubPanel() {
         new ButtonBuilder().setCustomId('admpnl_money_listbanker').setLabel('\ud83d\udccb List Banker').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_money_addbanker').setLabel('\ud83d\udee1\ufe0f Add Banker').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_money_removebanker').setLabel('\ud83d\uddd1\ufe0f Remove Banker').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId('admpnl_money_addbanker')
+            .setLabel('\ud83d\udee1\ufe0f Add Banker')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(!canManageBanker),
+        new ButtonBuilder()
+            .setCustomId('admpnl_money_removebanker')
+            .setLabel('\ud83d\uddd1\ufe0f Remove Banker')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(!canManageBanker),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
@@ -253,7 +275,8 @@ async function handleAdminButton(interaction) {
 
     // === SUB-PANEL NAVIGATION ===
     if (customId === 'admpnl_shop') return interaction.update(buildShopSubPanel());
-    if (customId === 'admpnl_money') return interaction.update(buildMoneySubPanel());
+    // Pass userId so Money panel can show/disable banker buttons accordingly
+    if (customId === 'admpnl_money') return interaction.update(buildMoneySubPanel(interaction.user.id));
     if (customId === 'admpnl_streak') return interaction.update(buildStreakSubPanel());
     if (customId === 'admpnl_setting') return interaction.update(buildSettingSubPanel(guildId));
     if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
@@ -264,7 +287,7 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_analytics') {
         const topCommands = db.prepare('SELECT command, SUM(count) as total, MAX(lastUsed) as lastUsed FROM command_summary WHERE guildId = ? GROUP BY command ORDER BY total DESC LIMIT 10').all(guildId);
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-        const activeToday = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM users WHERE userId IN (SELECT DISTINCT userId FROM command_summary WHERE lastUsed > ?)').get(todayStart.getTime());
+        const activeToday = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM users WHERE guildId = ? AND userId IN (SELECT DISTINCT userId FROM command_summary WHERE guildId = ? AND lastUsed > ?)').get(guildId, guildId, todayStart.getTime());
 
         let cmdList = topCommands.length ? topCommands.map((c, i) => `> **${i+1}.** \`/${c.command}\` — ${c.total.toLocaleString('id-ID')}x`).join('\n') : '> *Belum ada data*';
 
@@ -358,9 +381,13 @@ async function handleAdminButton(interaction) {
 
 
     // === MONEY: Add/Remove Banker (Modal) ===
+    // 🔒 HANYA BOT OWNER yang bisa akses — bukan owner server biasa
     if (customId === 'admpnl_money_addbanker' || customId === 'admpnl_money_removebanker') {
-        if (interaction.user.id !== interaction.guild.ownerId) {
-            return interaction.reply({ content: '\ud83d\uded1 Hanya Owner yang bisa mengelola banker!', ephemeral: true });
+        if (!isBotOwner(interaction.user.id)) {
+            return interaction.reply({
+                content: '🛑 Fitur ini hanya bisa digunakan oleh **pemilik bot**.\nAdmin server tidak memiliki akses ke fitur ini.',
+                ephemeral: true
+            });
         }
         const isAdd = customId === 'admpnl_money_addbanker';
         const modal = new ModalBuilder().setCustomId(`admpnl_modal_banker_${isAdd ? 'add' : 'remove'}`).setTitle(isAdd ? 'Add Banker' : 'Remove Banker');
@@ -494,7 +521,6 @@ async function handleAdminButton(interaction) {
         if (!state || !state.active) {
             return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', ephemeral: true });
         }
-        // Mark contest inactive and distribute prizes to the top 3 heaviest catches.
         const { getContestLeaderboard } = require('./contest');
         const { FISH_DATA } = require('../data/fish');
         const { addIncome } = require('../database');
@@ -547,8 +573,6 @@ async function handleAdminModal(interaction) {
         const content = interaction.fields.getTextInputValue('item_content');
         const stockRaw = interaction.fields.getTextInputValue('item_stock');
         if (isNaN(price) || price < 1) return interaction.reply({ content: '\u274c Harga tidak valid!', ephemeral: true });
-        // shop_items stores ONE ROW PER STOCK UNIT (the /shop list uses COUNT(*) and buying does DELETE).
-        // There is no `quantity` column, so insert N rows. Blank stock defaults to 1.
         let stock = stockRaw ? parseInt(stockRaw) : 1;
         if (isNaN(stock) || stock < 1) stock = 1;
         const insertItem = db.prepare('INSERT INTO shop_items (guildId, name, price, content) VALUES (?, ?, ?, ?)');
@@ -594,9 +618,13 @@ async function handleAdminModal(interaction) {
 
 
     // === BANKER: Add/Remove ===
+    // 🔒 Double-check di modal juga — jangan sampai lolos lewat bypass
     if (customId.startsWith('admpnl_modal_banker_')) {
-        if (interaction.user.id !== interaction.guild.ownerId) {
-            return interaction.reply({ content: '\ud83d\uded1 Hanya Owner!', ephemeral: true });
+        if (!isBotOwner(interaction.user.id)) {
+            return interaction.reply({
+                content: '🛑 Hanya **pemilik bot** yang bisa mengelola banker!',
+                ephemeral: true
+            });
         }
         const act = customId.replace('admpnl_modal_banker_', '');
         const bankerId = interaction.fields.getTextInputValue('banker_id').trim();
@@ -629,8 +657,6 @@ async function handleAdminModal(interaction) {
         if (act === 'restore') {
             const row = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetId);
             if (!row) return interaction.reply({ content: '\u274c User tidak punya data streak!', ephemeral: true });
-            // Try to recover the streak the user had before it was lost (streak_history.lost_count),
-            // otherwise keep the current count (min 1).
             const history = db.prepare('SELECT * FROM streak_history WHERE guildId = ? AND userId = ?').get(guildId, targetId);
             const prevCount = (history && history.lost_count > 0) ? history.lost_count : (row.count > 0 ? row.count : 1);
             db.prepare('UPDATE streaks SET count = ?, last_date = ? WHERE guildId = ? AND userId = ?').run(prevCount, new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), guildId, targetId);
