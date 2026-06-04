@@ -1,6 +1,42 @@
 // database.js - Database initialization, migrations, and helper functions
 const Database = require('better-sqlite3');
+const fs = require('fs');
+const path = require('path');
+
 const db = new Database('economy.sqlite');
+
+// ================= BACKUP SYSTEM =================
+// Backup database on startup (optional, for safety)
+function createBackup() {
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = path.join(path.dirname('economy.sqlite'), `economy.backup-${timestamp}.sqlite`);
+        fs.copyFileSync('economy.sqlite', backupPath);
+        console.log(`✅ Database backed up: ${backupPath}`);
+        
+        // Keep only last 5 backups
+        const backupDir = path.dirname('economy.sqlite');
+        const backupFiles = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith('economy.backup-') && f.endsWith('.sqlite'))
+            .sort()
+            .reverse();
+        if (backupFiles.length > 5) {
+            backupFiles.slice(5).forEach(f => {
+                fs.unlinkSync(path.join(backupDir, f));
+                console.log(`🗑️ Removed old backup: ${f}`);
+            });
+        }
+    } catch (e) {
+        console.error('❌ Backup failed:', e.message);
+    }
+}
+
+// Run backup if migration needed
+const isMigrationNeeded = !db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users_global'").get();
+if (isMigrationNeeded) {
+    console.log('📦 Creating backup before migration...');
+    createBackup();
+}
 
 // ================= TABLE CREATION =================
 db.exec(`
@@ -87,10 +123,54 @@ try { db.exec(`ALTER TABLE fish_equipment ADD COLUMN location TEXT DEFAULT 'rive
 // Farm Decorations
 db.exec(`CREATE TABLE IF NOT EXISTS farm_decorations (guildId TEXT, userId TEXT, decoId TEXT, purchasedAt INTEGER, PRIMARY KEY(guildId, userId, decoId))`);
 
+// ================= RUN GLOBAL PROGRESSION MIGRATION =================
+// This converts per-server progression to global progression
+// Only runs once per database
+try {
+    const { runGlobalMigration } = require('./systems/migration-global');
+    runGlobalMigration(db);
+} catch (e) {
+    console.error('⚠️  Migration warning:', e.message);
+    // Continue anyway - migration might not apply to all databases
+}
+
 // ================= HELPER FUNCTIONS =================
+
+// Helper to check if database is in GLOBAL mode (post-migration)
+let isGlobalMode = null;
+function checkGlobalMode() {
+    if (isGlobalMode === null) {
+        try {
+            const userTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+            if (!userTable) return false;
+            
+            // Check if users table has guildId column
+            const columns = db.pragma('table_info(users)');
+            isGlobalMode = !columns.some(col => col.name === 'guildId');
+        } catch (e) {
+            isGlobalMode = false;
+        }
+    }
+    return isGlobalMode;
+}
+
 function getOrCreateUser(guildId, userId) {
+    // NEW: Global mode (no guildId)
+    if (checkGlobalMode()) {
+        let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
+        if (!user) { 
+            db.prepare('INSERT INTO users (userId) VALUES (?)').run(userId); 
+            user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId); 
+        }
+        return user;
+    }
+    
+    // OLD: Per-server mode (with guildId) - for backward compatibility
     let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    if (!user) { db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); }
+    if (!user) { 
+        db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId); 
+        user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId); 
+    }
     return user;
 }
 
@@ -105,25 +185,40 @@ function getSetting(guildId, key, defaultVal) {
 }
 
 function getUserStat(guildId, userId, key) {
+    // NEW: Global mode
+    if (checkGlobalMode()) {
+        const row = db.prepare('SELECT stat_value FROM user_stats WHERE userId = ? AND stat_key = ?').get(userId, key);
+        return row ? row.stat_value : 0;
+    }
+    // OLD: Per-server mode
     const row = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, key);
     return row ? row.stat_value : 0;
 }
 
 function incrementUserStat(guildId, userId, key, amount = 1) {
     const current = getUserStat(guildId, userId, key);
-    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, current + amount);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO user_stats (userId, stat_key, stat_value) VALUES (?, ?, ?)').run(userId, key, current + amount);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, current + amount);
+    }
     return current + amount;
 }
 
 function setUserStat(guildId, userId, key, value) {
-    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, Math.round(Number(value) || 0));
+    const val = Math.round(Number(value) || 0);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO user_stats (userId, stat_key, stat_value) VALUES (?, ?, ?)').run(userId, key, val);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, val);
+    }
 }
 
 function setUserStatMax(guildId, userId, key, value) {
     // Stores `value` only if it is greater than the current stored value (for "biggest" records).
     value = Math.round(Number(value) || 0);
     if (value <= getUserStat(guildId, userId, key)) return;
-    db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, key, value);
+    setUserStat(guildId, userId, key, value);
 }
 
 // Tracks earned money for the /stats dashboard: per-source total, per-day total, and all-time total.
@@ -146,89 +241,150 @@ function addSpending(guildId, userId, category, amount) {
 }
 
 function getItemCount(guildId, userId, itemId) {
+    if (checkGlobalMode()) {
+        const row = db.prepare('SELECT quantity FROM item_inventory WHERE userId = ? AND itemId = ?').get(userId, itemId);
+        return row ? row.quantity : 0;
+    }
     const row = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, itemId);
     return row ? row.quantity : 0;
 }
 
 function addItem(guildId, userId, itemId, qty = 1) {
     const current = getItemCount(guildId, userId, itemId);
-    db.prepare('INSERT OR REPLACE INTO item_inventory (guildId, userId, itemId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, itemId, current + qty);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO item_inventory (userId, itemId, quantity) VALUES (?, ?, ?)').run(userId, itemId, current + qty);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO item_inventory (guildId, userId, itemId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, itemId, current + qty);
+    }
 }
 
 function removeItem(guildId, userId, itemId, qty = 1) {
     const current = getItemCount(guildId, userId, itemId);
     if (current < qty) return false;
-    if (current - qty <= 0) db.prepare('DELETE FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, itemId);
-    else db.prepare('UPDATE item_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(current - qty, guildId, userId, itemId);
+    if (checkGlobalMode()) {
+        if (current - qty <= 0) db.prepare('DELETE FROM item_inventory WHERE userId = ? AND itemId = ?').run(userId, itemId);
+        else db.prepare('UPDATE item_inventory SET quantity = ? WHERE userId = ? AND itemId = ?').run(current - qty, userId, itemId);
+    } else {
+        if (current - qty <= 0) db.prepare('DELETE FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').run(guildId, userId, itemId);
+        else db.prepare('UPDATE item_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND itemId = ?').run(current - qty, guildId, userId, itemId);
+    }
     return true;
 }
 
 // ================= PET FOOD INVENTORY =================
 function getPetFoodCount(guildId, userId, foodId) {
+    if (checkGlobalMode()) {
+        const row = db.prepare('SELECT quantity FROM pet_food_inventory WHERE userId = ? AND foodId = ?').get(userId, foodId);
+        return row ? row.quantity : 0;
+    }
     const row = db.prepare('SELECT quantity FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND foodId = ?').get(guildId, userId, foodId);
     return row ? row.quantity : 0;
 }
 
 function addPetFood(guildId, userId, foodId, qty = 1) {
     const current = getPetFoodCount(guildId, userId, foodId);
-    db.prepare('INSERT OR REPLACE INTO pet_food_inventory (guildId, userId, foodId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, foodId, current + qty);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO pet_food_inventory (userId, foodId, quantity) VALUES (?, ?, ?)').run(userId, foodId, current + qty);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO pet_food_inventory (guildId, userId, foodId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, foodId, current + qty);
+    }
 }
 
 function removePetFood(guildId, userId, foodId, qty = 1) {
     const current = getPetFoodCount(guildId, userId, foodId);
     if (current < qty) return false;
-    if (current - qty <= 0) db.prepare('DELETE FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND foodId = ?').run(guildId, userId, foodId);
-    else db.prepare('UPDATE pet_food_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND foodId = ?').run(current - qty, guildId, userId, foodId);
+    if (checkGlobalMode()) {
+        if (current - qty <= 0) db.prepare('DELETE FROM pet_food_inventory WHERE userId = ? AND foodId = ?').run(userId, foodId);
+        else db.prepare('UPDATE pet_food_inventory SET quantity = ? WHERE userId = ? AND foodId = ?').run(current - qty, userId, foodId);
+    } else {
+        if (current - qty <= 0) db.prepare('DELETE FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND foodId = ?').run(guildId, userId, foodId);
+        else db.prepare('UPDATE pet_food_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND foodId = ?').run(current - qty, guildId, userId, foodId);
+    }
     return true;
 }
 
 function getAllPetFood(guildId, userId) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT * FROM pet_food_inventory WHERE userId = ? AND quantity > 0').all(userId);
+    }
     return db.prepare('SELECT * FROM pet_food_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
 // ================= SEED INVENTORY =================
 function getSeedCount(guildId, userId, cropId) {
+    if (checkGlobalMode()) {
+        const row = db.prepare('SELECT quantity FROM seed_inventory WHERE userId = ? AND cropId = ?').get(userId, cropId);
+        return row ? row.quantity : 0;
+    }
     const row = db.prepare('SELECT quantity FROM seed_inventory WHERE guildId = ? AND userId = ? AND cropId = ?').get(guildId, userId, cropId);
     return row ? row.quantity : 0;
 }
 
 function addSeed(guildId, userId, cropId, qty = 1) {
     const current = getSeedCount(guildId, userId, cropId);
-    db.prepare('INSERT OR REPLACE INTO seed_inventory (guildId, userId, cropId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, cropId, current + qty);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO seed_inventory (userId, cropId, quantity) VALUES (?, ?, ?)').run(userId, cropId, current + qty);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO seed_inventory (guildId, userId, cropId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, cropId, current + qty);
+    }
 }
 
 function removeSeed(guildId, userId, cropId, qty = 1) {
     const current = getSeedCount(guildId, userId, cropId);
     if (current < qty) return false;
-    if (current - qty <= 0) db.prepare('DELETE FROM seed_inventory WHERE guildId = ? AND userId = ? AND cropId = ?').run(guildId, userId, cropId);
-    else db.prepare('UPDATE seed_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND cropId = ?').run(current - qty, guildId, userId, cropId);
+    if (checkGlobalMode()) {
+        if (current - qty <= 0) db.prepare('DELETE FROM seed_inventory WHERE userId = ? AND cropId = ?').run(userId, cropId);
+        else db.prepare('UPDATE seed_inventory SET quantity = ? WHERE userId = ? AND cropId = ?').run(current - qty, userId, cropId);
+    } else {
+        if (current - qty <= 0) db.prepare('DELETE FROM seed_inventory WHERE guildId = ? AND userId = ? AND cropId = ?').run(guildId, userId, cropId);
+        else db.prepare('UPDATE seed_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND cropId = ?').run(current - qty, guildId, userId, cropId);
+    }
     return true;
 }
 
 function getAllSeeds(guildId, userId) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT * FROM seed_inventory WHERE userId = ? AND quantity > 0').all(userId);
+    }
     return db.prepare('SELECT * FROM seed_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
 // ================= FERTILIZER INVENTORY =================
 function getFertCount(guildId, userId, fertId) {
+    if (checkGlobalMode()) {
+        const row = db.prepare('SELECT quantity FROM fertilizer_inventory WHERE userId = ? AND fertId = ?').get(userId, fertId);
+        return row ? row.quantity : 0;
+    }
     const row = db.prepare('SELECT quantity FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND fertId = ?').get(guildId, userId, fertId);
     return row ? row.quantity : 0;
 }
 
 function addFert(guildId, userId, fertId, qty = 1) {
     const current = getFertCount(guildId, userId, fertId);
-    db.prepare('INSERT OR REPLACE INTO fertilizer_inventory (guildId, userId, fertId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, fertId, current + qty);
+    if (checkGlobalMode()) {
+        db.prepare('INSERT OR REPLACE INTO fertilizer_inventory (userId, fertId, quantity) VALUES (?, ?, ?)').run(userId, fertId, current + qty);
+    } else {
+        db.prepare('INSERT OR REPLACE INTO fertilizer_inventory (guildId, userId, fertId, quantity) VALUES (?, ?, ?, ?)').run(guildId, userId, fertId, current + qty);
+    }
 }
 
 function removeFert(guildId, userId, fertId, qty = 1) {
     const current = getFertCount(guildId, userId, fertId);
     if (current < qty) return false;
-    if (current - qty <= 0) db.prepare('DELETE FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND fertId = ?').run(guildId, userId, fertId);
-    else db.prepare('UPDATE fertilizer_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND fertId = ?').run(current - qty, guildId, userId, fertId);
+    if (checkGlobalMode()) {
+        if (current - qty <= 0) db.prepare('DELETE FROM fertilizer_inventory WHERE userId = ? AND fertId = ?').run(userId, fertId);
+        else db.prepare('UPDATE fertilizer_inventory SET quantity = ? WHERE userId = ? AND fertId = ?').run(current - qty, userId, fertId);
+    } else {
+        if (current - qty <= 0) db.prepare('DELETE FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND fertId = ?').run(guildId, userId, fertId);
+        else db.prepare('UPDATE fertilizer_inventory SET quantity = ? WHERE guildId = ? AND userId = ? AND fertId = ?').run(current - qty, guildId, userId, fertId);
+    }
     return true;
 }
 
 function getAllFerts(guildId, userId) {
+    if (checkGlobalMode()) {
+        return db.prepare('SELECT * FROM fertilizer_inventory WHERE userId = ? AND quantity > 0').all(userId);
+    }
     return db.prepare('SELECT * FROM fertilizer_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
 }
 
