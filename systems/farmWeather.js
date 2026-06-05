@@ -187,7 +187,6 @@ module.exports = {
     getActivePests,
     applyPest,
     resolvePest,
-    resolveAllPests,
     getPestHarvestEffect
 };
 
@@ -233,9 +232,24 @@ const PEST_PROTECTION = {
 };
 
 // ==================== CHECK FOR PEST ATTACK ====================
+// Max 5 tanaman bisa kena hama sekaligus. Random plot yang diserang.
 function rollPestAttack(guildId, userId, plotId) {
+    // Check if already at max pest count (5)
+    const currentPests = getActivePests(guildId, userId);
+    if (currentPests.length >= 5) return null; // Max 5 hama aktif
+
+    // Check if this plot already has a pest
+    if (currentPests.some(p => p.plotId === plotId)) return null;
+
     const weather = getTodayWeather();
     const weatherMod = WEATHER_PEST_MODIFIER[weather.id] || 1.0;
+
+    // Check pest immunity (pesticide_shield active)
+    try {
+        const { getUserStat } = require('../database');
+        const shieldUntil = getUserStat(guildId, userId, 'pest_shield_until') || 0;
+        if (Date.now() < shieldUntil) return null; // Immune!
+    } catch(e) {}
 
     // Check protections
     let protectionReduction = 0;
@@ -287,18 +301,10 @@ function applyPest(guildId, userId, plotId, pestId) {
     } catch(e) {}
 }
 
-// ==================== RESOLVE PEST (player handles it) ====================
+// ==================== RESOLVE PEST (player uses pesticide on 1 plot) ====================
 function resolvePest(guildId, userId, pestRecordId) {
     try {
         db.prepare('UPDATE farm_pests SET resolved = 1 WHERE id = ? AND guildId = ? AND userId = ?').run(pestRecordId, guildId, userId);
-        return true;
-    } catch(e) { return false; }
-}
-
-// ==================== RESOLVE ALL PESTS ====================
-function resolveAllPests(guildId, userId) {
-    try {
-        db.prepare('UPDATE farm_pests SET resolved = 1 WHERE guildId = ? AND userId = ? AND resolved = 0').run(guildId, userId);
         return true;
     } catch(e) { return false; }
 }
