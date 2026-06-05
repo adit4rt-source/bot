@@ -19,11 +19,12 @@ const EXPEDITION_ZONES = [
         minPetLevel: 1,
         duration: 2 * 60, // 2 jam (menit)
         rewards: {
-            moneyRange: [200, 800],
-            expRange: [30, 60],
+            moneyRange: [800, 2500],
+            expRange: [50, 120],
             drops: [
-                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 25 },
-                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 10 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 40 },
+                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 20 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 15 },
             ]
         }
     },
@@ -35,12 +36,13 @@ const EXPEDITION_ZONES = [
         minPetLevel: 10,
         duration: 3 * 60, // 3 jam
         rewards: {
-            moneyRange: [500, 1500],
-            expRange: [50, 100],
+            moneyRange: [2000, 5000],
+            expRange: [100, 200],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 30 },
-                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 20 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 8 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 45 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 35 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 15 },
+                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 25 },
             ]
         }
     },
@@ -52,13 +54,14 @@ const EXPEDITION_ZONES = [
         minPetLevel: 25,
         duration: 4 * 60, // 4 jam
         rewards: {
-            moneyRange: [1000, 3000],
-            expRange: [80, 150],
+            moneyRange: [4000, 10000],
+            expRange: [150, 300],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 35 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 15 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 10 },
-                { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 12 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 50 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 25 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 18 },
+                { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 20 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 30 },
             ]
         }
     },
@@ -70,14 +73,15 @@ const EXPEDITION_ZONES = [
         minPetLevel: 40,
         duration: 5 * 60, // 5 jam
         rewards: {
-            moneyRange: [2000, 5000],
-            expRange: [120, 200],
+            moneyRange: [7000, 18000],
+            expRange: [200, 400],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 40 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 20 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 15 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 8 },
-                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 10 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 55 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 30 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 22 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 15 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 18 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 12 },
             ]
         }
     },
@@ -89,14 +93,15 @@ const EXPEDITION_ZONES = [
         minPetLevel: 60,
         duration: 6 * 60, // 6 jam
         rewards: {
-            moneyRange: [3000, 8000],
-            expRange: [180, 300],
+            moneyRange: [12000, 30000],
+            expRange: [300, 600],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 50 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 25 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 15 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 20 },
-                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 12 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 65 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 40 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 25 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 30 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 20 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 22 },
             ]
         }
     },
@@ -108,15 +113,15 @@ const EXPEDITION_ZONES = [
         minPetLevel: 100,
         duration: 8 * 60, // 8 jam
         rewards: {
-            moneyRange: [5000, 15000],
-            expRange: [250, 500],
+            moneyRange: [20000, 50000],
+            expRange: [500, 1000],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 60 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 35 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 20 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 25 },
-                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 18 },
-                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 15 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 75 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 50 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 35 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 35 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 28 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 25 },
             ]
         }
     },
