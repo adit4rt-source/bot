@@ -345,6 +345,35 @@ app.get('/api/fishing/weather', (req, res) => {
     }
 });
 
+// ==================== USER GUILDS (for dashboard server picker) ====================
+app.get('/api/user/guilds', async (req, res) => {
+    try {
+        const userId = req.headers['x-user-id'];
+        if (!userId) return res.status(400).json({ error: 'Missing x-user-id header' });
+
+        if (!discordClient) return res.json({ guilds: [] });
+
+        const userGuilds = [];
+        for (const [, guild] of discordClient.guilds.cache) {
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member && member.permissions.has('Administrator')) {
+                    userGuilds.push({
+                        id: guild.id,
+                        name: guild.name,
+                        icon: guild.iconURL({ size: 64 }) || null,
+                        memberCount: guild.memberCount,
+                    });
+                }
+            } catch (e) { /* skip */ }
+        }
+
+        res.json({ guilds: userGuilds });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ==================== AUTOMOD ====================
 app.get('/api/automod/:guildId', async (req, res) => {
     try {
