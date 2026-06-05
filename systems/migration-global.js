@@ -242,15 +242,12 @@ function runGlobalMigration(db) {
         const achievementCount = db.prepare("SELECT COUNT(*) as cnt FROM achievements_global").get().cnt;
         console.log(`    ✓ ${achievementCount} achievements migrated`);
         
-        // Migrate pets - keep best/active pets per user
+        // Migrate pets - keep ALL pets per user (not just highest level!)
         console.log('  → Migrating pets...');
         db.exec(`
             INSERT INTO pets_global (userId, petId, name, level, exp, happiness, hunger, status, active, adoptedAt, hunting_until, skills, class, element, hp, atk, def, spd, crit, evolved, evoStage)
             SELECT userId, petId, name, level, exp, happiness, hunger, status, active, adoptedAt, hunting_until, skills, class, element, hp, atk, def, spd, crit, evolved, evoStage
             FROM pets
-            WHERE (userId, level) IN (
-                SELECT userId, MAX(level) FROM pets GROUP BY userId
-            )
         `);
         const petCount = db.prepare("SELECT COUNT(*) as cnt FROM pets_global").get().cnt;
         console.log(`    ✓ ${petCount} pets migrated`);
