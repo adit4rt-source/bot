@@ -21,7 +21,7 @@ const handleReactionAdd = require('./events/reactionAdd');
 const handleInteractionCreate = require('./events/interactionCreate');
 
 // Load API server (Dashboard)
-const { startApiServer } = require('./api');
+const { startApiServer, setDiscordClient } = require('./api');
 
 // Load backup system
 const { startBackupSchedule } = require('./systems/backup');
@@ -90,6 +90,7 @@ client.once(Events.ClientReady, async c => {
     try { maybeRunStartupReset(); } catch (e) { console.error('Startup reset error:', e); }
 
     // Start API server for dashboard
+    setDiscordClient(client);
     startApiServer();
 
     // Start auto-backup schedule (every 6 hours + immediate backup)

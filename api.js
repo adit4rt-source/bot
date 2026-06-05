@@ -10,6 +10,39 @@ const API_PORT = process.env.API_PORT || 25922;
 const API_KEY = process.env.API_KEY || 'change-this-secret-key';
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').filter(Boolean);
 
+// Discord client reference (set by bot.js)
+let discordClient = null;
+function setDiscordClient(client) { discordClient = client; }
+
+// ==================== DISCORD USER RESOLVER ====================
+const userCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 min
+
+async function resolveUser(userId) {
+    const cached = userCache.get(userId);
+    if (cached && (Date.now() - cached.cachedAt) < CACHE_TTL) return cached;
+
+    if (discordClient) {
+        try {
+            const user = await discordClient.users.fetch(userId).catch(() => null);
+            if (user) {
+                const data = { userId, username: user.username, displayName: user.globalName || user.username, avatar: user.displayAvatarURL({ size: 64 }), cachedAt: Date.now() };
+                userCache.set(userId, data);
+                return data;
+            }
+        } catch (e) { /* silent */ }
+    }
+    return { userId, username: userId, displayName: userId, avatar: null, cachedAt: Date.now() };
+}
+
+async function enrichLeaderboard(rows, userIdField = 'userId') {
+    if (!rows || rows.length === 0) return rows;
+    const ids = [...new Set(rows.map(r => r[userIdField]).filter(Boolean))];
+    const users = {};
+    await Promise.all(ids.map(async id => { users[id] = await resolveUser(id); }));
+    return rows.map(r => ({ ...r, _user: users[r[userIdField]] || { username: r[userIdField], displayName: r[userIdField], avatar: null } }));
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -84,7 +117,7 @@ app.get('/api/stats/commands', (req, res) => {
 });
 
 // ==================== LEADERBOARD ====================
-app.get('/api/leaderboard/:type', (req, res) => {
+app.get('/api/leaderboard/:type', async (req, res) => {
     try {
         const { type } = req.params;
         const limit = parseInt(req.query.limit) || 10;
@@ -113,7 +146,7 @@ app.get('/api/leaderboard/:type', (req, res) => {
                 return res.status(400).json({ error: 'Invalid leaderboard type' });
         }
 
-        res.json({ type, leaderboard: rows });
+        res.json({ type, leaderboard: await enrichLeaderboard(rows) });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -313,7 +346,7 @@ app.get('/api/fishing/weather', (req, res) => {
 });
 
 // ==================== FISHING STATS ====================
-app.get('/api/fishing/stats', (req, res) => {
+app.get('/api/fishing/stats', async (req, res) => {
     try {
         const totalCaught = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_fish_caught'").get();
         const totalSold = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_fish_sold_value'").get();
@@ -331,8 +364,8 @@ app.get('/api/fishing/stats', (req, res) => {
             totalFishSpecies: FISH_DATA.length,
             totalLocations: FISHING_LOCATIONS.length,
             tiers: FISH_TIERS.map(t => t.tier),
-            topFishers,
-            topCollectors: collectionStats,
+            topFishers: await enrichLeaderboard(topFishers),
+            topCollectors: await enrichLeaderboard(collectionStats),
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -353,7 +386,7 @@ app.get('/api/fishing/collection', (req, res) => {
 });
 
 // ==================== FARMING STATS ====================
-app.get('/api/farming/stats', (req, res) => {
+app.get('/api/farming/stats', async (req, res) => {
     try {
         const totalHarvests = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_harvests'").get();
         const totalCrafts = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_crafts'").get();
@@ -368,7 +401,7 @@ app.get('/api/farming/stats', (req, res) => {
             totalMutations: totalMutations?.total || 0,
             activePlots: activePlots?.count || 0,
             totalCropTypes: FARM_CROPS.length,
-            topFarmers,
+            topFarmers: await enrichLeaderboard(topFarmers),
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -376,7 +409,7 @@ app.get('/api/farming/stats', (req, res) => {
 });
 
 // ==================== PET STATS ====================
-app.get('/api/pets/stats', (req, res) => {
+app.get('/api/pets/stats', async (req, res) => {
     try {
         const totalPets = db.prepare("SELECT COUNT(*) as count FROM pets").get();
         const totalEvolved = db.prepare("SELECT COUNT(*) as count FROM pets WHERE evolved = 1").get();
@@ -396,7 +429,7 @@ app.get('/api/pets/stats', (req, res) => {
             dungeonClears: dungeonClears?.total || 0,
             bossKills: bossKills?.total || 0,
             pvpWins: pvpWins?.total || 0,
-            topPets,
+            topPets: await enrichLeaderboard(topPets),
             popularPets: petsByTier,
         });
     } catch (e) {
@@ -405,7 +438,7 @@ app.get('/api/pets/stats', (req, res) => {
 });
 
 // ==================== CASINO STATS ====================
-app.get('/api/casino/stats', (req, res) => {
+app.get('/api/casino/stats', async (req, res) => {
     try {
         const coinflipWins = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'coinflip_wins'").get();
         const slotWins = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'slot_wins'").get();
@@ -417,8 +450,8 @@ app.get('/api/casino/stats', (req, res) => {
             coinflipWins: coinflipWins?.total || 0,
             slotWins: slotWins?.total || 0,
             slotTotalWinnings: slotTotal?.total || 0,
-            topGamblers,
-            topCoinflip,
+            topGamblers: await enrichLeaderboard(topGamblers),
+            topCoinflip: await enrichLeaderboard(topCoinflip),
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -434,4 +467,4 @@ function startApiServer() {
     });
 }
 
-module.exports = { startApiServer };
+module.exports = { startApiServer, setDiscordClient };
