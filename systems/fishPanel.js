@@ -2,13 +2,13 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getItemCount, addItem, removeItem, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
-const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('./fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
 const { getContestState, addContestEntry, getContestLeaderboard } = require('./contest');
 const { addPetExp } = require('../systems/pets');
-const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE } = require('../data/fish');
+const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE, SEA_MONSTERS } = require('../data/fish');
 const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGiantFish, getGiantFishStats, buildGiantFishSpawnEmbed, buildGiantFishHitEmbed, buildGiantFishDefeatedEmbed, buildGiantFishEscapedEmbed, GIANT_FISH } = require('./giantFish');
 const { hasSecretLocation, tryUnlockSecretLocation, trackLocationCatch, buildSecretLocationUnlockEmbed, buildSecretLocationProgressEmbed, SECRET_LOCATION } = require('./secretLocation');
 const state = require('../state');
@@ -211,6 +211,44 @@ async function handleFishingButton(interaction) {
             }
         }
 
+        // === SEA MONSTER CHECK (before normal fishing) ===
+        const eq2 = getEquipment(guildId, userId);
+        const rod2 = ROD_TYPES.find(r => r.id === eq2.rod) || ROD_TYPES[0];
+        const loc2 = FISHING_LOCATIONS.find(l => l.id === (eq2.location || 'river')) || FISHING_LOCATIONS[0];
+        const monsterEncounter = rollSeaMonster(guildId, userId, loc2, rod2);
+        if (monsterEncounter) {
+            const { monster, damageResult } = monsterEncounter;
+            incrementUserStat(guildId, userId, 'sea_monster_encounters');
+
+            // Extra cooldown if monster type is cooldown
+            if (damageResult.type === 'cooldown') {
+                const cdKey2 = `fish_${guildId}_${userId}`;
+                fishCooldowns.set(cdKey2, Date.now() + (rod.cooldown + 30) * 1000);
+            }
+
+            const monsterEmbed = new EmbedBuilder()
+                .setColor('#E74C3C')
+                .setTitle(`${monster.emoji} MONSTER LAUT MENYERANG!`)
+                .setDescription(
+                    `**${monster.name}** muncul dari kedalaman!\n\n` +
+                    `> 💬 *${monster.desc}*\n\n` +
+                    `⚠️ **Damage:** ${damageResult.detail}\n` +
+                    `> 📍 Lokasi: **${loc2.name}**\n` +
+                    `> 🎋 Rod: **${rod2.name}** (Tier ${rod2.tier})\n\n` +
+                    `💡 *Tip: Rod tier lebih tinggi = monster chance berkurang!*`
+                )
+                .setFooter({ text: `Monster chance di ${loc2.name}: ${loc2.monsterChance}% (rod bonus: -${Math.max(0, rod2.tier - loc2.requiredRodTier) * 3}%)` });
+
+            const monsterRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Coba Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('📋 Panel').setStyle(ButtonStyle.Secondary)
+            );
+
+            await interaction.update({ embeds: [monsterEmbed], components: [monsterRow] });
+            await checkAchievements(interaction.guild, userId, { type: 'sea_monster' });
+            return;
+        }
+
         // === NORMAL FISHING ===
         const result = catchFish(guildId, userId);
         incrementUserStat(guildId, userId, 'total_fish_caught');
@@ -252,9 +290,10 @@ async function handleFishingButton(interaction) {
             secretUnlockMsg = '\n\n> 👁️🌀 **SECRET LOCATION UNLOCKED!** Cek 📍 Location!';
         }
 
-        const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
+        const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF', 'God': '#FFD700' };
         let title = `🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`;
-        if (result.tier.tier === 'Secret') title = '🔮💫 SECRET CATCH!!! 💫🔮';
+        if (result.tier.tier === 'God') title = '👑⚡ GOD TIER CATCH!!! ⚡👑';
+        else if (result.tier.tier === 'Secret') title = '🔮💫 SECRET CATCH!!! 💫🔮';
         else if (result.tier.tier === 'Mythic') title = '🌈✨ MYTHIC CATCH!! ✨🌈';
         else if (result.tier.tier === 'Legendary') title = '🐉⚡ LEGENDARY CATCH! ⚡🐉';
 
@@ -279,7 +318,12 @@ async function handleFishingButton(interaction) {
         );
 
         await interaction.update({ embeds: [embed], components: [afterCatchRow] });
-        await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
+        await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight, fishId: result.fish.id });
+
+        // Track God tier catches
+        if (result.tier.tier === 'God') {
+            incrementUserStat(guildId, userId, 'fish_caught_god_tier');
+        }
 
         // Abyss-specific achievements
         if (currentLocation.id === 'abyss') {

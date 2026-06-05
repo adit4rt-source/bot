@@ -1,4 +1,4 @@
-// data/fish.js — Fishing system data (v3.1.0 Location-Based Overhaul)
+// data/fish.js — Fishing system data (v3.2.0 — God Tier + Sea Monsters)
 // Each location has unique fish. Rod determines luck penalty at higher locations.
 
 // ==================== ROD TYPES ====================
@@ -13,6 +13,10 @@ const ROD_TYPES = [
     { id: 'celestial', name: 'Joran Celestial', emoji: '<:JoranCelestial:1510791105694793818>', price: 300000, cooldown: 4, rareBonus: 24, tier: 7 },
     { id: 'divine_rod', name: 'Joran Divine', emoji: '<:JoranDivine:1510791103987843203>', price: 500000, cooldown: 3, rareBonus: 28, tier: 8 },
     { id: 'void_rod', name: 'Joran Void', emoji: '<:JoranVoid:1510791102075109446>', price: 1000000, cooldown: 3, rareBonus: 32, tier: 9 },
+    // === NEW HIGH-TIER RODS ===
+    { id: 'astral_rod', name: 'Joran Astral', emoji: '🌟', price: 2000000, cooldown: 2, rareBonus: 38, tier: 10 },
+    { id: 'godslayer_rod', name: 'Joran Godslayer', emoji: '⚡', price: 5000000, cooldown: 2, rareBonus: 45, tier: 11 },
+    { id: 'omega_rod', name: 'Joran Omega', emoji: '🔱', price: 10000000, cooldown: 1, rareBonus: 55, tier: 12 },
 ];
 
 // ==================== BAIT TYPES ====================
@@ -26,6 +30,10 @@ const BAIT_TYPES = [
     { id: 'golden_worm', name: 'Golden Worm', emoji: '✨', price: 3000, rareBonus: 15 },
     { id: 'mystic_bait', name: 'Mystic Bait', emoji: '🔮', price: 8000, rareBonus: 22 },
     { id: 'void_lure', name: 'Void Lure', emoji: '🕳️', price: 20000, rareBonus: 30 },
+    // === NEW HIGH-TIER BAITS ===
+    { id: 'celestial_bait', name: 'Celestial Bait', emoji: '🌙', price: 50000, rareBonus: 38 },
+    { id: 'divine_essence', name: 'Divine Essence', emoji: '✝️', price: 100000, rareBonus: 45 },
+    { id: 'god_lure', name: 'God Lure', emoji: '👁️‍🗨️', price: 250000, rareBonus: 55 },
 ];
 
 // ==================== FISH TIERS ====================
@@ -38,21 +46,45 @@ const FISH_TIERS = [
     { tier: 'Legendary', emoji: '🐉', chance: 1.5, minWeight: 50, maxWeight: 1000, minValue: 150, maxValue: 600 },
     { tier: 'Mythic', emoji: '🌈', chance: 0.4, minWeight: 100, maxWeight: 5000, minValue: 400, maxValue: 1500 },
     { tier: 'Secret', emoji: '🔮', chance: 0.1, minWeight: 500, maxWeight: 9999, minValue: 1000, maxValue: 5000 },
+    { tier: 'God', emoji: '👑', chance: 0.02, minWeight: 2000, maxWeight: 50000, minValue: 5000, maxValue: 25000 },
+];
+
+// ==================== SEA MONSTERS ====================
+// Monsters that can interrupt fishing at advanced locations
+// chance = % chance per cast to encounter monster instead of fish
+const SEA_MONSTERS = [
+    // Celestial Ocean monsters
+    { id: 'storm_serpent', name: 'Storm Serpent', emoji: '🐍⚡', location: 'celestial_ocean', chance: 12, damage: 'bait', desc: 'Ular badai menyambar umpanmu!' },
+    { id: 'light_kraken', name: 'Light Kraken', emoji: '🦑✨', location: 'celestial_ocean', chance: 8, damage: 'bait', desc: 'Kraken cahaya merebut umpanmu!' },
+    { id: 'celestial_shark', name: 'Celestial Shark', emoji: '🦈🌟', location: 'celestial_ocean', chance: 5, damage: 'rod_break', desc: 'Hiu celestial menyerang joranmu! Rod Part -1' },
+    // Primordial Depths monsters
+    { id: 'ancient_hydra', name: 'Ancient Hydra', emoji: '🐲💀', location: 'primordial_depths', chance: 15, damage: 'bait', desc: 'Hydra purba memakan umpanmu!' },
+    { id: 'abyss_titan', name: 'Abyss Titan', emoji: '👹🌊', location: 'primordial_depths', chance: 10, damage: 'bait_all', desc: 'Titan abyss menghancurkan semua umpan (5)!' },
+    { id: 'death_leviathan', name: 'Death Leviathan', emoji: '💀🐋', location: 'primordial_depths', chance: 5, damage: 'rod_break', desc: 'Leviathan kematian merusak joranmu! Rod Part -2' },
+    { id: 'soul_eater', name: 'Soul Eater', emoji: '👻⚫', location: 'primordial_depths', chance: 3, damage: 'money', desc: 'Soul Eater mencuri uangmu! -5000 money' },
+    // God Realm monsters
+    { id: 'chaos_dragon', name: 'Chaos Dragon', emoji: '🐉🔥', location: 'god_realm', chance: 18, damage: 'bait', desc: 'Naga Chaos membakar umpanmu!' },
+    { id: 'void_emperor_monster', name: 'Void Emperor', emoji: '🕳️👑', location: 'god_realm', chance: 12, damage: 'bait_all', desc: 'Void Emperor menghancurkan 5 umpan!' },
+    { id: 'god_guardian', name: 'God Guardian', emoji: '⚔️👁️', location: 'god_realm', chance: 8, damage: 'rod_break', desc: 'Penjaga Dewa menyerang joranmu! Rod Part -3' },
+    { id: 'reality_destroyer', name: 'Reality Destroyer', emoji: '💥🌀', location: 'god_realm', chance: 5, damage: 'money', desc: 'Penghancur Realitas mencuri uangmu! -10000 money' },
+    { id: 'time_devourer', name: 'Time Devourer', emoji: '⏳👾', location: 'god_realm', chance: 3, damage: 'cooldown', desc: 'Pemakan Waktu memperlambatmu! Cooldown +30 detik' },
 ];
 
 // ==================== FISHING LOCATIONS ====================
-// requiredRodTier: rod.tier minimum untuk rate "normal". Di bawah = luck penalty.
-// 0 = no requirement (any rod ok), 1 = fiber+, 2 = carbon+, etc.
 const FISHING_LOCATIONS = [
-    { id: 'river', name: '🏞️ Sungai', desc: 'Sungai kecil yang tenang — cocok untuk pemula', requiredRodTier: 0, luckPenalty: 0, bonusRare: 0, tiers: ['Trash','Common','Uncommon','Rare'] },
-    { id: 'swamp', name: '🌿 Rawa', desc: 'Air berlumpur penuh makhluk aneh', requiredRodTier: 0, luckPenalty: 0, bonusRare: 2, tiers: ['Trash','Common','Uncommon','Rare'] },
-    { id: 'lake', name: '🌊 Danau', desc: 'Danau besar dengan ikan berkualitas', requiredRodTier: 1, luckPenalty: 15, bonusRare: 5, tiers: ['Common','Uncommon','Rare','Epic'] },
-    { id: 'coast', name: '🏖️ Laut Pesisir', desc: 'Laut dangkal dengan ikan beragam', requiredRodTier: 2, luckPenalty: 20, bonusRare: 7, tiers: ['Common','Uncommon','Rare','Epic'] },
-    { id: 'deep_sea', name: '🌊 Laut Dalam', desc: 'Laut tengah penuh ikan monster', requiredRodTier: 3, luckPenalty: 25, bonusRare: 10, tiers: ['Uncommon','Rare','Epic','Legendary'] },
-    { id: 'ice_cave', name: '❄️ Gua Es', desc: 'Air dingin tersembunyi di pegunungan', requiredRodTier: 4, luckPenalty: 20, bonusRare: 12, tiers: ['Rare','Epic','Legendary'] },
-    { id: 'volcano', name: '🌋 Lahar', desc: 'Sungai lava dengan makhluk tahan panas', requiredRodTier: 5, luckPenalty: 25, bonusRare: 15, tiers: ['Rare','Epic','Legendary','Mythic'] },
-    { id: 'void_rift', name: '🕳️ Void Rift', desc: 'Dimensi lain — penuh monster langka', requiredRodTier: 6, luckPenalty: 30, bonusRare: 20, tiers: ['Epic','Legendary','Mythic','Secret'] },
-    { id: 'abyss', name: '👁️ The Abyss', desc: 'Dimensi tersembunyi di bawah Void Rift — hanya pemancing elite', requiredRodTier: 7, luckPenalty: 35, bonusRare: 25, tiers: ['Epic','Legendary','Mythic','Secret'], isSecret: true },
+    { id: 'river', name: '🏞️ Sungai', desc: 'Sungai kecil yang tenang — cocok untuk pemula', requiredRodTier: 0, luckPenalty: 0, bonusRare: 0, tiers: ['Trash','Common','Uncommon','Rare'], monsterChance: 0 },
+    { id: 'swamp', name: '🌿 Rawa', desc: 'Air berlumpur penuh makhluk aneh', requiredRodTier: 0, luckPenalty: 0, bonusRare: 2, tiers: ['Trash','Common','Uncommon','Rare'], monsterChance: 0 },
+    { id: 'lake', name: '🌊 Danau', desc: 'Danau besar dengan ikan berkualitas', requiredRodTier: 1, luckPenalty: 15, bonusRare: 5, tiers: ['Common','Uncommon','Rare','Epic'], monsterChance: 0 },
+    { id: 'coast', name: '🏖️ Laut Pesisir', desc: 'Laut dangkal dengan ikan beragam', requiredRodTier: 2, luckPenalty: 20, bonusRare: 7, tiers: ['Common','Uncommon','Rare','Epic'], monsterChance: 0 },
+    { id: 'deep_sea', name: '🌊 Laut Dalam', desc: 'Laut tengah penuh ikan monster', requiredRodTier: 3, luckPenalty: 25, bonusRare: 10, tiers: ['Uncommon','Rare','Epic','Legendary'], monsterChance: 0 },
+    { id: 'ice_cave', name: '❄️ Gua Es', desc: 'Air dingin tersembunyi di pegunungan', requiredRodTier: 4, luckPenalty: 20, bonusRare: 12, tiers: ['Rare','Epic','Legendary'], monsterChance: 0 },
+    { id: 'volcano', name: '🌋 Lahar', desc: 'Sungai lava dengan makhluk tahan panas', requiredRodTier: 5, luckPenalty: 25, bonusRare: 15, tiers: ['Rare','Epic','Legendary','Mythic'], monsterChance: 0 },
+    { id: 'void_rift', name: '🕳️ Void Rift', desc: 'Dimensi lain — penuh monster langka', requiredRodTier: 6, luckPenalty: 30, bonusRare: 20, tiers: ['Epic','Legendary','Mythic','Secret'], monsterChance: 0 },
+    { id: 'abyss', name: '👁️ The Abyss', desc: 'Dimensi tersembunyi di bawah Void Rift — hanya pemancing elite', requiredRodTier: 7, luckPenalty: 35, bonusRare: 25, tiers: ['Epic','Legendary','Mythic','Secret'], isSecret: true, monsterChance: 0 },
+    // === NEW ADVANCED LOCATIONS (with Sea Monsters!) ===
+    { id: 'celestial_ocean', name: '🌟 Celestial Ocean', desc: 'Lautan bintang — ikan dewa tapi penuh monster laut!', requiredRodTier: 9, luckPenalty: 40, bonusRare: 30, tiers: ['Legendary','Mythic','Secret','God'], monsterChance: 25 },
+    { id: 'primordial_depths', name: '💀 Primordial Depths', desc: 'Kedalaman purba — monster mematikan mengintai setiap cast!', requiredRodTier: 10, luckPenalty: 45, bonusRare: 35, tiers: ['Mythic','Secret','God'], monsterChance: 33 },
+    { id: 'god_realm', name: '👑 God Realm', desc: 'Dimensi para dewa — hanya yang paling kuat yang bertahan!', requiredRodTier: 11, luckPenalty: 50, bonusRare: 45, tiers: ['Secret','God'], monsterChance: 45 },
 ];
 
 // ==================== FISH DATA (Location-Based) ====================
@@ -161,10 +193,44 @@ const FISH_DATA = [
     { id: 'abyss_guardian', name: 'Abyss Guardian', tier: 'Mythic', emoji: '🛡️', location: 'abyss' },
     { id: 'the_forgotten_one', name: 'The Forgotten One', tier: 'Secret', emoji: '👁️', location: 'abyss' },
     { id: 'universe_fish', name: 'Universe Fish', tier: 'Secret', emoji: '🌠', location: 'abyss' },
+
+    // ===== CELESTIAL OCEAN (🌟) — MONSTER LOCATION =====
+    { id: 'starlight_ray', name: 'Starlight Ray', tier: 'Legendary', emoji: '⭐', location: 'celestial_ocean' },
+    { id: 'nebula_whale', name: 'Nebula Whale', tier: 'Legendary', emoji: '🐋', location: 'celestial_ocean' },
+    { id: 'constellation_fish', name: 'Constellation Fish', tier: 'Legendary', emoji: '✨', location: 'celestial_ocean' },
+    { id: 'aurora_serpent', name: 'Aurora Serpent', tier: 'Legendary', emoji: '🌈', location: 'celestial_ocean' },
+    { id: 'moonlight_koi', name: 'Moonlight Koi', tier: 'Mythic', emoji: '🌙', location: 'celestial_ocean' },
+    { id: 'solar_dragon', name: 'Solar Dragon', tier: 'Mythic', emoji: '☀️', location: 'celestial_ocean' },
+    { id: 'galaxy_jellyfish', name: 'Galaxy Jellyfish', tier: 'Mythic', emoji: '🪼', location: 'celestial_ocean' },
+    { id: 'celestial_phoenix', name: 'Celestial Phoenix', tier: 'Secret', emoji: '🦅', location: 'celestial_ocean' },
+    { id: 'star_eater', name: 'Star Eater', tier: 'Secret', emoji: '🌟', location: 'celestial_ocean' },
+    { id: 'astral_leviathan', name: 'Astral Leviathan', tier: 'God', emoji: '🐉', location: 'celestial_ocean' },
+    { id: 'heaven_whale', name: 'Heaven Whale', tier: 'God', emoji: '🐋', location: 'celestial_ocean' },
+
+    // ===== PRIMORDIAL DEPTHS (💀) — HEAVY MONSTER LOCATION =====
+    { id: 'ancient_titan_fish', name: 'Ancient Titan Fish', tier: 'Mythic', emoji: '🦕', location: 'primordial_depths' },
+    { id: 'primeval_shark', name: 'Primeval Shark', tier: 'Mythic', emoji: '🦈', location: 'primordial_depths' },
+    { id: 'chaos_eel', name: 'Chaos Eel', tier: 'Mythic', emoji: '⚡', location: 'primordial_depths' },
+    { id: 'bone_leviathan', name: 'Bone Leviathan', tier: 'Mythic', emoji: '💀', location: 'primordial_depths' },
+    { id: 'time_fish', name: 'Time Fish', tier: 'Secret', emoji: '⏳', location: 'primordial_depths' },
+    { id: 'entropy_serpent', name: 'Entropy Serpent', tier: 'Secret', emoji: '🌀', location: 'primordial_depths' },
+    { id: 'genesis_whale', name: 'Genesis Whale', tier: 'Secret', emoji: '🌊', location: 'primordial_depths' },
+    { id: 'creator_fish', name: 'Creator Fish', tier: 'God', emoji: '✝️', location: 'primordial_depths' },
+    { id: 'destroyer_of_worlds', name: 'Destroyer of Worlds', tier: 'God', emoji: '💥', location: 'primordial_depths' },
+    { id: 'primordial_god', name: 'Primordial God', tier: 'God', emoji: '🔱', location: 'primordial_depths' },
+
+    // ===== GOD REALM (👑) — EXTREME MONSTER LOCATION =====
+    { id: 'divine_koi', name: 'Divine Koi', tier: 'Secret', emoji: '🐟', location: 'god_realm' },
+    { id: 'holy_dragon_fish', name: 'Holy Dragon Fish', tier: 'Secret', emoji: '🐉', location: 'god_realm' },
+    { id: 'archangel_ray', name: 'Archangel Ray', tier: 'Secret', emoji: '👼', location: 'god_realm' },
+    { id: 'supreme_deity', name: 'Supreme Deity', tier: 'God', emoji: '👑', location: 'god_realm' },
+    { id: 'omega_fish', name: 'Omega Fish', tier: 'God', emoji: '🔱', location: 'god_realm' },
+    { id: 'alpha_leviathan', name: 'Alpha Leviathan', tier: 'God', emoji: '⚡', location: 'god_realm' },
+    { id: 'eternal_one', name: 'The Eternal One', tier: 'God', emoji: '♾️', location: 'god_realm' },
+    { id: 'origin_fish', name: 'Origin Fish', tier: 'God', emoji: '🌌', location: 'god_realm' },
 ];
 
 // ==================== ROD UPGRADE REQUIREMENTS ====================
-// upgradeFrom tier -> upgradeTo tier. Parts = rod_part item count needed.
 const ROD_UPGRADES = [
     { from: 0, to: 1, parts: 3, cost: 1000, successRate: 100 },
     { from: 1, to: 2, parts: 5, cost: 3000, successRate: 100 },
@@ -175,9 +241,12 @@ const ROD_UPGRADES = [
     { from: 6, to: 7, parts: 35, cost: 200000, successRate: 60 },
     { from: 7, to: 8, parts: 50, cost: 350000, successRate: 50 },
     { from: 8, to: 9, parts: 75, cost: 500000, successRate: 40 },
+    { from: 9, to: 10, parts: 100, cost: 1000000, successRate: 35 },
+    { from: 10, to: 11, parts: 150, cost: 2500000, successRate: 25 },
+    { from: 11, to: 12, parts: 200, cost: 5000000, successRate: 15 },
 ];
 
 // Drop chance for rod_part when fishing (base %, before bonuses)
 const ROD_PART_DROP_CHANCE = 8; // 8% per cast
 
-module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE };
+module.exports = { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE, SEA_MONSTERS };
