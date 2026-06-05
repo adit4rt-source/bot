@@ -50,6 +50,16 @@ db.exec(`CREATE TABLE IF NOT EXISTS farm_weather (
     setAt INTEGER
 )`);
 
+db.exec(`CREATE TABLE IF NOT EXISTS farm_pests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guildId TEXT,
+    userId TEXT,
+    plotId INTEGER,
+    pestId TEXT,
+    appliedAt INTEGER,
+    resolved INTEGER DEFAULT 0
+)`);
+
 // ==================== GET TODAY'S WEATHER ====================
 function getTodayWeather() {
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
@@ -169,5 +179,174 @@ module.exports = {
     getWeatherMutationBonus,
     isAutoWaterWeather,
     getWeatherForecast,
-    formatWeatherEmbed
+    formatWeatherEmbed,
+    PEST_TYPES,
+    WEATHER_PEST_MODIFIER,
+    PEST_PROTECTION,
+    rollPestAttack,
+    getActivePests,
+    applyPest,
+    resolvePest,
+    resolveAllPests,
+    getPestHarvestEffect
 };
+
+
+
+// ==================== PEST/HAMA SYSTEM ====================
+// Pests can attack crops randomly. Checked every tick (by reminder system).
+// Some weather increases pest chance, some decreases it.
+
+const PEST_TYPES = [
+    { id: 'ulat', name: 'Ulat', emoji: '🐛', damage: 'yield', reduction: 0.30,
+      chance: 0.08, desc: 'Memakan daun — yield -30% jika tidak ditangani' },
+    { id: 'belalang', name: 'Belalang', emoji: '🦗', damage: 'yield', reduction: 0.50,
+      chance: 0.05, desc: 'Menyerang gerombolan — yield -50%!' },
+    { id: 'tikus', name: 'Tikus Sawah', emoji: '🐀', damage: 'death', reduction: 0,
+      chance: 0.04, desc: 'Memakan akar — tanaman langsung MATI jika tidak ditangani' },
+    { id: 'kutu', name: 'Kutu Daun', emoji: '🪲', damage: 'speed', reduction: 0.25,
+      chance: 0.07, desc: 'Menghambat pertumbuhan — grow speed -25%' },
+    { id: 'jamur', name: 'Jamur Parasit', emoji: '🍄', damage: 'spread', reduction: 0.20,
+      chance: 0.03, desc: 'Menyebar ke tanaman sebelah — yield -20% semua plot!' },
+    { id: 'burung', name: 'Burung Pemakan', emoji: '🐦', damage: 'steal', reduction: 0,
+      chance: 0.06, desc: 'Mencuri hasil panen — kehilangan 1-3 item saat harvest' },
+];
+
+// Weather pest modifiers
+const WEATHER_PEST_MODIFIER = {
+    sunny: 1.0,       // normal
+    rainy: 1.3,       // humid = more pests
+    cloudy: 0.9,      // slightly less
+    stormy: 0.5,      // storm scares pests away
+    drought: 1.5,     // drought attracts desperate pests!
+    windy: 0.7,       // wind blows pests away
+    foggy: 1.2,       // foggy = pests hide easily
+    rainbow: 0.3,     // rainbow = almost no pests
+};
+
+// Protection factors
+const PEST_PROTECTION = {
+    scarecrow: 0.50,     // scarecrow decoration = -50% pest chance
+    bee_hive: 0.30,      // bee hive = -30% pest chance (bees protect)
+    greenhouse: 0.80,    // greenhouse = -80% pest chance (almost immune!)
+    pet_guard: 0.25,     // pet with event_luck bonus = -25% pest chance
+};
+
+// ==================== CHECK FOR PEST ATTACK ====================
+function rollPestAttack(guildId, userId, plotId) {
+    const weather = getTodayWeather();
+    const weatherMod = WEATHER_PEST_MODIFIER[weather.id] || 1.0;
+
+    // Check protections
+    let protectionReduction = 0;
+    try {
+        const { getFarmDecorations } = require('../database');
+        const decos = getFarmDecorations(guildId, userId);
+        if (decos.some(d => d.decoId === 'scarecrow')) protectionReduction += PEST_PROTECTION.scarecrow;
+        if (decos.some(d => d.decoId === 'bee_hive')) protectionReduction += PEST_PROTECTION.bee_hive;
+        if (decos.some(d => d.decoId === 'greenhouse')) protectionReduction += PEST_PROTECTION.greenhouse;
+    } catch(e) {}
+
+    // Pet guard bonus
+    try {
+        const { getPetData } = require('./pets');
+        const { PET_DATA } = require('../data/pets');
+        const pet = getPetData(guildId, userId);
+        if (pet) {
+            const petDef = PET_DATA.find(p => p.id === pet.petId);
+            if (petDef && petDef.bonus.type === 'event_luck') {
+                protectionReduction += PEST_PROTECTION.pet_guard;
+            }
+        }
+    } catch(e) {}
+
+    // Cap protection at 90%
+    protectionReduction = Math.min(0.90, protectionReduction);
+
+    // Roll for each pest type
+    for (const pest of PEST_TYPES) {
+        const adjustedChance = pest.chance * weatherMod * (1 - protectionReduction);
+        if (Math.random() < adjustedChance) {
+            return pest; // This pest attacks!
+        }
+    }
+    return null; // No pest
+}
+
+// ==================== GET ACTIVE PESTS ON PLOTS ====================
+function getActivePests(guildId, userId) {
+    try {
+        return db.prepare('SELECT * FROM farm_pests WHERE guildId = ? AND userId = ? AND resolved = 0').all(guildId, userId);
+    } catch(e) { return []; }
+}
+
+// ==================== APPLY PEST TO PLOT ====================
+function applyPest(guildId, userId, plotId, pestId) {
+    try {
+        db.prepare('INSERT INTO farm_pests (guildId, userId, plotId, pestId, appliedAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, plotId, pestId, Date.now());
+    } catch(e) {}
+}
+
+// ==================== RESOLVE PEST (player handles it) ====================
+function resolvePest(guildId, userId, pestRecordId) {
+    try {
+        db.prepare('UPDATE farm_pests SET resolved = 1 WHERE id = ? AND guildId = ? AND userId = ?').run(pestRecordId, guildId, userId);
+        return true;
+    } catch(e) { return false; }
+}
+
+// ==================== RESOLVE ALL PESTS ====================
+function resolveAllPests(guildId, userId) {
+    try {
+        db.prepare('UPDATE farm_pests SET resolved = 1 WHERE guildId = ? AND userId = ? AND resolved = 0').run(guildId, userId);
+        return true;
+    } catch(e) { return false; }
+}
+
+// ==================== GET PEST EFFECT ON HARVEST ====================
+// Returns modifier object: { yieldMult, stolenItems, deadPlots }
+function getPestHarvestEffect(guildId, userId, plotId) {
+    const pests = getActivePests(guildId, userId);
+    const plotPests = pests.filter(p => p.plotId === plotId);
+    
+    let yieldMult = 1.0;
+    let stolenItems = 0;
+    let isDead = false;
+    let spreadReduction = 0;
+
+    for (const record of plotPests) {
+        const pest = PEST_TYPES.find(p => p.id === record.pestId);
+        if (!pest) continue;
+
+        switch (pest.damage) {
+            case 'yield':
+                yieldMult -= pest.reduction;
+                break;
+            case 'death':
+                isDead = true;
+                break;
+            case 'speed':
+                // Already slowed during growth, no harvest effect
+                break;
+            case 'steal':
+                stolenItems += Math.floor(Math.random() * 3) + 1;
+                break;
+            case 'spread':
+                spreadReduction = pest.reduction;
+                break;
+        }
+    }
+
+    // Check for spread pests (affects ALL plots)
+    const allPests = pests.filter(p => {
+        const pest = PEST_TYPES.find(pt => pt.id === p.pestId);
+        return pest && pest.damage === 'spread';
+    });
+    if (allPests.length > 0) {
+        yieldMult -= spreadReduction;
+    }
+
+    return { yieldMult: Math.max(0.1, yieldMult), stolenItems, isDead };
+}
+
+// (exports already defined above with all pest functions included)
