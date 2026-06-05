@@ -505,6 +505,35 @@ app.get('/api/streak/leaderboard', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== LEVELING SETTINGS ====================
+app.get('/api/leveling/settings/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const keys = ['leveling_enabled', 'msg_xp_enabled', 'voice_xp_enabled', 'reaction_xp_enabled', 'levelup_announce_enabled', 'levelup_channel', 'levelup_message', 'msg_xp_min', 'msg_xp_max', 'msg_xp_cooldown', 'voice_xp_min', 'voice_xp_max', 'voice_xp_cooldown', 'reaction_xp_min', 'reaction_xp_max', 'reaction_xp_cooldown', 'xp_multiplier', 'max_level', 'no_xp_channels', 'no_xp_roles', 'role_rewards'];
+        const settings = {};
+        for (const key of keys) {
+            const row = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, key);
+            settings[key] = row ? row.value : null;
+        }
+        const defaults = { leveling_enabled: '1', msg_xp_enabled: '1', voice_xp_enabled: '1', reaction_xp_enabled: '1', levelup_announce_enabled: '1', levelup_channel: '', levelup_message: 'Selamat {user.mention}! Kamu naik ke **Level {user.level}**! 🎉', msg_xp_min: '5', msg_xp_max: '15', msg_xp_cooldown: '60', voice_xp_min: '3', voice_xp_max: '8', voice_xp_cooldown: '60', reaction_xp_min: '1', reaction_xp_max: '5', reaction_xp_cooldown: '30', xp_multiplier: '1', max_level: '200', no_xp_channels: '[]', no_xp_roles: '[]', role_rewards: '[]' };
+        const merged = {};
+        for (const key of keys) merged[key] = settings[key] !== null ? settings[key] : defaults[key];
+        res.json({ settings: merged });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/leveling/settings/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Missing settings object' });
+        for (const [key, value] of Object.entries(settings)) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
+        }
+        res.json({ success: true, saved: Object.keys(settings).length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== LEVELING ====================
 app.get('/api/leveling/leaderboard', async (req, res) => {
     try {
