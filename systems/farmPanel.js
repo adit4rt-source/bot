@@ -236,11 +236,14 @@ async function handleFarmButton(interaction) {
         }
         const seedMenu = new StringSelectMenuBuilder().setCustomId(`farm_plantseed_${userId}`).setPlaceholder('🌱 Pilih bibit...').setMinValues(1).setMaxValues(1);
         owned.slice(0, 25).forEach(inv => {
-            const c = FARM_CROPS.find(cr => cr.id === inv.cropId);
+            let c = FARM_CROPS.find(cr => cr.id === inv.cropId);
+            if (!c) c = PRESTIGE_CROPS.find(cr => cr.id === inv.cropId);
             if (!c) return;
+            const timeDisplay = c.time >= 60 ? `${Math.floor(c.time / 60)}j` : `${c.time}m`;
+            const isPrestige = c.tier === 'Prestige';
             seedMenu.addOptions(new StringSelectMenuOptionBuilder()
-                .setLabel(`${c.name} (x${inv.quantity}) — ${c.tier} | ${c.time}m`)
-                .setValue(c.id).setDescription(`Jual: 🪙${c.sellPrice} | Yield: ${c.minYield}-${c.maxYield}`));
+                .setLabel(`${isPrestige ? '🏆 ' : ''}${c.name} (x${inv.quantity}) — ${c.tier} | ${timeDisplay}`)
+                .setValue(c.id).setDescription(`Jual: 🪙${c.sellPrice.toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield}`));
         });
         const embed = new EmbedBuilder().setTitle('🌱 Tanam Bibit').setColor('#2ECC71')
             .setDescription(`Slot tersedia: **${maxSlots - plots.length}** dari ${maxSlots}\nPilih bibit dari inventory:`);
@@ -288,7 +291,8 @@ async function handleFarmButton(interaction) {
         let mutationCount = 0, mutationDesc = '';
 
         for (const plot of plots) {
-            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            let crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
             if (!crop) continue;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
             const growTime = crop.time * (1 - fert.speedBonus) * 60000;
@@ -389,6 +393,13 @@ async function handleFarmButton(interaction) {
             desc += `\n**${tier}:**\n`;
             crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
         }
+        // Prestige Crops section
+        desc += `\n**🏆 Prestige** *(ultra-rare, long-grow)*:\n`;
+        PRESTIGE_CROPS.forEach(c => { 
+            const hours = Math.floor(c.time / 60);
+            desc += `> ${c.emoji} **${c.name}** — 🪙 ${c.cost.toLocaleString('id-ID')} | ⏱️${hours}j | Jual: 🪙${c.sellPrice.toLocaleString('id-ID')}\n`; 
+        });
+
         desc += '\n━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK** *(masuk inventory)*\n\n';
         FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => { desc += `> ${f.emoji} **${f.name}** — 🪙 ${f.cost}\n>  ┗ ⏩ -${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | 📈 +${Math.round(f.yieldBonus * 100)}% hasil` : ''}\n`; });
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
@@ -403,6 +414,15 @@ async function handleFarmButton(interaction) {
             const seedMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed2_${userId}`).setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
             cropsPage2.slice(0, 25).forEach(c => seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice}`)));
             components.push(new ActionRowBuilder().addComponents(seedMenu2));
+        }
+        // Prestige Crops menu
+        if (PRESTIGE_CROPS.length > 0) {
+            const prestigeMenu = new StringSelectMenuBuilder().setCustomId(`farm_buyprestige_${userId}`).setPlaceholder('🏆 Bibit Prestige (24-48 jam)...').setMinValues(1).setMaxValues(1);
+            PRESTIGE_CROPS.forEach(c => {
+                const hours = Math.floor(c.time / 60);
+                prestigeMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost.toLocaleString('id-ID')})`).setValue(c.id).setDescription(`🏆 Prestige | ${hours}j | Jual:🪙${c.sellPrice.toLocaleString('id-ID')}`));
+            });
+            components.push(new ActionRowBuilder().addComponents(prestigeMenu));
         }
         const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_buyfert_${userId}`).setPlaceholder('🧪 Beli Pupuk...').setMinValues(1).setMaxValues(1);
         FARM_FERTILIZERS.filter(f => f.id !== 'none').forEach(f => fertMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙${f.cost})`).setValue(f.id).setDescription(`-${Math.round(f.speedBonus * 100)}% waktu${f.yieldBonus > 0 ? ` | +${Math.round(f.yieldBonus * 100)}% hasil` : ''}`)));
@@ -611,7 +631,9 @@ async function handleFarmSelectMenu(interaction) {
     // === PLANT SEED SELECT ===
     if (customId.startsWith('farm_plantseed_')) {
         const cropId = interaction.values[0];
-        const crop = FARM_CROPS.find(c => c.id === cropId);
+        // Check both normal crops AND prestige crops
+        let crop = FARM_CROPS.find(c => c.id === cropId);
+        if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === cropId);
         if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
         const owned = getSeedCount(guildId, userId, cropId);
         if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya bibit **${crop.emoji} ${crop.name}**!`, ephemeral: true });
@@ -621,8 +643,10 @@ async function handleFarmSelectMenu(interaction) {
         removeSeed(guildId, userId, cropId, 1);
         insertFarmPlot(guildId, userId, cropId, Date.now(), Date.now());
         const sisa = getSeedCount(guildId, userId, cropId);
-        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle(`🌱 ${crop.emoji} ${crop.name} Ditanam!`)
-            .setDescription(`> Siap panen dalam **${crop.time} menit**\n> 📦 Sisa bibit: **${sisa}**`);
+        const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
+        const isPrestige = crop.tier === 'Prestige';
+        const embed = new EmbedBuilder().setColor(isPrestige ? '#FFD700' : '#2ECC71').setTitle(`🌱 ${crop.emoji} ${crop.name} Ditanam!${isPrestige ? ' 🏆' : ''}`)
+            .setDescription(`> Siap panen dalam **${timeDisplay}**\n> 📦 Sisa bibit: **${sisa}**${isPrestige ? '\n\n> 🏆 *Prestige crop — jaga siram agar tidak mati!*' : ''}`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Tanam Lagi').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
@@ -640,6 +664,29 @@ async function handleFarmSelectMenu(interaction) {
             new TextInputBuilder().setCustomId('farm_seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
         ));
         return interaction.showModal(modal);
+    }
+
+    // === BUY PRESTIGE CROP (1 bibit per pembelian, langsung beli) ===
+    if (customId.startsWith('farm_buyprestige_')) {
+        const cropId = interaction.values[0];
+        const crop = PRESTIGE_CROPS.find(c => c.id === cropId);
+        if (!crop) return interaction.reply({ content: '❌ Bibit prestige tidak ditemukan!', ephemeral: true });
+        const userData = getOrCreateUser(guildId, userId);
+        if (userData.balance < crop.cost) {
+            return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${crop.cost.toLocaleString('id-ID')} (punya: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
+        }
+        // Deduct money & add seed
+        subtractUserBalance(guildId, userId, crop.cost);
+        addSeed(guildId, userId, crop.id, 1);
+        incrementUserStat(guildId, userId, 'total_buys');
+        const hours = Math.floor(crop.time / 60);
+        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🏆 Prestige Seed Purchased!')
+            .setDescription(`${crop.emoji} **${crop.name}** x1 dibeli!\n\n> 💰 Harga: 🪙 ${crop.cost.toLocaleString('id-ID')}\n> ⏱️ Grow time: **${hours} jam**\n> 💵 Sell: 🪙 **${crop.sellPrice.toLocaleString('id-ID')}**\n\n> Tanam lewat 🌱 Plant!`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
 
@@ -873,8 +920,9 @@ function isFarmPanelButton(customId) {
 
 function isFarmPanelSelectMenu(customId) {
     return customId.startsWith('farm_plantseed_') || customId.startsWith('farm_buyseed') ||
-           customId.startsWith('farm_buyfert_') || customId.startsWith('farm_pupukfert_') ||
-           customId.startsWith('farm_pupukplot_') || customId.startsWith('farm_craftselect_') ||
+           customId.startsWith('farm_buyfert_') || customId.startsWith('farm_buyprestige_') ||
+           customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
+           customId.startsWith('farm_craftselect_') ||
            customId.startsWith('farm_buydeco_');
 }
 
