@@ -65,19 +65,27 @@ async function postUpdateLog(client, version, changes) {
         if (!channel) return;
 
         // Dedup: skip if this version was already posted
-        const recent = await channel.messages.fetch({ limit: 5 }).catch(() => null);
+        const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
         if (recent && recent.some(m => m.embeds.length > 0 && m.embeds[0].title && m.embeds[0].title.includes(version))) {
             return; // Already posted
         }
 
-        const embed = new EmbedBuilder()
-            .setColor('#5865F2')
-            .setTitle(`📦 Update — v${version}`)
-            .setDescription(changes)
-            .setFooter({ text: 'idcommunity Bot — Changelog' })
-            .setTimestamp();
-
-        await channel.send({ embeds: [embed] });
+        // Support string or array of embeds
+        if (typeof changes === 'string') {
+            const embed = new EmbedBuilder()
+                .setColor('#5865F2')
+                .setTitle(`📦 Update — v${version}`)
+                .setDescription(changes)
+                .setFooter({ text: 'idcommunity Bot — Changelog' })
+                .setTimestamp();
+            await channel.send({ embeds: [embed] });
+        } else if (Array.isArray(changes)) {
+            // Send multiple embeds (max 10 per message, split if needed)
+            for (let i = 0; i < changes.length; i += 10) {
+                const batch = changes.slice(i, i + 10);
+                await channel.send({ embeds: batch });
+            }
+        }
     } catch (e) { /* silent */ }
 }
 

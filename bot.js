@@ -110,25 +110,167 @@ client.once(Events.ClientReady, async c => {
     }
 
     // Post update changelog (only once per version, deduped)
-    await postUpdateLog(client, BOT_VERSION, 
-        `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-        `**✨ Fitur Baru:**\n` +
-        `• 🐋 **Giant Fish (Boss Fish)** — 1% chance muncul di Deep Sea+! Butuh 3-5 cast dalam 60 detik. Reward: 5K-20K money + exclusive badge\n` +
-        `• 🏝️ **Secret Location: The Abyss** — Unlock setelah 50 ikan di Void Rift ATAU 5 Secret tier fish. 11 ikan eksklusif!\n` +
-        `• 🏆 **7 Achievement Baru** — Giant Slayer, Boss Hunter, Titan Slayer, Void Conqueror, Abyss Explorer, Abyss Fisher, Universe Catcher\n` +
-        `• 🎣 **Fishing Combo System** — Cast berturut = multiplier naik (1x → 3x max!)\n` +
-        `• 📦 **Treasure Drops** — 5% chance dapat item random saat mancing\n` +
-        `• 📊 **Giant Fish Stats** — Tracking defeats, encounters, success rate di Stats panel\n` +
-        `• 🗺️ **Location Panel Update** — Progress bar unlock + secret location info\n\n` +
-        `**🐛 Bug Fixes:**\n` +
-        `• Fix \`/fish\` quick-cast tidak track lokasi & Giant Fish\n` +
-        `• Fix Global Mode compatibility untuk tabel baru\n` +
-        `• Update \`/help\` dengan info fitur baru\n` +
-        `• Fix achievement milestone count (89 → 96)\n\n` +
-        `**🧹 Cleanup:**\n` +
-        `• Sinkronisasi fitur \`/fish\` dan \`/fishing\` panel\n` +
-        `• Update semua deskripsi panel\n`
-    );
+    const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
+    await postUpdateLog(client, BOT_VERSION, [
+        // === EMBED 1: Main Header ===
+        new ChangelogEmbed()
+            .setColor('#5865F2')
+            .setTitle(`📦 Update — v${BOT_VERSION}`)
+            .setDescription(
+                `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
+                `🌐 **BOT SEKARANG GLOBAL!**\n` +
+                `> Semua data player (balance, pet, fish, farm, achievement, inventory) sekarang **SHARED lintas server**!\n` +
+                `> ✅ Main di server A = progress sama di server B\n` +
+                `> ✅ Pet, balance, streak, level — semuanya 1 akun\n` +
+                `> ✅ Tidak perlu ulang dari awal di server baru\n\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+            )
+            .setTimestamp(),
+
+        // === EMBED 2: Fishing Features ===
+        new ChangelogEmbed()
+            .setColor('#3498DB')
+            .setTitle('🎣 FISHING — Update Lengkap')
+            .setDescription(
+                `**🐋 Giant Fish (Boss Fish) — NEW!**\n` +
+                `> • 1% chance muncul saat mancing di lokasi **Deep Sea+**\n` +
+                `> • Butuh **3-5 cast berturut dalam 60 detik** untuk ditangkap\n` +
+                `> • Reward: 🪙 **5.000-20.000 money** + exclusive badge!\n` +
+                `> • 9 Boss variants: Megalodon, Kraken, Frost Whale, Magma Wyrm, dll\n` +
+                `> • HP bar UI + timer countdown\n` +
+                `> • Stats tracking di panel (defeated, encounters, success rate)\n\n` +
+                `**🏝️ Secret Location: The Abyss — NEW!**\n` +
+                `> • Unlock setelah: 🎣 50 ikan di Void Rift **ATAU** 🔮 5 Secret tier fish\n` +
+                `> • **11 ikan EKSKLUSIF** yang tidak ada di lokasi lain:\n` +
+                `>   • 3 Epic: Abyssal Angler, Shadow Leviathan, Depth Crawler\n` +
+                `>   • 3 Legendary: Eternal Jellyfish, Abyssal Whale King, Void Emperor\n` +
+                `>   • 3 Mythic: Primordial Serpent, Soul Devourer, Abyss Guardian\n` +
+                `>   • 2 Secret: The Forgotten One 👁️, Universe Fish 🌠\n` +
+                `> • Requires Joran Celestial (Tier 7+), +25% rare bonus\n` +
+                `> • Progress bar & info di Location panel\n\n` +
+                `**🔥 Fishing Combo System**\n` +
+                `> • Cast berturut tanpa jeda >2 menit = combo naik\n` +
+                `> • Multiplier: x1.2 (3 combo) → x3.0 (20 combo!)\n` +
+                `> • Combo multiplier apply ke nilai jual ikan\n\n` +
+                `**📦 Treasure Drops**\n` +
+                `> • 5% base chance dapat item saat mancing\n` +
+                `> • Combo tinggi = chance treasure lebih besar\n` +
+                `> • Drops: Mystery Box, Rod Parts, Lucky Charm, XP Booster, dll\n\n` +
+                `**📍 8+1 Lokasi Fishing:**\n` +
+                `> 🏞️ Sungai → 🌿 Rawa → 🌊 Danau → 🏖️ Pesisir → 🌊 Laut Dalam → ❄️ Gua Es → 🌋 Lahar → 🕳️ Void Rift → 👁️ The Abyss (Secret!)`
+            ),
+
+        // === EMBED 3: Pet & Battle Features ===
+        new ChangelogEmbed()
+            .setColor('#9B59B6')
+            .setTitle('🐾 PET & BATTLE — Fitur Lengkap')
+            .setDescription(
+                `**🐾 Pet System:**\n` +
+                `> • Gacha Egg (Common → Mythic tier)\n` +
+                `> • Feed, Play, Hunt — status management\n` +
+                `> • Level up + stat growth (HP, ATK, DEF, SPD, CRIT)\n` +
+                `> • Class & Element system\n` +
+                `> • Evolution system (stage 1-3)\n` +
+                `> • Skill milestones setiap level tertentu\n` +
+                `> • Max 10 pet per player, swap aktif\n\n` +
+                `**⚔️ Battle System:**\n` +
+                `> • PvP auto-battle (\`/battle @user\`)\n` +
+                `> • Taruhan money (opsional)\n` +
+                `> • Dungeon (5 tier difficulty)\n` +
+                `> • Boss Raid (party max 10 orang)\n` +
+                `> • Relic drops (weapon/armor/accessory)\n` +
+                `> • Refine relic (+0 → +20)\n\n` +
+                `**🌊 Expedition:**\n` +
+                `> • Kirim pet ke ekspedisi untuk reward pasif\n` +
+                `> • Durasi & reward tergantung level pet\n\n` +
+                `**🗺️ World Boss:**\n` +
+                `> • Boss global — semua player serang bersama\n` +
+                `> • Reward berdasarkan damage kontribusi\n\n` +
+                `**🔮 Pet Fusion & Awakening:**\n` +
+                `> • Fuse 2 pet → pet baru tier lebih tinggi\n` +
+                `> • Awakening crystal untuk boost permanent`
+            ),
+
+        // === EMBED 4: Farm Features ===
+        new ChangelogEmbed()
+            .setColor('#2ECC71')
+            .setTitle('🌾 FARMING — Fitur Lengkap')
+            .setDescription(
+                `**🌱 Farm System:**\n` +
+                `> • Plant, Water, Harvest — full cycle\n` +
+                `> • 20+ jenis bibit (Common → Legendary)\n` +
+                `> • Upgrade lahan (Level 1-6), lebih banyak slot\n` +
+                `> • Pupuk: speedup + yield bonus\n` +
+                `> • Auto-Harvest Pass (DM otomatis saat siap panen)\n` +
+                `> • Farm Mutations (tanaman bisa mutasi jadi rare!)\n` +
+                `> • Weather system (bonus/penalty per hari)\n\n` +
+                `**🍳 Craft & Storage:**\n` +
+                `> • Craft hasil panen → produk jual tinggi\n` +
+                `> • Storage inventory per-player\n` +
+                `> • Resep craft unlock dari farming level\n\n` +
+                `**🎨 Farm Decorations:**\n` +
+                `> • Beli dekorasi di shop\n` +
+                `> • Bonus passive dari dekorasi tertentu`
+            ),
+
+        // === EMBED 5: Economy & Social Features ===
+        new ChangelogEmbed()
+            .setColor('#F1C40F')
+            .setTitle('💰 ECONOMY & SOCIAL — Fitur Lengkap')
+            .setDescription(
+                `**💰 Economy:**\n` +
+                `> • \`/daily\` — Reward harian + streak bonus\n` +
+                `> • \`/calendar\` — Login calendar 30 hari\n` +
+                `> • \`/gift @user\` — Kirim money (pajak 10%)\n` +
+                `> • \`/shop\` — Toko lengkap (fishing, farm, pet, battle, role)\n` +
+                `> • \`/trade\` — Tukar item antar player\n` +
+                `> • \`/market\` — Marketplace jual/beli item\n` +
+                `> • \`/globalmarket\` — Marketplace lintas server\n\n` +
+                `**🎰 Casino:**\n` +
+                `> • Coinflip (animasi 3 stage)\n` +
+                `> • Slot Machine (jackpot 7️⃣7️⃣7️⃣ = 25x!)\n` +
+                `> • Blackjack (hit/stand/double)\n\n` +
+                `**📜 Quest System:**\n` +
+                `> • 3 Daily Quest (reset 00:00 WIB)\n` +
+                `> • 3 Weekly Quest\n` +
+                `> • Perfect Day bonus + 7-day streak\n\n` +
+                `**🏆 Achievement System:**\n` +
+                `> • **96 badge** di 10+ kategori\n` +
+                `> • Milestone rewards (10/25/50/75/96 badge)\n` +
+                `> • Auto-role berdasarkan jumlah badge\n` +
+                `> • Achievement channel notification`
+            ),
+
+        // === EMBED 6: Infrastructure + How to Play ===
+        new ChangelogEmbed()
+            .setColor('#E74C3C')
+            .setTitle('⚙️ INFRASTRUKTUR & CARA MAIN')
+            .setDescription(
+                `**🌐 Global Mode (AKTIF!):**\n` +
+                `> • Semua data **1 akun global** — lintas server!\n` +
+                `> • Balance, pet, fish, farm, achievement = shared\n` +
+                `> • Pindah server? Progress tetap aman 100%\n` +
+                `> • Market & Trade bisa lintas server\n\n` +
+                `**🔒 Anti-Abuse:**\n` +
+                `> • Captcha random setiap 15 menit\n` +
+                `> • Block sementara jika gagal verifikasi\n` +
+                `> • Cooldown per-command\n\n` +
+                `**💾 Data Safety:**\n` +
+                `> • Auto-backup setiap 6 jam\n` +
+                `> • Database SQLite + WAL mode\n` +
+                `> • Crash recovery otomatis\n\n` +
+                `**📱 Cara Mulai:**\n` +
+                `> 1. \`/menu\` — Navigasi utama\n` +
+                `> 2. \`/daily\` — Klaim reward harian\n` +
+                `> 3. \`/fish\` atau \`/fishing\` — Mulai mancing\n` +
+                `> 4. \`/farm\` — Mulai berkebun\n` +
+                `> 5. \`/pet\` — Gacha & kelola pet\n` +
+                `> 6. \`/quest\` — Misi harian & mingguan\n` +
+                `> 7. \`/help\` — Panduan lengkap`
+            )
+            .setFooter({ text: 'idcommunity Bot v3.2.0 — Global Economy & RPG | discord.gg/idcommunity' })
+            .setTimestamp()
+    ]);
 });
 
 // ================= EVENT HANDLERS (wrapped with error catching) =================
