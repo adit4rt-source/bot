@@ -330,8 +330,15 @@ async function runAbilityTickAll(client) {
 async function runPestTick() {
     try {
         const { rollPestAttack, applyPest, getActivePests } = require('./farmWeather');
-        // Get all users who have active growing plots
-        const activeFarmers = db.prepare("SELECT DISTINCT guildId, userId FROM farm_plots WHERE status = 'growing'").all();
+        const { checkGlobalMode } = require('../database');
+        // Get all users who have active growing plots (Global Mode has no guildId column)
+        let activeFarmers;
+        if (checkGlobalMode()) {
+            activeFarmers = db.prepare("SELECT DISTINCT userId FROM farm_plots WHERE status = 'growing'").all()
+                .map(r => ({ guildId: null, userId: r.userId }));
+        } else {
+            activeFarmers = db.prepare("SELECT DISTINCT guildId, userId FROM farm_plots WHERE status = 'growing'").all();
+        }
 
         for (const { guildId, userId } of activeFarmers) {
             try {
@@ -339,7 +346,12 @@ async function runPestTick() {
                 if (currentPests.length >= 5) continue; // Already at max pests
 
                 // Get their plots
-                const plots = db.prepare("SELECT id FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'growing'").all(guildId, userId);
+                let plots;
+                if (checkGlobalMode()) {
+                    plots = db.prepare("SELECT id FROM farm_plots WHERE userId = ? AND status = 'growing'").all(userId);
+                } else {
+                    plots = db.prepare("SELECT id FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'growing'").all(guildId, userId);
+                }
                 if (plots.length === 0) continue;
 
                 // Roll pest for a random plot

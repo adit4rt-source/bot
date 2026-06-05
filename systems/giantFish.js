@@ -32,8 +32,20 @@ const GIANT_FISH_TIMEOUT = 60 * 1000; // 60 detik untuk menyelesaikan
 const ADVANCED_LOCATIONS = ['deep_sea', 'ice_cave', 'volcano', 'void_rift', 'abyss']; // Lokasi yang bisa spawn giant fish
 
 // ==================== DATABASE ====================
+// Migration: drop old table with 'oderId' column and recreate with correct schema
+// Using db.exec which bypasses proxy — safe for DDL
+try {
+    // Check if old schema exists (has 'oderId' but no 'userId')
+    const cols = db.prepare("PRAGMA table_info(giant_fish_encounters)").all();
+    const hasOderId = cols.some(c => c.name === 'oderId');
+    const hasUserId = cols.some(c => c.name === 'userId');
+    if (cols.length > 0 && (hasOderId || !hasUserId)) {
+        db.exec(`DROP TABLE IF EXISTS giant_fish_encounters`);
+        db.exec(`DROP TABLE IF EXISTS giant_fish_active`);
+    }
+} catch (e) { /* table doesn't exist yet, that's fine */ }
+
 db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_encounters (
-    guildId TEXT,
     userId TEXT,
     giantFishId TEXT,
     hitsRequired INTEGER DEFAULT 3,
@@ -42,18 +54,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_encounters (
     completedAt INTEGER,
     success INTEGER DEFAULT 0,
     reward INTEGER DEFAULT 0,
-    PRIMARY KEY(guildId, userId, startedAt)
+    PRIMARY KEY(userId, startedAt)
 )`);
 
 db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_active (
-    guildId TEXT,
     userId TEXT,
     giantFishId TEXT,
     hitsRequired INTEGER,
     hitsLanded INTEGER DEFAULT 0,
     startedAt INTEGER,
     expiresAt INTEGER,
-    PRIMARY KEY(guildId, userId)
+    PRIMARY KEY(userId)
 )`);
 
 // ==================== CORE FUNCTIONS ====================
@@ -77,16 +88,16 @@ function checkGiantFishSpawn(locationId) {
  * Get active giant fish encounter for a player
  */
 function getActiveGiantFish(guildId, userId) {
-    const row = db.prepare('SELECT * FROM giant_fish_active WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    const row = db.prepare('SELECT * FROM giant_fish_active WHERE userId = ?').get(userId);
     if (!row) return null;
 
     // Check if expired
     if (Date.now() > row.expiresAt) {
         // Remove expired encounter
-        db.prepare('DELETE FROM giant_fish_active WHERE guildId = ? AND userId = ?').run(guildId, userId);
+        db.prepare('DELETE FROM giant_fish_active WHERE userId = ?').run(userId);
         // Log as failed
-        db.prepare(`INSERT INTO giant_fish_encounters (guildId, userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`).run(guildId, userId, row.giantFishId, row.hitsRequired, row.hitsLanded, row.startedAt, Date.now());
+        db.prepare(`INSERT INTO giant_fish_encounters (userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
+            VALUES (?, ?, ?, ?, ?, ?, 0, 0)`).run(userId, row.giantFishId, row.hitsRequired, row.hitsLanded, row.startedAt, Date.now());
         return null;
     }
 
@@ -102,10 +113,10 @@ function startGiantFishEncounter(guildId, userId, giantFish) {
     const expiresAt = now + GIANT_FISH_TIMEOUT;
 
     // Remove any existing encounter first
-    db.prepare('DELETE FROM giant_fish_active WHERE guildId = ? AND userId = ?').run(guildId, userId);
+    db.prepare('DELETE FROM giant_fish_active WHERE userId = ?').run(userId);
 
-    db.prepare(`INSERT INTO giant_fish_active (guildId, userId, giantFishId, hitsRequired, hitsLanded, startedAt, expiresAt)
-        VALUES (?, ?, ?, ?, 0, ?, ?)`).run(guildId, userId, giantFish.id, hitsRequired, now, expiresAt);
+    db.prepare(`INSERT INTO giant_fish_active (userId, giantFishId, hitsRequired, hitsLanded, startedAt, expiresAt)
+        VALUES (?, ?, ?, 0, ?, ?)`).run(userId, giantFish.id, hitsRequired, now, expiresAt);
 
     return { giantFish, hitsRequired, hitsLanded: 0, startedAt: now, expiresAt };
 }
@@ -126,14 +137,14 @@ function hitGiantFish(guildId, userId) {
         const reward = getRandomInt(giantFish.minReward, giantFish.maxReward);
 
         // Remove active encounter
-        db.prepare('DELETE FROM giant_fish_active WHERE guildId = ? AND userId = ?').run(guildId, userId);
+        db.prepare('DELETE FROM giant_fish_active WHERE userId = ?').run(userId);
 
         // Log as success
-        db.prepare(`INSERT INTO giant_fish_encounters (guildId, userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(guildId, userId, giantFish.id, active.hitsRequired, newHits, active.startedAt, Date.now(), reward);
+        db.prepare(`INSERT INTO giant_fish_encounters (userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)`).run(userId, giantFish.id, active.hitsRequired, newHits, active.startedAt, Date.now(), reward);
 
         // Grant reward
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(reward, userId);
 
         // Increment stats
         incrementUserStat(guildId, userId, 'giant_fish_defeated');
@@ -153,7 +164,7 @@ function hitGiantFish(guildId, userId) {
         };
     } else {
         // Hit but not defeated yet
-        db.prepare('UPDATE giant_fish_active SET hitsLanded = ? WHERE guildId = ? AND userId = ?').run(newHits, guildId, userId);
+        db.prepare('UPDATE giant_fish_active SET hitsLanded = ? WHERE userId = ?').run(newHits, userId);
 
         return {
             hit: true,
@@ -173,8 +184,8 @@ function hitGiantFish(guildId, userId) {
 function getGiantFishStats(guildId, userId) {
     const defeated = getUserStat(guildId, userId, 'giant_fish_defeated');
     const totalReward = getUserStat(guildId, userId, 'giant_fish_total_reward');
-    const encounters = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    const successes = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND userId = ? AND success = 1').get(guildId, userId);
+    const encounters = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE userId = ?').get(userId);
+    const successes = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE userId = ? AND success = 1').get(userId);
 
     return {
         defeated: defeated || 0,
