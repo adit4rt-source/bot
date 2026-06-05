@@ -452,6 +452,59 @@ app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== STREAK ====================
+app.get('/api/streak/leaderboard', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const search = req.query.search || '';
+        const sort = req.query.sort || 'current'; // current or highest
+
+        let rows;
+        if (search) {
+            rows = db.prepare('SELECT userId, count, last_date FROM streaks WHERE userId LIKE ? ORDER BY count DESC LIMIT ?').all(`%${search}%`, limit);
+        } else {
+            rows = db.prepare('SELECT userId, count, last_date FROM streaks ORDER BY count DESC LIMIT ?').all(limit);
+        }
+
+        // Get highest streak from streak_history
+        const highestStreaks = {};
+        const historyRows = db.prepare('SELECT userId, lost_count FROM streak_history').all();
+        for (const h of historyRows) { highestStreaks[h.userId] = Math.max(highestStreaks[h.userId] || 0, h.lost_count); }
+        // Also compare with current streak
+        for (const r of rows) { highestStreaks[r.userId] = Math.max(highestStreaks[r.userId] || 0, r.count); }
+
+        // Get freezes (streak_shield items)
+        const freezeData = {};
+        try {
+            const shields = db.prepare("SELECT userId, quantity FROM item_inventory WHERE itemId = 'streak_shield' AND quantity > 0").all();
+            for (const s of shields) freezeData[s.userId] = s.quantity;
+        } catch(e) {}
+
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+        const enriched = await enrichLeaderboard(rows);
+        const withExtras = enriched.map(r => ({
+            ...r,
+            highest: highestStreaks[r.userId] || r.count,
+            freezes: freezeData[r.userId] || 0,
+            claimedToday: r.last_date === today,
+        }));
+
+        // Sort
+        if (sort === 'highest') withExtras.sort((a, b) => b.highest - a.highest);
+
+        const totalMembers = db.prepare('SELECT COUNT(*) as count FROM streaks WHERE count > 0').get();
+        const topStreak = db.prepare('SELECT MAX(count) as max FROM streaks').get();
+
+        res.json({
+            totalMembers: totalMembers?.count || 0,
+            topCurrentStreak: topStreak?.max || 0,
+            claimedToday: withExtras.filter(r => r.claimedToday).length,
+            leaderboard: withExtras,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== LEVELING ====================
 app.get('/api/leveling/leaderboard', async (req, res) => {
     try {
