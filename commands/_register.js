@@ -46,6 +46,14 @@ const commands = [
                 { name: '🏆 Achievement', value: 'achievement' }
             )),
 
+    // ================= SOCIAL / SERVER TOOLS =================
+    new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
+    new SlashCommandBuilder()
+        .setName('welcomer')
+        .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder().setName('tempvoice').setDescription('🎙️ Tempvoice Panel — Buat & kelola private voice channel'),
+
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),

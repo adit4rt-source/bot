@@ -27,6 +27,9 @@ const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTrad
 const { handleMarketCommand, handleMarketButton, handleMarketSelectMenu, handleMarketModal, isMarketPanelButton, isMarketPanelSelectMenu, isMarketPanelModal } = require('../systems/marketPanel');
 const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
 const { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton } = require('../systems/leaderboard');
+const { handleInviteCommand, handleInviteButton, isInvitePanelButton } = require('../systems/invitePanel');
+const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton } = require('../systems/welcomerPanel');
+const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
@@ -581,6 +584,21 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleLeaderboardCommand(interaction);
         }
 
+        // ================= INVITE PANEL =================
+        if (command === 'invite') {
+            return handleInviteCommand(interaction);
+        }
+
+        // ================= WELCOMER PANEL =================
+        if (command === 'welcomer') {
+            return handleWelcomerCommand(interaction);
+        }
+
+        // ================= TEMPVOICE PANEL =================
+        if (command === 'tempvoice') {
+            return handleTempvoiceCommand(interaction);
+        }
+
         // ================= DAILY LOGIN CALENDAR =================
         if (command === 'calendar') {
             const calData = getLoginCalendar(guildId, interaction.user.id);
@@ -946,6 +964,21 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- LEADERBOARD PANEL BUTTONS ---
         if (isLeaderboardButton(interaction.customId)) {
             return handleLeaderboardButton(interaction);
+        }
+
+        // --- INVITE PANEL BUTTONS ---
+        if (isInvitePanelButton(interaction.customId)) {
+            return handleInviteButton(interaction);
+        }
+
+        // --- WELCOMER PANEL BUTTONS ---
+        if (isWelcomerPanelButton(interaction.customId)) {
+            return handleWelcomerButton(interaction);
+        }
+
+        // --- TEMPVOICE PANEL BUTTONS ---
+        if (isTempvoicePanelButton(interaction.customId)) {
+            return handleTempvoiceButton(interaction);
         }
 
         // --- NOTIFICATION TOGGLE BUTTONS ---
