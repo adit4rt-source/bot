@@ -15,8 +15,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS livestock (
     lastFed TEXT,
     lastCollect INTEGER,
     sickSince INTEGER,
-    createdAt INTEGER
+    createdAt INTEGER,
+    diesAt INTEGER
 )`);
+
+// Migration: add diesAt column if not exists
+try { db.exec(`ALTER TABLE livestock ADD COLUMN diesAt INTEGER`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS livestock_data (
     userId TEXT,
@@ -63,11 +67,28 @@ function getBarnSlots(userId) {
 
 // ==================== ANIMAL MANAGEMENT ====================
 function getAnimals(userId, type) {
-    return db.prepare('SELECT * FROM livestock WHERE userId = ? AND animalType = ?').all(userId, type);
+    const animals = db.prepare('SELECT * FROM livestock WHERE userId = ? AND animalType = ?').all(userId, type);
+    // Check lifespan — auto-kill expired animals
+    const now = Date.now();
+    for (const animal of animals) {
+        if (animal.diesAt && animal.status !== 'dead' && now >= animal.diesAt) {
+            db.prepare('UPDATE livestock SET status = ? WHERE id = ?').run('dead', animal.id);
+            animal.status = 'dead';
+        }
+    }
+    return animals;
 }
 
 function getAllAnimals(userId) {
-    return db.prepare('SELECT * FROM livestock WHERE userId = ?').all(userId);
+    const animals = db.prepare('SELECT * FROM livestock WHERE userId = ?').all(userId);
+    const now = Date.now();
+    for (const animal of animals) {
+        if (animal.diesAt && animal.status !== 'dead' && now >= animal.diesAt) {
+            db.prepare('UPDATE livestock SET status = ? WHERE id = ?').run('dead', animal.id);
+            animal.status = 'dead';
+        }
+    }
+    return animals;
 }
 
 function buyAnimal(userId, type) {
@@ -92,9 +113,11 @@ function buyAnimal(userId, type) {
     // Deduct money
     db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(animal.price, userId);
 
-    // Create animal
+    // Create animal with random lifespan (2-20 days, secret — player doesn't know)
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    db.prepare('INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt) VALUES (?, ?, 1, 0, 0, ?, ?, ?, ?)').run(userId, type, 'healthy', today, Date.now(), Date.now());
+    const lifespanDays = Math.floor(Math.random() * 19) + 2; // 2-20 days
+    const diesAt = Date.now() + (lifespanDays * 24 * 60 * 60 * 1000);
+    db.prepare('INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt) VALUES (?, ?, 1, 0, 0, ?, ?, ?, ?, ?)').run(userId, type, 'healthy', String(Date.now()), Date.now(), Date.now(), diesAt);
 
     return { success: true, type, price: animal.price };
 }
