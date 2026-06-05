@@ -374,8 +374,16 @@ async function handleExpeditionButton(interaction) {
 
     const action = parts[1];
 
-    // === BACK (to pet panel or main) ===
+    // === BACK (to pet panel) ===
     if (action === 'back') {
+        // Redirect ke pet panel
+        const { buildMainPanel } = require('./petPanel');
+        const panel = buildMainPanel(guildId, userId, interaction.user.username);
+        return interaction.update(panel);
+    }
+
+    // === REFRESH (refresh expedition panel) ===
+    if (action === 'refresh') {
         const panel = buildExpeditionPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
     }
