@@ -17,18 +17,20 @@ function buildCoopPanel(userId, username) {
     const sickCount = chickens.filter(a => a.status === 'sick').length;
     const prodMult = getSeasonProductionMultiplier('chicken');
 
-    // Count ready eggs
+    // Count ready animals
     const now = Date.now();
     let totalReady = 0;
     let animalList = '';
     chickens.forEach((chicken, i) => {
-        const produceTime = ANIMALS.chicken.produceTime / prodMult;
+        const { getProduceTime } = require('../data/livestock');
+        const produceTime = getProduceTime('chicken', chicken.level, chicken.tier) / prodMult;
         const elapsed = now - (chicken.lastCollect || chicken.createdAt);
-        const pending = Math.min(ANIMALS.chicken.maxPending, Math.floor(elapsed / produceTime));
-        totalReady += pending;
+        const isReady = elapsed >= produceTime;
+        if (isReady) totalReady++;
         const tierInfo = chicken.tier > 0 ? ` ${'⭐'.repeat(Math.min(chicken.tier, 3))}${chicken.tier > 3 ? `+${chicken.tier - 3}` : ''}` : '';
-        const statusIcon = chicken.status === 'sick' ? ' 🤒' : pending >= ANIMALS.chicken.maxPending ? ' ✅' : '';
-        animalList += `> \`[${i + 1}]\` 🐔 Lv.${chicken.level}${tierInfo} — 🥚 ${pending}/${ANIMALS.chicken.maxPending}${statusIcon}\n`;
+        const statusIcon = chicken.status === 'sick' ? ' 🤒' : isReady ? ' ✅' : '';
+        const timeLeft = isReady ? '' : ` (${Math.ceil((produceTime - elapsed) / 60000)}m)`;
+        animalList += `> \`[${i + 1}]\` 🐔 Lv.${chicken.level}${tierInfo} — ${isReady ? '🥚 Ready!' : `⏳${timeLeft}`}${statusIcon}\n`;
     });
 
     if (chickens.length === 0) animalList = '> *Belum punya ayam. Beli di Shop!*\n';
@@ -47,7 +49,7 @@ function buildCoopPanel(userId, username) {
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📋 **Daftar Ayam:**\n${animalList}`
         )
-        .setFooter({ text: `Collect setiap 2 jam/ayam | Feed setiap hari` });
+        .setFooter({ text: `Produksi: 3-10 menit (tergantung level/evo) | Feed setiap hari` });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
@@ -87,24 +89,28 @@ function buildBarnPanel(userId, username) {
 
     let cowList = '';
     cows.forEach((cow, i) => {
-        const produceTime = ANIMALS.cow.produceTime / cowProd;
+        const { getProduceTime } = require('../data/livestock');
+        const produceTime = getProduceTime('cow', cow.level, cow.tier) / cowProd;
         const elapsed = now - (cow.lastCollect || cow.createdAt);
-        const pending = Math.min(ANIMALS.cow.maxPending, Math.floor(elapsed / produceTime));
-        totalMilk += pending;
+        const isReady = elapsed >= produceTime;
+        if (isReady) totalMilk++;
         const tierInfo = cow.tier > 0 ? ` ${'⭐'.repeat(Math.min(cow.tier, 3))}${cow.tier > 3 ? `+${cow.tier - 3}` : ''}` : '';
-        const statusIcon = cow.status === 'sick' ? ' 🤒' : pending >= ANIMALS.cow.maxPending ? ' ✅' : '';
-        cowList += `> \`[${i + 1}]\` 🐄 Lv.${cow.level}${tierInfo} — 🥛 ${pending}/${ANIMALS.cow.maxPending}${statusIcon}\n`;
+        const statusIcon = cow.status === 'sick' ? ' 🤒' : isReady ? ' ✅' : '';
+        const timeLeft = isReady ? '' : ` (${Math.ceil((produceTime - elapsed) / 60000)}m)`;
+        cowList += `> \`[${i + 1}]\` 🐄 Lv.${cow.level}${tierInfo} — ${isReady ? '🥛 Ready!' : `⏳${timeLeft}`}${statusIcon}\n`;
     });
 
     let sheepList = '';
     sheep.forEach((s, i) => {
-        const produceTime = ANIMALS.sheep.produceTime / sheepProd;
+        const { getProduceTime } = require('../data/livestock');
+        const produceTime = getProduceTime('sheep', s.level, s.tier) / sheepProd;
         const elapsed = now - (s.lastCollect || s.createdAt);
-        const pending = Math.min(ANIMALS.sheep.maxPending, Math.floor(elapsed / produceTime));
-        totalWool += pending;
+        const isReady = elapsed >= produceTime;
+        if (isReady) totalWool++;
         const tierInfo = s.tier > 0 ? ` ${'⭐'.repeat(Math.min(s.tier, 3))}${s.tier > 3 ? `+${s.tier - 3}` : ''}` : '';
-        const statusIcon = s.status === 'sick' ? ' 🤒' : pending >= ANIMALS.sheep.maxPending ? ' ✅' : '';
-        sheepList += `> \`[${i + 1}]\` 🐑 Lv.${s.level}${tierInfo} — 🧶 ${pending}/${ANIMALS.sheep.maxPending}${statusIcon}\n`;
+        const statusIcon = s.status === 'sick' ? ' 🤒' : isReady ? ' ✅' : '';
+        const timeLeft = isReady ? '' : ` (${Math.ceil((produceTime - elapsed) / 60000)}m)`;
+        sheepList += `> \`[${i + 1}]\` 🐑 Lv.${s.level}${tierInfo} — ${isReady ? '🧶 Ready!' : `⏳${timeLeft}`}${statusIcon}\n`;
     });
 
     if (cows.length === 0) cowList = '> *Belum punya sapi*\n';
@@ -124,7 +130,7 @@ function buildBarnPanel(userId, username) {
             `📋 **Sapi:**\n${cowList}\n` +
             `📋 **Domba:**\n${sheepList}`
         )
-        .setFooter({ text: `Sapi: 3jam/perah | Domba: 4jam/cukur | Feed setiap hari` });
+        .setFooter({ text: `Produksi: 5-20 menit (tergantung level/evo) | Feed setiap hari` });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_barn_milk_${userId}`).setLabel(`🥛 Milk (${totalMilk})`).setStyle(ButtonStyle.Primary).setDisabled(totalMilk === 0),

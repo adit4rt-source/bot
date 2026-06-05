@@ -131,6 +131,7 @@ function collectProducts(userId, animalType) {
     if (animals.length === 0) return { error: 'Tidak ada hewan yang bisa di-collect!' };
 
     const animalDef = ANIMALS[animalType];
+    const { getProduceTime, getYieldRange, getQualityChance } = require('../data/livestock');
     const seasonMult = getSeasonProductionMultiplier(animalType);
     const now = Date.now();
     let totalCollected = 0;
@@ -138,16 +139,22 @@ function collectProducts(userId, animalType) {
     const products = {};
 
     for (const animal of animals) {
-        if (animal.status === 'sick') continue; // sick animals don't produce
-        const produceTime = animalDef.produceTime / seasonMult; // season affects speed
-        const elapsed = now - (animal.lastCollect || animal.createdAt);
-        const pendingCount = Math.min(animalDef.maxPending, Math.floor(elapsed / produceTime));
+        if (animal.status === 'sick') continue;
 
-        if (pendingCount <= 0) continue;
+        // Calculate produce time based on level + tier
+        const produceTime = getProduceTime(animalType, animal.level, animal.tier) / seasonMult;
+        const elapsed = now - (animal.lastCollect || animal.createdAt);
+
+        // Check if enough time has passed for at least 1 produce cycle
+        if (elapsed < produceTime) continue;
+
+        // Random yield based on tier (like tanaman)
+        const [minY, maxY] = getYieldRange(animalType, animal.tier);
+        const yieldCount = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
 
         // Roll quality for each product
         const qualityChances = getQualityChance(animal.tier);
-        for (let i = 0; i < pendingCount; i++) {
+        for (let i = 0; i < yieldCount; i++) {
             const roll = Math.random() * 100;
             let cumulative = 0;
             let quality = 'normal';
@@ -161,9 +168,9 @@ function collectProducts(userId, animalType) {
         }
 
         // Add EXP
-        const expGain = animalDef.expPerCollect * pendingCount;
+        const expGain = animalDef.expPerCollect * yieldCount;
         const newExp = animal.exp + expGain;
-        const expNeeded = animal.level * 20; // level * 20 EXP to level up
+        const expNeeded = animal.level * 20;
         let newLevel = animal.level;
         let remainExp = newExp;
 

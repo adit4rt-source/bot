@@ -22,24 +22,32 @@ const BARN_LEVELS = [
 ];
 
 // ==================== ANIMAL TYPES ====================
+// produceTime dihitung dynamic berdasarkan level + tier:
+// actualTime = baseTime * (1 - (level * 0.007) - (tier * 0.06))
+// Semakin tinggi level/tier, semakin cepat produksi
+// Hasil random per collect (1-3 base, tier tinggi bisa 1-5)
 const ANIMALS = {
     chicken: {
         id: 'chicken', name: 'Ayam', emoji: '🐔',
         price: 3000,
         product: { id: 'egg', name: 'Telur', emoji: '🥚' },
-        produceTime: 2 * 60 * 60 * 1000, // 2 hours
-        maxPending: 5,
+        baseProduceTime: 10 * 60 * 1000, // 10 menit base (lv1 tier0)
+        minProduceTime: 3 * 60 * 1000,   // min 3 menit (lv100 tier10)
+        baseYield: [1, 3],  // random 1-3 telur per collect (base)
+        maxYield: [2, 5],   // random 2-5 telur per collect (tier 10)
         expPerCollect: 5,
         feedItem: 'chicken_feed', feedName: 'Pakan Ayam',
         medicineItem: 'chicken_medicine', medicineName: 'Obat Ayam',
-        daysToSick: 3, daysTodie: 2, // 3 days no food → sick, 2 more days → dead (5 total)
+        daysToSick: 3, daysTodie: 2,
     },
     cow: {
         id: 'cow', name: 'Sapi', emoji: '🐄',
         price: 10000,
         product: { id: 'milk', name: 'Susu', emoji: '🥛' },
-        produceTime: 3 * 60 * 60 * 1000, // 3 hours
-        maxPending: 4,
+        baseProduceTime: 15 * 60 * 1000, // 15 menit base
+        minProduceTime: 5 * 60 * 1000,   // min 5 menit
+        baseYield: [1, 2],
+        maxYield: [2, 4],
         expPerCollect: 8,
         feedItem: 'cow_feed', feedName: 'Pakan Sapi',
         medicineItem: 'cow_medicine', medicineName: 'Obat Sapi',
@@ -49,14 +57,36 @@ const ANIMALS = {
         id: 'sheep', name: 'Domba', emoji: '🐑',
         price: 8000,
         product: { id: 'wool', name: 'Bulu', emoji: '🧶' },
-        produceTime: 4 * 60 * 60 * 1000, // 4 hours
-        maxPending: 3,
+        baseProduceTime: 20 * 60 * 1000, // 20 menit base
+        minProduceTime: 7 * 60 * 1000,   // min 7 menit
+        baseYield: [1, 2],
+        maxYield: [1, 3],
         expPerCollect: 6,
         feedItem: 'sheep_feed', feedName: 'Pakan Domba',
         medicineItem: 'sheep_medicine', medicineName: 'Obat Domba',
         daysToSick: 3, daysTodie: 2,
     },
 };
+
+// Helper: hitung actual produce time berdasarkan level + tier
+function getProduceTime(animalType, level, tier) {
+    const def = ANIMALS[animalType];
+    if (!def) return 10 * 60 * 1000;
+    // Reduce time by level (0.7% per level) + tier (6% per tier)
+    const reduction = Math.min(0.85, (level * 0.007) + (tier * 0.06));
+    const time = Math.max(def.minProduceTime, def.baseProduceTime * (1 - reduction));
+    return Math.floor(time);
+}
+
+// Helper: hitung random yield berdasarkan tier
+function getYieldRange(animalType, tier) {
+    const def = ANIMALS[animalType];
+    if (!def) return [1, 2];
+    const progress = Math.min(1, tier / 10); // 0 to 1
+    const minY = Math.round(def.baseYield[0] + (def.maxYield[0] - def.baseYield[0]) * progress);
+    const maxY = Math.round(def.baseYield[1] + (def.maxYield[1] - def.baseYield[1]) * progress);
+    return [minY, maxY];
+}
 
 // ==================== EVOLUTION TIERS (max 10) ====================
 // Every 10 levels = 1 evolution tier
@@ -227,7 +257,7 @@ const LIVESTOCK_PESTS = [
 
 module.exports = {
     COOP_LEVELS, BARN_LEVELS, ANIMALS, EVOLUTION_TIERS,
-    getQualityChance, PRODUCT_QUALITY,
+    getQualityChance, PRODUCT_QUALITY, getProduceTime, getYieldRange,
     COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES,
     SEASONS, LIVESTOCK_DISEASES, LIVESTOCK_PESTS,
 };
