@@ -452,6 +452,37 @@ app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== LEVELING ====================
+app.get('/api/leveling/leaderboard', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const search = req.query.search || '';
+        let rows;
+        if (search) {
+            rows = db.prepare('SELECT userId, level, xp FROM users WHERE userId LIKE ? ORDER BY level DESC, xp DESC LIMIT ?').all(`%${search}%`, limit);
+        } else {
+            rows = db.prepare('SELECT userId, level, xp FROM users ORDER BY level DESC, xp DESC LIMIT ?').all(limit);
+        }
+        const totalMembers = db.prepare('SELECT COUNT(*) as count FROM users').get();
+        const topLevel = db.prepare('SELECT MAX(level) as max FROM users').get();
+        const topXp = db.prepare('SELECT MAX(xp) as max FROM users').get();
+
+        // Calculate XP to next level for each user
+        const enriched = await enrichLeaderboard(rows);
+        const withXpCalc = enriched.map(r => {
+            const xpToNext = (r.level + 1) * (r.level + 1) * 100; // formula: level^2 * 100
+            return { ...r, xpToNext };
+        });
+
+        res.json({
+            totalMembers: totalMembers?.count || 0,
+            topLevel: topLevel?.max || 0,
+            topXp: topXp?.max || 0,
+            leaderboard: withXpCalc,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== FISHING STATS ====================
 app.get('/api/fishing/stats', async (req, res) => {
     try {
