@@ -45,17 +45,27 @@ function buildFarmPanel(guildId, userId, username) {
     }
 
     let plotStatus = '';
+    // Get active pests
+    const { getActivePests, PEST_TYPES } = require('./farmWeather');
+    const activePests = getActivePests(guildId, userId);
+    const pestCount = activePests.length;
+
     if (plots.length === 0) {
         plotStatus = '> *🌿 Kebun kosong! Tanam bibit untuk mulai.*\n';
     } else {
         plots.forEach((plot, i) => {
-            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            let crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
             if (!crop) return;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
             const growTime = crop.time * (1 - fert.speedBonus) * 60000;
             const elapsed = Date.now() - plot.plantedAt;
             const dryTime = Date.now() - plot.wateredAt;
             const deadThreshold = growTime * 2.5;
+
+            // Check if this plot has a pest
+            const plotPest = activePests.find(p => p.plotId === plot.id);
+            const pestIcon = plotPest ? (() => { const pt = PEST_TYPES.find(p => p.id === plotPest.pestId); return pt ? ` ${pt.emoji}` : ' 🐛'; })() : '';
             
             let statusIcon = '', statusText = '', progressBar = '';
             if (plot.status === 'dead' || dryTime > deadThreshold) {
@@ -80,7 +90,7 @@ function buildFarmPanel(guildId, userId, username) {
             }
             
             const fertIcon = fert.id !== 'none' ? ` ${fert.emoji}` : '';
-            plotStatus += `> \`[${i+1}]\` ${crop.emoji} **${crop.name}**${fertIcon}\n>  ┗ ${statusIcon} \`${progressBar}\` ${statusText}\n`;
+            plotStatus += `> \`[${i+1}]\` ${crop.emoji} **${crop.name}**${fertIcon}${pestIcon}\n>  ┗ ${statusIcon} \`${progressBar}\` ${statusText}\n`;
         });
     }
 
@@ -96,6 +106,7 @@ function buildFarmPanel(guildId, userId, username) {
             `> 📦 Storage: **${storageCount}** items\n` +
             `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
             (readyCount > 0 ? `> 🔔 **${readyCount} tanaman siap panen!**\n` : '') +
+            (pestCount > 0 ? `> 🐛 **${pestCount} hama menyerang!** Gunakan 🧴 Pestisida\n` : '') +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📋 **Status Tanaman:**\n${plotStatus}`
         )
@@ -105,6 +116,7 @@ function buildFarmPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_water_${userId}`).setLabel('💧 Water').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_harvest_${userId}`).setLabel('🌾 Harvest').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_pest_${userId}`).setLabel(`🧴 Pest${pestCount > 0 ? ` (${pestCount})` : ''}`).setStyle(pestCount > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
@@ -267,6 +279,94 @@ async function handleFarmButton(interaction) {
             new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // === PEST (show pest panel + use pesticide) ===
+    if (action === 'pest') {
+        const { getActivePests, PEST_TYPES, resolvePest } = require('./farmWeather');
+        const { getItemCount, removeItem } = require('../database');
+        const pests = getActivePests(guildId, userId);
+
+        if (pests.length === 0) {
+            const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🧴 Hama & Pestisida')
+                .setDescription(`✅ **Kebun aman!** Tidak ada hama saat ini.\n\n> 🧴 Pestisida: **${getItemCount(guildId, userId, 'pesticide')}** buah\n> 🌿 Shield: **${getItemCount(guildId, userId, 'pesticide_shield')}** buah\n\n💡 *Hama menyerang random setiap 30 menit. Beli pestisida di Shop!*`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+
+        // Show pests with option to use pesticide
+        const plots = getPlots(guildId, userId);
+        const pesticideCount = getItemCount(guildId, userId, 'pesticide');
+        let desc = `**🐛 ${pests.length}/5 Hama Aktif:**\n\n`;
+        pests.forEach((p, i) => {
+            const pest = PEST_TYPES.find(pt => pt.id === p.pestId);
+            const plot = plots.find(pl => pl.id === p.plotId);
+            let cropName = '?';
+            if (plot) {
+                let crop = FARM_CROPS.find(c => c.id === plot.cropId);
+                if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
+                if (crop) cropName = `${crop.emoji} ${crop.name}`;
+            }
+            desc += `> **${i+1}.** ${pest ? pest.emoji : '🐛'} **${pest ? pest.name : 'Unknown'}** → ${cropName}\n`;
+            desc += `>   ⚠️ *${pest ? pest.desc : ''}*\n\n`;
+        });
+        desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+        desc += `> 🧴 Pestisida: **${pesticideCount}** buah (basmi 1 hama per use)\n`;
+        desc += `> 💡 *Klik tombol di bawah untuk basmi hama random*`;
+
+        const embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🐛 HAMA MENYERANG!')
+            .setDescription(desc);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_usepest_${userId}`).setLabel(`🧴 Gunakan Pestisida (${pesticideCount})`).setStyle(ButtonStyle.Success).setDisabled(pesticideCount <= 0),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === USE PESTICIDE (basmi 1 hama random) ===
+    if (action === 'usepest') {
+        const { getActivePests, PEST_TYPES, resolvePest } = require('./farmWeather');
+        const { getItemCount, removeItem } = require('../database');
+        const pests = getActivePests(guildId, userId);
+        const pesticideCount = getItemCount(guildId, userId, 'pesticide');
+
+        if (pests.length === 0) return interaction.reply({ content: '✅ Tidak ada hama!', flags: 1 << 6 });
+        if (pesticideCount <= 0) return interaction.reply({ content: '❌ Pestisida habis! Beli di Shop.', flags: 1 << 6 });
+
+        // Remove 1 pesticide
+        removeItem(guildId, userId, 'pesticide', 1);
+
+        // Pick random pest to remove (hoki-hokian!)
+        const randomIndex = Math.floor(Math.random() * pests.length);
+        const removedPest = pests[randomIndex];
+        resolvePest(guildId, userId, removedPest.id);
+
+        const pest = PEST_TYPES.find(pt => pt.id === removedPest.pestId);
+        const plots = getPlots(guildId, userId);
+        const plot = plots.find(pl => pl.id === removedPest.plotId);
+        let cropName = 'tanaman';
+        if (plot) {
+            let crop = FARM_CROPS.find(c => c.id === plot.cropId);
+            if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
+            if (crop) cropName = `${crop.emoji} ${crop.name}`;
+        }
+
+        const remaining = pests.length - 1;
+        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🧴 Hama Dibasmi!')
+            .setDescription(
+                `${pest ? pest.emoji : '🐛'} **${pest ? pest.name : 'Hama'}** di ${cropName} berhasil dibasmi!\n\n` +
+                `> 🧴 Sisa pestisida: **${pesticideCount - 1}**\n` +
+                `> 🐛 Hama tersisa: **${remaining}**` +
+                (remaining > 0 ? `\n\n⚠️ Masih ada ${remaining} hama lagi!` : '\n\n✅ Semua hama sudah dibasmi!')
+            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_pest_${userId}`).setLabel(`🧴 Pest${remaining > 0 ? ` (${remaining})` : ''}`).setStyle(remaining > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === HARVEST ===

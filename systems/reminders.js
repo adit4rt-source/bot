@@ -326,6 +326,35 @@ async function runAbilityTickAll(client) {
     }
 }
 
+// ---- Farm Pest Tick (random hama attack every 30 min) ----
+async function runPestTick() {
+    try {
+        const { rollPestAttack, applyPest, getActivePests } = require('./farmWeather');
+        // Get all users who have active growing plots
+        const activeFarmers = db.prepare("SELECT DISTINCT guildId, userId FROM farm_plots WHERE status = 'growing'").all();
+
+        for (const { guildId, userId } of activeFarmers) {
+            try {
+                const currentPests = getActivePests(guildId, userId);
+                if (currentPests.length >= 5) continue; // Already at max pests
+
+                // Get their plots
+                const plots = db.prepare("SELECT id FROM farm_plots WHERE guildId = ? AND userId = ? AND status = 'growing'").all(guildId, userId);
+                if (plots.length === 0) continue;
+
+                // Roll pest for a random plot
+                const randomPlot = plots[Math.floor(Math.random() * plots.length)];
+                const pest = rollPestAttack(guildId, userId, randomPlot.id);
+                if (pest) {
+                    applyPest(guildId, userId, randomPlot.id, pest.id);
+                }
+            } catch (e) { /* skip */ }
+        }
+    } catch (e) {
+        log('ERROR', 'pestTick failed', e);
+    }
+}
+
 function startReminderSchedules(client) {
     // Startup: bersihkan plot mati/invalid yang masih notified=0 agar tidak spam
     try {
@@ -365,8 +394,9 @@ function startReminderSchedules(client) {
     const t6 = setInterval(() => { runFarmReadyCheck(client).catch(() => {}); }, FARM_CHECK_INTERVAL_MS);
     const t7 = setInterval(() => { runWorldBossReminderCheck(client).catch(() => {}); }, 60 * 60 * 1000); // hourly
     const t8 = setInterval(() => { runAbilityTickAll(client).catch(() => {}); }, ABILITY_TICK_INTERVAL_MS);
+    const t9 = setInterval(() => { runPestTick().catch(() => {}); }, 30 * 60 * 1000); // every 30 min
 
-    console.log('⏰ Reminder System v2 started (7 reminder types + ability tick active)');
+    console.log('⏰ Reminder System v2 started (7 reminder types + ability tick + pest tick active)');
     return { dailyTimer: t1, petTimer: t2, expeditionTimer: t3, questTimer: t4, streakTimer: t5, farmTimer: t6, worldBossTimer: t7, abilityTimer: t8 };
 }
 
