@@ -13,8 +13,8 @@ const ITEMS = [
     { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '<:AutoHarvestPass:1510785815889055775>', menuEmoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 5000, category: 'Special' },
     { id: 'rod_part', name: 'Rod Parts', emoji: '<:RodParts:1510785813741441126>', menuEmoji: '🔧', desc: 'Material upgrade joran (dari mancing/shop)', price: 5000, category: 'Fishing' },
     // Farming - Pesticide items (1 per use, player pilih plot mana)
-    { id: 'pesticide', name: 'Pestisida', emoji: '🧴', menuEmoji: '🧴', desc: 'Basmi 1 hama di 1 plot — pilih yang mau diselamatkan (sekali pakai)', price: 800, category: 'Farming' },
-    { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '🌿', menuEmoji: '🌿', desc: 'Preventif — lindungi farm dari hama selama 6 jam (sekali pakai)', price: 4000, category: 'Farming' },
+    { id: 'pesticide', name: 'Pestisida', emoji: '🧴', menuEmoji: '🧴', desc: 'Basmi 1 hama di 1 plot — pilih yang mau diselamatkan (sekali pakai)', price: 2500, category: 'Farming' },
+    { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '🌿', menuEmoji: '🌿', desc: 'Preventif — lindungi farm dari hama selama 6 jam (sekali pakai)', price: 12000, category: 'Farming' },
     // Awakening materials (not buyable)
     { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', menuEmoji: '🌟', desc: 'Material langka Awakening (World Boss/Expedition)', price: 0, category: 'Special' },
     { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', menuEmoji: '💫', desc: 'Material ultra-langka Awakening (World Boss #1)', price: 0, category: 'Special' },
