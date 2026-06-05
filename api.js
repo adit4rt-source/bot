@@ -312,6 +312,119 @@ app.get('/api/fishing/weather', (req, res) => {
     }
 });
 
+// ==================== FISHING STATS ====================
+app.get('/api/fishing/stats', (req, res) => {
+    try {
+        const totalCaught = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_fish_caught'").get();
+        const totalSold = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_fish_sold_value'").get();
+        const totalGiantDefeated = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'giant_fish_defeated'").get();
+        const totalMonsters = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'sea_monster_encounters'").get();
+        const topFishers = db.prepare("SELECT userId, stat_value as total FROM user_stats WHERE stat_key = 'total_fish_caught' ORDER BY stat_value DESC LIMIT 10").all();
+        const collectionStats = db.prepare("SELECT userId, COUNT(*) as collected FROM fish_collection GROUP BY userId ORDER BY collected DESC LIMIT 10").all();
+        const { FISH_DATA, FISH_TIERS, FISHING_LOCATIONS } = require('./data/fish');
+
+        res.json({
+            totalCaught: totalCaught?.total || 0,
+            totalSoldValue: totalSold?.total || 0,
+            totalGiantDefeated: totalGiantDefeated?.total || 0,
+            totalMonsterEncounters: totalMonsters?.total || 0,
+            totalFishSpecies: FISH_DATA.length,
+            totalLocations: FISHING_LOCATIONS.length,
+            tiers: FISH_TIERS.map(t => t.tier),
+            topFishers,
+            topCollectors: collectionStats,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/fishing/collection', (req, res) => {
+    try {
+        const { FISH_DATA, FISH_TIERS, FISHING_LOCATIONS } = require('./data/fish');
+        const fishByLocation = {};
+        for (const loc of FISHING_LOCATIONS) {
+            fishByLocation[loc.id] = { name: loc.name, desc: loc.desc, fish: FISH_DATA.filter(f => f.location === loc.id).map(f => ({ id: f.id, name: f.name, tier: f.tier, emoji: f.emoji })) };
+        }
+        res.json({ totalFish: FISH_DATA.length, tiers: FISH_TIERS, locations: FISHING_LOCATIONS.map(l => ({ id: l.id, name: l.name, desc: l.desc, tiers: l.tiers, monsterChance: l.monsterChance || 0 })), fishByLocation });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==================== FARMING STATS ====================
+app.get('/api/farming/stats', (req, res) => {
+    try {
+        const totalHarvests = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_harvests'").get();
+        const totalCrafts = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_crafts'").get();
+        const totalMutations = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'total_mutations'").get();
+        const activePlots = db.prepare("SELECT COUNT(*) as count FROM farm_plots WHERE status = 'growing'").get();
+        const topFarmers = db.prepare("SELECT userId, stat_value as total FROM user_stats WHERE stat_key = 'total_harvests' ORDER BY stat_value DESC LIMIT 10").all();
+        const { FARM_CROPS } = require('./data/farming');
+
+        res.json({
+            totalHarvests: totalHarvests?.total || 0,
+            totalCrafts: totalCrafts?.total || 0,
+            totalMutations: totalMutations?.total || 0,
+            activePlots: activePlots?.count || 0,
+            totalCropTypes: FARM_CROPS.length,
+            topFarmers,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==================== PET STATS ====================
+app.get('/api/pets/stats', (req, res) => {
+    try {
+        const totalPets = db.prepare("SELECT COUNT(*) as count FROM pets").get();
+        const totalEvolved = db.prepare("SELECT COUNT(*) as count FROM pets WHERE evolved = 1").get();
+        const avgLevel = db.prepare("SELECT AVG(level) as avg FROM pets").get();
+        const maxLevel = db.prepare("SELECT MAX(level) as max FROM pets").get();
+        const topPets = db.prepare("SELECT userId, name, petId, level, class, element, active FROM pets ORDER BY level DESC LIMIT 10").all();
+        const petsByTier = db.prepare("SELECT petId, COUNT(*) as count FROM pets GROUP BY petId ORDER BY count DESC LIMIT 15").all();
+        const dungeonClears = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'dungeon_clears'").get();
+        const bossKills = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'boss_kills'").get();
+        const pvpWins = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'pvp_wins'").get();
+
+        res.json({
+            totalPets: totalPets?.count || 0,
+            totalEvolved: totalEvolved?.count || 0,
+            avgLevel: Math.round(avgLevel?.avg || 0),
+            maxLevel: maxLevel?.max || 0,
+            dungeonClears: dungeonClears?.total || 0,
+            bossKills: bossKills?.total || 0,
+            pvpWins: pvpWins?.total || 0,
+            topPets,
+            popularPets: petsByTier,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==================== CASINO STATS ====================
+app.get('/api/casino/stats', (req, res) => {
+    try {
+        const coinflipWins = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'coinflip_wins'").get();
+        const slotWins = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'slot_wins'").get();
+        const slotTotal = db.prepare("SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = 'slot_total_winnings'").get();
+        const topGamblers = db.prepare("SELECT userId, stat_value as total FROM user_stats WHERE stat_key = 'slot_total_winnings' ORDER BY stat_value DESC LIMIT 10").all();
+        const topCoinflip = db.prepare("SELECT userId, stat_value as wins FROM user_stats WHERE stat_key = 'coinflip_wins' ORDER BY stat_value DESC LIMIT 10").all();
+
+        res.json({
+            coinflipWins: coinflipWins?.total || 0,
+            slotWins: slotWins?.total || 0,
+            slotTotalWinnings: slotTotal?.total || 0,
+            topGamblers,
+            topCoinflip,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ==================== START SERVER ====================
 function startApiServer() {
     app.listen(API_PORT, '0.0.0.0', () => {
