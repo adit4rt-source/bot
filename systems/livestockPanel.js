@@ -420,7 +420,12 @@ async function handleLivestockButton(interaction) {
 
 // ============ UTILITY: Detection helper ============
 function isLivestockButton(customId) {
-    return customId.startsWith('farm_coop_') || customId.startsWith('farm_barn_') || customId.startsWith('farm_craft_');
+    if (customId.startsWith('farm_coop_')) return true;
+    if (customId.startsWith('farm_barn_')) return true;
+    // Only catch crafting sub-buttons (farm_craft_farm_, farm_craft_livestock_, farm_craft_products_)
+    // NOT farm_craft_${userId} which is the tanaman craft from old farmPanel
+    if (customId.startsWith('farm_craft_farm_') || customId.startsWith('farm_craft_livestock_') || customId.startsWith('farm_craft_products_')) return true;
+    return false;
 }
 
 module.exports = {
