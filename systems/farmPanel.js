@@ -817,13 +817,14 @@ async function handleFarmSelectMenu(interaction) {
         const recipeId = interaction.values[0];
         const recipe = FARM_RECIPES.find(r => r.id === recipeId);
         if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
         const missing = [];
         for (const ing of recipe.ingredients) {
             const have = getStorageQty(guildId, userId, ing.id);
-            if (have < ing.qty) { const crop = FARM_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
+            if (have < ing.qty) { const crop = ALL_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
         }
         if (missing.length > 0) {
-            return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], ephemeral: true });
+            return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], flags: 1 << 6 });
         }
         for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
         addUserBalance(guildId, userId, recipe.sellPrice);
@@ -833,7 +834,7 @@ async function handleFarmSelectMenu(interaction) {
         addComboFeature(guildId, userId, 'farming');
         await checkAchievements(interaction.guild, userId, { type: 'farm_craft' });
         const freshData = getOrCreateUser(guildId, userId);
-        const ingredients = recipe.ingredients.map(ing => { const c = FARM_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
+        const ingredients = recipe.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
         const embed = new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} Crafted!`)
             .setDescription(`> Bahan: ${ingredients}\n> 💰 Dijual: 🪙 **${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`);
         const backRow = new ActionRowBuilder().addComponents(
