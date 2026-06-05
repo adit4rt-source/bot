@@ -210,17 +210,30 @@ module.exports = async function handleInteractionCreate(interaction) {
             updateQuestProgress(guildId, interaction.user.id, 'fish', 1);
             addPetExp(guildId, interaction.user.id, 5);
             addComboFeature(guildId, interaction.user.id, 'fishing');
+
+            // === FISHING COMBO SYSTEM ===
+            const { updateFishingCombo, getComboFishMultiplier, rollTreasure, applyTreasure, formatComboDisplay, formatTreasureDisplay } = require('../systems/fishingCombo');
+            const comboData = updateFishingCombo(guildId, interaction.user.id);
+            const comboTier = getComboFishMultiplier(comboData.combo);
+            const comboMsg = formatComboDisplay(comboData.combo);
+
+            // === TREASURE SYSTEM ===
+            const treasure = rollTreasure(comboData.combo);
+            if (treasure) applyTreasure(guildId, interaction.user.id, treasure);
+            const treasureMsg = formatTreasureDisplay(treasure);
+
+            // Apply combo multiplier to fish value
+            const boostedValue = Math.floor(result.value * comboTier.mult);
+
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
-            const comboMult = getComboMultiplier(guildId, interaction.user.id);
-            let comboMsg = comboMult > 1 ? `\n> 🔥 **Combo x${comboMult}!**` : '';
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
-                .setColor(tierColors[result.tier.tier] || '#2B2D31')
+                .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
                 .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
-                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg)
-                .setFooter({ text: `Cooldown: ${rod.cooldown}s | Gunakan tombol di bawah!` });
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg)
+                .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${rod.cooldown}s | Max combo: ${comboData.maxCombo}x` });
             if (result.tier.tier === 'Secret') embed.setTitle('🔮💫 SECRET CATCH!!! 💫🔮');
             else if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
             else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
