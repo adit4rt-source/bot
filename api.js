@@ -374,6 +374,82 @@ app.get('/api/user/guilds', async (req, res) => {
     }
 });
 
+// ==================== GUILD DATA (for dashboard selectors) ====================
+app.get('/api/guild/:guildId/channels', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        if (!discordClient) return res.json({ channels: [] });
+        const guild = discordClient.guilds.cache.get(guildId);
+        if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+        const channels = guild.channels.cache
+            .filter(ch => ch.type !== undefined)
+            .map(ch => ({
+                id: ch.id,
+                name: ch.name,
+                type: ch.type, // 0=text, 2=voice, 4=category, 5=announcement, 13=stage, 15=forum
+                parentId: ch.parentId || null,
+                position: ch.position,
+            }))
+            .sort((a, b) => a.position - b.position);
+
+        res.json({ channels });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/guild/:guildId/roles', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        if (!discordClient) return res.json({ roles: [] });
+        const guild = discordClient.guilds.cache.get(guildId);
+        if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+        const roles = guild.roles.cache
+            .filter(r => r.id !== guildId) // exclude @everyone
+            .map(r => ({
+                id: r.id,
+                name: r.name,
+                color: r.hexColor,
+                position: r.position,
+                managed: r.managed, // bot roles
+                icon: r.iconURL({ size: 32 }) || null,
+            }))
+            .sort((a, b) => b.position - a.position);
+
+        res.json({ roles });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/guild/:guildId/members', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const limit = parseInt(req.query.limit) || 100;
+        const search = req.query.search || '';
+        if (!discordClient) return res.json({ members: [] });
+        const guild = discordClient.guilds.cache.get(guildId);
+        if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+        let members;
+        if (search) {
+            members = await guild.members.search({ query: search, limit });
+        } else {
+            await guild.members.fetch({ limit });
+            members = guild.members.cache;
+        }
+
+        const result = members
+            .filter(m => !m.user.bot)
+            .map(m => ({
+                id: m.id,
+                username: m.user.username,
+                displayName: m.displayName,
+                avatar: m.user.displayAvatarURL({ size: 32 }),
+            }));
+
+        res.json({ members: Array.from(result.values()).slice(0, limit) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== AUTOMOD ====================
 app.get('/api/automod/:guildId', async (req, res) => {
     try {
