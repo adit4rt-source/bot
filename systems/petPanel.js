@@ -197,6 +197,43 @@ async function handlePetButton(interaction) {
         embed.addFields({ name: '🌟 Skill Buffs (Passive)', value: skillDesc || '> Belum ada skill', inline: false });
         embed.addFields({ name: '⚔️ Skills (Battle Active)', value: battleSkillDesc, inline: false });
 
+        // Pet Abilities info
+        const { getAbilitySlots, getAbilityById, isPetEligibleForAbilities } = require('./petAbilities');
+        const abilitySlots = getAbilitySlots(guildId, userId);
+        const abilitiesEligible = isPetEligibleForAbilities(pet);
+        let abilityDesc = '';
+        const activeAbilityIds = [abilitySlots.slot1, abilitySlots.slot2, abilitySlots.slot3].filter(Boolean);
+        if (activeAbilityIds.length > 0) {
+            activeAbilityIds.forEach(aId => {
+                const ab = getAbilityById(aId);
+                if (ab) abilityDesc += `> ${ab.emoji} **${ab.name}** — ${ab.desc}\n`;
+            });
+            abilityDesc += `> Status: ${abilitiesEligible ? '✅ AKTIF' : '❌ MATI (happiness/hunger rendah)'}`;
+        } else {
+            if (pet.level >= 30) abilityDesc = '> ⚪ *Belum dipasang* — Buka lewat ⬆️ More → 🧪 Abilities';
+            else abilityDesc = `> 🔒 Unlock di **Lv.30** (sekarang: Lv.${pet.level})`;
+        }
+        embed.addFields({ name: '🧪 World Abilities', value: abilityDesc, inline: false });
+
+        // Awakening info
+        const { getAwakeningData, getStarsDisplay, AWAKENING_TIERS } = require('./awakening');
+        const awakData = getAwakeningData(pet.id);
+        const stars = getStarsDisplay(awakData.awakeningLevel);
+        let awakenDesc = '';
+        if (awakData.awakeningLevel > 0) {
+            const tier = AWAKENING_TIERS.find(t => t.level === awakData.awakeningLevel);
+            awakenDesc = `> ${tier.stars} **${tier.name}** — +${Math.floor(tier.statBoost * 100)}% all base stats\n`;
+            awakenDesc += `> 🏷️ Title: **${tier.title}**`;
+            if (tier.reward.permanentBonus) {
+                awakenDesc += `\n> 🎁 Permanent: +${tier.reward.permanentBonus.value}% ${tier.reward.permanentBonus.type.replace(/_/g, ' ')}`;
+            }
+        } else {
+            if (pet.level >= 200) awakenDesc = '> ⭐ **SIAP AWAKENING!** — Buka lewat ⬆️ More → ⚡ Awakening';
+            else awakenDesc = `> 🔒 Butuh **Lv.200** untuk Awakening (sekarang: Lv.${pet.level})`;
+        }
+        embed.addFields({ name: `⚡ Awakening${stars}`, value: awakenDesc, inline: false });
+
+        // Evolution
         const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
         if (evo) {
             const evoPetDef = PET_DATA.find(p => p.id === evo.to);
