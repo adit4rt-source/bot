@@ -167,31 +167,6 @@ function formatWeatherEmbed() {
     return { weather, desc };
 }
 
-// ==================== EXPORTS ====================
-module.exports = {
-    WEATHER_TYPES,
-    getTodayWeather,
-    getWeatherEffects,
-    getWeatherYieldMultiplier,
-    getWeatherGrowMultiplier,
-    getWeatherWaterDecay,
-    getWeatherDeathChance,
-    getWeatherMutationBonus,
-    isAutoWaterWeather,
-    getWeatherForecast,
-    formatWeatherEmbed,
-    PEST_TYPES,
-    WEATHER_PEST_MODIFIER,
-    PEST_PROTECTION,
-    rollPestAttack,
-    getActivePests,
-    applyPest,
-    resolvePest,
-    getPestHarvestEffect
-};
-
-
-
 // ==================== PEST/HAMA SYSTEM ====================
 // Pests can attack crops randomly. Checked every tick (by reminder system).
 // Some weather increases pest chance, some decreases it.
@@ -355,4 +330,25 @@ function getPestHarvestEffect(guildId, userId, plotId) {
     return { yieldMult: Math.max(0.1, yieldMult), stolenItems, isDead };
 }
 
-// (exports already defined above with all pest functions included)
+// ==================== EXPORTS ====================
+module.exports = {
+    WEATHER_TYPES,
+    getTodayWeather,
+    getWeatherEffects,
+    getWeatherYieldMultiplier,
+    getWeatherGrowMultiplier,
+    getWeatherWaterDecay,
+    getWeatherDeathChance,
+    getWeatherMutationBonus,
+    isAutoWaterWeather,
+    getWeatherForecast,
+    formatWeatherEmbed,
+    PEST_TYPES,
+    WEATHER_PEST_MODIFIER,
+    PEST_PROTECTION,
+    rollPestAttack,
+    getActivePests,
+    applyPest,
+    resolvePest,
+    getPestHarvestEffect
+};
