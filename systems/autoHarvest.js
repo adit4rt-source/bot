@@ -52,9 +52,9 @@ async function runAutoHarvestCheck(client) {
             }
             const summary = Object.entries(counts).map(([label, c]) => `${label} x${c}`).join(', ');
 
-            await notifyFarmReady(client, guildId, userId, summary).catch(() => {});
+            await notifyFarmReady(client, 'global', userId, summary).catch(() => {});
         } catch (e) {
-            log('ERROR', `autoHarvest: check failed for ${guildId}/${userId}`, e);
+            log('ERROR', `autoHarvest: check failed for userId ${userId}`, e);
         }
     }
 }
