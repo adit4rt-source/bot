@@ -41,22 +41,51 @@ const FARM_CROPS = [
 ];
 
 const FARM_RECIPES = [
+    // === COMMON RECIPES (bahan mudah, profit rendah) ===
     { id: 'roti', name: 'Roti', emoji: '🍞', ingredients: [{id:'gandum',qty:3}], sellPrice: 150 },
     { id: 'salad', name: 'Salad', emoji: '🥗', ingredients: [{id:'bayam',qty:2},{id:'tomat',qty:1}], sellPrice: 260 },
     { id: 'kentang_goreng', name: 'Kentang Goreng', emoji: '🍟', ingredients: [{id:'kentang',qty:3}], sellPrice: 180 },
     { id: 'popcorn', name: 'Popcorn', emoji: '🍿', ingredients: [{id:'jagung',qty:4}], sellPrice: 300 },
-    { id: 'kue', name: 'Kue Strawberry', emoji: '🍰', ingredients: [{id:'gandum',qty:2},{id:'strawberry',qty:2}], sellPrice: 520 },
     { id: 'sup', name: 'Sup Sayur', emoji: '🫕', ingredients: [{id:'wortel',qty:2},{id:'kentang',qty:2},{id:'bawang_putih',qty:1}], sellPrice: 380 },
+    { id: 'nasi_goreng', name: 'Nasi Goreng', emoji: '🍳', ingredients: [{id:'gandum',qty:2},{id:'bawang_merah',qty:2},{id:'cabai',qty:1}], sellPrice: 350 },
+    { id: 'tumis_sayur', name: 'Tumis Sayur', emoji: '🥬', ingredients: [{id:'bayam',qty:3},{id:'bawang_putih',qty:2}], sellPrice: 220 },
+    { id: 'jagung_bakar', name: 'Jagung Bakar', emoji: '🌽', ingredients: [{id:'jagung',qty:3},{id:'bawang_putih',qty:1}], sellPrice: 250 },
+
+    // === UNCOMMON RECIPES (bahan medium, profit medium) ===
+    { id: 'kue', name: 'Kue Strawberry', emoji: '🍰', ingredients: [{id:'gandum',qty:2},{id:'strawberry',qty:2}], sellPrice: 520 },
     { id: 'sambal', name: 'Sambal', emoji: '🌶️', ingredients: [{id:'cabai',qty:4},{id:'bawang_merah',qty:2}], sellPrice: 600 },
+    { id: 'pizza', name: 'Pizza', emoji: '🍕', ingredients: [{id:'gandum',qty:3},{id:'tomat',qty:2},{id:'paprika',qty:1}], sellPrice: 700 },
+    { id: 'pasta', name: 'Pasta Bolognese', emoji: '🍝', ingredients: [{id:'gandum',qty:3},{id:'tomat',qty:3},{id:'bawang_putih',qty:2}], sellPrice: 650 },
+    { id: 'smoothie', name: 'Berry Smoothie', emoji: '🥤', ingredients: [{id:'strawberry',qty:2},{id:'blueberry',qty:2}], sellPrice: 750 },
+    { id: 'pie', name: 'Apple Pie', emoji: '🥧', ingredients: [{id:'gandum',qty:3},{id:'strawberry',qty:3},{id:'madu',qty:1}], sellPrice: 900 },
+    { id: 'sate', name: 'Sate Spesial', emoji: '🍢', ingredients: [{id:'bawang_merah',qty:3},{id:'bawang_putih',qty:2},{id:'cabai',qty:2}], sellPrice: 550 },
+
+    // === RARE RECIPES (bahan langka, profit tinggi) ===
     { id: 'wine', name: 'Wine', emoji: '🍷', ingredients: [{id:'anggur',qty:5}], sellPrice: 1800 },
     { id: 'kopi_premium', name: 'Kopi Premium', emoji: '☕', ingredients: [{id:'kopi',qty:3},{id:'madu',qty:1}], sellPrice: 2200 },
     { id: 'cokelat', name: 'Cokelat Mewah', emoji: '🍫', ingredients: [{id:'kakao',qty:3},{id:'strawberry',qty:2}], sellPrice: 1600 },
     { id: 'buket', name: 'Buket Bunga', emoji: '💐', ingredients: [{id:'mawar',qty:2},{id:'sakura',qty:1},{id:'hibiscus',qty:1}], sellPrice: 3300 },
     { id: 'parfum', name: 'Parfum Sakura', emoji: '🧴', ingredients: [{id:'sakura',qty:2},{id:'mawar',qty:2}], sellPrice: 4500 },
     { id: 'minyak_zaitun', name: 'Minyak Zaitun', emoji: '🫒', ingredients: [{id:'zaitun',qty:3}], sellPrice: 4000 },
+    { id: 'kue_cokelat', name: 'Chocolate Cake', emoji: '🎂', ingredients: [{id:'gandum',qty:3},{id:'kakao',qty:3},{id:'strawberry',qty:2}], sellPrice: 3000 },
+    { id: 'wine_premium', name: 'Wine Premium', emoji: '🍾', ingredients: [{id:'anggur',qty:8},{id:'blueberry',qty:3}], sellPrice: 4200 },
+    { id: 'teh_herbal', name: 'Teh Herbal', emoji: '🍵', ingredients: [{id:'kopi',qty:2},{id:'madu',qty:2},{id:'blueberry',qty:2}], sellPrice: 3500 },
+
+    // === EPIC RECIPES (bahan sangat langka, profit besar) ===
     { id: 'ramuan', name: 'Ramuan Ajaib', emoji: '🧪', ingredients: [{id:'mystic_herb',qty:1},{id:'crystal_flower',qty:1}], sellPrice: 10000 },
     { id: 'essence_naga', name: 'Essence Naga', emoji: '🐉', ingredients: [{id:'dragon_fruit_crop',qty:2},{id:'ice_berry',qty:1}], sellPrice: 13000 },
-    { id: 'elixir', name: 'Elixir of Life', emoji: '✨', ingredients: [{id:'mystic_herb',qty:1},{id:'lotus',qty:1},{id:'ice_berry',qty:1}], sellPrice: 16000 }
+    { id: 'elixir', name: 'Elixir of Life', emoji: '✨', ingredients: [{id:'mystic_herb',qty:1},{id:'lotus',qty:1},{id:'ice_berry',qty:1}], sellPrice: 16000 },
+    { id: 'golden_jam', name: 'Golden Jam', emoji: '🫙', ingredients: [{id:'bunga_matahari',qty:3},{id:'madu',qty:2},{id:'strawberry',qty:3}], sellPrice: 5500 },
+    { id: 'royal_soup', name: 'Royal Soup', emoji: '🍲', ingredients: [{id:'semangka',qty:1},{id:'wortel',qty:3},{id:'kentang',qty:3},{id:'bawang_putih',qty:2}], sellPrice: 6000 },
+    { id: 'crystal_tea', name: 'Crystal Tea', emoji: '🫖', ingredients: [{id:'crystal_flower',qty:1},{id:'kopi',qty:2},{id:'madu',qty:2}], sellPrice: 9000 },
+    { id: 'dragon_wine', name: 'Dragon Wine', emoji: '🐲', ingredients: [{id:'dragon_fruit_crop',qty:2},{id:'anggur',qty:5},{id:'madu',qty:2}], sellPrice: 15000 },
+
+    // === LEGENDARY RECIPES (prestige crops, profit sangat besar) ===
+    { id: 'phoenix_elixir', name: 'Phoenix Elixir', emoji: '🔥', ingredients: [{id:'phoenix_flower',qty:1},{id:'mystic_herb',qty:1},{id:'ice_berry',qty:1}], sellPrice: 35000 },
+    { id: 'void_essence', name: 'Void Essence', emoji: '🌑', ingredients: [{id:'void_rose',qty:1},{id:'crystal_flower',qty:2}], sellPrice: 45000 },
+    { id: 'celestial_potion', name: 'Celestial Potion', emoji: '⭐', ingredients: [{id:'celestial_tree',qty:1},{id:'lotus',qty:2},{id:'madu',qty:3}], sellPrice: 60000 },
+    { id: 'time_essence', name: 'Time Essence', emoji: '⌛', ingredients: [{id:'time_blossom',qty:1},{id:'mystic_herb',qty:2},{id:'dragon_fruit_crop',qty:1}], sellPrice: 100000 },
+    { id: 'lotus_perfume', name: 'Golden Lotus Perfume', emoji: '🪷', ingredients: [{id:'golden_lotus',qty:1},{id:'sakura',qty:3},{id:'mawar',qty:3}], sellPrice: 30000 },
 ];
 
 const FARM_FERTILIZERS = [
