@@ -186,9 +186,9 @@ function buildStorageHub(guildId, userId, username) {
     const storage = getStorage(guildId, userId);
     const totalItems = storage.reduce((sum, s) => sum + s.quantity, 0);
 
-    // Separate farm items vs livestock products
-    const farmItems = storage.filter(s => s.cropId && !s.cropId.includes('_'));
-    const livestockItems = storage.filter(s => s.cropId && s.cropId.includes('_')); // egg_normal, milk_premium, wool_superior
+    // Separate farm items vs livestock products (livestock has underscore: egg_normal, milk_premium)
+    const farmItems = storage.filter(s => s.itemId && !s.itemId.includes('_'));
+    const livestockItems = storage.filter(s => s.itemId && s.itemId.includes('_'));
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
 
@@ -197,9 +197,9 @@ function buildStorageHub(guildId, userId, username) {
         desc += `> *Kosong*\n`;
     } else {
         farmItems.slice(0, 8).forEach(s => {
-            const crop = ALL_CROPS.find(c => c.id === s.cropId);
+            const crop = ALL_CROPS.find(c => c.id === s.itemId);
             if (crop) desc += `> ${crop.emoji} **${crop.name}** × ${s.quantity}\n`;
-            else desc += `> 📦 ${s.cropId} × ${s.quantity}\n`;
+            else desc += `> 📦 ${s.itemId} × ${s.quantity}\n`;
         });
         if (farmItems.length > 8) desc += `> *...+${farmItems.length - 8} lainnya*\n`;
     }
@@ -209,7 +209,7 @@ function buildStorageHub(guildId, userId, username) {
         desc += `> *Kosong — collect dari hewan dulu!*\n`;
     } else {
         livestockItems.slice(0, 8).forEach(s => {
-            const name = s.cropId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const name = s.itemId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             desc += `> 📦 **${name}** × ${s.quantity}\n`;
         });
         if (livestockItems.length > 8) desc += `> *...+${livestockItems.length - 8} lainnya*\n`;

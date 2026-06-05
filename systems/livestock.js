@@ -184,13 +184,13 @@ function collectProducts(userId, animalType) {
     }
 
     // Store products in farm_storage (same table as tanaman harvest)
-    // Format: cropId = "egg_normal", "egg_premium", "milk_superior", etc.
+    // farm_storage uses column 'itemId' not 'cropId'
     for (const [key, qty] of Object.entries(products)) {
-        const existing = db.prepare('SELECT * FROM farm_storage WHERE guildId = ? AND userId = ? AND cropId = ?').get('global', userId, key);
+        const existing = db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(userId, key);
         if (existing) {
-            db.prepare('UPDATE farm_storage SET quantity = quantity + ? WHERE guildId = ? AND userId = ? AND cropId = ?').run(qty, 'global', userId, key);
+            db.prepare('UPDATE farm_storage SET quantity = quantity + ? WHERE userId = ? AND itemId = ?').run(qty, userId, key);
         } else {
-            db.prepare('INSERT INTO farm_storage (guildId, userId, cropId, quantity) VALUES (?, ?, ?, ?)').run('global', userId, key, qty);
+            db.prepare('INSERT INTO farm_storage (userId, itemId, quantity) VALUES (?, ?, ?)').run(userId, key, qty);
         }
     }
 
