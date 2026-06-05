@@ -824,6 +824,12 @@ async function handleFarmSelectMenu(interaction) {
         return interaction.reply({ content: '❌ Ini bukan panel farm kamu!', ephemeral: true });
     }
 
+    // === LIVESTOCK CRAFT SELECT MENU (hub craft) ===
+    const { isLivestockSelectMenu, handleLivestockSelectMenu } = require('./livestockPanel');
+    if (isLivestockSelectMenu(customId)) {
+        return handleLivestockSelectMenu(interaction);
+    }
+
     const userData = getOrCreateUser(guildId, userId);
 
     // === PLANT SEED SELECT ===
@@ -1121,7 +1127,7 @@ function isFarmPanelSelectMenu(customId) {
     return customId.startsWith('farm_plantseed_') || customId.startsWith('farm_buyseed') ||
            customId.startsWith('farm_buyfert_') || customId.startsWith('farm_buyprestige_') ||
            customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
-           customId.startsWith('farm_craftselect') ||
+           customId.startsWith('farm_craftselect') || customId.startsWith('farm_hubcraft') ||
            customId.startsWith('farm_buydeco_');
 }
 

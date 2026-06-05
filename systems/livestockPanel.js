@@ -143,43 +143,75 @@ function buildBarnPanel(userId, username) {
     return { embeds: [embed], components: [row1, row2] };
 }
 
-// ============ BUILD: Crafting Panel (ALL recipes: tanaman + livestock) ============
+// ============ BUILD: Crafting Panel (1 dropdown with ALL recipes) ============
 function buildCraftingPanel(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
     const { FARM_CROPS } = require('../data/farming');
+    const { StringSelectMenuBuilder } = require('discord.js');
     const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
     const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
+    const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
-    desc += `**🌾 Tanaman Recipes** (${FARM_RECIPES.length}):\n`;
-    FARM_RECIPES.slice(0, 5).forEach(r => {
-        const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
-        desc += `> ${r.emoji} **${r.name}** [${ingStr}] → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`;
-    });
-    if (FARM_RECIPES.length > 5) desc += `> *...dan ${FARM_RECIPES.length - 5} resep lainnya*\n`;
-
-    desc += `\n**🐔🐄 Livestock Recipes** (${LIVESTOCK_RECIPES.length}):\n`;
-    LIVESTOCK_RECIPES.slice(0, 5).forEach(r => {
-        desc += `> ${r.emoji} **${r.name}** → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`;
-    });
-    if (LIVESTOCK_RECIPES.length > 5) desc += `> *...dan ${LIVESTOCK_RECIPES.length - 5} resep lainnya*\n`;
-
-    desc += `\n> Total: **${FARM_RECIPES.length + LIVESTOCK_RECIPES.length}** resep tersedia`;
+    desc += `📋 **${allRecipes.length} resep tersedia** — pilih dari dropdown:\n\n`;
+    desc += `**🌾 Tanaman** (${FARM_RECIPES.length}):\n`;
+    FARM_RECIPES.slice(0, 4).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
+    if (FARM_RECIPES.length > 4) desc += `> *...+${FARM_RECIPES.length - 4} lainnya*\n`;
+    desc += `\n**🐔🐄 Livestock** (${LIVESTOCK_RECIPES.length}):\n`;
+    LIVESTOCK_RECIPES.slice(0, 4).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
+    if (LIVESTOCK_RECIPES.length > 4) desc += `> *...+${LIVESTOCK_RECIPES.length - 4} lainnya*\n`;
 
     const embed = new EmbedBuilder()
         .setTitle(`🧪 CRAFTING HUB — ${username}`)
         .setColor('#9B59B6')
         .setDescription(desc)
-        .setFooter({ text: `Craft = gabungkan bahan → langsung dijual | Bahan dari Tanaman + Kandang` });
+        .setFooter({ text: `Bahan dari Storage (panen) + Livestock Products (telur/susu/bulu)` });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🌾 Craft Tanaman').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_craft_livestock_${userId}`).setLabel('🐔 Craft Livestock').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_craft_products_${userId}`).setLabel('📦 Livestock Products').setStyle(ButtonStyle.Secondary),
+    // Single select menu with all recipes
+    const craftMenu = new StringSelectMenuBuilder()
+        .setCustomId(`farm_hubcraft_${userId}`)
+        .setPlaceholder('🧪 Pilih resep untuk craft...')
+        .setMinValues(1).setMaxValues(1);
+
+    allRecipes.slice(0, 25).forEach(r => {
+        const ingStr = r.ingredients.map(ing => {
+            const c = ALL_CROPS.find(cr => cr.id === ing.id);
+            return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
+        }).join('+');
+        let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+        if (label.length > 100) label = label.substring(0, 97) + '...';
+        let optDesc = `Bahan: ${ingStr}`;
+        if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
+        craftMenu.addOptions({ label, description: optDesc, value: r.id, emoji: r.emoji });
+    });
+
+    const rows = [new ActionRowBuilder().addComponents(craftMenu)];
+
+    // Second menu if > 25 recipes
+    if (allRecipes.length > 25) {
+        const craftMenu2 = new StringSelectMenuBuilder()
+            .setCustomId(`farm_hubcraft2_${userId}`)
+            .setPlaceholder('🧪 Resep Lanjutan...')
+            .setMinValues(1).setMaxValues(1);
+        allRecipes.slice(25).forEach(r => {
+            const ingStr = r.ingredients.map(ing => {
+                const c = ALL_CROPS.find(cr => cr.id === ing.id);
+                return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
+            }).join('+');
+            let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+            if (label.length > 100) label = label.substring(0, 97) + '...';
+            let optDesc = `Bahan: ${ingStr}`;
+            if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
+            craftMenu2.addOptions({ label, description: optDesc, value: r.id, emoji: r.emoji });
+        });
+        rows.push(new ActionRowBuilder().addComponents(craftMenu2));
+    }
+
+    rows.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
-    );
+    ));
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: rows };
 }
 
 // ============ BUILD: Storage Hub (all items from tanaman + livestock) ============
@@ -511,12 +543,80 @@ async function handleLivestockButton(interaction) {
 function isLivestockButton(customId) {
     if (customId.startsWith('farm_coop_')) return true;
     if (customId.startsWith('farm_barn_')) return true;
-    // Only catch crafting sub-buttons (farm_craft_livestock_, farm_craft_products_)
-    // NOT farm_craft_${userId} which is the tanaman craft from old farmPanel
-    if (customId.startsWith('farm_craft_livestock_') || customId.startsWith('farm_craft_products_')) return true;
+    // Crafting products view
+    if (customId.startsWith('farm_craft_products_')) return true;
+    if (customId.startsWith('farm_craft_livestock_')) return true;
     // Storage hub buttons
     if (customId.startsWith('farm_allstorage_')) return true;
     return false;
+}
+
+function isLivestockSelectMenu(customId) {
+    return customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_');
+}
+
+// ============ HANDLER: Craft select menu ============
+async function handleLivestockSelectMenu(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    if (customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_')) {
+        const recipeId = interaction.values[0];
+        const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
+        const recipe = allRecipes.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        const { FARM_CROPS } = require('../data/farming');
+        const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
+        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
+        const { getStorage, removeStorage, getStorageQty } = require('./farming');
+        const { getProductCount } = require('./livestock');
+        const { getItemCount: getIC, addItem: addI } = require('../database');
+
+        // Check ingredients
+        for (const ing of recipe.ingredients) {
+            let have = 0;
+            if (ing.source === 'livestock') {
+                // Format: egg_normal, milk_premium, wool_superior
+                const [productId, quality] = [ing.id.substring(0, ing.id.lastIndexOf('_')), ing.id.substring(ing.id.lastIndexOf('_') + 1)];
+                have = getProductCount(userId, productId, quality);
+            } else {
+                // Farm storage
+                have = getStorageQty(guildId, userId, ing.id);
+            }
+            if (have < ing.qty) {
+                const c = ALL_CROPS.find(cr => cr.id === ing.id);
+                const name = c ? c.name : ing.id;
+                return interaction.reply({ content: `❌ Bahan kurang! Butuh **${name}** × ${ing.qty} (punya: ${have})`, ephemeral: true });
+            }
+        }
+
+        // Deduct ingredients
+        for (const ing of recipe.ingredients) {
+            if (ing.source === 'livestock') {
+                const [productId, quality] = [ing.id.substring(0, ing.id.lastIndexOf('_')), ing.id.substring(ing.id.lastIndexOf('_') + 1)];
+                db.prepare('UPDATE livestock_products SET quantity = quantity - ? WHERE userId = ? AND productId = ? AND quality = ?').run(ing.qty, userId, productId, quality);
+            } else {
+                removeStorage(guildId, userId, ing.id, ing.qty);
+            }
+        }
+
+        // Add money
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(recipe.sellPrice, userId);
+
+        const ingredients = recipe.ingredients.map(ing => {
+            const c = ALL_CROPS.find(cr => cr.id === ing.id);
+            return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} ×${ing.qty}`;
+        }).join(' + ');
+
+        return interaction.reply({ content: `🧪 **Craft: ${recipe.emoji} ${recipe.name}!**\n> Bahan: ${ingredients}\n> Hasil: 🪙 **+${recipe.sellPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+    }
 }
 
 module.exports = {
@@ -525,5 +625,7 @@ module.exports = {
     buildCraftingPanel,
     buildStorageHub,
     handleLivestockButton,
+    handleLivestockSelectMenu,
     isLivestockButton,
+    isLivestockSelectMenu,
 };
