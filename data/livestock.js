@@ -33,8 +33,8 @@ const ANIMALS = {
         product: { id: 'egg', name: 'Telur', emoji: '🥚' },
         baseProduceTime: 10 * 60 * 1000, // 10 menit base (lv1 tier0)
         minProduceTime: 3 * 60 * 1000,   // min 3 menit (lv100 tier10)
-        baseYield: [1, 3],  // random 1-3 telur per collect (base)
-        maxYield: [2, 5],   // random 2-5 telur per collect (tier 10)
+        baseYield: [2, 6],  // tier 0: 2-6 telur (normal only → 100-300/collect)
+        maxYield: [3, 8],   // tier 10: 3-8 telur (mostly excellent/perfect → huge value)
         expPerCollect: 5,
         feedItem: 'chicken_feed', feedName: 'Pakan Ayam',
         medicineItem: 'chicken_medicine', medicineName: 'Obat Ayam',
@@ -46,8 +46,8 @@ const ANIMALS = {
         product: { id: 'milk', name: 'Susu', emoji: '🥛' },
         baseProduceTime: 15 * 60 * 1000, // 15 menit base
         minProduceTime: 5 * 60 * 1000,   // min 5 menit
-        baseYield: [1, 2],
-        maxYield: [2, 4],
+        baseYield: [1, 4],  // tier 0: 1-4 susu
+        maxYield: [3, 7],   // tier 10: 3-7 susu
         expPerCollect: 8,
         feedItem: 'cow_feed', feedName: 'Pakan Sapi',
         medicineItem: 'cow_medicine', medicineName: 'Obat Sapi',
@@ -59,8 +59,8 @@ const ANIMALS = {
         product: { id: 'wool', name: 'Bulu', emoji: '🧶' },
         baseProduceTime: 20 * 60 * 1000, // 20 menit base
         minProduceTime: 7 * 60 * 1000,   // min 7 menit
-        baseYield: [1, 2],
-        maxYield: [1, 3],
+        baseYield: [1, 4],  // tier 0: 1-4 bulu
+        maxYield: [2, 6],   // tier 10: 2-6 bulu
         expPerCollect: 6,
         feedItem: 'sheep_feed', feedName: 'Pakan Domba',
         medicineItem: 'sheep_medicine', medicineName: 'Obat Domba',
@@ -105,43 +105,104 @@ const EVOLUTION_TIERS = [
 ];
 
 // ==================== PRODUCT QUALITY ====================
-// Quality chance based on evolution tier
+// Tier determines which qualities are UNLOCKED + chance
+// Tier 0: only normal (yield banyak → total 100-3000/collect)
+// Tier 1: normal + premium (total 3000-8000/collect)
+// Tier 2: normal + premium + superior (total 5000-15000)
+// Tier 3-4: up to excellent (total 10000-40000)
+// Tier 5+: up to perfect (total 20000-100000+)
 function getQualityChance(tier) {
-    // Base chances (tier 0), shifts toward rare as tier increases
-    const chances = [
-        { quality: 'normal', base: 75, perTier: -6.5 },    // 75% → 10% at tier 10
-        { quality: 'premium', base: 20, perTier: -0.5 },   // 20% → 15% at tier 10
-        { quality: 'superior', base: 4, perTier: 2.5 },    // 4% → 29% at tier 10
-        { quality: 'excellent', base: 1, perTier: 2.5 },   // 1% → 26% at tier 10
-        { quality: 'perfect', base: 0, perTier: 2 },       // 0% → 20% at tier 10
+    if (tier <= 0) return [
+        { quality: 'normal', chance: 100 },
     ];
-    return chances.map(c => ({
-        quality: c.quality,
-        chance: Math.max(0, Math.min(100, c.base + (c.perTier * tier)))
-    }));
+    if (tier === 1) return [
+        { quality: 'normal', chance: 70 },
+        { quality: 'premium', chance: 30 },
+    ];
+    if (tier === 2) return [
+        { quality: 'normal', chance: 50 },
+        { quality: 'premium', chance: 35 },
+        { quality: 'superior', chance: 15 },
+    ];
+    if (tier === 3) return [
+        { quality: 'normal', chance: 30 },
+        { quality: 'premium', chance: 35 },
+        { quality: 'superior', chance: 25 },
+        { quality: 'excellent', chance: 10 },
+    ];
+    if (tier === 4) return [
+        { quality: 'normal', chance: 20 },
+        { quality: 'premium', chance: 30 },
+        { quality: 'superior', chance: 30 },
+        { quality: 'excellent', chance: 18 },
+        { quality: 'perfect', chance: 2 },
+    ];
+    if (tier === 5) return [
+        { quality: 'normal', chance: 10 },
+        { quality: 'premium', chance: 25 },
+        { quality: 'superior', chance: 30 },
+        { quality: 'excellent', chance: 25 },
+        { quality: 'perfect', chance: 10 },
+    ];
+    if (tier === 6) return [
+        { quality: 'normal', chance: 5 },
+        { quality: 'premium', chance: 15 },
+        { quality: 'superior', chance: 30 },
+        { quality: 'excellent', chance: 35 },
+        { quality: 'perfect', chance: 15 },
+    ];
+    if (tier === 7) return [
+        { quality: 'normal', chance: 3 },
+        { quality: 'premium', chance: 10 },
+        { quality: 'superior', chance: 25 },
+        { quality: 'excellent', chance: 40 },
+        { quality: 'perfect', chance: 22 },
+    ];
+    if (tier === 8) return [
+        { quality: 'normal', chance: 2 },
+        { quality: 'premium', chance: 8 },
+        { quality: 'superior', chance: 20 },
+        { quality: 'excellent', chance: 40 },
+        { quality: 'perfect', chance: 30 },
+    ];
+    if (tier === 9) return [
+        { quality: 'normal', chance: 1 },
+        { quality: 'premium', chance: 5 },
+        { quality: 'superior', chance: 15 },
+        { quality: 'excellent', chance: 40 },
+        { quality: 'perfect', chance: 39 },
+    ];
+    // tier 10
+    return [
+        { quality: 'normal', chance: 0 },
+        { quality: 'premium', chance: 3 },
+        { quality: 'superior', chance: 12 },
+        { quality: 'excellent', chance: 40 },
+        { quality: 'perfect', chance: 45 },
+    ];
 }
 
 const PRODUCT_QUALITY = {
     egg: [
-        { quality: 'normal', name: '⚪ Telur Normal', price: 20 },
-        { quality: 'premium', name: '🟡 Telur Premium', price: 55 },
-        { quality: 'superior', name: '🟠 Telur Superior', price: 150 },
-        { quality: 'excellent', name: '🔴 Telur Excellent', price: 400 },
-        { quality: 'perfect', name: '💎 Telur Perfect', price: 1000 },
+        { quality: 'normal', name: '⚪ Telur Normal', price: 50 },
+        { quality: 'premium', name: '🟡 Telur Premium', price: 100 },
+        { quality: 'superior', name: '🟠 Telur Superior', price: 500 },
+        { quality: 'excellent', name: '🔴 Telur Excellent', price: 2000 },
+        { quality: 'perfect', name: '💎 Telur Perfect', price: 10000 },
     ],
     milk: [
-        { quality: 'normal', name: '⚪ Susu Normal', price: 35 },
-        { quality: 'premium', name: '🟡 Susu Premium', price: 90 },
-        { quality: 'superior', name: '🟠 Susu Superior', price: 250 },
-        { quality: 'excellent', name: '🔴 Susu Excellent', price: 650 },
-        { quality: 'perfect', name: '💎 Susu Perfect', price: 1600 },
+        { quality: 'normal', name: '⚪ Susu Normal', price: 70 },
+        { quality: 'premium', name: '🟡 Susu Premium', price: 150 },
+        { quality: 'superior', name: '🟠 Susu Superior', price: 700 },
+        { quality: 'excellent', name: '🔴 Susu Excellent', price: 3000 },
+        { quality: 'perfect', name: '💎 Susu Perfect', price: 15000 },
     ],
     wool: [
-        { quality: 'normal', name: '⚪ Bulu Normal', price: 28 },
-        { quality: 'premium', name: '🟡 Bulu Premium', price: 75 },
-        { quality: 'superior', name: '🟠 Bulu Superior', price: 200 },
-        { quality: 'excellent', name: '🔴 Bulu Excellent', price: 500 },
-        { quality: 'perfect', name: '💎 Bulu Perfect', price: 1200 },
+        { quality: 'normal', name: '⚪ Bulu Normal', price: 60 },
+        { quality: 'premium', name: '🟡 Bulu Premium', price: 120 },
+        { quality: 'superior', name: '🟠 Bulu Superior', price: 600 },
+        { quality: 'excellent', name: '🔴 Bulu Excellent', price: 2500 },
+        { quality: 'perfect', name: '💎 Bulu Perfect', price: 12000 },
     ],
 };
 
