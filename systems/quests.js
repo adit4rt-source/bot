@@ -283,9 +283,9 @@ async function checkAndUpdateStreak(message) {
                         .replace(/{user\.mention}/g, `<@${userId}>`)
                         .replace(/{user\.name}/g, member.user.username)
                         .replace(/{streak}/g, String(streakData.count));
-                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} ${announceMsg}`).setTimestamp()] }).catch(() => {});
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} ${announceMsg}`).setTimestamp()] }).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 } else {
-                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).catch(() => {});
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 }
             }
         }
@@ -430,9 +430,9 @@ async function addXpAndMoney(member, type, multiplier = 1) {
                         .replace(/{user\.name}/g, member.user.username)
                         .replace(/{user\.level}/g, String(user.level))
                         .replace(/{user\.xp}/g, String(user.xp));
-                    channel.send(`${lvlMsg}${teksHadiah}`).catch(() => {});
+                    channel.send(`${lvlMsg}${teksHadiah}`).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 } else {
-                    channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).catch(() => {});
+                    channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 }
             }
         }
