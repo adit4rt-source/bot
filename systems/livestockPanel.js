@@ -59,6 +59,7 @@ function buildCoopPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_coop_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_coop_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_coop_upgrade_${userId}`).setLabel('⬆️ Upgrade Kandang').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_coop_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
@@ -135,6 +136,7 @@ function buildBarnPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_barn_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_barn_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_barn_upgrade_${userId}`).setLabel('⬆️ Upgrade Kandang').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_barn_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
@@ -192,6 +194,9 @@ async function handleLivestockButton(interaction) {
     const { buyAnimal, upgradeCoopLevel, upgradeBarnLevel, collectProducts, feedAnimals, healAll, sellAllProducts, getProductInventory } = require('./livestock');
 
     // === COOP ACTIONS ===
+    if (customId === `farm_coop_${userId}` || customId === `farm_coop_refresh_${userId}`) {
+        return interaction.update(buildCoopPanel(userId, interaction.user.username));
+    }
     if (customId === `farm_coop_collect_${userId}`) {
         const result = collectProducts(userId, 'chicken');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
@@ -219,13 +224,66 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
     }
     if (customId === `farm_coop_shop_${userId}`) {
-        // Buy chicken
+        // Show full coop shop
+        const { COOP_SHOP } = require('../data/livestock');
+        const userData2 = getOrCreateUser(null, userId);
+        let desc = `💰 Saldo: 🪙 **${userData2.balance.toLocaleString('id-ID')}**\n\n`;
+        COOP_SHOP.forEach(item => { desc += `> ${item.name} — 🪙 ${item.price.toLocaleString('id-ID')}\n>  ┗ *${item.desc}*\n`; });
+        const embed = new EmbedBuilder().setTitle('🛒 Shop Kandang Ayam').setColor('#FFA500').setDescription(desc);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('🐔 Ayam (3,000)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_coop_buyfeed_${userId}`).setLabel('🌾 Pakan x10 (600)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_coop_buymeds_${userId}`).setLabel('💊 Obat (250)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_coop_buypremium_${userId}`).setLabel('⭐ Premium (1,200)').setStyle(ButtonStyle.Secondary)
+        );
+        const row2x = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_coop_buyfeedbulk_${userId}`).setLabel('🌾 Pakan x50 (2,500)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row, row2x] });
+    }
+    if (customId === `farm_coop_buyhen_${userId}`) {
         const result = buyAnimal(userId, 'chicken');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         return interaction.reply({ content: `🐔 Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
     }
+    if (customId === `farm_coop_buyfeed_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 600) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 600 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'chicken_feed', 10);
+        return interaction.reply({ content: '🌾 Beli Pakan Ayam x10! (-🪙 600)', ephemeral: true });
+    }
+    if (customId === `farm_coop_buyfeedbulk_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 2500) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 2500 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'chicken_feed', 50);
+        return interaction.reply({ content: '🌾 Beli Pakan Ayam x50! (-🪙 2,500)', ephemeral: true });
+    }
+    if (customId === `farm_coop_buymeds_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 250) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 250 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'chicken_medicine', 1);
+        return interaction.reply({ content: '💊 Beli Obat Ayam x1! (-🪙 250)', ephemeral: true });
+    }
+    if (customId === `farm_coop_buypremium_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 1200) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 1200 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'premium_feed', 1);
+        return interaction.reply({ content: '⭐ Beli Pakan Premium x1! (-🪙 1,200)', ephemeral: true });
+    }
 
     // === BARN ACTIONS ===
+    if (customId === `farm_barn_${userId}` || customId === `farm_barn_refresh_${userId}`) {
+        return interaction.update(buildBarnPanel(userId, interaction.user.username));
+    }
     if (customId === `farm_barn_milk_${userId}`) {
         const result = collectProducts(userId, 'cow');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
@@ -263,17 +321,25 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: `⬆️ Peternakan upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
     }
     if (customId === `farm_barn_shop_${userId}`) {
-        // Show buy options
-        const embed = new EmbedBuilder()
-            .setTitle('🛒 Shop Peternakan')
-            .setColor('#8B4513')
-            .setDescription('Pilih hewan yang mau dibeli:');
+        // Show full barn shop
+        const { BARN_SHOP } = require('../data/livestock');
+        const userData2 = getOrCreateUser(null, userId);
+        let desc = `💰 Saldo: 🪙 **${userData2.balance.toLocaleString('id-ID')}**\n\n`;
+        BARN_SHOP.forEach(item => { desc += `> ${item.name} — 🪙 ${item.price.toLocaleString('id-ID')}\n>  ┗ *${item.desc}*\n`; });
+        const embed = new EmbedBuilder().setTitle('🛒 Shop Peternakan').setColor('#8B4513').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('🐄 Beli Sapi (10,000)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('🐑 Beli Domba (8,000)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('🐄 Sapi (10,000)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('🐑 Domba (8,000)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buycowfeed_${userId}`).setLabel('🌾 Pakan Sapi x10 (900)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_barn_buysheepfeed_${userId}`).setLabel('🌾 Pakan Domba x10 (700)').setStyle(ButtonStyle.Success)
+        );
+        const row2x = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_barn_buycowmeds_${userId}`).setLabel('💊 Obat Sapi (400)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_barn_buysheepmeds_${userId}`).setLabel('💊 Obat Domba (350)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_barn_buypremium_${userId}`).setLabel('⭐ Premium (1,200)').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row, row2x] });
     }
     if (customId === `farm_barn_buycow_${userId}`) {
         const result = buyAnimal(userId, 'cow');
@@ -284,6 +350,46 @@ async function handleLivestockButton(interaction) {
         const result = buyAnimal(userId, 'sheep');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         return interaction.reply({ content: `🐑 Berhasil beli domba! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_barn_buycowfeed_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 900) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 900 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'cow_feed', 10);
+        return interaction.reply({ content: '🌾 Beli Pakan Sapi x10! (-🪙 900)', ephemeral: true });
+    }
+    if (customId === `farm_barn_buysheepfeed_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 700) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 700 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'sheep_feed', 10);
+        return interaction.reply({ content: '🌾 Beli Pakan Domba x10! (-🪙 700)', ephemeral: true });
+    }
+    if (customId === `farm_barn_buycowmeds_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 400) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 400 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'cow_medicine', 1);
+        return interaction.reply({ content: '💊 Beli Obat Sapi x1! (-🪙 400)', ephemeral: true });
+    }
+    if (customId === `farm_barn_buysheepmeds_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 350) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 350 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'sheep_medicine', 1);
+        return interaction.reply({ content: '💊 Beli Obat Domba x1! (-🪙 350)', ephemeral: true });
+    }
+    if (customId === `farm_barn_buypremium_${userId}`) {
+        const user = getOrCreateUser(null, userId);
+        if (user.balance < 1200) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - 1200 WHERE userId = ?').run(userId);
+        const { addItem: addI } = require('../database');
+        addI(null, userId, 'premium_feed', 1);
+        return interaction.reply({ content: '⭐ Beli Pakan Premium x1! (-🪙 1,200)', ephemeral: true });
     }
 
     // === CRAFTING PRODUCTS VIEW ===
