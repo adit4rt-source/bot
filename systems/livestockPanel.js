@@ -27,29 +27,38 @@ function buildCoopPanel(userId, username) {
         const elapsed = now - (chicken.lastCollect || chicken.createdAt);
         const isReady = elapsed >= produceTime;
         if (isReady) totalReady++;
-        const tierInfo = chicken.tier > 0 ? ` ${'⭐'.repeat(Math.min(chicken.tier, 3))}${chicken.tier > 3 ? `+${chicken.tier - 3}` : ''}` : '';
-        const statusIcon = chicken.status === 'sick' ? ' 🤒' : isReady ? ' ✅' : '';
-        const timeLeft = isReady ? '' : ` (${Math.ceil((produceTime - elapsed) / 60000)}m)`;
-        animalList += `> \`[${i + 1}]\` 🐔 Lv.${chicken.level}${tierInfo} — ${isReady ? '🥚 Ready!' : `⏳${timeLeft}`}${statusIcon}\n`;
+        const tierEmoji = chicken.tier > 0 ? `(+${chicken.tier})` : '';
+        const statusEmoji = chicken.status === 'sick' ? '🤒' : isReady ? '🥚' : '⏳';
+        const timeInfo = isReady ? '' : `(${Math.ceil((produceTime - elapsed) / 60000)}m)`;
+        animalList += `\`[${i + 1}]\` 🐔 Lv.${chicken.level} — ${statusEmoji} ${timeInfo}${tierEmoji}\n`;
     });
 
-    if (chickens.length === 0) animalList = '> *Belum punya ayam. Beli di Shop!*\n';
+    if (chickens.length === 0) animalList = '*Belum punya ayam. Beli di Shop!*\n';
+
+    // Next upgrade info
+    const nextCoop = COOP_LEVELS.find(l => l.level === coopLvl + 1);
 
     const embed = new EmbedBuilder()
         .setTitle(`🐔 KANDANG AYAM — ${username}`)
-        .setColor('#FFA500')
+        .setColor(totalReady > 0 ? '#FFD700' : '#FFA500')
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏠 **${coopInfo.name}** (Lv.${coopLvl}) | ${season.emoji} ${season.name}\n` +
+            `\n` +
+            `🏠 💎 **${coopInfo.name}** (Lv.${coopLvl}) | ${season.emoji} ${season.name}\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
             `> 🐔 Ayam: **${chickens.length}**/${maxSlots} slot\n` +
             `> 🥚 Telur siap: **${totalReady}** butir\n` +
             `> 📈 Produksi: **${Math.round(prodMult * 100)}%** (season effect)\n` +
-            (sickCount > 0 ? `> 🤒 Sakit: **${sickCount}** ayam\n` : '') +
             `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📋 **Daftar Ayam:**\n${animalList}`
+            (sickCount > 0 ? `> ⚠️ Sakit: **${sickCount}** ayam — beri obat!\n` : '') +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `📋 **Daftar Ayam:**\n` +
+            animalList +
+            `\n` +
+            `> ${nextCoop ? `Upgrade: 🪙 ${nextCoop.cost.toLocaleString('id-ID')} → ${nextCoop.slots} slot` : '✅ MAX LEVEL'}\n` +
+            `> Produksi: 3-10 menit (tergantung level/evo) | Feed setiap hari`
         )
-        .setFooter({ text: `Produksi: 3-10 menit (tergantung level/evo) | Feed setiap hari` });
+        .setFooter({ text: `🥚 = siap collect | ⏳ = menunggu | 🤒 = sakit | (+N) = tier evo` })
+        .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
