@@ -432,8 +432,9 @@ async function handleExpeditionButton(interaction) {
             .setFooter({ text: 'Mulai ekspedisi baru kapan saja!' });
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🌊 Ekspedisi Lagi').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`exp_history_${userId}`).setLabel('📜 History').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`exp_refresh_${userId}`).setLabel('🌊 Ekspedisi Lagi').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`exp_history_${userId}`).setLabel('📜 History').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
         );
 
         // Check achievements
@@ -455,7 +456,8 @@ async function handleExpeditionButton(interaction) {
             .setDescription('Ekspedisi dibatalkan. Pet kamu kembali tanpa reward.\n\n*Mulai ekspedisi baru kapan saja.*');
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId(`exp_refresh_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -492,7 +494,8 @@ async function handleExpeditionButton(interaction) {
             .setDescription(desc);
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId(`exp_refresh_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`exp_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
