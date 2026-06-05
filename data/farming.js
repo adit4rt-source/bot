@@ -107,31 +107,4 @@ const FARM_DECORATIONS = [
     { id: 'golden_statue', name: 'Patung Emas', emoji: '🗽', price: 100000, desc: 'Simbol kemewahan!' },
 ];
 
-// === LIVESTOCK RECIPES (gabungan item tanaman + telur/susu/bulu) ===
-// Produk ternak disimpan di farm_storage dengan id: egg_normal, egg_premium, milk_normal, wool_normal, dll
-const FARM_LIVESTOCK_RECIPES = [
-    // Telur recipes
-    { id: 'roti_telur', name: 'Roti Telur', emoji: '🍳', ingredients: [{id:'gandum',qty:3},{id:'egg_normal',qty:3}], sellPrice: 250 },
-    { id: 'kue_telur', name: 'Kue Telur Premium', emoji: '🧁', ingredients: [{id:'gandum',qty:4},{id:'egg_premium',qty:2},{id:'strawberry',qty:2}], sellPrice: 600 },
-    { id: 'omelette', name: 'Omelette Spesial', emoji: '🍳', ingredients: [{id:'egg_superior',qty:2},{id:'tomat',qty:2},{id:'bawang_merah',qty:2}], sellPrice: 900 },
-    { id: 'royal_cake', name: 'Royal Cake', emoji: '🎂', ingredients: [{id:'egg_excellent',qty:3},{id:'gandum',qty:5},{id:'madu',qty:2}], sellPrice: 3500 },
-    // Susu recipes
-    { id: 'cokelat_susu', name: 'Cokelat Susu', emoji: '🍫', ingredients: [{id:'kakao',qty:3},{id:'milk_normal',qty:3}], sellPrice: 400 },
-    { id: 'keju', name: 'Keju Artisan', emoji: '🧀', ingredients: [{id:'milk_premium',qty:5}], sellPrice: 800 },
-    { id: 'ice_cream', name: 'Ice Cream Mewah', emoji: '🍨', ingredients: [{id:'milk_superior',qty:3},{id:'strawberry',qty:3},{id:'madu',qty:1}], sellPrice: 1500 },
-    { id: 'yogurt_premium', name: 'Yogurt Premium', emoji: '🥛', ingredients: [{id:'milk_excellent',qty:2},{id:'blueberry',qty:3}], sellPrice: 2800 },
-    // Bulu recipes
-    { id: 'benang', name: 'Benang Halus', emoji: '🧵', ingredients: [{id:'wool_normal',qty:5}], sellPrice: 300 },
-    { id: 'kain_premium', name: 'Kain Premium', emoji: '🧣', ingredients: [{id:'wool_premium',qty:4}], sellPrice: 650 },
-    { id: 'sweater', name: 'Sweater Handmade', emoji: '🧥', ingredients: [{id:'wool_superior',qty:5},{id:'wool_premium',qty:3}], sellPrice: 2000 },
-    { id: 'royal_carpet', name: 'Karpet Kerajaan', emoji: '🪄', ingredients: [{id:'wool_excellent',qty:4},{id:'mawar',qty:2}], sellPrice: 4000 },
-    // Cross-product recipes
-    { id: 'breakfast_deluxe', name: 'Breakfast Deluxe', emoji: '🍽️', ingredients: [{id:'egg_premium',qty:3},{id:'milk_premium',qty:2},{id:'gandum',qty:3}], sellPrice: 1200 },
-    { id: 'golden_feast', name: 'Golden Feast', emoji: '👑', ingredients: [{id:'egg_excellent',qty:2},{id:'milk_excellent',qty:2},{id:'kopi',qty:2}], sellPrice: 8000 },
-    { id: 'divine_elixir', name: 'Divine Farm Elixir', emoji: '✨', ingredients: [{id:'egg_perfect',qty:1},{id:'milk_perfect',qty:1},{id:'mystic_herb',qty:1}], sellPrice: 20000 },
-];
-
-// Gabungkan semua ke FARM_RECIPES
-FARM_RECIPES.push(...FARM_LIVESTOCK_RECIPES);
-
-module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS, FARM_LIVESTOCK_RECIPES };
+module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS };

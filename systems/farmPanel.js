@@ -687,7 +687,7 @@ async function handleFarmButton(interaction) {
     }
 
 
-    // === CRAFT (all recipes from FARM_RECIPES which includes livestock) ===
+    // === CRAFT ===
     if (action === 'craft') {
         const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
         const craftMenu = new StringSelectMenuBuilder().setCustomId(`farm_craftselect_${userId}`).setPlaceholder('Pilih resep...').setMinValues(1).setMaxValues(1);
@@ -704,7 +704,7 @@ async function handleFarmButton(interaction) {
 
         if (FARM_RECIPES.length > 25) {
             const craftMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect2_${userId}`).setPlaceholder('Resep Lanjutan...').setMinValues(1).setMaxValues(1);
-            FARM_RECIPES.slice(25, 50).forEach(r => {
+            FARM_RECIPES.slice(25).forEach(r => {
                 const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
                 let label = `${r.name} — ${r.sellPrice}`;
                 if (label.length > 100) label = label.substring(0, 97) + '...';
@@ -715,21 +715,8 @@ async function handleFarmButton(interaction) {
             components.push(new ActionRowBuilder().addComponents(craftMenu2));
         }
 
-        if (FARM_RECIPES.length > 50) {
-            const craftMenu3 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect3_${userId}`).setPlaceholder('Resep Livestock...').setMinValues(1).setMaxValues(1);
-            FARM_RECIPES.slice(50).forEach(r => {
-                const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
-                let label = `${r.name} — ${r.sellPrice}`;
-                if (label.length > 100) label = label.substring(0, 97) + '...';
-                let desc = `Bahan: ${ingStr}`;
-                if (desc.length > 100) desc = desc.substring(0, 97) + '...';
-                craftMenu3.addOptions(new StringSelectMenuOptionBuilder().setLabel(label).setValue(r.id).setDescription(desc));
-            });
-            components.push(new ActionRowBuilder().addComponents(craftMenu3));
-        }
-
         const embed = new EmbedBuilder().setTitle('🧪 Craft Resep').setColor('#9B59B6')
-            .setDescription(`Pilih resep untuk craft (bahan diambil dari Storage):\n\n> 🌾 Tanaman: 36 resep\n> 🐔🐄 Livestock: 15 resep`);
+            .setDescription('Pilih resep untuk craft (bahan diambil dari Storage):');
         components.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         ));
