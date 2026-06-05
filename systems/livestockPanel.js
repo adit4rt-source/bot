@@ -143,31 +143,30 @@ function buildBarnPanel(userId, username) {
     return { embeds: [embed], components: [row1, row2] };
 }
 
-// ============ BUILD: Crafting Panel (simple button-based) ============
+// ============ BUILD: Crafting Panel (redirects to unified craft in farmPanel) ============
 function buildCraftingPanel(guildId, userId, username) {
+    // Just redirect to the craft action in farmPanel
+    // This function is kept for the hub button routing
     const userData = getOrCreateUser(guildId, userId);
+    const { FARM_RECIPES } = require('../data/farming');
     const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
     desc += `📋 **${allRecipes.length} resep tersedia**\n\n`;
-    desc += `**🌾 Tanaman** (${FARM_RECIPES.length}):\n`;
-    FARM_RECIPES.slice(0, 5).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
-    if (FARM_RECIPES.length > 5) desc += `> *...+${FARM_RECIPES.length - 5} lainnya*\n`;
-    desc += `\n**🐔🐄 Livestock** (${LIVESTOCK_RECIPES.length}):\n`;
-    LIVESTOCK_RECIPES.slice(0, 5).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
-    if (LIVESTOCK_RECIPES.length > 5) desc += `> *...+${LIVESTOCK_RECIPES.length - 5} lainnya*\n`;
-    desc += `\n> Klik **🌾 Craft Tanaman** untuk craft resep tanaman\n> Klik **📦 Livestock Products** untuk lihat stok produk ternak`;
+    desc += `> 🌾 Tanaman: ${FARM_RECIPES.length} resep\n`;
+    desc += `> 🐔🐄 Livestock: ${LIVESTOCK_RECIPES.length} resep\n\n`;
+    desc += `Klik **🧪 Craft** untuk membuka menu craft.`;
 
     const embed = new EmbedBuilder()
         .setTitle(`🧪 CRAFTING HUB — ${username}`)
         .setColor('#9B59B6')
         .setDescription(desc)
-        .setFooter({ text: `Bahan dari Storage (panen) + Livestock Products (telur/susu/bulu)` });
+        .setFooter({ text: 'Bahan dari Storage (panen) + Livestock Products (telur/susu/bulu)' });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🌾 Craft Tanaman').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_craft_products_${userId}`).setLabel('📦 Livestock Products').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_craft_sellall_${userId}`).setLabel('💰 Sell ALL Products').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`farm_craft_sellall_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
@@ -179,6 +178,9 @@ function buildStorageHub(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
     const { getStorage } = require('./farming');
     const { getProductInventory } = require('./livestock');
+    const { FARM_CROPS } = require('../data/farming');
+    const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
+    const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
 
     // Farm storage
     const farmStorage = getStorage(guildId, userId);
@@ -195,9 +197,6 @@ function buildStorageHub(guildId, userId, username) {
     if (farmStorage.length === 0) {
         desc += `> *Kosong*\n`;
     } else {
-        const { FARM_CROPS } = require('../data/farming');
-        const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
-        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
         farmStorage.slice(0, 8).forEach(s => {
             const crop = ALL_CROPS.find(c => c.id === s.cropId);
             if (crop) desc += `> ${crop.emoji} **${crop.name}** × ${s.quantity} (🪙 ${crop.sellPrice}/pc)\n`;
@@ -225,7 +224,7 @@ function buildStorageHub(guildId, userId, username) {
         .setFooter({ text: `Total: ${farmTotal + livestockTotal} items | Sell All untuk jual semua sekaligus` });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('🌾 Sell Panen').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('🌾 Detail Panen').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_allstorage_sellall_${userId}`).setLabel('💰 Sell ALL').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );

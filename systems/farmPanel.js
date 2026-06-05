@@ -666,11 +666,14 @@ async function handleFarmButton(interaction) {
     }
 
 
-    // === CRAFT ===
+    // === CRAFT (gabungan tanaman + livestock) ===
     if (action === 'craft') {
-        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS]; // Include prestige for lookup
+        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
+        const { LIVESTOCK_RECIPES } = require('../data/livestock');
+        const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
+
         const craftMenu = new StringSelectMenuBuilder().setCustomId(`farm_craftselect_${userId}`).setPlaceholder('🧪 Pilih resep...').setMinValues(1).setMaxValues(1);
-        FARM_RECIPES.slice(0, 25).forEach(r => {
+        allRecipes.slice(0, 25).forEach(r => {
             const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
             let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
             if (label.length > 100) label = label.substring(0, 97) + '...';
@@ -681,10 +684,9 @@ async function handleFarmButton(interaction) {
 
         const components = [new ActionRowBuilder().addComponents(craftMenu)];
 
-        // If more than 25 recipes, add second menu
-        if (FARM_RECIPES.length > 25) {
-            const craftMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect2_${userId}`).setPlaceholder('🧪 Resep Lanjutan (Epic/Legendary)...').setMinValues(1).setMaxValues(1);
-            FARM_RECIPES.slice(25).forEach(r => {
+        if (allRecipes.length > 25) {
+            const craftMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect2_${userId}`).setPlaceholder('🧪 Resep Lanjutan...').setMinValues(1).setMaxValues(1);
+            allRecipes.slice(25).forEach(r => {
                 let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
                 if (label.length > 100) label = label.substring(0, 97) + '...';
                 const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
@@ -696,9 +698,9 @@ async function handleFarmButton(interaction) {
         }
 
         const embed = new EmbedBuilder().setTitle('🧪 Craft Resep').setColor('#9B59B6')
-            .setDescription('Pilih resep untuk craft (bahan diambil dari Storage):');
+            .setDescription(`Pilih resep untuk craft (bahan diambil dari Storage):\n\n> 🌾 Tanaman: ${FARM_RECIPES.length} resep\n> 🐔🐄 Livestock: ${LIVESTOCK_RECIPES.length} resep`);
         components.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         ));
         return interaction.update({ embeds: [embed], components });
     }
@@ -1000,18 +1002,43 @@ async function handleFarmSelectMenu(interaction) {
     // === CRAFT SELECT ===
     if (customId.startsWith('farm_craftselect_') || customId.startsWith('farm_craftselect2_')) {
         const recipeId = interaction.values[0];
-        const recipe = FARM_RECIPES.find(r => r.id === recipeId);
+        const { LIVESTOCK_RECIPES } = require('../data/livestock');
+        const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
+        const recipe = allRecipes.find(r => r.id === recipeId);
         if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
         const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
         const missing = [];
         for (const ing of recipe.ingredients) {
-            const have = getStorageQty(guildId, userId, ing.id);
-            if (have < ing.qty) { const crop = ALL_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
+            let have = 0;
+            if (ing.source === 'livestock') {
+                // Livestock product: format "egg_normal", "milk_premium", etc.
+                const lastUnderscore = ing.id.lastIndexOf('_');
+                const productId = ing.id.substring(0, lastUnderscore);
+                const quality = ing.id.substring(lastUnderscore + 1);
+                const { getProductCount } = require('./livestock');
+                have = getProductCount(userId, productId, quality);
+            } else {
+                have = getStorageQty(guildId, userId, ing.id);
+            }
+            if (have < ing.qty) {
+                const crop = ALL_CROPS.find(c => c.id === ing.id);
+                missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`);
+            }
         }
         if (missing.length > 0) {
             return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], flags: 1 << 6 });
         }
-        for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
+        // Deduct ingredients
+        for (const ing of recipe.ingredients) {
+            if (ing.source === 'livestock') {
+                const lastUnderscore = ing.id.lastIndexOf('_');
+                const productId = ing.id.substring(0, lastUnderscore);
+                const quality = ing.id.substring(lastUnderscore + 1);
+                db.prepare('UPDATE livestock_products SET quantity = quantity - ? WHERE userId = ? AND productId = ? AND quality = ?').run(ing.qty, userId, productId, quality);
+            } else {
+                removeStorage(guildId, userId, ing.id, ing.qty);
+            }
+        }
         addUserBalance(guildId, userId, recipe.sellPrice);
         incrementUserStat(guildId, userId, 'total_crafts');
         addIncome(guildId, userId, 'farming', recipe.sellPrice);
@@ -1024,7 +1051,7 @@ async function handleFarmSelectMenu(interaction) {
             .setDescription(`> Bahan: ${ingredients}\n> 💰 Dijual: 🪙 **${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft Lagi').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
