@@ -1079,6 +1079,12 @@ async function handleFarmModal(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
 
+    // === LIVESTOCK MODALS (shop buy qty) ===
+    const { isLivestockModal, handleLivestockModal } = require('./livestockPanel');
+    if (isLivestockModal(customId)) {
+        return handleLivestockModal(interaction);
+    }
+
     // === SEED QUANTITY MODAL ===
     if (customId.startsWith('farm_seedqty_')) {
         const remaining = customId.replace('farm_seedqty_', '');
@@ -1152,7 +1158,7 @@ function isFarmPanelSelectMenu(customId) {
 }
 
 function isFarmPanelModal(customId) {
-    return customId.startsWith('farm_seedqty_') || customId.startsWith('farm_fertqty_');
+    return customId.startsWith('farm_seedqty_') || customId.startsWith('farm_fertqty_') || customId.startsWith('farm_coop_modal_') || customId.startsWith('farm_barn_modal_');
 }
 
 module.exports = {

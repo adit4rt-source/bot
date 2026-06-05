@@ -21,6 +21,7 @@ function buildCoopPanel(userId, username) {
     const now = Date.now();
     let totalReady = 0;
     let animalList = '';
+    const { getHungerPercent } = require('./livestock');
     chickens.forEach((chicken, i) => {
         const { getProduceTime } = require('../data/livestock');
         const produceTime = getProduceTime('chicken', chicken.level, chicken.tier) / prodMult;
@@ -29,21 +30,28 @@ function buildCoopPanel(userId, username) {
         if (isReady) totalReady++;
 
         const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
+        const hunger = getHungerPercent(chicken);
+        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' 💀';
 
         if (chicken.status === 'sick') {
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!\n`;
+            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
         } else if (isReady) {
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!\n`;
+            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)\n`;
+            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
     if (chickens.length === 0) animalList = '> *Belum punya ayam. Beli di Shop!*\n';
+
+    // Calculate average hunger
+    const avgHunger = chickens.length > 0 ? Math.round(chickens.reduce((s, c) => s + getHungerPercent(c), 0) / chickens.length) : 100;
+    const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
+    const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '💀';
 
     const embed = new EmbedBuilder()
         .setTitle(`🐔 KANDANG AYAM — ${username}`)
@@ -51,13 +59,14 @@ function buildCoopPanel(userId, username) {
         .setDescription(
             `🏠 **${coopInfo.name}** (Lv.${coopLvl}) | ${season.emoji} ${season.name}\n` +
             `> 🐔 Ayam: **${chickens.length}**/${maxSlots} | 🥚 Siap: **${totalReady}**\n` +
+            `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> 📈 Produksi: **${Math.round(prodMult * 100)}%** | 💰 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
             (sickCount > 0 ? `> ⚠️ **${sickCount} ayam sakit!** Beri obat segera.\n` : '') +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📋 **Daftar Ayam:**\n` +
             animalList
         )
-        .setFooter({ text: `🥚 Ready | ⏳ Growing | 🤒 Sakit | ⭐ Tier Evo | 🔄 Refresh` });
+        .setFooter({ text: `🥚 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | 🔄 Refresh` });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
@@ -282,20 +291,29 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
     }
     if (customId === `farm_coop_shop_${userId}`) {
-        // Show full coop shop
-        const { COOP_SHOP } = require('../data/livestock');
+        // Show full coop shop with input buttons
         const userData2 = getOrCreateUser(null, userId);
+        const feedCount = require('../database').getItemCount(null, userId, 'chicken_feed');
+        const medCount = require('../database').getItemCount(null, userId, 'chicken_medicine');
+        const premCount = require('../database').getItemCount(null, userId, 'premium_feed');
         let desc = `💰 Saldo: 🪙 **${userData2.balance.toLocaleString('id-ID')}**\n\n`;
-        COOP_SHOP.forEach(item => { desc += `> ${item.name} — 🪙 ${item.price.toLocaleString('id-ID')}\n>  ┗ *${item.desc}*\n`; });
+        desc += `📦 **Stok saat ini:**\n`;
+        desc += `> 🌾 Pakan Ayam: **${feedCount}** pack\n`;
+        desc += `> 💊 Obat Ayam: **${medCount}** dosis\n`;
+        desc += `> ⭐ Pakan Premium: **${premCount}** pc\n\n`;
+        desc += `🛒 **Daftar Harga:**\n`;
+        desc += `> 🐔 Ayam Baru — 🪙 3,000/ekor\n`;
+        desc += `> 🌾 Pakan Ayam — 🪙 60/pack (1 pack = +10% hunger)\n`;
+        desc += `> 💊 Obat Ayam — 🪙 250/dosis\n`;
+        desc += `> ⭐ Pakan Premium — 🪙 1,200/pc (untuk evolve)\n`;
         const embed = new EmbedBuilder().setTitle('🛒 Shop Kandang Ayam').setColor('#FFA500').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('🐔 Ayam (3,000)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_coop_buyfeed_${userId}`).setLabel('🌾 Pakan x10 (600)').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`farm_coop_buymeds_${userId}`).setLabel('💊 Obat (250)').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`farm_coop_buypremium_${userId}`).setLabel('⭐ Premium (1,200)').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('🐔 Beli Ayam').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_coop_buyfeed_input_${userId}`).setLabel('🌾 Beli Pakan').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_coop_buymeds_input_${userId}`).setLabel('💊 Beli Obat').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_coop_buypremium_input_${userId}`).setLabel('⭐ Beli Premium').setStyle(ButtonStyle.Secondary)
         );
         const row2x = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_coop_buyfeedbulk_${userId}`).setLabel('🌾 Pakan x50 (2,500)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row, row2x] });
@@ -305,37 +323,29 @@ async function handleLivestockButton(interaction) {
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         return interaction.reply({ content: `🐔 Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
     }
-    if (customId === `farm_coop_buyfeed_${userId}`) {
-        const user = getOrCreateUser(null, userId);
-        if (user.balance < 600) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - 600 WHERE userId = ?').run(userId);
-        const { addItem: addI } = require('../database');
-        addI(null, userId, 'chicken_feed', 10);
-        return interaction.reply({ content: '🌾 Beli Pakan Ayam x10! (-🪙 600)', ephemeral: true });
+    if (customId === `farm_coop_buyfeed_input_${userId}`) {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`farm_coop_modal_feed_${userId}`).setTitle('Beli Pakan Ayam');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('qty').setLabel('Jumlah (🪙 60/pack)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('contoh: 50').setMaxLength(5)
+        ));
+        return interaction.showModal(modal);
     }
-    if (customId === `farm_coop_buyfeedbulk_${userId}`) {
-        const user = getOrCreateUser(null, userId);
-        if (user.balance < 2500) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - 2500 WHERE userId = ?').run(userId);
-        const { addItem: addI } = require('../database');
-        addI(null, userId, 'chicken_feed', 50);
-        return interaction.reply({ content: '🌾 Beli Pakan Ayam x50! (-🪙 2,500)', ephemeral: true });
+    if (customId === `farm_coop_buymeds_input_${userId}`) {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`farm_coop_modal_meds_${userId}`).setTitle('Beli Obat Ayam');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('qty').setLabel('Jumlah (🪙 250/dosis)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('contoh: 10').setMaxLength(5)
+        ));
+        return interaction.showModal(modal);
     }
-    if (customId === `farm_coop_buymeds_${userId}`) {
-        const user = getOrCreateUser(null, userId);
-        if (user.balance < 250) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - 250 WHERE userId = ?').run(userId);
-        const { addItem: addI } = require('../database');
-        addI(null, userId, 'chicken_medicine', 1);
-        return interaction.reply({ content: '💊 Beli Obat Ayam x1! (-🪙 250)', ephemeral: true });
-    }
-    if (customId === `farm_coop_buypremium_${userId}`) {
-        const user = getOrCreateUser(null, userId);
-        if (user.balance < 1200) return interaction.reply({ content: '❌ Saldo kurang!', ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - 1200 WHERE userId = ?').run(userId);
-        const { addItem: addI } = require('../database');
-        addI(null, userId, 'premium_feed', 1);
-        return interaction.reply({ content: '⭐ Beli Pakan Premium x1! (-🪙 1,200)', ephemeral: true });
+    if (customId === `farm_coop_buypremium_input_${userId}`) {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`farm_coop_modal_premium_${userId}`).setTitle('Beli Pakan Premium');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('qty').setLabel('Jumlah (🪙 1,200/pc)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('contoh: 5').setMaxLength(5)
+        ));
+        return interaction.showModal(modal);
     }
 
     // === BARN ACTIONS ===
@@ -525,6 +535,87 @@ function isLivestockButton(customId) {
     return false;
 }
 
+function isLivestockModal(customId) {
+    return customId.startsWith('farm_coop_modal_') || customId.startsWith('farm_barn_modal_');
+}
+
+// ============ HANDLER: Modal submits (shop buy with qty input) ============
+async function handleLivestockModal(interaction) {
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    const qty = parseInt(interaction.fields.getTextInputValue('qty'));
+    if (isNaN(qty) || qty <= 0) return interaction.reply({ content: '❌ Jumlah tidak valid!', ephemeral: true });
+
+    const user = getOrCreateUser(null, userId);
+    const { addItem: addI } = require('../database');
+
+    // Coop modals
+    if (customId === `farm_coop_modal_feed_${userId}`) {
+        const cost = qty * 60;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'chicken_feed', qty);
+        return interaction.reply({ content: `🌾 Beli Pakan Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_coop_modal_meds_${userId}`) {
+        const cost = qty * 250;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'chicken_medicine', qty);
+        return interaction.reply({ content: `💊 Beli Obat Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_coop_modal_premium_${userId}`) {
+        const cost = qty * 1200;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'premium_feed', qty);
+        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+
+    // Barn modals
+    if (customId === `farm_barn_modal_cowfeed_${userId}`) {
+        const cost = qty * 90;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'cow_feed', qty);
+        return interaction.reply({ content: `🌾 Beli Pakan Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_barn_modal_sheepfeed_${userId}`) {
+        const cost = qty * 70;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'sheep_feed', qty);
+        return interaction.reply({ content: `🌾 Beli Pakan Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_barn_modal_cowmeds_${userId}`) {
+        const cost = qty * 400;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'cow_medicine', qty);
+        return interaction.reply({ content: `💊 Beli Obat Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_barn_modal_sheepmeds_${userId}`) {
+        const cost = qty * 350;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'sheep_medicine', qty);
+        return interaction.reply({ content: `💊 Beli Obat Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+    if (customId === `farm_barn_modal_premium_${userId}`) {
+        const cost = qty * 1200;
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+        addI(null, userId, 'premium_feed', qty);
+        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+    }
+}
+
 function isLivestockSelectMenu(customId) {
     return customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_');
 }
@@ -599,7 +690,9 @@ module.exports = {
     buildCraftingPanel,
     buildStorageHub,
     handleLivestockButton,
+    handleLivestockModal,
     handleLivestockSelectMenu,
     isLivestockButton,
+    isLivestockModal,
     isLivestockSelectMenu,
 };

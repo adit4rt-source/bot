@@ -228,6 +228,23 @@ function sellAllProducts(userId) {
 }
 
 // ==================== FEEDING ====================
+// Hunger system: setiap ayam punya hunger% yang turun seiring waktu
+// lastFed = timestamp terakhir dikasih makan
+// Hunger turun ~10% per jam (full → 0% dalam 10 jam)
+// Feed mengembalikan hunger ke 100%
+// Jika hunger 0% selama 3 hari → sakit
+
+function getHungerPercent(animal) {
+    if (!animal.lastFed) return 0;
+    const lastFedTime = typeof animal.lastFed === 'string' ? new Date(animal.lastFed).getTime() : parseInt(animal.lastFed);
+    if (isNaN(lastFedTime)) return 0;
+    const elapsed = Date.now() - lastFedTime;
+    const hoursElapsed = elapsed / (1000 * 60 * 60);
+    // Turun 10% per jam, minimum 0%
+    const hunger = Math.max(0, Math.floor(100 - (hoursElapsed * 10)));
+    return hunger;
+}
+
 function feedAnimals(userId, animalType) {
     const animals = getAnimals(userId, animalType).filter(a => a.status !== 'dead');
     if (animals.length === 0) return { error: 'Tidak ada hewan untuk diberi makan!' };
@@ -240,10 +257,10 @@ function feedAnimals(userId, animalType) {
     if (feedCount < feedNeeded) return { error: `Pakan kurang! Butuh ${feedNeeded}, punya ${feedCount}. (Season: x${feedMultiplier} pakan)` };
 
     removeItem(null, userId, animalDef.feedItem, feedNeeded);
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const nowTimestamp = String(Date.now());
 
     for (const animal of animals) {
-        db.prepare('UPDATE livestock SET lastFed = ? WHERE id = ?').run(today, animal.id);
+        db.prepare('UPDATE livestock SET lastFed = ? WHERE id = ?').run(nowTimestamp, animal.id);
     }
 
     return { success: true, fed: animals.length, feedUsed: feedNeeded };
@@ -376,7 +393,7 @@ module.exports = {
     getAnimals, getAllAnimals, buyAnimal,
     upgradeCoopLevel, upgradeBarnLevel,
     collectProducts, sellProducts, sellAllProducts,
-    feedAnimals, healAnimal, healAll,
+    feedAnimals, getHungerPercent, healAnimal, healAll,
     evolveAnimal, processDailyLivestock,
     getProductInventory, getProductCount,
 };
