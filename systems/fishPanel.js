@@ -223,7 +223,7 @@ async function handleFishingButton(interaction) {
             // Extra cooldown if monster type is cooldown
             if (damageResult.type === 'cooldown') {
                 const cdKey2 = `fish_${guildId}_${userId}`;
-                fishCooldowns.set(cdKey2, Date.now() + (rod.cooldown + 30) * 1000);
+                fishCooldowns.set(cdKey2, Date.now() + (rod.cooldown + damageResult.amount) * 1000);
             }
 
             const monsterEmbed = new EmbedBuilder()

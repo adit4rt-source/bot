@@ -79,8 +79,8 @@ function rollSeaMonster(guildId, userId, location, rod) {
             break;
 
         case 'rod_break':
-            // Lose rod_part items (1-3 depending on monster)
-            const partLoss = monster.id === 'god_guardian' ? 3 : monster.id === 'death_leviathan' ? 2 : 1;
+            // Lose rod_part items (1-5 depending on monster)
+            const partLoss = monster.id === 'omega_beast' ? 5 : monster.id === 'god_guardian' ? 3 : monster.id === 'death_leviathan' || monster.id === 'apocalypse_serpent' ? 2 : 1;
             const { getItemCount, removeItem } = require('../database');
             const currentParts = getItemCount(guildId, userId, 'rod_part');
             const actualLoss = Math.min(partLoss, currentParts);
@@ -90,8 +90,9 @@ function rollSeaMonster(guildId, userId, location, rod) {
             break;
 
         case 'money':
-            // Lose money
-            const moneyLoss = monster.id === 'reality_destroyer' ? 10000 : 5000;
+            // Lose money (varies by monster)
+            const moneyLossMap = { 'judgement_whale': 15000, 'reality_destroyer': 10000, 'dimensional_rift': 8000, 'phantom_angler': 7000, 'soul_eater': 5000, 'nebula_squid': 3000 };
+            const moneyLoss = moneyLossMap[monster.id] || 5000;
             const { getOrCreateUser } = require('../database');
             const user = getOrCreateUser(guildId, userId);
             const actualMoneyLoss = Math.min(moneyLoss, user.balance);
@@ -104,8 +105,9 @@ function rollSeaMonster(guildId, userId, location, rod) {
 
         case 'cooldown':
             // Extra cooldown penalty (handled by caller)
-            damageResult.amount = 30;
-            damageResult.detail = 'Cooldown +30 detik';
+            const cdPenalty = monster.id === 'time_devourer' ? 30 : monster.id === 'gravity_worm' ? 25 : 20;
+            damageResult.amount = cdPenalty;
+            damageResult.detail = `Cooldown +${cdPenalty} detik`;
             break;
     }
 

@@ -53,21 +53,41 @@ const FISH_TIERS = [
 // Monsters that can interrupt fishing at advanced locations
 // chance = % chance per cast to encounter monster instead of fish
 const SEA_MONSTERS = [
-    // Celestial Ocean monsters
+    // ===== CELESTIAL OCEAN (🌟) — 8 monsters =====
     { id: 'storm_serpent', name: 'Storm Serpent', emoji: '🐍⚡', location: 'celestial_ocean', chance: 12, damage: 'bait', desc: 'Ular badai menyambar umpanmu!' },
     { id: 'light_kraken', name: 'Light Kraken', emoji: '🦑✨', location: 'celestial_ocean', chance: 8, damage: 'bait', desc: 'Kraken cahaya merebut umpanmu!' },
     { id: 'celestial_shark', name: 'Celestial Shark', emoji: '🦈🌟', location: 'celestial_ocean', chance: 5, damage: 'rod_break', desc: 'Hiu celestial menyerang joranmu! Rod Part -1' },
-    // Primordial Depths monsters
+    { id: 'thunder_jellyfish', name: 'Thunder Jellyfish', emoji: '🪼⚡', location: 'celestial_ocean', chance: 10, damage: 'bait', desc: 'Ubur-ubur petir menyetrum umpanmu!' },
+    { id: 'comet_whale', name: 'Comet Whale', emoji: '🐋☄️', location: 'celestial_ocean', chance: 6, damage: 'bait_all', desc: 'Paus komet menabrak perahu! Umpan -5!' },
+    { id: 'starfall_piranha', name: 'Starfall Piranha', emoji: '🐟💫', location: 'celestial_ocean', chance: 14, damage: 'bait', desc: 'Swarm piranha bintang memakan umpanmu!' },
+    { id: 'nebula_squid', name: 'Nebula Squid', emoji: '🦑🌌', location: 'celestial_ocean', chance: 4, damage: 'money', desc: 'Cumi nebula menyemprotkan tinta — money -3000!' },
+    { id: 'solar_flare_eel', name: 'Solar Flare Eel', emoji: '🐍☀️', location: 'celestial_ocean', chance: 3, damage: 'cooldown', desc: 'Belut solar flare membakar waktumu! CD +20 detik' },
+
+    // ===== PRIMORDIAL DEPTHS (💀) — 10 monsters =====
     { id: 'ancient_hydra', name: 'Ancient Hydra', emoji: '🐲💀', location: 'primordial_depths', chance: 15, damage: 'bait', desc: 'Hydra purba memakan umpanmu!' },
     { id: 'abyss_titan', name: 'Abyss Titan', emoji: '👹🌊', location: 'primordial_depths', chance: 10, damage: 'bait_all', desc: 'Titan abyss menghancurkan semua umpan (5)!' },
     { id: 'death_leviathan', name: 'Death Leviathan', emoji: '💀🐋', location: 'primordial_depths', chance: 5, damage: 'rod_break', desc: 'Leviathan kematian merusak joranmu! Rod Part -2' },
     { id: 'soul_eater', name: 'Soul Eater', emoji: '👻⚫', location: 'primordial_depths', chance: 3, damage: 'money', desc: 'Soul Eater mencuri uangmu! -5000 money' },
-    // God Realm monsters
+    { id: 'bone_crusher', name: 'Bone Crusher', emoji: '🦴💥', location: 'primordial_depths', chance: 12, damage: 'bait', desc: 'Bone Crusher menghancurkan umpanmu dengan rahangnya!' },
+    { id: 'plague_octopus', name: 'Plague Octopus', emoji: '🐙☠️', location: 'primordial_depths', chance: 8, damage: 'bait', desc: 'Gurita wabah meracuni umpanmu!' },
+    { id: 'fossil_golem', name: 'Fossil Golem', emoji: '🪨🦕', location: 'primordial_depths', chance: 6, damage: 'rod_break', desc: 'Golem fosil memukul joranmu! Rod Part -1' },
+    { id: 'blood_shark', name: 'Blood Shark', emoji: '🦈🩸', location: 'primordial_depths', chance: 9, damage: 'bait_all', desc: 'Hiu darah mencium umpanmu — semua umpan habis (5)!' },
+    { id: 'phantom_angler', name: 'Phantom Angler', emoji: '👤🎣', location: 'primordial_depths', chance: 4, damage: 'money', desc: 'Pemancing hantu mencuri hasilmu! -7000 money' },
+    { id: 'gravity_worm', name: 'Gravity Worm', emoji: '🪱🌀', location: 'primordial_depths', chance: 3, damage: 'cooldown', desc: 'Cacing gravitasi melambatkan waktu! CD +25 detik' },
+
+    // ===== GOD REALM (👑) — 12 monsters =====
     { id: 'chaos_dragon', name: 'Chaos Dragon', emoji: '🐉🔥', location: 'god_realm', chance: 18, damage: 'bait', desc: 'Naga Chaos membakar umpanmu!' },
     { id: 'void_emperor_monster', name: 'Void Emperor', emoji: '🕳️👑', location: 'god_realm', chance: 12, damage: 'bait_all', desc: 'Void Emperor menghancurkan 5 umpan!' },
     { id: 'god_guardian', name: 'God Guardian', emoji: '⚔️👁️', location: 'god_realm', chance: 8, damage: 'rod_break', desc: 'Penjaga Dewa menyerang joranmu! Rod Part -3' },
     { id: 'reality_destroyer', name: 'Reality Destroyer', emoji: '💥🌀', location: 'god_realm', chance: 5, damage: 'money', desc: 'Penghancur Realitas mencuri uangmu! -10000 money' },
     { id: 'time_devourer', name: 'Time Devourer', emoji: '⏳👾', location: 'god_realm', chance: 3, damage: 'cooldown', desc: 'Pemakan Waktu memperlambatmu! Cooldown +30 detik' },
+    { id: 'divine_wrath', name: 'Divine Wrath', emoji: '⚡👼', location: 'god_realm', chance: 10, damage: 'bait_all', desc: 'Murka Ilahi menyambar! Semua umpan musnah!' },
+    { id: 'apocalypse_serpent', name: 'Apocalypse Serpent', emoji: '🐍🔥', location: 'god_realm', chance: 7, damage: 'rod_break', desc: 'Ular Kiamat melilit joranmu! Rod Part -2' },
+    { id: 'judgement_whale', name: 'Judgement Whale', emoji: '🐋⚖️', location: 'god_realm', chance: 6, damage: 'money', desc: 'Paus Penghakiman menghukummu! -15000 money' },
+    { id: 'entropy_swarm', name: 'Entropy Swarm', emoji: '🐝🌑', location: 'god_realm', chance: 14, damage: 'bait', desc: 'Swarm entropy memakan habis umpanmu!' },
+    { id: 'dimensional_rift', name: 'Dimensional Rift', emoji: '🌀💀', location: 'god_realm', chance: 4, damage: 'money', desc: 'Lubang dimensi menyedot moneymu! -8000 money' },
+    { id: 'celestial_hydra', name: 'Celestial Hydra', emoji: '🐲✨', location: 'god_realm', chance: 9, damage: 'bait', desc: 'Hydra celestial menyerang dari segala arah!' },
+    { id: 'omega_beast', name: 'Omega Beast', emoji: '🔱💀', location: 'god_realm', chance: 2, damage: 'rod_break', desc: 'Omega Beast menghancurkan segalanya! Rod Part -5!' },
 ];
 
 // ==================== FISHING LOCATIONS ====================
