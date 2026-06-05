@@ -121,16 +121,12 @@ function buildFarmPanel(guildId, userId, username) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('📦 Storage').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary)
-    );
-    const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 
@@ -179,7 +175,8 @@ function buildFarmHub(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_crops_${userId}`).setLabel('🌱 Tanaman').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel(`🐔 Kandang Ayam`).setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel(`🐄 Peternakan`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🧪 Crafting').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🧪 Crafting').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_allstorage_${userId}`).setLabel('📦 Storage').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -221,6 +218,10 @@ async function handleFarmButton(interaction) {
     if (customId === `farm_allcraft_${userId}`) {
         const { buildCraftingPanel } = require('./livestockPanel');
         return interaction.update(buildCraftingPanel(guildId, userId, interaction.user.username));
+    }
+    if (customId === `farm_allstorage_${userId}`) {
+        const { buildStorageHub } = require('./livestockPanel');
+        return interaction.update(buildStorageHub(guildId, userId, interaction.user.username));
     }
     if (customId === `farm_hub_${userId}`) {
         return interaction.update(buildFarmHub(guildId, userId, interaction.user.username));
