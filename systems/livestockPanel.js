@@ -143,23 +143,20 @@ function buildBarnPanel(userId, username) {
     return { embeds: [embed], components: [row1, row2] };
 }
 
-// ============ BUILD: Crafting Panel (1 dropdown with ALL recipes) ============
+// ============ BUILD: Crafting Panel (simple button-based) ============
 function buildCraftingPanel(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
-    const { FARM_CROPS } = require('../data/farming');
-    const { StringSelectMenuBuilder } = require('discord.js');
-    const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
-    const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
     const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
-    desc += `📋 **${allRecipes.length} resep tersedia** — pilih dari dropdown:\n\n`;
+    desc += `📋 **${allRecipes.length} resep tersedia**\n\n`;
     desc += `**🌾 Tanaman** (${FARM_RECIPES.length}):\n`;
-    FARM_RECIPES.slice(0, 4).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
-    if (FARM_RECIPES.length > 4) desc += `> *...+${FARM_RECIPES.length - 4} lainnya*\n`;
+    FARM_RECIPES.slice(0, 5).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
+    if (FARM_RECIPES.length > 5) desc += `> *...+${FARM_RECIPES.length - 5} lainnya*\n`;
     desc += `\n**🐔🐄 Livestock** (${LIVESTOCK_RECIPES.length}):\n`;
-    LIVESTOCK_RECIPES.slice(0, 4).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
-    if (LIVESTOCK_RECIPES.length > 4) desc += `> *...+${LIVESTOCK_RECIPES.length - 4} lainnya*\n`;
+    LIVESTOCK_RECIPES.slice(0, 5).forEach(r => { desc += `> ${r.emoji} ${r.name} → 🪙 ${r.sellPrice.toLocaleString('id-ID')}\n`; });
+    if (LIVESTOCK_RECIPES.length > 5) desc += `> *...+${LIVESTOCK_RECIPES.length - 5} lainnya*\n`;
+    desc += `\n> Klik **🌾 Craft Tanaman** untuk craft resep tanaman\n> Klik **📦 Livestock Products** untuk lihat stok produk ternak`;
 
     const embed = new EmbedBuilder()
         .setTitle(`🧪 CRAFTING HUB — ${username}`)
@@ -167,51 +164,14 @@ function buildCraftingPanel(guildId, userId, username) {
         .setDescription(desc)
         .setFooter({ text: `Bahan dari Storage (panen) + Livestock Products (telur/susu/bulu)` });
 
-    // Single select menu with all recipes
-    const craftMenu = new StringSelectMenuBuilder()
-        .setCustomId(`farm_hubcraft_${userId}`)
-        .setPlaceholder('🧪 Pilih resep untuk craft...')
-        .setMinValues(1).setMaxValues(1);
-
-    allRecipes.slice(0, 25).forEach(r => {
-        const ingStr = r.ingredients.map(ing => {
-            const c = ALL_CROPS.find(cr => cr.id === ing.id);
-            return c ? `${c.name} x${ing.qty}` : `${ing.id} x${ing.qty}`;
-        }).join(', ');
-        let label = `${r.name} — ${r.sellPrice.toLocaleString('id-ID')} money`;
-        if (label.length > 100) label = label.substring(0, 97) + '...';
-        let optDesc = ingStr;
-        if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
-        craftMenu.addOptions({ label, description: optDesc, value: r.id });
-    });
-
-    const rows = [new ActionRowBuilder().addComponents(craftMenu)];
-
-    // Second menu if > 25 recipes
-    if (allRecipes.length > 25) {
-        const craftMenu2 = new StringSelectMenuBuilder()
-            .setCustomId(`farm_hubcraft2_${userId}`)
-            .setPlaceholder('Resep Lanjutan...')
-            .setMinValues(1).setMaxValues(1);
-        allRecipes.slice(25).forEach(r => {
-            const ingStr = r.ingredients.map(ing => {
-                const c = ALL_CROPS.find(cr => cr.id === ing.id);
-                return c ? `${c.name} x${ing.qty}` : `${ing.id} x${ing.qty}`;
-            }).join(', ');
-            let label = `${r.name} — ${r.sellPrice.toLocaleString('id-ID')} money`;
-            if (label.length > 100) label = label.substring(0, 97) + '...';
-            let optDesc = ingStr;
-            if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
-            craftMenu2.addOptions({ label, description: optDesc, value: r.id });
-        });
-        rows.push(new ActionRowBuilder().addComponents(craftMenu2));
-    }
-
-    rows.push(new ActionRowBuilder().addComponents(
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🌾 Craft Tanaman').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_craft_products_${userId}`).setLabel('📦 Livestock Products').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_craft_sellall_${userId}`).setLabel('💰 Sell ALL Products').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
-    ));
+    );
 
-    return { embeds: [embed], components: rows };
+    return { embeds: [embed], components: [row] };
 }
 
 // ============ BUILD: Storage Hub (all items from tanaman + livestock) ============
@@ -485,6 +445,14 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: '⭐ Beli Pakan Premium x1! (-🪙 1,200)', ephemeral: true });
     }
 
+    // === CRAFTING SELL ALL PRODUCTS ===
+    if (customId === `farm_craft_sellall_${userId}`) {
+        const { sellAllProducts: sellLP } = require('./livestock');
+        const result = sellLP(userId);
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        return interaction.reply({ content: `💰 Semua produk ternak terjual! 🪙 **${result.totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+    }
+
     // === CRAFTING PRODUCTS VIEW ===
     if (customId === `farm_craft_products_${userId}`) {
         const products = getProductInventory(userId);
@@ -546,6 +514,7 @@ function isLivestockButton(customId) {
     // Crafting products view
     if (customId.startsWith('farm_craft_products_')) return true;
     if (customId.startsWith('farm_craft_livestock_')) return true;
+    if (customId.startsWith('farm_craft_sellall_')) return true;
     // Storage hub buttons
     if (customId.startsWith('farm_allstorage_')) return true;
     return false;
