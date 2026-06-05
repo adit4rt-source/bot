@@ -622,22 +622,33 @@ async function handleFarmButton(interaction) {
                 .setDescription('Gudang kosong! Panen dulu.');
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`farm_harvest_${userId}`).setLabel('🌾 Harvest').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
             );
             return interaction.update({ embeds: [embed], components: [row] });
         }
+        const { PRODUCT_QUALITY } = require('../data/livestock');
         let desc = '', totalValue = 0;
         storage.forEach(s => {
             const crop = FARM_CROPS.find(c => c.id === s.itemId);
-            const value = crop ? crop.sellPrice * s.quantity : 0;
+            let value = 0;
+            if (crop) {
+                value = crop.sellPrice * s.quantity;
+            } else {
+                // Check livestock product price
+                const lastU = s.itemId.lastIndexOf('_');
+                const prodId = s.itemId.substring(0, lastU);
+                const quality = s.itemId.substring(lastU + 1);
+                const qData = PRODUCT_QUALITY[prodId]?.find(q => q.quality === quality);
+                value = qData ? qData.price * s.quantity : 0;
+            }
             totalValue += value;
-            desc += `> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : s.itemId}** x${s.quantity} (🪙${value})\n`;
+            desc += `> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : s.itemId}** x${s.quantity} (🪙${value.toLocaleString('id-ID')})\n`;
         });
         desc += `\n> 💰 **Total Nilai Jual:** 🪙 ${totalValue.toLocaleString('id-ID')}`;
         const embed = new EmbedBuilder().setTitle('📦 Farm Storage').setColor('#2B2D31').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_sellall_${userId}`).setLabel('💰 Sell All').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -646,12 +657,22 @@ async function handleFarmButton(interaction) {
     if (action === 'sellall') {
         const storage = getStorage(guildId, userId);
         if (storage.length === 0) return interaction.reply({ content: '❌ Gudang kosong!', ephemeral: true });
+        const { PRODUCT_QUALITY } = require('../data/livestock');
         let totalMoney = 0, sellDesc = '';
         for (const s of storage) {
             const crop = FARM_CROPS.find(c => c.id === s.itemId);
-            const price = crop ? crop.sellPrice * s.quantity : 0;
+            let price = 0;
+            if (crop) {
+                price = crop.sellPrice * s.quantity;
+            } else {
+                const lastU = s.itemId.lastIndexOf('_');
+                const prodId = s.itemId.substring(0, lastU);
+                const quality = s.itemId.substring(lastU + 1);
+                const qData = PRODUCT_QUALITY[prodId]?.find(q => q.quality === quality);
+                price = qData ? qData.price * s.quantity : 0;
+            }
             totalMoney += price;
-            sellDesc += `> ${crop ? crop.emoji : '📦'} ${crop ? crop.name : '?'} x${s.quantity} = 🪙 ${price}\n`;
+            sellDesc += `> ${crop ? crop.emoji : '📦'} ${crop ? crop.name : s.itemId} x${s.quantity} = 🪙 ${price.toLocaleString('id-ID')}\n`;
         }
         addUserBalance(guildId, userId, totalMoney);
         clearFarmStorage(guildId, userId);
