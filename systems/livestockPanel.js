@@ -186,9 +186,10 @@ function buildStorageHub(guildId, userId, username) {
     const storage = getStorage(guildId, userId);
     const totalItems = storage.reduce((sum, s) => sum + s.quantity, 0);
 
-    // Separate farm items vs livestock products (livestock has underscore: egg_normal, milk_premium)
-    const farmItems = storage.filter(s => s.itemId && !s.itemId.includes('_'));
-    const livestockItems = storage.filter(s => s.itemId && s.itemId.includes('_'));
+    // Separate farm items vs livestock products (livestock starts with egg_, milk_, wool_)
+    const isLivestockProduct = (id) => id && (id.startsWith('egg_') || id.startsWith('milk_') || id.startsWith('wool_'));
+    const farmItems = storage.filter(s => s.itemId && !isLivestockProduct(s.itemId));
+    const livestockItems = storage.filter(s => s.itemId && isLivestockProduct(s.itemId));
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
 
