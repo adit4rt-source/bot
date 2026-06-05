@@ -942,7 +942,7 @@ function isFarmPanelSelectMenu(customId) {
     return customId.startsWith('farm_plantseed_') || customId.startsWith('farm_buyseed') ||
            customId.startsWith('farm_buyfert_') || customId.startsWith('farm_buyprestige_') ||
            customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
-           customId.startsWith('farm_craftselect_') ||
+           customId.startsWith('farm_craftselect') ||
            customId.startsWith('farm_buydeco_');
 }
 
