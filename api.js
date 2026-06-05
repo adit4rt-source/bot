@@ -254,6 +254,219 @@ app.post('/api/admin/items', adminCheck, (req, res) => {
     }
 });
 
+// ==================== ADMIN: PETS ====================
+app.post('/api/admin/pets/give', adminCheck, (req, res) => {
+    try {
+        const { userId, petId, name, level } = req.body;
+        if (!userId || !petId) return res.status(400).json({ error: 'Missing userId or petId' });
+        const { PET_DATA } = require('./data/pets');
+        const { generatePetStats } = require('./systems/pets');
+        const petDef = PET_DATA.find(p => p.id === petId);
+        if (!petDef) return res.status(400).json({ error: 'Invalid petId' });
+
+        const petName = name || petDef.name;
+        const petLevel = parseInt(level) || 1;
+        const stats = generatePetStats(petDef.tier);
+        const classes = ['warrior','mage','assassin','tank','support'];
+        const elements = ['fire','water','earth','wind','light','dark'];
+        const cls = classes[Math.floor(Math.random() * classes.length)];
+        const elem = elements[Math.floor(Math.random() * elements.length)];
+
+        // Deactivate existing active pet
+        db.prepare('UPDATE pets SET active = 0 WHERE userId = ? AND active = 1').run(userId);
+        db.prepare('INSERT INTO pets (userId, petId, name, level, exp, hp, atk, def, spd, crit, happiness, hunger, status, active, class, element) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 100, 100, ?, 1, ?, ?)').run(userId, petId, petName, petLevel, stats.hp, stats.atk, stats.def, stats.spd, stats.crit, 'healthy', cls, elem);
+        res.json({ success: true, userId, petId, name: petName, level: petLevel, stats });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/pets/setlevel', adminCheck, (req, res) => {
+    try {
+        const { userId, level } = req.body;
+        if (!userId || !level) return res.status(400).json({ error: 'Missing fields' });
+        const pet = db.prepare('SELECT * FROM pets WHERE userId = ? AND active = 1').get(userId);
+        if (!pet) return res.status(404).json({ error: 'No active pet' });
+        db.prepare('UPDATE pets SET level = ?, exp = 0 WHERE id = ?').run(parseInt(level), pet.id);
+        res.json({ success: true, userId, petName: pet.name, newLevel: parseInt(level) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/pets/setstats', adminCheck, (req, res) => {
+    try {
+        const { userId, hp, atk, def, spd, crit } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        const pet = db.prepare('SELECT * FROM pets WHERE userId = ? AND active = 1').get(userId);
+        if (!pet) return res.status(404).json({ error: 'No active pet' });
+        if (hp) db.prepare('UPDATE pets SET hp = ? WHERE id = ?').run(parseInt(hp), pet.id);
+        if (atk) db.prepare('UPDATE pets SET atk = ? WHERE id = ?').run(parseInt(atk), pet.id);
+        if (def) db.prepare('UPDATE pets SET def = ? WHERE id = ?').run(parseInt(def), pet.id);
+        if (spd) db.prepare('UPDATE pets SET spd = ? WHERE id = ?').run(parseInt(spd), pet.id);
+        if (crit) db.prepare('UPDATE pets SET crit = ? WHERE id = ?').run(parseInt(crit), pet.id);
+        res.json({ success: true, userId, petName: pet.name, updated: { hp, atk, def, spd, crit } });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/pets/delete', adminCheck, (req, res) => {
+    try {
+        const { userId, petDbId } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        if (petDbId) {
+            db.prepare('DELETE FROM pets WHERE id = ? AND userId = ?').run(parseInt(petDbId), userId);
+        } else {
+            db.prepare('DELETE FROM pets WHERE userId = ? AND active = 1').run(userId);
+        }
+        res.json({ success: true, userId, deleted: petDbId || 'active' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/pets/list/:userId', adminCheck, (req, res) => {
+    try {
+        const { userId } = req.params;
+        const pets = db.prepare('SELECT * FROM pets WHERE userId = ?').all(userId);
+        res.json({ pets });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: FISHING ====================
+app.post('/api/admin/fish/equipment', adminCheck, (req, res) => {
+    try {
+        const { userId, rod, bait, bait_count, location } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        const eq = db.prepare('SELECT * FROM fish_equipment WHERE userId = ?').get(userId);
+        if (!eq) { db.prepare('INSERT INTO fish_equipment (userId) VALUES (?)').run(userId); }
+        if (rod) db.prepare('UPDATE fish_equipment SET rod = ? WHERE userId = ?').run(rod, userId);
+        if (bait) db.prepare('UPDATE fish_equipment SET bait = ? WHERE userId = ?').run(bait, userId);
+        if (bait_count !== undefined) db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(parseInt(bait_count), userId);
+        if (location) db.prepare('UPDATE fish_equipment SET location = ? WHERE userId = ?').run(location, userId);
+        const updated = db.prepare('SELECT * FROM fish_equipment WHERE userId = ?').get(userId);
+        res.json({ success: true, userId, equipment: updated });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/fish/collection', adminCheck, (req, res) => {
+    try {
+        const { userId, fishId, action } = req.body;
+        if (!userId || !fishId) return res.status(400).json({ error: 'Missing fields' });
+        if (action === 'add') {
+            db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId, caughtAt) VALUES (?, ?, ?, ?)').run('global', userId, fishId, Date.now());
+        } else {
+            db.prepare('DELETE FROM fish_collection WHERE userId = ? AND fishId = ?').run(userId, fishId);
+        }
+        const count = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE userId = ?').get(userId);
+        res.json({ success: true, userId, fishId, action, totalCollection: count.c });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: FARMING ====================
+app.post('/api/admin/farm/level', adminCheck, (req, res) => {
+    try {
+        const { userId, farmLevel } = req.body;
+        if (!userId || !farmLevel) return res.status(400).json({ error: 'Missing fields' });
+        db.prepare('INSERT OR REPLACE INTO farm_data (guildId, userId, farm_level) VALUES (?, ?, ?)').run('global', userId, parseInt(farmLevel));
+        res.json({ success: true, userId, newFarmLevel: parseInt(farmLevel) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/farm/seeds', adminCheck, (req, res) => {
+    try {
+        const { userId, seedId, action, quantity } = req.body;
+        if (!userId || !seedId || !action) return res.status(400).json({ error: 'Missing fields' });
+        const qty = parseInt(quantity) || 1;
+        const { addSeed, removeSeed, getSeedCount } = require('./database');
+        if (action === 'give') addSeed(null, userId, seedId, qty);
+        else if (action === 'remove') removeSeed(null, userId, seedId, qty);
+        const current = getSeedCount(null, userId, seedId);
+        res.json({ success: true, userId, seedId, action, quantity: qty, currentCount: current });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/farm/fertilizer', adminCheck, (req, res) => {
+    try {
+        const { userId, fertId, action, quantity } = req.body;
+        if (!userId || !fertId || !action) return res.status(400).json({ error: 'Missing fields' });
+        const qty = parseInt(quantity) || 1;
+        const { addFert, removeFert, getFertCount } = require('./database');
+        if (action === 'give') addFert(null, userId, fertId, qty);
+        else if (action === 'remove') removeFert(null, userId, fertId, qty);
+        const current = getFertCount(null, userId, fertId);
+        res.json({ success: true, userId, fertId, action, quantity: qty, currentCount: current });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: STREAK ====================
+app.post('/api/admin/streak', adminCheck, (req, res) => {
+    try {
+        const { userId, action, value } = req.body;
+        if (!userId || !action) return res.status(400).json({ error: 'Missing fields' });
+        if (action === 'set') {
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run('global', userId, parseInt(value), today);
+            res.json({ success: true, userId, newStreak: parseInt(value) });
+        } else if (action === 'reset') {
+            db.prepare('DELETE FROM streaks WHERE userId = ?').run(userId);
+            res.json({ success: true, userId, streak: 0 });
+        } else {
+            return res.status(400).json({ error: 'Invalid action (set/reset)' });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: XP ====================
+app.post('/api/admin/xp', adminCheck, (req, res) => {
+    try {
+        const { userId, xp } = req.body;
+        if (!userId || xp === undefined) return res.status(400).json({ error: 'Missing fields' });
+        db.prepare('UPDATE users SET xp = ? WHERE userId = ?').run(parseInt(xp), userId);
+        res.json({ success: true, userId, newXp: parseInt(xp) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: STATS ====================
+app.post('/api/admin/stat', adminCheck, (req, res) => {
+    try {
+        const { userId, key, value } = req.body;
+        if (!userId || !key || value === undefined) return res.status(400).json({ error: 'Missing fields' });
+        setUserStat(null, userId, key, parseInt(value));
+        res.json({ success: true, userId, key, value: parseInt(value) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: ACHIEVEMENTS ====================
+app.post('/api/admin/achievement', adminCheck, (req, res) => {
+    try {
+        const { userId, achievementId, action } = req.body;
+        if (!userId || !achievementId || !action) return res.status(400).json({ error: 'Missing fields' });
+        if (action === 'give') {
+            db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run('global', userId, achievementId, Date.now());
+        } else if (action === 'remove') {
+            db.prepare('DELETE FROM achievements WHERE userId = ? AND achievementId = ?').run(userId, achievementId);
+        }
+        const total = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(userId);
+        res.json({ success: true, userId, achievementId, action, totalAchievements: total.c });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ADMIN: DATA CATALOG (for dashboard dropdowns) ====================
+app.get('/api/admin/catalog', adminCheck, (req, res) => {
+    try {
+        const { ITEMS } = require('./data/items');
+        const { PET_DATA } = require('./data/pets');
+        const { FARM_CROPS, FARM_FERTILIZERS, FARM_DECORATIONS } = require('./data/farming');
+        const { ROD_TYPES, BAIT_TYPES, FISHING_LOCATIONS } = require('./data/fish');
+        const { ACHIEVEMENTS: ACH_LIST } = require('./systems/achievements');
+        res.json({
+            items: ITEMS.map(i => ({ id: i.id, name: i.name, emoji: i.menuEmoji || i.emoji, category: i.category, price: i.price })),
+            pets: PET_DATA.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, tier: p.tier })),
+            crops: FARM_CROPS.map(c => ({ id: c.id, name: c.name, emoji: c.emoji, tier: c.tier })),
+            fertilizers: FARM_FERTILIZERS.map(f => ({ id: f.id, name: f.name, emoji: f.emoji })),
+            decorations: FARM_DECORATIONS.map(d => ({ id: d.id, name: d.name, emoji: d.emoji })),
+            rods: ROD_TYPES.map(r => ({ id: r.id, name: r.name, tier: r.tier })),
+            baits: BAIT_TYPES.map(b => ({ id: b.id, name: b.name, price: b.price })),
+            locations: FISHING_LOCATIONS.map(l => ({ id: l.id, name: l.name })),
+            achievements: ACH_LIST ? ACH_LIST.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, category: a.category })) : [],
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== ADMIN: SERVER SETTINGS ====================
 app.get('/api/admin/settings', adminCheck, (req, res) => {
     try {
