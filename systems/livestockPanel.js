@@ -176,11 +176,11 @@ function buildCraftingPanel(guildId, userId, username) {
     allRecipes.slice(0, 25).forEach(r => {
         const ingStr = r.ingredients.map(ing => {
             const c = ALL_CROPS.find(cr => cr.id === ing.id);
-            return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
-        }).join('+');
-        let label = `${r.emoji} ${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+            return c ? `${c.name} x${ing.qty}` : `${ing.id} x${ing.qty}`;
+        }).join(', ');
+        let label = `${r.name} — ${r.sellPrice.toLocaleString('id-ID')} money`;
         if (label.length > 100) label = label.substring(0, 97) + '...';
-        let optDesc = `Bahan: ${ingStr}`;
+        let optDesc = ingStr;
         if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
         craftMenu.addOptions({ label, description: optDesc, value: r.id });
     });
@@ -191,16 +191,16 @@ function buildCraftingPanel(guildId, userId, username) {
     if (allRecipes.length > 25) {
         const craftMenu2 = new StringSelectMenuBuilder()
             .setCustomId(`farm_hubcraft2_${userId}`)
-            .setPlaceholder('🧪 Resep Lanjutan...')
+            .setPlaceholder('Resep Lanjutan...')
             .setMinValues(1).setMaxValues(1);
         allRecipes.slice(25).forEach(r => {
             const ingStr = r.ingredients.map(ing => {
                 const c = ALL_CROPS.find(cr => cr.id === ing.id);
-                return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
-            }).join('+');
-            let label = `${r.emoji} ${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+                return c ? `${c.name} x${ing.qty}` : `${ing.id} x${ing.qty}`;
+            }).join(', ');
+            let label = `${r.name} — ${r.sellPrice.toLocaleString('id-ID')} money`;
             if (label.length > 100) label = label.substring(0, 97) + '...';
-            let optDesc = `Bahan: ${ingStr}`;
+            let optDesc = ingStr;
             if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
             craftMenu2.addOptions({ label, description: optDesc, value: r.id });
         });
