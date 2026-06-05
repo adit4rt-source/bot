@@ -9,6 +9,8 @@ const { addComboFeature, getComboMultiplier, getComboTracker } = require('./comb
 const { getContestState, addContestEntry, getContestLeaderboard } = require('./contest');
 const { addPetExp } = require('../systems/pets');
 const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPGRADES, ROD_PART_DROP_CHANCE } = require('../data/fish');
+const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGiantFish, getGiantFishStats, buildGiantFishSpawnEmbed, buildGiantFishHitEmbed, buildGiantFishDefeatedEmbed, buildGiantFishEscapedEmbed, GIANT_FISH } = require('./giantFish');
+const { hasSecretLocation, tryUnlockSecretLocation, trackLocationCatch, buildSecretLocationUnlockEmbed, buildSecretLocationProgressEmbed, SECRET_LOCATION } = require('./secretLocation');
 const state = require('../state');
 const { fishCooldowns, activeFishEvents } = state;
 
@@ -127,7 +129,7 @@ async function handleFishingButton(interaction) {
         let desc = `📍 **Lokasi Saat Ini:** ${currentLoc.name}\n> *${currentLoc.desc}*\n> Bonus Rare: +${currentLoc.bonusRare}% | Tier: ${currentLoc.tiers.join(', ')}\n\n`;
         desc += `🎋 **Joran:** ${rod.emoji} ${rod.name} (Tier ${rod.tier})\n\n`;
         desc += `🗺️ **Semua Lokasi:**\n`;
-        for (const loc of FISHING_LOCATIONS) {
+        for (const loc of FISHING_LOCATIONS.filter(l => !l.isSecret)) {
             const isCurrent = loc.id === currentLoc.id;
             const reqRod = ROD_TYPES.find(r => r.tier === loc.requiredRodTier);
             const hasReqRod = rod.tier >= loc.requiredRodTier;
@@ -142,6 +144,10 @@ async function handleFishingButton(interaction) {
             desc += `> Tier Ikan: ${loc.tiers.join(', ')} | +${loc.bonusRare}% rare\n\n`;
         }
 
+        // Show secret location progress/status
+        const secretProgress = buildSecretLocationProgressEmbed(guildId, userId);
+        desc += `\n🔮 **Secret Location:**\n${secretProgress.text}\n`;
+
         if (desc.length > 3900) desc = desc.substring(0, 3890) + '\n...';
 
         const embed = new EmbedBuilder()
@@ -151,16 +157,22 @@ async function handleFishingButton(interaction) {
             .setFooter({ text: rod.tier < currentLoc.requiredRodTier ? `⚠️ Joran di bawah rekomendasi! Luck -${currentLoc.luckPenalty}%` : '✅ Joran cukup untuk lokasi ini!' });
 
         const components = [];
-        const otherLocs = FISHING_LOCATIONS.filter(l => l.id !== currentLoc.id);
-        if (otherLocs.length > 0) {
+        // Build location select menu (include secret location if unlocked)
+        const availableLocs = FISHING_LOCATIONS.filter(l => {
+            if (l.id === currentLoc.id) return false;
+            if (l.isSecret && !hasSecretLocation(guildId, userId)) return false;
+            return true;
+        });
+        if (availableLocs.length > 0) {
             const locMenu = new StringSelectMenuBuilder()
                 .setCustomId(`fish_setloc_${userId}`)
                 .setPlaceholder('📍 Pindah lokasi...')
                 .setMinValues(1).setMaxValues(1);
-            otherLocs.forEach(loc => {
+            availableLocs.forEach(loc => {
                 const hasReq = rod.tier >= loc.requiredRodTier;
                 const suffix = !hasReq ? ` | -${loc.luckPenalty}% luck` : '';
-                locMenu.addOptions({ label: loc.name.replace(/[^\w\s]/g, '').trim(), value: loc.id, description: `${loc.desc.substring(0, 45)}${suffix}` });
+                const label = loc.isSecret ? `👁️ ${loc.name.replace(/[^\w\s]/g, '').trim()}` : loc.name.replace(/[^\w\s]/g, '').trim();
+                locMenu.addOptions({ label: label.substring(0, 25), value: loc.id, description: `${loc.desc.substring(0, 45)}${suffix}` });
             });
             components.push(new ActionRowBuilder().addComponents(locMenu));
         }
@@ -181,11 +193,39 @@ async function handleFishingButton(interaction) {
             return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true });
         }
         fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
+
+        // === CHECK ACTIVE GIANT FISH ENCOUNTER ===
+        const activeGiant = getActiveGiantFish(guildId, userId);
+        if (activeGiant) {
+            const hitResult = hitGiantFish(guildId, userId);
+            if (hitResult && hitResult.defeated) {
+                // Giant fish defeated!
+                const defeatEmbed = buildGiantFishDefeatedEmbed(hitResult, userId);
+                await interaction.update(defeatEmbed);
+                await checkAchievements(interaction.guild, userId, { type: 'giant_fish', giantFishId: hitResult.giantFish.id });
+                return;
+            } else if (hitResult) {
+                // Hit but not yet defeated
+                const hitEmbed = buildGiantFishHitEmbed(hitResult, userId);
+                return interaction.update(hitEmbed);
+            }
+        }
+
+        // === NORMAL FISHING ===
         const result = catchFish(guildId, userId);
         incrementUserStat(guildId, userId, 'total_fish_caught');
         updateQuestProgress(guildId, userId, 'fish', 1);
         addPetExp(guildId, userId, 5);
         addComboFeature(guildId, userId, 'fishing');
+
+        // Track location catch for secret location unlock
+        const currentLocation = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river')) || FISHING_LOCATIONS[0];
+        trackLocationCatch(guildId, userId, currentLocation.id, result.tier.tier);
+
+        // Track abyss catches specifically
+        if (currentLocation.id === 'abyss') {
+            incrementUserStat(guildId, userId, 'fish_caught_abyss');
+        }
 
         const contestState = getContestState(guildId);
         let contestMsg = '';
@@ -196,6 +236,21 @@ async function handleFishingButton(interaction) {
         const comboMult = getComboMultiplier(guildId, userId);
         let comboMsg = comboMult > 1 ? `\n> 🔥 **Combo x${comboMult}!**` : '';
 
+        // === CHECK GIANT FISH SPAWN (1% chance, Deep Sea+ only) ===
+        const giantFishSpawn = checkGiantFishSpawn(currentLocation.id);
+        if (giantFishSpawn) {
+            const encounter = startGiantFishEncounter(guildId, userId, giantFishSpawn);
+            const spawnEmbed = buildGiantFishSpawnEmbed(giantFishSpawn, encounter.hitsRequired, userId);
+            return interaction.update(spawnEmbed);
+        }
+
+        // === CHECK SECRET LOCATION UNLOCK ===
+        const unlockResult = tryUnlockSecretLocation(guildId, userId);
+        let secretUnlockMsg = '';
+        if (unlockResult) {
+            // Will show a special notification after the catch
+            secretUnlockMsg = '\n\n> 👁️🌀 **SECRET LOCATION UNLOCKED!** Cek 📍 Location!';
+        }
 
         const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
         let title = `🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`;
@@ -215,7 +270,7 @@ async function handleFishingButton(interaction) {
                 `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}\n` +
                 `> 📍 Lokasi: **${result.location.name}**` +
                 (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
-                contestMsg + comboMsg
+                contestMsg + comboMsg + secretUnlockMsg
             );
 
         const afterCatchRow = new ActionRowBuilder().addComponents(
@@ -225,6 +280,16 @@ async function handleFishingButton(interaction) {
 
         await interaction.update({ embeds: [embed], components: [afterCatchRow] });
         await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
+
+        // Abyss-specific achievements
+        if (currentLocation.id === 'abyss') {
+            await checkAchievements(interaction.guild, userId, { type: 'fishing_abyss', fishId: result.fish.id });
+        }
+
+        // Secret location unlock achievement
+        if (unlockResult) {
+            await checkAchievements(interaction.guild, userId, { type: 'secret_location_unlock' });
+        }
 
         // Tournament participation
         if (activeFishEvents.has(guildId)) {
@@ -351,8 +416,19 @@ async function handleFishingButton(interaction) {
         const totalSoldValue = getUserStat(guildId, userId, 'total_fish_sold_value');
         const totalSoldCount = getUserStat(guildId, userId, 'total_fish_sold_count');
         const invCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+        const giantStats = getGiantFishStats(guildId, userId);
         const embed = new EmbedBuilder().setTitle('📊 Statistik Memancing').setColor('#2B2D31')
-            .setDescription(`> 🎣 **Total Tangkapan:** ${totalCaught}\n> 💰 **Total Penjualan:** 🪙 ${totalSoldValue.toLocaleString('id-ID')}\n> 📦 **Ikan Dijual:** ${totalSoldCount}\n> 🐟 **Di Inventory:** ${invCount}`);
+            .setDescription(
+                `> 🎣 **Total Tangkapan:** ${totalCaught}\n` +
+                `> 💰 **Total Penjualan:** 🪙 ${totalSoldValue.toLocaleString('id-ID')}\n` +
+                `> 📦 **Ikan Dijual:** ${totalSoldCount}\n` +
+                `> 🐟 **Di Inventory:** ${invCount}\n\n` +
+                `🐋 **Giant Fish:**\n` +
+                `> ⚔️ Defeated: **${giantStats.defeated}**\n` +
+                `> 🎯 Encounters: **${giantStats.totalEncounters}**\n` +
+                `> 📊 Success Rate: **${giantStats.successRate}%**\n` +
+                `> 💰 Total Reward: 🪙 **${giantStats.totalReward.toLocaleString('id-ID')}**`
+            );
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
@@ -558,14 +634,18 @@ async function handleFishingSelectMenu(interaction) {
         const locId = interaction.values[0];
         const loc = FISHING_LOCATIONS.find(l => l.id === locId);
         if (!loc) return interaction.reply({ content: '❌ Lokasi tidak ditemukan!', ephemeral: true });
+        // Block secret location if not unlocked
+        if (loc.isSecret && !hasSecretLocation(guildId, userId)) {
+            return interaction.reply({ content: '🔒 Lokasi **The Abyss** masih terkunci! Selesaikan misi untuk membukanya.', ephemeral: true });
+        }
         if (userData.level < loc.unlockLevel) {
             return interaction.reply({ content: `🔒 Lokasi **${loc.name}** butuh Level **${loc.unlockLevel}**! (Level kamu: ${userData.level})`, ephemeral: true });
         }
         setPlayerLocation(guildId, userId, locId);
         const embed = new EmbedBuilder()
-            .setColor('#1ABC9C')
+            .setColor(loc.isSecret ? '#8B00FF' : '#1ABC9C')
             .setTitle(`📍 Pindah ke ${loc.name}!`)
-            .setDescription(`> *${loc.desc}*\n> Bonus Rare: +${loc.bonusRare}%\n> Tier: ${loc.tiers.join(', ')}`);
+            .setDescription(`> *${loc.desc}*\n> Bonus Rare: +${loc.bonusRare}%\n> Tier: ${loc.tiers.join(', ')}${loc.isSecret ? '\n\n> 👁️ *Lokasi rahasia — ikan eksklusif menunggumu!*' : ''}`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );

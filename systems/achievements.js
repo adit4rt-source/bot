@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 89, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 96, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -78,6 +78,15 @@ const ACHIEVEMENTS = [
     { id: 'fish_rod_pro', name: 'Pro Equipment', emoji: '🏆', desc: 'Beli Joran Pro Titanium', category: 'Fishing', reward: 500 },
     { id: 'fish_rod_mythic', name: 'Ultimate Gear', emoji: '🔱', desc: 'Beli Joran Mitik', category: 'Fishing', reward: 2000 },
     { id: 'fish_secret', name: 'Secret Finder', emoji: '🔮', desc: 'Tangkap ikan Secret pertama', category: 'Fishing', reward: 10000 },
+    // --- GIANT FISH ---
+    { id: 'giant_fish_first', name: 'Giant Slayer', emoji: '🐋', desc: 'Kalahkan Giant Fish pertama', category: 'Fishing', reward: 3000 },
+    { id: 'giant_fish_5', name: 'Boss Hunter', emoji: '⚔️', desc: 'Kalahkan 5 Giant Fish', category: 'Fishing', reward: 8000 },
+    { id: 'giant_fish_15', name: 'Titan Slayer', emoji: '🏆', desc: 'Kalahkan 15 Giant Fish', category: 'Fishing', reward: 20000 },
+    { id: 'giant_fish_void_titan', name: 'Void Conqueror', emoji: '🌀', desc: 'Kalahkan Void Titan', category: 'Fishing', reward: 15000 },
+    // --- SECRET LOCATION ---
+    { id: 'secret_location_unlock', name: 'Abyss Explorer', emoji: '👁️', desc: 'Unlock The Abyss (Secret Location)', category: 'Fishing', reward: 5000 },
+    { id: 'fish_abyss_10', name: 'Abyss Fisher', emoji: '🌊', desc: 'Tangkap 10 ikan di The Abyss', category: 'Fishing', reward: 5000 },
+    { id: 'fish_universe', name: 'Universe Catcher', emoji: '🌠', desc: 'Tangkap Universe Fish (Abyss Secret)', category: 'Fishing', reward: 25000 },
     // --- FARMING ---
     { id: 'farm_first', name: 'Petani Baru', emoji: '🌱', desc: 'Panen pertama kali', category: 'Farming', reward: 100 },
     { id: 'farm_50', name: 'Green Thumb', emoji: '🌿', desc: 'Panen 50 kali', category: 'Farming', reward: 500 },
@@ -204,7 +213,7 @@ const ACHIEVEMENT_ROLES = [
     { minBadges: 30, name: '💎 Veteran', color: '#9B59B6' },
     { minBadges: 50, name: '🔥 Elite', color: '#E74C3C' },
     { minBadges: 70, name: '👑 Master', color: '#F1C40F' },
-    { minBadges: 89, name: '🏆 Completionist', color: '#FFFFFF' },
+    { minBadges: 96, name: '🏆 Completionist', color: '#FFFFFF' },
 ];
 
 async function updateAchievementRole(guild, userId, badgeCount) {
@@ -292,6 +301,9 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'quest') { const c = getUserStat(guildId, userId, 'total_quests_done'); if (c >= 1) checks.push('quest_first'); if (c >= 10) checks.push('quest_10'); if (c >= 50) checks.push('quest_50'); if (c >= 100) checks.push('quest_100'); }
     if (context.type === 'redeem') checks.push('redeem_first'); if (context.type === 'custom_role') checks.push('custom_role'); if (context.type === 'all_quest_day') checks.push('all_quest_day');
     if (context.type === 'fishing') { const c = getUserStat(guildId, userId, 'total_fish_caught'); if (c >= 1) checks.push('fish_first'); if (c >= 10) checks.push('fish_10'); if (c >= 50) checks.push('fish_50'); if (c >= 100) checks.push('fish_100'); if (c >= 500) checks.push('fish_500'); if (context.tier === 'Rare') checks.push('fish_rare'); if (context.tier === 'Epic') checks.push('fish_epic'); if (context.tier === 'Legendary') checks.push('fish_legendary'); if (context.tier === 'Mythic') checks.push('fish_mythic'); if (context.tier === 'Secret') checks.push('fish_secret'); if (context.weight > 500) checks.push('fish_heavy'); }
+    if (context.type === 'giant_fish') { const c = getUserStat(guildId, userId, 'giant_fish_defeated'); if (c >= 1) checks.push('giant_fish_first'); if (c >= 5) checks.push('giant_fish_5'); if (c >= 15) checks.push('giant_fish_15'); if (context.giantFishId === 'giant_void_titan') checks.push('giant_fish_void_titan'); }
+    if (context.type === 'secret_location_unlock') { checks.push('secret_location_unlock'); }
+    if (context.type === 'fishing_abyss') { const c = getUserStat(guildId, userId, 'fish_caught_abyss'); if (c >= 10) checks.push('fish_abyss_10'); if (context.fishId === 'universe_fish') checks.push('fish_universe'); }
     if (context.type === 'fish_sell') { const c = getUserStat(guildId, userId, 'total_fish_sold_value'); if (c >= 10000) checks.push('fish_sell_10k'); if (c >= 100000) checks.push('fish_sell_100k'); }
     if (context.type === 'fish_rod') { if (context.rod === 'pro') checks.push('fish_rod_pro'); if (context.rod === 'mythic_rod') checks.push('fish_rod_mythic'); }
     if (context.type === 'farm_harvest') { const c = getUserStat(guildId, userId, 'total_harvests'); if (c >= 1) checks.push('farm_first'); if (c >= 50) checks.push('farm_50'); if (c >= 200) checks.push('farm_200'); if (c >= 500) checks.push('farm_500'); if (context.legendary) checks.push('farm_legendary'); }

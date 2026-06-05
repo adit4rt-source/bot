@@ -52,6 +52,7 @@ const FISHING_LOCATIONS = [
     { id: 'ice_cave', name: '❄️ Gua Es', desc: 'Air dingin tersembunyi di pegunungan', requiredRodTier: 4, luckPenalty: 20, bonusRare: 12, tiers: ['Rare','Epic','Legendary'] },
     { id: 'volcano', name: '🌋 Lahar', desc: 'Sungai lava dengan makhluk tahan panas', requiredRodTier: 5, luckPenalty: 25, bonusRare: 15, tiers: ['Rare','Epic','Legendary','Mythic'] },
     { id: 'void_rift', name: '🕳️ Void Rift', desc: 'Dimensi lain — penuh monster langka', requiredRodTier: 6, luckPenalty: 30, bonusRare: 20, tiers: ['Epic','Legendary','Mythic','Secret'] },
+    { id: 'abyss', name: '👁️ The Abyss', desc: 'Dimensi tersembunyi di bawah Void Rift — hanya pemancing elite', requiredRodTier: 7, luckPenalty: 35, bonusRare: 25, tiers: ['Epic','Legendary','Mythic','Secret'], isSecret: true },
 ];
 
 // ==================== FISH DATA (Location-Based) ====================
@@ -147,6 +148,19 @@ const FISH_DATA = [
     { id: 'world_eater', name: 'World Eater', tier: 'Mythic', emoji: '🌀', location: 'void_rift' },
     { id: 'god_fish', name: 'The God Fish', tier: 'Secret', emoji: '🔮', location: 'void_rift' },
     { id: 'reality_breaker', name: 'Reality Breaker', tier: 'Secret', emoji: '💫', location: 'void_rift' },
+
+    // ===== THE ABYSS (👁️) — SECRET LOCATION =====
+    { id: 'abyss_angler', name: 'Abyssal Angler', tier: 'Epic', emoji: '🔦', location: 'abyss' },
+    { id: 'shadow_leviathan', name: 'Shadow Leviathan', tier: 'Epic', emoji: '🐲', location: 'abyss' },
+    { id: 'depth_crawler', name: 'Depth Crawler', tier: 'Epic', emoji: '🕷️', location: 'abyss' },
+    { id: 'eternal_jellyfish', name: 'Eternal Jellyfish', tier: 'Legendary', emoji: '🪼', location: 'abyss' },
+    { id: 'abyssal_whale_king', name: 'Abyssal Whale King', tier: 'Legendary', emoji: '🐋', location: 'abyss' },
+    { id: 'void_emperor', name: 'Void Emperor', tier: 'Legendary', emoji: '👑', location: 'abyss' },
+    { id: 'primordial_serpent', name: 'Primordial Serpent', tier: 'Mythic', emoji: '🐍', location: 'abyss' },
+    { id: 'soul_devourer', name: 'Soul Devourer', tier: 'Mythic', emoji: '👻', location: 'abyss' },
+    { id: 'abyss_guardian', name: 'Abyss Guardian', tier: 'Mythic', emoji: '🛡️', location: 'abyss' },
+    { id: 'the_forgotten_one', name: 'The Forgotten One', tier: 'Secret', emoji: '👁️', location: 'abyss' },
+    { id: 'universe_fish', name: 'Universe Fish', tier: 'Secret', emoji: '🌠', location: 'abyss' },
 ];
 
 // ==================== ROD UPGRADE REQUIREMENTS ====================
