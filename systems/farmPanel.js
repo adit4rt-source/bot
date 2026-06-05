@@ -683,7 +683,7 @@ async function handleFarmButton(interaction) {
 
         if (FARM_RECIPES.length > 25) {
             const craftMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect2_${userId}`).setPlaceholder('Resep Lanjutan...').setMinValues(1).setMaxValues(1);
-            FARM_RECIPES.slice(25).forEach(r => {
+            FARM_RECIPES.slice(25, 50).forEach(r => {
                 const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
                 let label = `${r.name} — ${r.sellPrice}`;
                 if (label.length > 100) label = label.substring(0, 97) + '...';
@@ -692,6 +692,19 @@ async function handleFarmButton(interaction) {
                 craftMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(label).setValue(r.id).setDescription(desc));
             });
             components.push(new ActionRowBuilder().addComponents(craftMenu2));
+        }
+
+        if (FARM_RECIPES.length > 50) {
+            const craftMenu3 = new StringSelectMenuBuilder().setCustomId(`farm_craftselect3_${userId}`).setPlaceholder('Resep Livestock...').setMinValues(1).setMaxValues(1);
+            FARM_RECIPES.slice(50).forEach(r => {
+                const ingStr = r.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'}${ing.qty}`; }).join('+');
+                let label = `${r.name} — ${r.sellPrice}`;
+                if (label.length > 100) label = label.substring(0, 97) + '...';
+                let desc = `Bahan: ${ingStr}`;
+                if (desc.length > 100) desc = desc.substring(0, 97) + '...';
+                craftMenu3.addOptions(new StringSelectMenuOptionBuilder().setLabel(label).setValue(r.id).setDescription(desc));
+            });
+            components.push(new ActionRowBuilder().addComponents(craftMenu3));
         }
 
         const embed = new EmbedBuilder().setTitle('🧪 Craft Resep').setColor('#9B59B6')
@@ -997,7 +1010,7 @@ async function handleFarmSelectMenu(interaction) {
     }
 
     // === CRAFT SELECT ===
-    if (customId.startsWith('farm_craftselect_') || customId.startsWith('farm_craftselect2_')) {
+    if (customId.startsWith('farm_craftselect_') || customId.startsWith('farm_craftselect2_') || customId.startsWith('farm_craftselect3_')) {
         const recipeId = interaction.values[0];
         const recipe = FARM_RECIPES.find(r => r.id === recipeId);
         if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
