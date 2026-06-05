@@ -34,8 +34,7 @@ const ADVANCED_LOCATIONS = ['deep_sea', 'ice_cave', 'volcano', 'void_rift', 'aby
 // ==================== DATABASE ====================
 db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_encounters (
     guildId TEXT,
-    oderId TEXT,
-    oderId2 TEXT,
+    userId TEXT,
     giantFishId TEXT,
     hitsRequired INTEGER DEFAULT 3,
     hitsLanded INTEGER DEFAULT 0,
@@ -43,7 +42,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_encounters (
     completedAt INTEGER,
     success INTEGER DEFAULT 0,
     reward INTEGER DEFAULT 0,
-    PRIMARY KEY(guildId, oderId, startedAt)
+    PRIMARY KEY(guildId, userId, startedAt)
 )`);
 
 db.exec(`CREATE TABLE IF NOT EXISTS giant_fish_active (
@@ -86,7 +85,7 @@ function getActiveGiantFish(guildId, userId) {
         // Remove expired encounter
         db.prepare('DELETE FROM giant_fish_active WHERE guildId = ? AND userId = ?').run(guildId, userId);
         // Log as failed
-        db.prepare(`INSERT INTO giant_fish_encounters (guildId, oderId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
+        db.prepare(`INSERT INTO giant_fish_encounters (guildId, userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`).run(guildId, userId, row.giantFishId, row.hitsRequired, row.hitsLanded, row.startedAt, Date.now());
         return null;
     }
@@ -130,7 +129,7 @@ function hitGiantFish(guildId, userId) {
         db.prepare('DELETE FROM giant_fish_active WHERE guildId = ? AND userId = ?').run(guildId, userId);
 
         // Log as success
-        db.prepare(`INSERT INTO giant_fish_encounters (guildId, oderId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
+        db.prepare(`INSERT INTO giant_fish_encounters (guildId, userId, giantFishId, hitsRequired, hitsLanded, startedAt, completedAt, success, reward)
             VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(guildId, userId, giantFish.id, active.hitsRequired, newHits, active.startedAt, Date.now(), reward);
 
         // Grant reward
@@ -174,8 +173,8 @@ function hitGiantFish(guildId, userId) {
 function getGiantFishStats(guildId, userId) {
     const defeated = getUserStat(guildId, userId, 'giant_fish_defeated');
     const totalReward = getUserStat(guildId, userId, 'giant_fish_total_reward');
-    const encounters = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND oderId = ?').get(guildId, userId);
-    const successes = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND oderId = ? AND success = 1').get(guildId, userId);
+    const encounters = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    const successes = db.prepare('SELECT COUNT(*) as total FROM giant_fish_encounters WHERE guildId = ? AND userId = ? AND success = 1').get(guildId, userId);
 
     return {
         defeated: defeated || 0,
