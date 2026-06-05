@@ -1,0 +1,212 @@
+// systems/inviteTracker.js — Invite Tracking System
+// Tracks who invited whom, invite counts, and leaderboard.
+const { EmbedBuilder } = require('discord.js');
+const { db, getSetting } = require('../database');
+
+// ==================== DATABASE SETUP ====================
+db.exec(`CREATE TABLE IF NOT EXISTS invites (guildId TEXT, inviterId TEXT, invitedId TEXT, code TEXT, joinedAt INTEGER, leftAt INTEGER, fake INTEGER DEFAULT 0, PRIMARY KEY(guildId, invitedId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS invite_settings (guildId TEXT, key TEXT, value TEXT, PRIMARY KEY(guildId, key))`);
+
+// In-memory invite cache: guildId -> Map<code, uses>
+const inviteCache = new Map();
+
+// ==================== SETTINGS HELPERS ====================
+function getInviteSetting(guildId, key, defaultVal = null) {
+    const row = db.prepare('SELECT value FROM invite_settings WHERE guildId = ? AND key = ?').get(guildId, key);
+    return row ? row.value : defaultVal;
+}
+
+function setInviteSetting(guildId, key, value) {
+    db.prepare('INSERT OR REPLACE INTO invite_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
+}
+
+function getAllInviteSettings(guildId) {
+    const keys = ['invite_enabled', 'invite_channel', 'invite_message', 'invite_fake_threshold', 'invite_leave_deduct'];
+    const defaults = {
+        invite_enabled: '1',
+        invite_channel: '',
+        invite_message: '{inviter.mention} mengundang {user.mention}! (Total: **{inviter.total}** invites)',
+        invite_fake_threshold: '7', // days — accounts younger than this are "fake"
+        invite_leave_deduct: '1', // deduct when invited user leaves
+    };
+    const settings = {};
+    for (const key of keys) {
+        settings[key] = getInviteSetting(guildId, key, defaults[key]);
+    }
+    return settings;
+}
+
+// ==================== CACHE MANAGEMENT ====================
+async function cacheGuildInvites(guild) {
+    try {
+        const invites = await guild.invites.fetch();
+        const cacheMap = new Map();
+        invites.forEach(inv => cacheMap.set(inv.code, inv.uses || 0));
+        inviteCache.set(guild.id, cacheMap);
+    } catch (e) {
+        // Bot might not have MANAGE_GUILD permission
+    }
+}
+
+async function cacheAllGuildInvites(client) {
+    for (const [, guild] of client.guilds.cache) {
+        await cacheGuildInvites(guild);
+    }
+}
+
+// ==================== MEMBER JOIN HANDLER ====================
+async function handleMemberJoin(member) {
+    const guildId = member.guild.id;
+    const enabled = getInviteSetting(guildId, 'invite_enabled', '1');
+    if (enabled !== '1') return;
+
+    let inviterUserId = null;
+    let usedCode = null;
+
+    try {
+        const newInvites = await member.guild.invites.fetch();
+        const oldCache = inviteCache.get(guildId) || new Map();
+
+        // Find the invite that increased uses
+        for (const [code, inv] of newInvites) {
+            const oldUses = oldCache.get(code) || 0;
+            if (inv.uses > oldUses) {
+                inviterUserId = inv.inviterId;
+                usedCode = code;
+                break;
+            }
+        }
+
+        // Update cache
+        const newCache = new Map();
+        newInvites.forEach(inv => newCache.set(inv.code, inv.uses || 0));
+        inviteCache.set(guildId, newCache);
+    } catch (e) {
+        // Can't fetch invites
+        return;
+    }
+
+    if (!inviterUserId) return;
+
+    // Check if fake (account age)
+    const fakeThreshold = parseInt(getInviteSetting(guildId, 'invite_fake_threshold', '7')) || 7;
+    const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
+    const isFake = accountAgeDays < fakeThreshold ? 1 : 0;
+
+    // Store invite record
+    db.prepare('INSERT OR REPLACE INTO invites (guildId, inviterId, invitedId, code, joinedAt, leftAt, fake) VALUES (?, ?, ?, ?, ?, NULL, ?)').run(guildId, inviterUserId, member.id, usedCode, Date.now(), isFake);
+
+    // Send announcement
+    const channelId = getInviteSetting(guildId, 'invite_channel', '');
+    if (channelId) {
+        const channel = member.guild.channels.cache.get(channelId);
+        if (channel) {
+            const stats = getInviterStats(guildId, inviterUserId);
+            let message = getInviteSetting(guildId, 'invite_message', '{inviter.mention} mengundang {user.mention}! (Total: **{inviter.total}** invites)');
+            message = message
+                .replace(/{user\.mention}/g, `<@${member.id}>`)
+                .replace(/{user\.name}/g, member.user.username)
+                .replace(/{inviter\.mention}/g, `<@${inviterUserId}>`)
+                .replace(/{inviter\.name}/g, inviterUserId)
+                .replace(/{inviter\.total}/g, String(stats.total))
+                .replace(/{inviter\.real}/g, String(stats.real))
+                .replace(/{inviter\.fake}/g, String(stats.fake))
+                .replace(/{inviter\.left}/g, String(stats.left));
+
+            const embed = new EmbedBuilder()
+                .setColor(isFake ? '#FF6B6B' : '#43B581')
+                .setDescription(message)
+                .setFooter({ text: isFake ? '⚠️ Possible fake invite (new account)' : `Code: ${usedCode}` })
+                .setTimestamp();
+
+            channel.send({ embeds: [embed] }).catch(() => {});
+        }
+    }
+}
+
+// ==================== MEMBER LEAVE HANDLER ====================
+async function handleMemberLeave(member) {
+    const guildId = member.guild.id;
+    const enabled = getInviteSetting(guildId, 'invite_enabled', '1');
+    if (enabled !== '1') return;
+
+    const leaveDeduct = getInviteSetting(guildId, 'invite_leave_deduct', '1');
+
+    // Mark invite record as left
+    const record = db.prepare('SELECT * FROM invites WHERE guildId = ? AND invitedId = ?').get(guildId, member.id);
+    if (record) {
+        db.prepare('UPDATE invites SET leftAt = ? WHERE guildId = ? AND invitedId = ?').run(Date.now(), guildId, member.id);
+    }
+
+    // Announce leave if channel set
+    if (record && record.inviterId) {
+        const channelId = getInviteSetting(guildId, 'invite_channel', '');
+        if (channelId) {
+            const channel = member.guild.channels.cache.get(channelId);
+            if (channel) {
+                const stats = getInviterStats(guildId, record.inviterId);
+                const embed = new EmbedBuilder()
+                    .setColor('#FF6B6B')
+                    .setDescription(`👋 **${member.user.username}** left. Invited by <@${record.inviterId}> (Now: **${stats.total}** invites)`)
+                    .setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
+        }
+    }
+}
+
+// ==================== STATS HELPERS ====================
+function getInviterStats(guildId, userId) {
+    const total = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND fake = 0 AND leftAt IS NULL').get(guildId, userId)?.count || 0;
+    const fake = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND fake = 1').get(guildId, userId)?.count || 0;
+    const left = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND leftAt IS NOT NULL AND fake = 0').get(guildId, userId)?.count || 0;
+    const real = total;
+    const totalAll = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ?').get(guildId, userId)?.count || 0;
+    return { total, real, fake, left, totalAll };
+}
+
+function getInviteLeaderboard(guildId, limit = 20) {
+    const rows = db.prepare(`
+        SELECT inviterId as userId, 
+            COUNT(CASE WHEN fake = 0 AND leftAt IS NULL THEN 1 END) as total,
+            COUNT(CASE WHEN fake = 1 THEN 1 END) as fake,
+            COUNT(CASE WHEN leftAt IS NOT NULL AND fake = 0 THEN 1 END) as 'left',
+            COUNT(*) as totalAll
+        FROM invites WHERE guildId = ? 
+        GROUP BY inviterId 
+        ORDER BY total DESC LIMIT ?
+    `).all(guildId, limit);
+    return rows;
+}
+
+function getInvitedBy(guildId, userId) {
+    return db.prepare('SELECT * FROM invites WHERE guildId = ? AND invitedId = ?').get(guildId, userId);
+}
+
+function getInvitedList(guildId, inviterId, limit = 50) {
+    return db.prepare('SELECT invitedId, joinedAt, leftAt, fake, code FROM invites WHERE guildId = ? AND inviterId = ? ORDER BY joinedAt DESC LIMIT ?').all(guildId, inviterId, limit);
+}
+
+function resetInvites(guildId, userId) {
+    if (userId) {
+        db.prepare('DELETE FROM invites WHERE guildId = ? AND inviterId = ?').run(guildId, userId);
+    } else {
+        db.prepare('DELETE FROM invites WHERE guildId = ?').run(guildId);
+    }
+}
+
+module.exports = {
+    cacheGuildInvites,
+    cacheAllGuildInvites,
+    handleMemberJoin,
+    handleMemberLeave,
+    getInviterStats,
+    getInviteLeaderboard,
+    getInvitedBy,
+    getInvitedList,
+    resetInvites,
+    getAllInviteSettings,
+    getInviteSetting,
+    setInviteSetting,
+    inviteCache,
+};

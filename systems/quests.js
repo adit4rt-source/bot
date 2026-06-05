@@ -234,8 +234,16 @@ function resetConsecutivePerfect(guildId, userId) {
 // ================= STREAK SYSTEM (existing) =================
 async function checkAndUpdateStreak(message) {
     const member = message.member;
-    if (member.user.bot || getSetting(member.guild.id, 'streak_enabled', 'true') === 'false') return false;
-    const guildId = member.guild.id, userId = member.id, today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const guildId = member.guild.id;
+    if (member.user.bot) return false;
+
+    // Read settings from server_settings (dashboard) with fallback to old getSetting
+    const streakEnabled = getSetting(guildId, 'streak_enabled', '1');
+    if (streakEnabled === '0' || streakEnabled === 'false') return false;
+
+    const streakTimezone = getSetting(guildId, 'streak_timezone', 'Asia/Jakarta');
+    const userId = member.id;
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: streakTimezone });
     let streakData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId), streakActivatedToday = false;
 
     if (!streakData) {
@@ -249,39 +257,136 @@ async function checkAndUpdateStreak(message) {
         streakActivatedToday = true;
     }
 
-    if (getSetting(guildId, 'streak_auto_nick', 'true') === 'true' && member.manageable) {
-        const minStreak = parseInt(getSetting(guildId, 'streak_min', '3')), emoji = getSetting(guildId, 'streak_emoji', '🔥');
+    // Auto-nickname from dashboard settings
+    const autoNick = getSetting(guildId, 'streak_auto_nickname', '0');
+    if ((autoNick === '1' || autoNick === 'true') && member.manageable) {
+        const minStreak = parseInt(getSetting(guildId, 'streak_min_days', '3')) || 3;
+        const emoji = getSetting(guildId, 'streak_emoji', '🔥');
         const baseNick = (member.nickname || member.user.username).split(` ${emoji} `)[0];
         const newNick = streakData.count >= minStreak ? `${baseNick} ${emoji} ${streakData.count}` : baseNick;
         if ((member.nickname || member.user.username) !== newNick && newNick.length <= 32) await member.setNickname(newNick).catch(() => {});
     }
 
     if (streakActivatedToday) {
-        // Reset consecutive perfect if yesterday wasn't perfect
         resetConsecutivePerfect(guildId, userId);
         await checkAchievements(member.guild, userId, { type: 'streak' });
-        const streakChannelId = getSetting(guildId, 'streak_channel', null);
-        if (streakChannelId && streakData.count > 1) {
-            const streakCh = member.guild.channels.cache.get(streakChannelId);
+
+        // Milestone announcement from dashboard settings
+        const announceChannelId = getSetting(guildId, 'streak_announce_channel', '') || getSetting(guildId, 'streak_channel', '');
+        if (announceChannelId && streakData.count > 1) {
+            const streakCh = member.guild.channels.cache.get(announceChannelId);
             if (streakCh) {
                 const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
-                streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).catch(() => {});
+                let announceMsg = getSetting(guildId, 'streak_announce_message', '');
+                if (announceMsg) {
+                    announceMsg = announceMsg
+                        .replace(/{user\.mention}/g, `<@${userId}>`)
+                        .replace(/{user\.name}/g, member.user.username)
+                        .replace(/{streak}/g, String(streakData.count));
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} ${announceMsg}`).setTimestamp()] }).catch(() => {});
+                } else {
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).catch(() => {});
+                }
             }
         }
+
+        // Streak milestone rewards from dashboard settings
+        try {
+            const rewardsJson = getSetting(guildId, 'streak_rewards', '');
+            if (rewardsJson) {
+                const rewards = JSON.parse(rewardsJson);
+                const milestone = rewards.find(r => r.days === streakData.count);
+                if (milestone) {
+                    if (milestone.money > 0) {
+                        const user = getOrCreateUser(guildId, userId);
+                        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(milestone.money, guildId, userId);
+                    }
+                    if (milestone.roleId) {
+                        const role = member.guild.roles.cache.get(milestone.roleId);
+                        if (role) await member.roles.add(role).catch(() => {});
+                    }
+                }
+            } else {
+                // Fallback: check individual milestone keys (streak_reward_7, etc.)
+                const milestones = [7, 14, 30, 60, 100];
+                if (milestones.includes(streakData.count)) {
+                    const reward = parseInt(getSetting(guildId, `streak_reward_${streakData.count}`, '0')) || 0;
+                    const roleId = getSetting(guildId, `streak_role_${streakData.count}`, '');
+                    if (reward > 0) {
+                        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
+                    }
+                    if (roleId) {
+                        const role = member.guild.roles.cache.get(roleId);
+                        if (role) await member.roles.add(role).catch(() => {});
+                    }
+                }
+            }
+        } catch (e) { /* ignore reward errors */ }
     }
     return streakActivatedToday;
 }
 
 async function addXpAndMoney(member, type, multiplier = 1) {
-    const guildId = member.guild.id, user = getOrCreateUser(guildId, member.id);
-    let defaultMin = 15, defaultMax = 25;
-    if (type === 'voice') { defaultMin = 60; defaultMax = 120; }
-    if (type === 'reaction') { defaultMin = 50; defaultMax = 100; }
-    const gainedXp = (Math.floor(Math.random() * (getConf(guildId, `${type}_max_xp`, defaultMax) - getConf(guildId, `${type}_min_xp`, defaultMin) + 1)) + getConf(guildId, `${type}_min_xp`, defaultMin)) * multiplier;
+    const guildId = member.guild.id;
+
+    // Check if leveling is enabled (from dashboard settings)
+    const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
+    if (levelingEnabled === '0') return;
+
+    // Check if this XP source is enabled
+    const sourceKey = type === 'voice' ? 'voice_xp_enabled' : type === 'reaction' ? 'reaction_xp_enabled' : 'msg_xp_enabled';
+    const sourceEnabled = getSetting(guildId, sourceKey, '1');
+    if (sourceEnabled === '0') return;
+
+    // Check no-XP channels
+    if (type === 'message' || type === 'msg') {
+        const noXpChannels = getSetting(guildId, 'no_xp_channels', '[]');
+        try {
+            const channels = noXpChannels.startsWith('[') ? JSON.parse(noXpChannels) : noXpChannels.split(',').filter(Boolean);
+            if (channels.includes(member.voice?.channelId || '') || channels.includes(member.lastMessage?.channelId || '')) return;
+        } catch (e) {}
+    }
+
+    // Check no-XP roles
+    const noXpRoles = getSetting(guildId, 'no_xp_roles', '[]');
+    try {
+        const roles = noXpRoles.startsWith('[') ? JSON.parse(noXpRoles) : noXpRoles.split(',').filter(Boolean);
+        if (roles.length > 0 && member.roles?.cache?.some(r => roles.includes(r.id))) return;
+    } catch (e) {}
+
+    const user = getOrCreateUser(guildId, member.id);
+
+    // Read XP range from dashboard settings
+    let xpMin, xpMax;
+    if (type === 'voice') {
+        xpMin = parseInt(getSetting(guildId, 'voice_xp_min', '')) || parseInt(getConf(guildId, 'voice_min_xp', 3));
+        xpMax = parseInt(getSetting(guildId, 'voice_xp_max', '')) || parseInt(getConf(guildId, 'voice_max_xp', 8));
+    } else if (type === 'reaction') {
+        xpMin = parseInt(getSetting(guildId, 'reaction_xp_min', '')) || parseInt(getConf(guildId, 'reaction_min_xp', 1));
+        xpMax = parseInt(getSetting(guildId, 'reaction_xp_max', '')) || parseInt(getConf(guildId, 'reaction_max_xp', 5));
+    } else {
+        xpMin = parseInt(getSetting(guildId, 'msg_xp_min', '')) || parseInt(getConf(guildId, 'msg_min_xp', 5));
+        xpMax = parseInt(getSetting(guildId, 'msg_xp_max', '')) || parseInt(getConf(guildId, 'msg_max_xp', 15));
+    }
+
+    // Apply global XP multiplier from dashboard
+    const xpMultiplier = parseFloat(getSetting(guildId, 'xp_multiplier', '1')) || 1;
+    const maxLevel = parseInt(getSetting(guildId, 'max_level', '200')) || 200;
+
+    const gainedXp = Math.floor((Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin) * multiplier * xpMultiplier);
     user.xp += gainedXp; user.balance += Math.floor(gainedXp / 2);
 
-    if (user.xp >= (user.level + 1) * 100) {
+    // Check max level
+    if (user.level >= maxLevel) {
+        user.xp = 0;
+        db.prepare('UPDATE users SET xp = ?, balance = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.balance, guildId, member.id);
+        return;
+    }
+
+    if (user.xp >= (user.level + 1) * (user.level + 1) * 100 * xpMultiplier) {
         user.level += 1; user.xp = 0;
+
+        // Check rewards from old rewards table
         const reward = db.prepare('SELECT * FROM rewards WHERE guildId = ? AND level = ?').get(guildId, user.level);
         let teksHadiah = "";
         if (reward) {
@@ -290,10 +395,47 @@ async function addXpAndMoney(member, type, multiplier = 1) {
             if (reward.money > 0) { user.balance += reward.money; teksHadiah += `${dapatRole ? ' dan' : ''} 🪙 **${reward.money.toLocaleString('id-ID')} Money**`; dapatUang = true; }
             if (dapatRole || dapatUang) teksHadiah = `\n🎁 **Hadiah Bonus:** Kamu mendapatkan${teksHadiah}!`;
         }
+
+        // Check role_rewards from dashboard settings (JSON format)
+        try {
+            const roleRewardsJson = getSetting(guildId, 'role_rewards', '[]');
+            if (roleRewardsJson && roleRewardsJson !== '[]') {
+                const roleRewards = JSON.parse(roleRewardsJson);
+                const dashReward = roleRewards.find(r => r.days === user.level); // 'days' field is used as level
+                if (dashReward) {
+                    if (dashReward.roleId) {
+                        const role = member.guild.roles.cache.get(dashReward.roleId);
+                        if (role) { await member.roles.add(role).catch(() => {}); if (!teksHadiah) teksHadiah = `\n🎁 **Hadiah Bonus:** Kamu mendapatkan Role <@&${dashReward.roleId}>`; }
+                    }
+                    if (dashReward.money > 0) {
+                        user.balance += dashReward.money;
+                        if (!teksHadiah) teksHadiah = `\n🎁 **Hadiah Bonus:** 🪙 **${dashReward.money.toLocaleString('id-ID')} Money**`;
+                    }
+                }
+            }
+        } catch (e) { /* ignore parse errors */ }
+
         db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
-        const levelChannelId = getSetting(guildId, 'level_channel', null);
-        const channel = levelChannelId ? member.guild.channels.cache.get(levelChannelId) : (member.guild.systemChannel || member.guild.channels.cache.filter(c => c.isTextBased()).first());
-        if (channel) channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).catch(() => {});
+
+        // Level-up announcement from dashboard settings
+        const announceEnabled = getSetting(guildId, 'levelup_announce_enabled', '1');
+        if (announceEnabled !== '0') {
+            const levelChannelId = getSetting(guildId, 'levelup_channel', '') || getSetting(guildId, 'level_channel', null);
+            const channel = levelChannelId ? member.guild.channels.cache.get(levelChannelId) : (member.guild.systemChannel || member.guild.channels.cache.filter(c => c.isTextBased()).first());
+            if (channel) {
+                let lvlMsg = getSetting(guildId, 'levelup_message', '');
+                if (lvlMsg) {
+                    lvlMsg = lvlMsg
+                        .replace(/{user\.mention}/g, `<@${member.id}>`)
+                        .replace(/{user\.name}/g, member.user.username)
+                        .replace(/{user\.level}/g, String(user.level))
+                        .replace(/{user\.xp}/g, String(user.xp));
+                    channel.send(`${lvlMsg}${teksHadiah}`).catch(() => {});
+                } else {
+                    channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).catch(() => {});
+                }
+            }
+        }
         await checkAchievements(member.guild, member.id, { type: 'level' });
     } else {
         db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);

@@ -707,6 +707,124 @@ app.get('/api/casino/stats', async (req, res) => {
     }
 });
 
+// ==================== INVITE TRACKER ====================
+app.get('/api/invite/settings/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getAllInviteSettings } = require('./systems/inviteTracker');
+        res.json({ settings: getAllInviteSettings(guildId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/invite/settings/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Missing settings' });
+        const { setInviteSetting } = require('./systems/inviteTracker');
+        for (const [key, value] of Object.entries(settings)) {
+            setInviteSetting(guildId, key, String(value));
+        }
+        res.json({ success: true, saved: Object.keys(settings).length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/invite/leaderboard/:guildId', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const limit = parseInt(req.query.limit) || 20;
+        const { getInviteLeaderboard } = require('./systems/inviteTracker');
+        const rows = getInviteLeaderboard(guildId, limit);
+        res.json({ leaderboard: await enrichLeaderboard(rows) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/invite/user/:guildId/:userId', async (req, res) => {
+    try {
+        const { guildId, userId } = req.params;
+        const { getInviterStats, getInvitedList } = require('./systems/inviteTracker');
+        const stats = getInviterStats(guildId, userId);
+        const invited = getInvitedList(guildId, userId);
+        res.json({ stats, invited: await enrichLeaderboard(invited, 'invitedId') });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/invite/reset/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { userId } = req.body;
+        const { resetInvites } = require('./systems/inviteTracker');
+        resetInvites(guildId, userId || null);
+        res.json({ success: true, reset: userId || 'all' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== WELCOMER ====================
+app.get('/api/welcomer/settings/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getAllWelcomerSettings } = require('./systems/welcomer');
+        res.json({ settings: getAllWelcomerSettings(guildId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/welcomer/settings/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Missing settings' });
+        const { setWelcomerSetting } = require('./systems/welcomer');
+        for (const [key, value] of Object.entries(settings)) {
+            setWelcomerSetting(guildId, key, String(value));
+        }
+        res.json({ success: true, saved: Object.keys(settings).length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/welcomer/test/:guildId', adminCheck, async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { testWelcomer } = require('./systems/welcomer');
+        if (!discordClient) return res.status(500).json({ error: 'Bot not connected' });
+        const guild = discordClient.guilds.cache.get(guildId);
+        if (!guild) return res.status(404).json({ error: 'Guild not found' });
+        const userId = req.headers['x-user-id'];
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return res.status(404).json({ error: 'Member not found in guild' });
+        await testWelcomer(member);
+        res.json({ success: true, message: 'Test message sent' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== TEMPVOICE SETTINGS ====================
+app.get('/api/tempvoice/settings/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const keys = ['jtc_category', 'jtc_channel', 'tv_default_name', 'tv_default_limit', 'tv_allow_custom_name', 'tv_allow_lock', 'tv_allow_hide', 'tv_allow_limit', 'tv_allow_kick', 'tv_allow_block', 'tv_enabled'];
+        const defaults = { jtc_category: '', jtc_channel: '', tv_default_name: '{user.name}\'s Channel', tv_default_limit: '0', tv_allow_custom_name: '1', tv_allow_lock: '1', tv_allow_hide: '1', tv_allow_limit: '1', tv_allow_kick: '1', tv_allow_block: '1', tv_enabled: '1' };
+        const settings = {};
+        for (const key of keys) {
+            const row = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, key);
+            settings[key] = row ? row.value : defaults[key];
+        }
+        // Get active temp voices count
+        const activeCount = db.prepare('SELECT COUNT(*) as count FROM temp_voices WHERE guildId = ?').get(guildId)?.count || 0;
+        res.json({ settings, activeVoices: activeCount });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tempvoice/settings/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Missing settings' });
+        for (const [key, value] of Object.entries(settings)) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
+        }
+        res.json({ success: true, saved: Object.keys(settings).length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== START SERVER ====================
 function startApiServer() {
     app.listen(API_PORT, '0.0.0.0', () => {

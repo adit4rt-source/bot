@@ -286,8 +286,36 @@ client.on(Events.VoiceStateUpdate, wrapHandler('voiceStateUpdate', handleVoiceSt
 client.on(Events.MessageReactionAdd, wrapHandler('reactionAdd', handleReactionAdd));
 client.on(Events.InteractionCreate, wrapHandler('interactionCreate', handleInteractionCreate));
 
+// Invite Tracker + Welcomer
+const { cacheAllGuildInvites, cacheGuildInvites, handleMemberJoin: handleInviteJoin } = require('./systems/inviteTracker');
+const { handleWelcome, handleGoodbye } = require('./systems/welcomer');
+
+client.once(Events.ClientReady, async () => {
+    await cacheAllGuildInvites(client);
+    console.log('📨 Invite cache loaded for all guilds');
+});
+
+client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) => {
+    await handleInviteJoin(member);
+    await handleWelcome(member);
+}));
+
+client.on(Events.GuildMemberRemove, wrapHandler('guildMemberRemove', async (member) => {
+    const { handleMemberLeave } = require('./systems/inviteTracker');
+    await handleMemberLeave(member);
+    await handleGoodbye(member);
+}));
+
+client.on(Events.InviteCreate, async (invite) => {
+    await cacheGuildInvites(invite.guild);
+});
+
+client.on(Events.InviteDelete, async (invite) => {
+    if (invite.guild) await cacheGuildInvites(invite.guild);
+});
+
 // Guild join/leave logging
-client.on(Events.GuildCreate, (guild) => onGuildCreate(client, guild));
+client.on(Events.GuildCreate, (guild) => { onGuildCreate(client, guild); cacheGuildInvites(guild); });
 client.on(Events.GuildDelete, (guild) => onGuildDelete(client, guild));
 
 client.login(TOKEN);
