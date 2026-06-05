@@ -8,6 +8,10 @@ const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
 const { addPetExp } = require('../systems/pets');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
+const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, getWeatherDeathChance, isAutoWaterWeather, formatWeatherEmbed } = require('./farmWeather');
+const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
+const { getPetData } = require('./pets');
+const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
 const state = require('../state');
 const { fishCooldowns } = state;
 
@@ -21,6 +25,7 @@ function buildFarmPanel(guildId, userId, username) {
     const storage = getStorage(guildId, userId);
     const levelInfo = FARM_LEVELS.find(l => l.level === farmData.farm_level);
     const storageCount = storage.reduce((sum, s) => sum + s.quantity, 0);
+    const weather = getTodayWeather();
     const readyCount = plots.filter(p => {
         const crop = FARM_CROPS.find(c => c.id === p.cropId);
         if (!crop || p.status === 'dead') return false;
@@ -85,7 +90,8 @@ function buildFarmPanel(guildId, userId, username) {
         .setDescription(
             (decoDisplay ? decoDisplay : '') +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏡 **${levelInfo.name}**\n` +
+            `🏡 **${levelInfo.name}** | ${weather.emoji} **${weather.name}**\n` +
+            `> ${weather.desc}\n` +
             `> 📊 Slots: **${plots.length}** / ${maxSlots} terpakai\n` +
             `> 📦 Storage: **${storageCount}** items\n` +
             `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
@@ -264,22 +270,74 @@ async function handleFarmButton(interaction) {
     if (action === 'harvest') {
         const plots = getPlots(guildId, userId);
         if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman!', ephemeral: true });
+        
+        // Get bonuses
+        const weatherYieldMult = getWeatherYieldMultiplier();
+        const weatherDeathChance = getWeatherDeathChance();
+        const pet = getPetData(guildId, userId);
+        let petFarmBonus = 0;
+        if (pet) {
+            const petDef = PET_DATA.find(p => p.id === pet.petId);
+            if (petDef && (petDef.bonus.type === 'farm_yield' || petDef.bonus.type === 'all_reward')) {
+                const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
+                petFarmBonus = petDef.bonus.value * lvlMult;
+            }
+        }
+
         let harvested = 0, totalItems = 0, harvestDesc = '', harvestedLegendary = false;
+        let mutationCount = 0, mutationDesc = '';
+
         for (const plot of plots) {
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
             if (!crop) continue;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
             const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+            
             if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
-                let qty = getRandomInt(crop.minYield, crop.maxYield);
-                if (Math.random() < fert.yieldBonus) qty += getRandomInt(1, 2);
+                // Weather death check (stormy/drought can kill at harvest)
+                if (weatherDeathChance > 0 && Math.random() < weatherDeathChance) {
+                    harvestDesc += `> ☠️ ~~${crop.emoji} ${crop.name}~~ — *mati karena cuaca!*\n`;
+                    db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    continue;
+                }
+
+                // Calculate yield with all bonuses
+                const rotationBonus = getRotationBonus(guildId, userId, plot.id, crop.id);
+                const qty = calculateHarvestYield(crop, {
+                    weatherYieldMult,
+                    fertYieldBonus: fert.yieldBonus,
+                    seedLevel: 0, // TODO: integrate seed upgrade per-plot
+                    rotationBonus,
+                    petFarmBonus
+                });
+
+                // Roll mutation!
+                const mutation = rollMutation(guildId, userId, 0);
+                
                 addStorage(guildId, userId, crop.id, qty);
                 if (crop.tier === 'Legendary') harvestedLegendary = true;
-                harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}\n`;
+
+                if (mutation) {
+                    // Mutation success! Add bonus money directly
+                    const mutationMoney = crop.sellPrice * qty * mutation.multiplier;
+                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(mutationMoney, guildId, userId);
+                    addIncome(guildId, userId, 'farm_mutation', mutationMoney);
+                    logMutation(guildId, userId, crop.id, mutation.id);
+                    mutationCount++;
+                    mutationDesc += `> ${mutation.emoji} **${mutation.prefix} ${crop.name}!** (+🪙 ${mutationMoney.toLocaleString('id-ID')})\n`;
+                    harvestDesc += `> ${crop.emoji} ${crop.name} x${qty} ${mutation.emoji} **MUTASI!**\n`;
+                } else {
+                    harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}${rotationBonus > 0 ? ' 🔄' : ''}\n`;
+                }
+
+                // Update rotation tracking
+                updateRotation(guildId, userId, plot.id, crop.id);
+
                 harvested++; totalItems += qty;
                 db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
             }
         }
+        
         const deadPlots = plots.filter(p => p.status === 'dead');
         let deadMsg = '';
         if (deadPlots.length > 0) {
@@ -293,13 +351,28 @@ async function handleFarmButton(interaction) {
             return interaction.update({ embeds: [embed], components: [backRow] });
         }
         if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman siap dipanen!', ephemeral: true });
+        
         incrementUserStat(guildId, userId, 'total_harvests', harvested);
         updateQuestProgress(guildId, userId, 'farm_harvest', harvested);
         addPetExp(guildId, userId, 5);
         addComboFeature(guildId, userId, 'farming');
         await checkAchievements(interaction.guild, userId, { type: 'farm_harvest', legendary: harvestedLegendary });
-        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🌾 Panen Berhasil!')
-            .setDescription(`**${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}${deadMsg}\n> Hasil masuk ke Storage.`);
+
+        // Build result embed
+        const weather = getTodayWeather();
+        let resultDesc = `**${harvested} tanaman** (${totalItems} item):\n\n${harvestDesc}`;
+        if (mutationCount > 0) {
+            resultDesc += `\n✨ **MUTASI! (${mutationCount}x)**\n${mutationDesc}`;
+        }
+        resultDesc += deadMsg;
+        resultDesc += `\n\n> ${weather.emoji} Cuaca: ${weather.name}`;
+        if (petFarmBonus > 0) resultDesc += ` | 🐾 Pet: +${Math.floor(petFarmBonus)}%`;
+        resultDesc += `\n> Hasil masuk ke Storage.`;
+
+        const embed = new EmbedBuilder()
+            .setColor(mutationCount > 0 ? '#FFD700' : '#2ECC71')
+            .setTitle(mutationCount > 0 ? '🌾✨ Panen + MUTASI!' : '🌾 Panen Berhasil!')
+            .setDescription(resultDesc);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
