@@ -13,6 +13,8 @@ const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMark
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
+const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
+const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -607,6 +609,11 @@ module.exports = async function handleInteractionCreate(interaction) {
             return handleFusionSelectMenu(interaction);
         }
 
+        // --- PET ABILITIES SELECT MENUS ---
+        if (isAbilitySelectMenu(interaction.customId)) {
+            return handleAbilitySelectMenu(interaction);
+        }
+
         // --- CASINO PANEL SELECT MENUS ---
         if (isCasinoPanelSelectMenu(interaction.customId)) {
             return handleCasinoSelectMenu(interaction);
@@ -821,6 +828,16 @@ module.exports = async function handleInteractionCreate(interaction) {
         // --- BLACKJACK BUTTONS ---
         if (isBlackjackButton(interaction.customId)) {
             return handleBlackjackButton(interaction);
+        }
+
+        // --- PET ABILITIES BUTTONS ---
+        if (isAbilityButton(interaction.customId)) {
+            return handleAbilityButton(interaction);
+        }
+
+        // --- AWAKENING BUTTONS ---
+        if (isAwakeningButton(interaction.customId)) {
+            return handleAwakeningButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---

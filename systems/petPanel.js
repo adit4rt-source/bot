@@ -535,17 +535,37 @@ async function handlePetButton(interaction) {
         return interaction.update(panel);
     }
 
-    // === EVOLVE (now serves as "More" menu with Refine + Evolve) ===
+    // === EVOLVE (now serves as "More" menu with Refine + Evolve + Abilities + Awakening) ===
     if (action === 'evolve') {
         const pet = getPetData(guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
+        const { getAwakeningData, getStarsDisplay } = require('./awakening');
+        const { getAbilitySlots, getAbilityById, isPetEligibleForAbilities } = require('./petAbilities');
+        const awakData = getAwakeningData(pet.id);
+        const stars = getStarsDisplay(awakData.awakeningLevel);
+        const slots = getAbilitySlots(guildId, userId);
+        const abilitiesActive = isPetEligibleForAbilities(pet);
 
-        let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level})\n\n`;
-        desc += `**⬆️ Fitur Upgrade:**\n`;
+        let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}${stars}** (Lv.${pet.level})\n\n`;
+        desc += `**⬆️ Fitur Upgrade & Abilities:**\n`;
         desc += `> 📿 **Refine** — Upgrade relic equipment\n`;
         desc += `> 🧬 **Evolve** — Evolusi pet ke bentuk baru\n`;
+        desc += `> 🧪 **Abilities** — Passive world abilities (Lv.30+)\n`;
+        desc += `> ⚡ **Awakening** — Reset & power up (Lv.200)\n`;
+
+        // Show ability summary
+        const activeAbilities = [slots.slot1, slots.slot2, slots.slot3].filter(Boolean);
+        if (activeAbilities.length > 0) {
+            desc += `\n**🧪 Active Abilities:** ${abilitiesActive ? '✅' : '❌'}\n`;
+            activeAbilities.forEach(aId => {
+                const ab = getAbilityById(aId);
+                if (ab) desc += `> ${ab.emoji} ${ab.name}\n`;
+            });
+        }
+
+        // Show evolution info
         if (evo) {
             const evoPetDef = PET_DATA.find(p => p.id === evo.to);
             const canEvolve = pet.level >= evo.level;
@@ -555,17 +575,36 @@ async function handlePetButton(interaction) {
             desc += `> ${canEvolve ? '✅ **SIAP EVOLVE!**' : `🔒 Butuh Lv.${evo.level}`}\n`;
         }
 
+        // Show awakening info
+        if (awakData.awakeningLevel > 0) {
+            desc += `\n**⚡ Awakening:** ${stars} (+${Math.floor(awakData.awakeningLevel * 15)}% stats)\n`;
+        }
+
         const embed = new EmbedBuilder()
-            .setTitle('⬆️ Upgrade Menu')
+            .setTitle('⬆️ Upgrade & Abilities')
             .setColor('#9B59B6')
             .setDescription(desc);
 
-        const row = new ActionRowBuilder().addComponents(
+        const row1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`pet_doevolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success).setDisabled(!evo || pet.level < evo.level),
+            new ButtonBuilder().setCustomId(`pet_abilities_${userId}`).setLabel('🧪 Abilities').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`pet_awakening_${userId}`).setLabel('⚡ Awakening').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row1] });
+    }
+
+    // === ABILITIES (redirect to abilities panel) ===
+    if (action === 'abilities') {
+        const { buildAbilitiesPanel } = require('./petAbilities');
+        return interaction.update(buildAbilitiesPanel(guildId, userId, interaction.user.username));
+    }
+
+    // === AWAKENING (redirect to awakening panel) ===
+    if (action === 'awakening') {
+        const { buildAwakeningPanel } = require('./awakening');
+        return interaction.update(buildAwakeningPanel(guildId, userId, interaction.user.username));
     }
 
     // === DUNGEON (select menu of tiers) ===

@@ -12,6 +12,7 @@ const EXPEDITION_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
 const QUEST_CHECK_INTERVAL_MS = 60 * 60 * 1000; // check hourly
 const STREAK_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000; // check every 2 hours
 const FARM_CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
+const ABILITY_TICK_INTERVAL_MS = 7 * 60 * 1000; // check every 7 minutes (for auto-fish timing)
 
 const PET_DM_COOLDOWN_MS = 6 * 60 * 60 * 1000; // at most one hungry-pet DM / 6h / user
 const PET_HUNGER_THRESHOLD = 15;            // DM when hunger at/below this (or sick)
@@ -309,6 +310,22 @@ async function runWorldBossReminderCheck(client) {
     }
 }
 
+// ---- Pet Abilities Tick (passive income, auto-fish, auto-water) ----
+async function runAbilityTickAll(client) {
+    try {
+        const { runAbilityTick } = require('./petAbilities');
+        // Get all users with active pets that have abilities equipped
+        const users = db.prepare("SELECT DISTINCT guildId, userId FROM pet_abilities WHERE slot1 IS NOT NULL OR slot2 IS NOT NULL OR slot3 IS NOT NULL").all();
+        for (const { guildId, userId } of users) {
+            try {
+                runAbilityTick(client, guildId, userId);
+            } catch (e) { /* skip individual failures */ }
+        }
+    } catch (e) {
+        log('ERROR', 'abilityTick check failed', e);
+    }
+}
+
 function startReminderSchedules(client) {
     // Startup: bersihkan plot mati/invalid yang masih notified=0 agar tidak spam
     try {
@@ -347,9 +364,10 @@ function startReminderSchedules(client) {
     const t5 = setInterval(() => { runStreakReminderCheck(client).catch(() => {}); }, STREAK_CHECK_INTERVAL_MS);
     const t6 = setInterval(() => { runFarmReadyCheck(client).catch(() => {}); }, FARM_CHECK_INTERVAL_MS);
     const t7 = setInterval(() => { runWorldBossReminderCheck(client).catch(() => {}); }, 60 * 60 * 1000); // hourly
+    const t8 = setInterval(() => { runAbilityTickAll(client).catch(() => {}); }, ABILITY_TICK_INTERVAL_MS);
 
-    console.log('⏰ Reminder System v2 started (7 reminder types active)');
-    return { dailyTimer: t1, petTimer: t2, expeditionTimer: t3, questTimer: t4, streakTimer: t5, farmTimer: t6, worldBossTimer: t7 };
+    console.log('⏰ Reminder System v2 started (7 reminder types + ability tick active)');
+    return { dailyTimer: t1, petTimer: t2, expeditionTimer: t3, questTimer: t4, streakTimer: t5, farmTimer: t6, worldBossTimer: t7, abilityTimer: t8 };
 }
 
 module.exports = {
