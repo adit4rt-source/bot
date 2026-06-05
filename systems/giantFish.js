@@ -122,19 +122,64 @@ function startGiantFishEncounter(guildId, userId, giantFish) {
 }
 
 /**
- * Hit (cast at) an active giant fish
- * @returns {object} { hit: true/false, defeated: true/false, encounter data }
+ * Hit (cast at) an active giant fish — with timing minigame
+ * @param {number} reactionTime - ms since last hit prompt (for timing bonus)
+ * @returns {object} { hit: true/false, defeated: true/false, perfect: bool, encounter data }
  */
-function hitGiantFish(guildId, userId) {
+function hitGiantFish(guildId, userId, reactionTime = null) {
     const active = getActiveGiantFish(guildId, userId);
     if (!active) return null;
 
-    const newHits = active.hitsLanded + 1;
     const giantFish = GIANT_FISH.find(g => g.id === active.giantFishId);
+
+    // === TIMING MINIGAME ===
+    // Perfect Hit: react within 3 seconds = counts as 2 hits!
+    // Good Hit: react within 8 seconds = normal 1 hit
+    // Slow Hit: react after 8 seconds = 1 hit but might miss (30% chance)
+    let hitCount = 1;
+    let perfect = false;
+    let missed = false;
+
+    if (reactionTime !== null) {
+        if (reactionTime <= 3000) {
+            // PERFECT! Double hit
+            hitCount = 2;
+            perfect = true;
+        } else if (reactionTime <= 8000) {
+            // Good — normal hit
+            hitCount = 1;
+        } else {
+            // Slow — 30% chance to miss
+            if (Math.random() < 0.30) {
+                missed = true;
+                hitCount = 0;
+            }
+        }
+    }
+
+    if (missed) {
+        // Update lastHit timestamp for next timing check
+        db.prepare('UPDATE giant_fish_active SET startedAt = startedAt WHERE userId = ?').run(userId);
+        return {
+            hit: false,
+            defeated: false,
+            missed: true,
+            perfect: false,
+            giantFish,
+            hitsLanded: active.hitsLanded,
+            hitsRequired: active.hitsRequired,
+            reward: 0,
+            timeLeft: Math.max(0, active.expiresAt - Date.now())
+        };
+    }
+
+    const newHits = Math.min(active.hitsLanded + hitCount, active.hitsRequired);
 
     if (newHits >= active.hitsRequired) {
         // DEFEATED! Calculate reward
-        const reward = getRandomInt(giantFish.minReward, giantFish.maxReward);
+        let reward = getRandomInt(giantFish.minReward, giantFish.maxReward);
+        // Perfect hit bonus: +25% reward
+        if (perfect) reward = Math.floor(reward * 1.25);
 
         // Remove active encounter
         db.prepare('DELETE FROM giant_fish_active WHERE userId = ?').run(userId);
@@ -149,6 +194,7 @@ function hitGiantFish(guildId, userId) {
         // Increment stats
         incrementUserStat(guildId, userId, 'giant_fish_defeated');
         incrementUserStat(guildId, userId, 'giant_fish_total_reward', reward);
+        if (perfect) incrementUserStat(guildId, userId, 'giant_fish_perfect_hits');
 
         // Grant badge item
         addItem(guildId, userId, `badge_${giantFish.id}`, 1);
@@ -156,6 +202,8 @@ function hitGiantFish(guildId, userId) {
         return {
             hit: true,
             defeated: true,
+            perfect,
+            missed: false,
             giantFish,
             hitsLanded: newHits,
             hitsRequired: active.hitsRequired,
@@ -169,6 +217,8 @@ function hitGiantFish(guildId, userId) {
         return {
             hit: true,
             defeated: false,
+            perfect,
+            missed: false,
             giantFish,
             hitsLanded: newHits,
             hitsRequired: active.hitsRequired,
@@ -222,24 +272,32 @@ function buildGiantFishSpawnEmbed(giantFish, hitsRequired, userId) {
 }
 
 /**
- * Build giant fish hit embed (progress update)
+ * Build giant fish hit embed (progress update) — with timing feedback
  */
 function buildGiantFishHitEmbed(result, userId) {
-    const { giantFish, hitsLanded, hitsRequired, timeLeft } = result;
+    const { giantFish, hitsLanded, hitsRequired, timeLeft, perfect, missed } = result;
     const hpRemaining = hitsRequired - hitsLanded;
     const hpBar = '🟩'.repeat(hitsLanded) + '🟥'.repeat(hpRemaining);
     const timeLeftSec = Math.ceil(timeLeft / 1000);
 
+    let hitFeedback = '💥 **Seranganmu mengenai!**';
+    if (perfect) hitFeedback = '⚡💥 **PERFECT HIT! (2x damage!)**';
+    else if (missed) hitFeedback = '💨 **MISS! Terlalu lambat...**';
+
     const embed = new EmbedBuilder()
-        .setColor('#FF6B00')
-        .setTitle(`⚔️ HIT! ${giantFish.emoji} ${giantFish.name}`)
+        .setColor(perfect ? '#FFD700' : missed ? '#95A5A6' : '#FF6B00')
+        .setTitle(`${perfect ? '⚡' : missed ? '💨' : '⚔️'} ${missed ? 'MISS!' : 'HIT!'} ${giantFish.emoji} ${giantFish.name}`)
         .setDescription(
-            `💥 **Seranganmu mengenai!**\n\n` +
+            `${hitFeedback}\n\n` +
             `❤️ HP: ${hpBar} (${hitsLanded}/${hitsRequired})\n` +
             `⏱️ Waktu tersisa: **${timeLeftSec} detik**\n\n` +
-            `> Cast lagi **${hpRemaining}x** untuk menangkapnya!`
+            `> Cast lagi **${hpRemaining}x** untuk menangkapnya!\n\n` +
+            `💡 **Timing Bonus:**\n` +
+            `> ⚡ < 3 detik = **PERFECT** (2x hit!)\n` +
+            `> ✅ < 8 detik = Normal hit\n` +
+            `> ⚠️ > 8 detik = 30% chance miss!`
         )
-        .setFooter({ text: 'Cepat! Waktu terbatas!' });
+        .setFooter({ text: 'Cepat tekan Cast! Timing menentukan!' });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel(`⚔️ SERANG! (${hitsLanded}/${hitsRequired})`).setStyle(ButtonStyle.Danger),
@@ -250,10 +308,10 @@ function buildGiantFishHitEmbed(result, userId) {
 }
 
 /**
- * Build giant fish defeated embed (success!)
+ * Build giant fish defeated embed (success!) — with perfect bonus info
  */
 function buildGiantFishDefeatedEmbed(result, userId) {
-    const { giantFish, hitsLanded, hitsRequired, reward } = result;
+    const { giantFish, hitsLanded, hitsRequired, reward, perfect } = result;
 
     const embed = new EmbedBuilder()
         .setColor('#FFD700')
@@ -262,12 +320,12 @@ function buildGiantFishDefeatedEmbed(result, userId) {
             `${giantFish.emoji} **${giantFish.name}** berhasil ditangkap!\n\n` +
             `> *${giantFish.desc}*\n\n` +
             `🎉 **REWARD:**\n` +
-            `> 💰 Money: 🪙 **+${reward.toLocaleString('id-ID')}**\n` +
+            `> 💰 Money: 🪙 **+${reward.toLocaleString('id-ID')}**${perfect ? ' *(+25% Perfect Bonus!)*' : ''}\n` +
             `> 🏅 Badge: **${giantFish.emoji} ${giantFish.name}** (Exclusive!)\n\n` +
-            `⚔️ Serangan: ${hitsLanded}/${hitsRequired} ✅\n` +
+            `⚔️ Serangan: ${hitsLanded}/${hitsRequired} ✅${perfect ? ' ⚡ PERFECT FINISH!' : ''}\n` +
             `❤️ HP: ${'🟩'.repeat(hitsRequired)} DEFEATED!`
         )
-        .setFooter({ text: 'Selamat! Giant Fish sangat langka — tunjukkan badge-mu!' });
+        .setFooter({ text: perfect ? '⚡ Perfect timing! +25% bonus reward!' : 'Selamat! Giant Fish sangat langka — tunjukkan badge-mu!' });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Lanjut Mancing').setStyle(ButtonStyle.Primary),

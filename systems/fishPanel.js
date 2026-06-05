@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getItemCount, addItem, removeItem, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
-const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster } = require('./fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster, getFishingWeather } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
@@ -197,15 +197,15 @@ async function handleFishingButton(interaction) {
         // === CHECK ACTIVE GIANT FISH ENCOUNTER ===
         const activeGiant = getActiveGiantFish(guildId, userId);
         if (activeGiant) {
-            const hitResult = hitGiantFish(guildId, userId);
+            // Calculate reaction time for timing minigame
+            const reactionTime = interaction.message ? (Date.now() - interaction.message.createdTimestamp) : null;
+            const hitResult = hitGiantFish(guildId, userId, reactionTime);
             if (hitResult && hitResult.defeated) {
-                // Giant fish defeated!
                 const defeatEmbed = buildGiantFishDefeatedEmbed(hitResult, userId);
                 await interaction.update(defeatEmbed);
                 await checkAchievements(interaction.guild, userId, { type: 'giant_fish', giantFishId: hitResult.giantFish.id });
                 return;
             } else if (hitResult) {
-                // Hit but not yet defeated
                 const hitEmbed = buildGiantFishHitEmbed(hitResult, userId);
                 return interaction.update(hitEmbed);
             }
@@ -217,27 +217,54 @@ async function handleFishingButton(interaction) {
         const loc2 = FISHING_LOCATIONS.find(l => l.id === (eq2.location || 'river')) || FISHING_LOCATIONS[0];
         const monsterEncounter = rollSeaMonster(guildId, userId, loc2, rod2);
         if (monsterEncounter) {
-            const { monster, damageResult } = monsterEncounter;
+            const { monster, damageResult, blocked, loot } = monsterEncounter;
             incrementUserStat(guildId, userId, 'sea_monster_encounters');
 
-            // Extra cooldown if monster type is cooldown
-            if (damageResult.type === 'cooldown') {
+            // Extra cooldown if monster type is cooldown (only if not blocked)
+            if (!blocked && damageResult.type === 'cooldown') {
                 const cdKey2 = `fish_${guildId}_${userId}`;
                 fishCooldowns.set(cdKey2, Date.now() + (rod.cooldown + damageResult.amount) * 1000);
             }
 
-            const monsterEmbed = new EmbedBuilder()
-                .setColor('#E74C3C')
-                .setTitle(`${monster.emoji} MONSTER LAUT MENYERANG!`)
-                .setDescription(
-                    `**${monster.name}** muncul dari kedalaman!\n\n` +
+            // Build loot message
+            let lootMsg = '';
+            if (loot) {
+                lootMsg = `\n\n> 🎒 **LOOT DROP:** ${loot.emoji} **${loot.name}** x${loot.quantity}!`;
+            }
+
+            // Different embed based on blocked state
+            let embedColor = '#E74C3C';
+            let embedTitle = `${monster.emoji} MONSTER LAUT MENYERANG!`;
+            let embedDesc = '';
+
+            if (blocked && damageResult.type === 'blocked') {
+                embedColor = '#2ECC71';
+                embedTitle = `🛡️ MONSTER DIBLOKIR!`;
+                embedDesc = `${monster.emoji} **${monster.name}** muncul tapi...\n\n` +
+                    `> 🛡️✨ **Shield Charm melindungimu!**\n` +
+                    `> Monster tidak bisa menyerang!\n\n` +
+                    `> 📍 Lokasi: **${loc2.name}**` + lootMsg;
+            } else if (blocked && damageResult.type === 'thunder') {
+                embedColor = '#FFD700';
+                embedTitle = `⚡ THUNDER COATING AKTIF!`;
+                embedDesc = `${monster.emoji} **${monster.name}** muncul tapi...\n\n` +
+                    `> ⚡🎣 **Thunder Coating menyetrum monster!**\n` +
+                    `> Monster kabur dan menjatuhkan loot!` + lootMsg + `\n\n` +
+                    `> 📍 Lokasi: **${loc2.name}**`;
+            } else {
+                embedDesc = `**${monster.name}** muncul dari kedalaman!\n\n` +
                     `> 💬 *${monster.desc}*\n\n` +
-                    `⚠️ **Damage:** ${damageResult.detail}\n` +
+                    `⚠️ **Damage:** ${damageResult.detail}` + lootMsg + `\n` +
                     `> 📍 Lokasi: **${loc2.name}**\n` +
                     `> 🎋 Rod: **${rod2.name}** (Tier ${rod2.tier})\n\n` +
-                    `💡 *Tip: Rod tier lebih tinggi = monster chance berkurang!*`
-                )
-                .setFooter({ text: `Monster chance di ${loc2.name}: ${loc2.monsterChance}% (rod bonus: -${Math.max(0, rod2.tier - loc2.requiredRodTier) * 3}%)` });
+                    `💡 *Tip: Beli 🛡️ Shield Charm atau ⚡ Thunder Coating di /shop!*`;
+            }
+
+            const monsterEmbed = new EmbedBuilder()
+                .setColor(embedColor)
+                .setTitle(embedTitle)
+                .setDescription(embedDesc)
+                .setFooter({ text: `Monster chance: ${loc2.monsterChance}% | Rod bonus: -${Math.max(0, rod2.tier - loc2.requiredRodTier) * 3}%` });
 
             const monsterRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Coba Lagi').setStyle(ButtonStyle.Primary),
@@ -286,8 +313,14 @@ async function handleFishingButton(interaction) {
         const unlockResult = tryUnlockSecretLocation(guildId, userId);
         let secretUnlockMsg = '';
         if (unlockResult) {
-            // Will show a special notification after the catch
             secretUnlockMsg = '\n\n> 👁️🌀 **SECRET LOCATION UNLOCKED!** Cek 📍 Location!';
+        }
+
+        // === WEATHER INFO (for advanced locations) ===
+        let weatherMsg = '';
+        if (result.activeWeather) {
+            const w = result.activeWeather;
+            weatherMsg = `\n> ${w.emoji} **${w.name}**${w.effects.valueMult !== 1 ? ` (Value ${w.effects.valueMult}x)` : ''}`;
         }
 
         const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF', 'God': '#FFD700' };
@@ -308,6 +341,7 @@ async function handleFishingButton(interaction) {
                 `> 🎋 Joran: **${rod.name}**\n` +
                 `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}\n` +
                 `> 📍 Lokasi: **${result.location.name}**` +
+                weatherMsg +
                 (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
                 contestMsg + comboMsg + secretUnlockMsg
             );
