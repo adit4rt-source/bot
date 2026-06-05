@@ -117,7 +117,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
                 { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, roulette)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
-                { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection, Lokasi`, inline: false },
+                { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection, Lokasi\n> 🐋 Giant Fish (Boss) — 1% spawn di Deep Sea+\n> 🏝️ Secret Location — Unlock lewat milestone`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING** (`/farm`)', inline: false },
                 { name: '\u200b', value: `> \`/farm\` — 🌾 Farm Panel\n> Panel: Plant, Water, Harvest, Craft, Shop, Upgrade, Storage`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
@@ -205,11 +205,34 @@ module.exports = async function handleInteractionCreate(interaction) {
             const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
             if (fishCooldowns.has(cdKey) && Date.now() < fishCooldowns.get(cdKey)) { const remaining = Math.ceil((fishCooldowns.get(cdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true }); }
             fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
+
+            // === GIANT FISH: Check active encounter ===
+            const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGiantFish, buildGiantFishSpawnEmbed, buildGiantFishHitEmbed, buildGiantFishDefeatedEmbed } = require('../systems/giantFish');
+            const { trackLocationCatch, tryUnlockSecretLocation } = require('../systems/secretLocation');
+            const activeGiant = getActiveGiantFish(guildId, interaction.user.id);
+            if (activeGiant) {
+                const hitResult = hitGiantFish(guildId, interaction.user.id);
+                if (hitResult && hitResult.defeated) {
+                    const defeatEmbed = buildGiantFishDefeatedEmbed(hitResult, interaction.user.id);
+                    await interaction.reply(defeatEmbed);
+                    await checkAchievements(interaction.guild, interaction.user.id, { type: 'giant_fish', giantFishId: hitResult.giantFish.id });
+                    return;
+                } else if (hitResult) {
+                    const hitEmbed = buildGiantFishHitEmbed(hitResult, interaction.user.id);
+                    return interaction.reply(hitEmbed);
+                }
+            }
+
             const result = catchFish(guildId, interaction.user.id);
             incrementUserStat(guildId, interaction.user.id, 'total_fish_caught');
             updateQuestProgress(guildId, interaction.user.id, 'fish', 1);
             addPetExp(guildId, interaction.user.id, 5);
             addComboFeature(guildId, interaction.user.id, 'fishing');
+
+            // === Track location catch for Secret Location + Abyss ===
+            const currentLocation = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river')) || FISHING_LOCATIONS[0];
+            trackLocationCatch(guildId, interaction.user.id, currentLocation.id, result.tier.tier);
+            if (currentLocation.id === 'abyss') incrementUserStat(guildId, interaction.user.id, 'fish_caught_abyss');
 
             // === FISHING COMBO SYSTEM ===
             const { updateFishingCombo, getComboFishMultiplier, rollTreasure, applyTreasure, formatComboDisplay, formatTreasureDisplay } = require('../systems/fishingCombo');
@@ -225,6 +248,22 @@ module.exports = async function handleInteractionCreate(interaction) {
             // Apply combo multiplier to fish value
             const boostedValue = Math.floor(result.value * comboTier.mult);
 
+            // === GIANT FISH: Check spawn (1% chance, Deep Sea+ only) ===
+            const giantFishSpawn = checkGiantFishSpawn(currentLocation.id);
+            if (giantFishSpawn) {
+                const encounter = startGiantFishEncounter(guildId, interaction.user.id, giantFishSpawn);
+                const spawnEmbed = buildGiantFishSpawnEmbed(giantFishSpawn, encounter.hitsRequired, interaction.user.id);
+                return interaction.reply(spawnEmbed);
+            }
+
+            // === SECRET LOCATION: Check unlock ===
+            const unlockResult = tryUnlockSecretLocation(guildId, interaction.user.id);
+            let secretUnlockMsg = '';
+            if (unlockResult) {
+                secretUnlockMsg = '\n\n> 👁️🌀 **SECRET LOCATION UNLOCKED!** Cek 📍 Location di `/fishing`!';
+                await checkAchievements(interaction.guild, interaction.user.id, { type: 'secret_location_unlock' });
+            }
+
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
@@ -232,7 +271,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             const embed = new EmbedBuilder()
                 .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
                 .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
-                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg)
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
                 .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${rod.cooldown}s | Max combo: ${comboData.maxCombo}x` });
             if (result.tier.tier === 'Secret') embed.setTitle('🔮💫 SECRET CATCH!!! 💫🔮');
             else if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
@@ -245,6 +284,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             );
             await interaction.reply({ embeds: [embed], components: [afterCatchRow] });
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
+            if (currentLocation.id === 'abyss') await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing_abyss', fishId: result.fish.id });
             if (activeFishEvents.has(guildId)) {
                 const ev = activeFishEvents.get(guildId);
                 if (!ev.participants[interaction.user.id]) ev.participants[interaction.user.id] = { count: 0, heaviest: 0 };

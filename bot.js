@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.1.0';
-const BUILD_DATE = '2026-06-01';
+const BOT_VERSION = '3.2.0';
+const BUILD_DATE = '2026-06-05';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -113,26 +113,21 @@ client.once(Events.ClientReady, async c => {
     await postUpdateLog(client, BOT_VERSION, 
         `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
         `**✨ Fitur Baru:**\n` +
-        `• 🔒 **Anti-Abuse Captcha** — verifikasi random setiap 15 menit (anti macro/autoclicker)\n` +
-        `• 🎮 **Bot Status** — tampil \`/help | X servers\` di profil bot\n` +
-        `• 📥 **Guild Log** — catat server yang invite/kick bot\n` +
-        `• 📦 **Auto Changelog** — update otomatis terpost di sini\n` +
-        `• 🎁 **Welcome Embed** — link join server saat bot pertama kali dipakai\n` +
-        `• \`/gift @user\` — kirim money tanpa copy ID\n` +
-        `• 🏆 Contest view di \`/fishing\` panel\n` +
-        `• ♻️ Streak restore mandiri di \`/profile\`\n` +
-        `• 🌾 Auto-harvest DM (benar-benar otomatis)\n` +
-        `• 🔔 Daily reminder + Pet lapar DM\n` +
-        `• 📊 \`/stats\` dashboard data real\n\n` +
+        `• 🐋 **Giant Fish (Boss Fish)** — 1% chance muncul di Deep Sea+! Butuh 3-5 cast dalam 60 detik. Reward: 5K-20K money + exclusive badge\n` +
+        `• 🏝️ **Secret Location: The Abyss** — Unlock setelah 50 ikan di Void Rift ATAU 5 Secret tier fish. 11 ikan eksklusif!\n` +
+        `• 🏆 **7 Achievement Baru** — Giant Slayer, Boss Hunter, Titan Slayer, Void Conqueror, Abyss Explorer, Abyss Fisher, Universe Catcher\n` +
+        `• 🎣 **Fishing Combo System** — Cast berturut = multiplier naik (1x → 3x max!)\n` +
+        `• 📦 **Treasure Drops** — 5% chance dapat item random saat mancing\n` +
+        `• 📊 **Giant Fish Stats** — Tracking defeats, encounters, success rate di Stats panel\n` +
+        `• 🗺️ **Location Panel Update** — Progress bar unlock + secret location info\n\n` +
         `**🐛 Bug Fixes:**\n` +
-        `• Fix voucher, shop stock, streak, contest crash\n` +
-        `• Fix item hilang di Market\n` +
-        `• Fix farm_legendary achievement\n` +
-        `• Fix contest end sekarang bagi hadiah\n` +
-        `• Update semua teks panel ke versi baru\n\n` +
+        `• Fix \`/fish\` quick-cast tidak track lokasi & Giant Fish\n` +
+        `• Fix Global Mode compatibility untuk tabel baru\n` +
+        `• Update \`/help\` dengan info fitur baru\n` +
+        `• Fix achievement milestone count (89 → 96)\n\n` +
         `**🧹 Cleanup:**\n` +
-        `• Hapus ~600 baris dead code + migrasi lama\n` +
-        `• Hapus tabel tidak terpakai\n`
+        `• Sinkronisasi fitur \`/fish\` dan \`/fishing\` panel\n` +
+        `• Update semua deskripsi panel\n`
     );
 });
 
