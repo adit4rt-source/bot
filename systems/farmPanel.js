@@ -127,17 +127,69 @@ function buildFarmPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary)
     );
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 
-// ============ HANDLER: /farm command (show main panel) ============
+// ============ BUILD: Farm Hub (main entry with 4 buttons) ============
+function buildFarmHub(guildId, userId, username) {
+    const { getSeasonDisplay } = require('./farmSeason');
+    const { getCoopLevel, getBarnLevel, getAnimals } = require('./livestock');
+    const season = getSeasonDisplay();
+    const userData = getOrCreateUser(guildId, userId);
+
+    const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+    const cows = getAnimals(userId, 'cow').filter(a => a.status !== 'dead');
+    const sheep = getAnimals(userId, 'sheep').filter(a => a.status !== 'dead');
+    const coopLvl = getCoopLevel(userId);
+    const barnLvl = getBarnLevel(userId);
+
+    const farmData = getFarmData(guildId, userId);
+    const plots = getPlots(guildId, userId);
+    const readyCount = plots.filter(p => {
+        const crop = FARM_CROPS.find(c => c.id === p.cropId);
+        if (!crop || p.status === 'dead') return false;
+        const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
+        const growTime = crop.time * (1 - fert.speedBonus) * 60000 / (season.effects?.farmGrow || 1);
+        return Date.now() - p.plantedAt >= growTime;
+    }).length;
+
+    const embed = new EmbedBuilder()
+        .setTitle(`🌾 FARM — ${username}`)
+        .setColor('#2ECC71')
+        .setDescription(
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `${season.emoji} **Season: ${season.name}**\n` +
+            `> ${season.desc}\n\n` +
+            `📊 **Overview:**\n` +
+            `> 🌱 Tanaman: **${plots.length}** plot ${readyCount > 0 ? `(🔔 ${readyCount} siap panen!)` : ''}\n` +
+            `> 🐔 Ayam: **${chickens.length}** ekor (Kandang Lv.${coopLvl})\n` +
+            `> 🐄 Sapi: **${cows.length}** | 🐑 Domba: **${sheep.length}** (Kandang Lv.${barnLvl})\n` +
+            `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `Pilih fitur yang mau dikelola:`
+        )
+        .setFooter({ text: `Season berubah setiap hari 00:00 WIB | Next: ${season.nextSeason.emoji} ${season.nextSeason.name}` })
+        .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_crops_${userId}`).setLabel('🌱 Tanaman').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel(`🐔 Kandang Ayam`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel(`🐄 Peternakan`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🧪 Crafting').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+// ============ HANDLER: /farm command (show HUB panel) ============
 async function handleFarmCommand(interaction) {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const panel = buildFarmPanel(guildId, userId, interaction.user.username);
+    const panel = buildFarmHub(guildId, userId, interaction.user.username);
     return interaction.reply(panel);
 }
 
@@ -153,6 +205,32 @@ async function handleFarmButton(interaction) {
     }
 
     const userData = getOrCreateUser(guildId, userId);
+
+    // === HUB NAVIGATION (from main farm panel) ===
+    if (customId === `farm_crops_${userId}`) {
+        return interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+    }
+    if (customId === `farm_coop_${userId}`) {
+        const { buildCoopPanel } = require('./livestockPanel');
+        return interaction.update(buildCoopPanel(userId, interaction.user.username));
+    }
+    if (customId === `farm_barn_${userId}`) {
+        const { buildBarnPanel } = require('./livestockPanel');
+        return interaction.update(buildBarnPanel(userId, interaction.user.username));
+    }
+    if (customId === `farm_allcraft_${userId}`) {
+        const { buildCraftingPanel } = require('./livestockPanel');
+        return interaction.update(buildCraftingPanel(guildId, userId, interaction.user.username));
+    }
+    if (customId === `farm_hub_${userId}`) {
+        return interaction.update(buildFarmHub(guildId, userId, interaction.user.username));
+    }
+
+    // === LIVESTOCK PANEL BUTTONS (delegate to livestockPanel) ===
+    const { isLivestockButton, handleLivestockButton } = require('./livestockPanel');
+    if (isLivestockButton(customId)) {
+        return handleLivestockButton(interaction);
+    }
 
     // === PUPUK MODE BUTTONS (special parsing) ===
     if (customId.startsWith('farm_pupuk_single_')) {
@@ -1052,6 +1130,7 @@ function isFarmPanelModal(customId) {
 
 module.exports = {
     buildFarmPanel,
+    buildFarmHub,
     handleFarmCommand,
     handleFarmButton,
     handleFarmSelectMenu,
