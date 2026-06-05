@@ -143,89 +143,80 @@ function buildBarnPanel(userId, username) {
     return { embeds: [embed], components: [row1, row2] };
 }
 
-// ============ BUILD: Crafting Panel (redirects to unified craft in farmPanel) ============
+// ============ BUILD: Crafting Panel (simple — just route to farm craft) ============
 function buildCraftingPanel(guildId, userId, username) {
-    // Just redirect to the craft action in farmPanel
-    // This function is kept for the hub button routing
     const userData = getOrCreateUser(guildId, userId);
     const { FARM_RECIPES } = require('../data/farming');
-    const allRecipes = [...FARM_RECIPES, ...LIVESTOCK_RECIPES];
-
-    let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
-    desc += `📋 **${allRecipes.length} resep tersedia**\n\n`;
-    desc += `> 🌾 Tanaman: ${FARM_RECIPES.length} resep\n`;
-    desc += `> 🐔🐄 Livestock: ${LIVESTOCK_RECIPES.length} resep\n\n`;
-    desc += `Klik **🧪 Craft** untuk membuka menu craft.`;
 
     const embed = new EmbedBuilder()
         .setTitle(`🧪 CRAFTING HUB — ${username}`)
         .setColor('#9B59B6')
-        .setDescription(desc)
-        .setFooter({ text: 'Bahan dari Storage (panen) + Livestock Products (telur/susu/bulu)' });
+        .setDescription(
+            `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n` +
+            `📋 **${FARM_RECIPES.length} resep tersedia**\n\n` +
+            `> 🌾 Tanaman: 36 resep\n` +
+            `> 🐔🐄 Livestock: 15 resep baru\n\n` +
+            `Klik **🧪 Craft** untuk membuka menu resep.\n` +
+            `Bahan diambil dari **Storage** (panen + produk ternak).`
+        )
+        .setFooter({ text: 'Produk ternak (telur/susu/bulu) otomatis masuk Storage saat collect' });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_craft_products_${userId}`).setLabel('📦 Livestock Products').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_craft_sellall_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
 }
 
-// ============ BUILD: Storage Hub (all items from tanaman + livestock) ============
+// ============ BUILD: Storage Hub (all items from farm_storage) ============
 function buildStorageHub(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
     const { getStorage } = require('./farming');
-    const { getProductInventory } = require('./livestock');
     const { FARM_CROPS } = require('../data/farming');
     const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
     const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
 
-    // Farm storage
-    const farmStorage = getStorage(guildId, userId);
-    const farmTotal = farmStorage.reduce((sum, s) => sum + s.quantity, 0);
+    const storage = getStorage(guildId, userId);
+    const totalItems = storage.reduce((sum, s) => sum + s.quantity, 0);
 
-    // Livestock products
-    const livestockProducts = getProductInventory(userId);
-    const livestockTotal = livestockProducts.reduce((sum, p) => sum + p.quantity, 0);
+    // Separate farm items vs livestock products
+    const farmItems = storage.filter(s => !s.cropId.includes('_'));
+    const livestockItems = storage.filter(s => s.cropId.includes('_')); // egg_normal, milk_premium, wool_superior
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
 
-    // Farm items
-    desc += `**🌾 Hasil Panen** (${farmTotal} items):\n`;
-    if (farmStorage.length === 0) {
+    desc += `**🌾 Hasil Panen** (${farmItems.reduce((s, i) => s + i.quantity, 0)} items):\n`;
+    if (farmItems.length === 0) {
         desc += `> *Kosong*\n`;
     } else {
-        farmStorage.slice(0, 8).forEach(s => {
+        farmItems.slice(0, 8).forEach(s => {
             const crop = ALL_CROPS.find(c => c.id === s.cropId);
-            if (crop) desc += `> ${crop.emoji} **${crop.name}** × ${s.quantity} (🪙 ${crop.sellPrice}/pc)\n`;
+            if (crop) desc += `> ${crop.emoji} **${crop.name}** × ${s.quantity}\n`;
             else desc += `> 📦 ${s.cropId} × ${s.quantity}\n`;
         });
-        if (farmStorage.length > 8) desc += `> *...dan ${farmStorage.length - 8} lainnya*\n`;
+        if (farmItems.length > 8) desc += `> *...+${farmItems.length - 8} lainnya*\n`;
     }
 
-    // Livestock products
-    desc += `\n**🥚🥛🧶 Produk Ternak** (${livestockTotal} items):\n`;
-    if (livestockProducts.length === 0) {
+    desc += `\n**🥚🥛🧶 Produk Ternak** (${livestockItems.reduce((s, i) => s + i.quantity, 0)} items):\n`;
+    if (livestockItems.length === 0) {
         desc += `> *Kosong — collect dari hewan dulu!*\n`;
     } else {
-        livestockProducts.slice(0, 8).forEach(p => {
-            const qualityData = PRODUCT_QUALITY[p.productId]?.find(q => q.quality === p.quality);
-            if (qualityData) desc += `> ${qualityData.name} × **${p.quantity}** (🪙 ${qualityData.price}/pc)\n`;
+        livestockItems.slice(0, 8).forEach(s => {
+            const name = s.cropId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            desc += `> 📦 **${name}** × ${s.quantity}\n`;
         });
-        if (livestockProducts.length > 8) desc += `> *...dan ${livestockProducts.length - 8} lainnya*\n`;
+        if (livestockItems.length > 8) desc += `> *...+${livestockItems.length - 8} lainnya*\n`;
     }
 
     const embed = new EmbedBuilder()
         .setTitle(`📦 STORAGE HUB — ${username}`)
         .setColor('#E67E22')
         .setDescription(desc)
-        .setFooter({ text: `Total: ${farmTotal + livestockTotal} items | Sell All untuk jual semua sekaligus` });
+        .setFooter({ text: `Total: ${totalItems} items | Sell All untuk jual semua` });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('🌾 Detail Panen').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_allstorage_sellall_${userId}`).setLabel('💰 Sell ALL').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`farm_storage_${userId}`).setLabel('💰 Sell Panen').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
