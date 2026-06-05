@@ -12,6 +12,13 @@ const ITEMS = [
     { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', menuEmoji: '🛡️', desc: 'Refine gagal tidak turun level', price: 8000, category: 'Battle' },
     { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '<:AutoHarvestPass:1510785815889055775>', menuEmoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 5000, category: 'Special' },
     { id: 'rod_part', name: 'Rod Parts', emoji: '<:RodParts:1510785813741441126>', menuEmoji: '🔧', desc: 'Material upgrade joran (dari mancing/shop)', price: 5000, category: 'Fishing' },
+    // Farming - Pesticide items
+    { id: 'pesticide_basic', name: 'Pestisida Dasar', emoji: '🧴', menuEmoji: '🧴', desc: 'Basmi 1 hama di 1 plot (sekali pakai)', price: 500, category: 'Farming' },
+    { id: 'pesticide_super', name: 'Pestisida Super', emoji: '🧪', menuEmoji: '🧪', desc: 'Basmi SEMUA hama di semua plot (sekali pakai)', price: 2500, category: 'Farming' },
+    { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '🛡️🌿', menuEmoji: '🌿', desc: 'Imunitas hama selama 6 jam (sekali pakai)', price: 5000, category: 'Farming' },
+    // Awakening materials
+    { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', menuEmoji: '🌟', desc: 'Material langka Awakening (World Boss/Expedition)', price: 0, category: 'Special' },
+    { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', menuEmoji: '💫', desc: 'Material ultra-langka Awakening (World Boss #1)', price: 0, category: 'Special' },
 ];
 
 const CRAFT_RECIPES = [
