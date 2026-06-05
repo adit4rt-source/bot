@@ -380,7 +380,7 @@ async function handlePetButton(interaction) {
     }
 
 
-    // === COLLECTION ===
+    // === COLLECTION (My Pets) ===
     if (action === 'collection') {
         const allPets = getAllPets(guildId, userId);
         if (allPets.length === 0) {
@@ -388,6 +388,7 @@ async function handlePetButton(interaction) {
                 .setDescription('🐾 Belum punya pet! Beli di Shop untuk mulai.');
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`pet_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`pet_dex_Common_${userId}`).setLabel('📖 Pet Dex').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
             );
             return interaction.update({ embeds: [embed], components: [row] });
@@ -408,9 +409,71 @@ async function handlePetButton(interaction) {
         const embed = new EmbedBuilder().setTitle('📦 Pet Collection').setColor('#FF69B4').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_swap_${userId}`).setLabel('🔄 Swap Pet').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`pet_dex_Common_${userId}`).setLabel('📖 Pet Dex').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === PET DEX (Catalog semua pet per tier) ===
+    if (action === 'dex') {
+        const tier = parts[2]; // pet_dex_TIER_userId
+        const validTiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const currentTier = validTiers.includes(tier) ? tier : 'Common';
+        const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF1493' };
+        const tierEmojis = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴' };
+
+        // Get all pets of this tier
+        const tierPets = PET_DATA.filter(p => p.tier === currentTier);
+        // Get user's owned pets
+        const ownedPets = getAllPets(guildId, userId);
+        const ownedPetIds = new Set(ownedPets.map(p => p.petId));
+        const ownedCount = tierPets.filter(p => ownedPetIds.has(p.id)).length;
+
+        // Check for evolution paths
+        const { PET_EVOLUTIONS } = require('../data/pets');
+
+        let desc = `${tierEmojis[currentTier]} **${currentTier.toUpperCase()}** — ${tierPets.length} pet\n`;
+        desc += `> 📊 Collected: **${ownedCount}/${tierPets.length}**\n`;
+        desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
+
+        tierPets.forEach(pet => {
+            const owned = ownedPetIds.has(pet.id);
+            const ownedIcon = owned ? '✅' : '🔒';
+            const evo = PET_EVOLUTIONS.find(e => e.from === pet.id);
+
+            desc += `${ownedIcon} ${pet.emoji} **${pet.name}**\n`;
+            desc += `> 💰 ${pet.price > 0 ? pet.price.toLocaleString('id-ID') : 'Egg Only'} | 🎁 +${pet.bonus.value}% ${pet.bonus.type.replace(/_/g, ' ')}`;
+            if (evo) {
+                const evoPet = PET_DATA.find(p => p.id === evo.to);
+                desc += `\n> 🧬 Evolve Lv.${evo.level} → ${evoPet ? evoPet.emoji : '?'} ${evoPet ? evoPet.name : evo.to}`;
+            }
+            desc += `\n\n`;
+        });
+
+        if (desc.length > 4000) desc = desc.substring(0, 3950) + '\n*...dan lainnya*';
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📖 PET DEX — ${currentTier}`)
+            .setColor(tierColors[currentTier] || '#FF69B4')
+            .setDescription(desc)
+            .setFooter({ text: `${ownedCount}/${tierPets.length} collected | Gunakan tombol untuk ganti tier` });
+
+        // Tier navigation buttons
+        const row1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_dex_Common_${userId}`).setLabel('⚪ Common').setStyle(currentTier === 'Common' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_Uncommon_${userId}`).setLabel('🟢 Uncommon').setStyle(currentTier === 'Uncommon' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_Rare_${userId}`).setLabel('🔵 Rare').setStyle(currentTier === 'Rare' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_Epic_${userId}`).setLabel('🟣 Epic').setStyle(currentTier === 'Epic' ? ButtonStyle.Success : ButtonStyle.Secondary),
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_dex_Legendary_${userId}`).setLabel('🟡 Legendary').setStyle(currentTier === 'Legendary' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_Mythic_${userId}`).setLabel('🔴 Mythic').setStyle(currentTier === 'Mythic' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('📦 My Pets').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary),
+        );
+
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
 
