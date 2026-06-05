@@ -452,6 +452,35 @@ app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== STREAK SETTINGS ====================
+app.get('/api/streak/settings/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const keys = ['streak_enabled', 'streak_emoji', 'streak_min_days', 'streak_monthly_restore', 'streak_timezone', 'streak_auto_nickname', 'streak_reward_7', 'streak_reward_14', 'streak_reward_30', 'streak_reward_60', 'streak_reward_100', 'streak_role_7', 'streak_role_14', 'streak_role_30', 'streak_role_60', 'streak_role_100', 'streak_announce_channel', 'streak_announce_message'];
+        const settings = {};
+        for (const key of keys) {
+            const row = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, key);
+            settings[key] = row ? row.value : null;
+        }
+        const defaults = { streak_enabled: '1', streak_emoji: '🔥', streak_min_days: '3', streak_monthly_restore: '5', streak_timezone: 'Asia/Jakarta', streak_auto_nickname: '0', streak_reward_7: '1000', streak_reward_14: '2500', streak_reward_30: '5000', streak_reward_60: '10000', streak_reward_100: '25000', streak_role_7: '', streak_role_14: '', streak_role_30: '', streak_role_60: '', streak_role_100: '', streak_announce_channel: '', streak_announce_message: '{user.mention} mencapai streak **{streak}** hari! 🔥' };
+        const merged = {};
+        for (const key of keys) merged[key] = settings[key] !== null ? settings[key] : defaults[key];
+        res.json({ settings: merged });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/streak/settings/:guildId', adminCheck, (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Missing settings' });
+        for (const [key, value] of Object.entries(settings)) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
+        }
+        res.json({ success: true, saved: Object.keys(settings).length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== STREAK ====================
 app.get('/api/streak/leaderboard', async (req, res) => {
     try {
