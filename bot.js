@@ -20,6 +20,9 @@ const handleVoiceStateUpdate = require('./events/voiceStateUpdate');
 const handleReactionAdd = require('./events/reactionAdd');
 const handleInteractionCreate = require('./events/interactionCreate');
 
+// Load API server (Dashboard)
+const { startApiServer } = require('./api');
+
 // Load backup system
 const { startBackupSchedule } = require('./systems/backup');
 
@@ -85,6 +88,9 @@ client.once(Events.ClientReady, async c => {
 
     // One-time data reset (only if env RESET_DATA=<token> is set & not used before)
     try { maybeRunStartupReset(); } catch (e) { console.error('Startup reset error:', e); }
+
+    // Start API server for dashboard
+    startApiServer();
 
     // Start auto-backup schedule (every 6 hours + immediate backup)
     startBackupSchedule();
