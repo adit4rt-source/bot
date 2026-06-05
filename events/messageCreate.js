@@ -15,6 +15,11 @@ const poolAcakKata = ["DISCORD", "KOMPUTER", "INTERNET", "PROGRAMMER", "INDONESI
 module.exports = async function handleMessageCreate(message) {
     if (message.author.bot || !message.guild) return;
 
+    // === AUTOMOD CHECK (before anything else) ===
+    const { processAutomod } = require('../systems/automod');
+    const automodResult = await processAutomod(message);
+    if (automodResult) return; // Message was deleted by automod, stop processing
+
     // Anti-abuse captcha: check if this message is a captcha answer
     const { verifyCaptchaMessage } = require('../systems/captcha');
     if (verifyCaptchaMessage(message)) return; // consumed as captcha answer, don't process further

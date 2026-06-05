@@ -345,6 +345,84 @@ app.get('/api/fishing/weather', (req, res) => {
     }
 });
 
+// ==================== AUTOMOD ====================
+app.get('/api/automod/:guildId', async (req, res) => {
+    try {
+        const { AUTOMOD_MODULES, getAllModuleStates, getAutomodSetting, getBlockedWords, getWhitelist, getIgnoredChannels } = require('./systems/automod');
+        const { guildId } = req.params;
+        res.json({
+            modules: AUTOMOD_MODULES,
+            states: getAllModuleStates(guildId),
+            settings: {
+                mod_log_channel: getAutomodSetting(guildId, 'mod_log_channel'),
+                audit_log_channel: getAutomodSetting(guildId, 'audit_log_channel'),
+            },
+            blockedWords: getBlockedWords(guildId),
+            whitelist: getWhitelist(guildId),
+            ignoredChannels: getIgnoredChannels(guildId),
+            recentLogs: db.prepare('SELECT * FROM automod_logs WHERE guildId = ? ORDER BY timestamp DESC LIMIT 20').all(guildId),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/automod/:guildId/toggle', adminCheck, (req, res) => {
+    try {
+        const { setModuleEnabled, isModuleEnabled } = require('./systems/automod');
+        const { guildId } = req.params;
+        const { moduleId, enabled } = req.body;
+        if (!moduleId) return res.status(400).json({ error: 'Missing moduleId' });
+        setModuleEnabled(guildId, moduleId, enabled !== undefined ? enabled : !isModuleEnabled(guildId, moduleId));
+        res.json({ success: true, moduleId, enabled: isModuleEnabled(guildId, moduleId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/automod/:guildId/settings', adminCheck, (req, res) => {
+    try {
+        const { setAutomodSetting } = require('./systems/automod');
+        const { guildId } = req.params;
+        const { key, value } = req.body;
+        if (!key) return res.status(400).json({ error: 'Missing key' });
+        setAutomodSetting(guildId, key, value || '');
+        res.json({ success: true, key, value });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/automod/:guildId/words', adminCheck, (req, res) => {
+    try {
+        const { addBlockedWord, removeBlockedWord, getBlockedWords } = require('./systems/automod');
+        const { guildId } = req.params;
+        const { action, word } = req.body;
+        if (!word) return res.status(400).json({ error: 'Missing word' });
+        if (action === 'add') addBlockedWord(guildId, word);
+        else if (action === 'remove') removeBlockedWord(guildId, word);
+        res.json({ success: true, blockedWords: getBlockedWords(guildId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/automod/:guildId/whitelist', adminCheck, (req, res) => {
+    try {
+        const { addWhitelist, removeWhitelist, getWhitelist } = require('./systems/automod');
+        const { guildId } = req.params;
+        const { action, targetId, type } = req.body;
+        if (!targetId) return res.status(400).json({ error: 'Missing targetId' });
+        if (action === 'add') addWhitelist(guildId, targetId, type || 'user');
+        else if (action === 'remove') removeWhitelist(guildId, targetId);
+        res.json({ success: true, whitelist: getWhitelist(guildId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
+    try {
+        const { addIgnoredChannel, removeIgnoredChannel, getIgnoredChannels } = require('./systems/automod');
+        const { guildId } = req.params;
+        const { action, channelId } = req.body;
+        if (!channelId) return res.status(400).json({ error: 'Missing channelId' });
+        if (action === 'add') addIgnoredChannel(guildId, channelId);
+        else if (action === 'remove') removeIgnoredChannel(guildId, channelId);
+        res.json({ success: true, ignoredChannels: getIgnoredChannels(guildId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== FISHING STATS ====================
 app.get('/api/fishing/stats', async (req, res) => {
     try {
