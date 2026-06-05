@@ -178,11 +178,11 @@ function buildCraftingPanel(guildId, userId, username) {
             const c = ALL_CROPS.find(cr => cr.id === ing.id);
             return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
         }).join('+');
-        let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+        let label = `${r.emoji} ${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
         if (label.length > 100) label = label.substring(0, 97) + '...';
         let optDesc = `Bahan: ${ingStr}`;
         if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
-        craftMenu.addOptions({ label, description: optDesc, value: r.id, emoji: r.emoji });
+        craftMenu.addOptions({ label, description: optDesc, value: r.id });
     });
 
     const rows = [new ActionRowBuilder().addComponents(craftMenu)];
@@ -198,11 +198,11 @@ function buildCraftingPanel(guildId, userId, username) {
                 const c = ALL_CROPS.find(cr => cr.id === ing.id);
                 return c ? `${c.emoji}${ing.qty}` : `📦${ing.qty}`;
             }).join('+');
-            let label = `${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
+            let label = `${r.emoji} ${r.name} — 🪙${r.sellPrice.toLocaleString('id-ID')}`;
             if (label.length > 100) label = label.substring(0, 97) + '...';
             let optDesc = `Bahan: ${ingStr}`;
             if (optDesc.length > 100) optDesc = optDesc.substring(0, 97) + '...';
-            craftMenu2.addOptions({ label, description: optDesc, value: r.id, emoji: r.emoji });
+            craftMenu2.addOptions({ label, description: optDesc, value: r.id });
         });
         rows.push(new ActionRowBuilder().addComponents(craftMenu2));
     }
