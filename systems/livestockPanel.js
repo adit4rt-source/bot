@@ -32,7 +32,7 @@ function buildCoopPanel(userId, username) {
 
         const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
         const hunger = getHungerPercent(chicken);
-        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' 💀';
+        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
 
         if (chicken.status === 'sick') {
             const name = chicken.name || 'Ayam';
@@ -55,7 +55,7 @@ function buildCoopPanel(userId, username) {
     // Calculate average hunger
     const avgHunger = chickens.length > 0 ? Math.round(chickens.reduce((s, c) => s + getHungerPercent(c), 0) / chickens.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
-    const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '💀';
+    const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
         .setTitle(`🐔 KANDANG AYAM — ${username}`)
@@ -70,7 +70,7 @@ function buildCoopPanel(userId, username) {
             `📋 **Daftar Ayam:**\n` +
             animalList
         )
-        .setFooter({ text: `🥚 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | 🔄 Refresh` });
+        .setFooter({ text: `🥚 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | ⚠️🍗 Kelaparan | 🔄 Refresh` });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
@@ -125,7 +125,7 @@ function buildBarnPanel(userId, username) {
         if (isReady) totalMilk++;
         const tierEmoji = cow.tier > 0 ? ' ' + '⭐'.repeat(Math.min(cow.tier, 5)) + (cow.tier > 5 ? `+${cow.tier - 5}` : '') : '';
         const hunger = getHungerPercent(cow);
-        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' 💀';
+        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
 
         if (cow.status === 'sick') {
             cowList += `\`[${i + 1}]\` 🐄 **Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
@@ -149,7 +149,7 @@ function buildBarnPanel(userId, username) {
         if (isReady) totalWool++;
         const tierEmoji = s.tier > 0 ? ' ' + '⭐'.repeat(Math.min(s.tier, 5)) + (s.tier > 5 ? `+${s.tier - 5}` : '') : '';
         const hunger = getHungerPercent(s);
-        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' 💀';
+        const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
 
         if (s.status === 'sick') {
             sheepList += `\`[${i + 1}]\` 🐑 **Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
@@ -170,7 +170,7 @@ function buildBarnPanel(userId, username) {
     const allBarn = [...cows, ...sheep];
     const avgHunger = allBarn.length > 0 ? Math.round(allBarn.reduce((s, a) => s + getHungerPercent(a), 0) / allBarn.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
-    const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '💀';
+    const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
         .setTitle(`🐄 PETERNAKAN — ${username}`)
@@ -186,7 +186,7 @@ function buildBarnPanel(userId, username) {
             `📋 **Sapi:**\n${cowList}\n` +
             `📋 **Domba:**\n${sheepList}`
         )
-        .setFooter({ text: `🥛🧶 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | 🎾 Play boost` });
+        .setFooter({ text: `🥛🧶 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | ⚠️🍗 Kelaparan | 🎾 Play boost` });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_barn_milk_${userId}`).setLabel(`🥛 Milk (${totalMilk})`).setStyle(ButtonStyle.Primary).setDisabled(totalMilk === 0),
