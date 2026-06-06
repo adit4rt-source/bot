@@ -14,6 +14,7 @@ function buildCoopPanel(userId, username) {
     const coopInfo = COOP_LEVELS.find(l => l.level === coopLvl);
     const maxSlots = getCoopSlots(userId);
     const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+    const deadCount = getAnimals(userId, 'chicken').filter(a => a.status === 'dead').length;
     const sickCount = chickens.filter(a => a.status === 'sick').length;
     const prodMult = getSeasonProductionMultiplier('chicken');
 
@@ -86,6 +87,7 @@ function buildCoopPanel(userId, username) {
     );
     const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_leaderboard_${userId}`).setLabel('🏆 Leaderboard').setStyle(ButtonStyle.Primary),
+        ...(deadCount > 0 ? [new ButtonBuilder().setCustomId(`farm_coop_bury_${userId}`).setLabel(`⚰️ Kubur (${deadCount})`).setStyle(ButtonStyle.Danger)] : []),
         new ButtonBuilder().setCustomId(`farm_coop_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
@@ -106,6 +108,7 @@ function buildBarnPanel(userId, username) {
     const sickCows = cows.filter(a => a.status === 'sick').length;
     const sickSheep = sheep.filter(a => a.status === 'sick').length;
     const totalSick = sickCows + sickSheep;
+    const deadBarnCount = db.prepare("SELECT COUNT(*) as c FROM livestock WHERE userId = ? AND animalType IN ('cow', 'sheep') AND status = 'dead'").get(userId)?.c || 0;
     const cowProd = getSeasonProductionMultiplier('cow');
     const sheepProd = getSeasonProductionMultiplier('sheep');
     const { getHungerPercent } = require('./livestock');
@@ -196,6 +199,7 @@ function buildBarnPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_barn_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_barn_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_barn_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
+        ...(deadBarnCount > 0 ? [new ButtonBuilder().setCustomId(`farm_barn_bury_${userId}`).setLabel(`⚰️ Kubur (${deadBarnCount})`).setStyle(ButtonStyle.Danger)] : []),
         new ButtonBuilder().setCustomId(`farm_barn_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
@@ -384,6 +388,14 @@ async function handleLivestockButton(interaction) {
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
+
+    // === KUBUR AYAM MATI ===
+    if (customId === `farm_coop_bury_${userId}`) {
+        const { buryAllDead } = require('./livestock');
+        const result = buryAllDead(userId);
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        return interaction.reply({ content: `⚰️ **${result.count}** ayam mati telah dikubur. Slot kandang dibebaskan.`, ephemeral: true });
+    }
     if (customId === `farm_coop_shop_${userId}`) {
         // Show full coop shop with input buttons
         const userData2 = getOrCreateUser(null, userId);
@@ -516,6 +528,12 @@ async function handleLivestockButton(interaction) {
         const result = upgradeBarnLevel(userId);
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         return interaction.reply({ content: `⬆️ Peternakan upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
+    }
+    if (customId === `farm_barn_bury_${userId}`) {
+        const { buryAllDead } = require('./livestock');
+        const result = buryAllDead(userId);
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        return interaction.reply({ content: `⚰️ **${result.count}** hewan mati telah dikubur. Slot kandang dibebaskan.`, ephemeral: true });
     }
     if (customId === `farm_barn_shop_${userId}`) {
         const userData2 = getOrCreateUser(null, userId);

@@ -38,7 +38,7 @@ const ANIMALS = {
         expPerCollect: 5,
         feedItem: 'chicken_feed', feedName: 'Pakan Ayam',
         medicineItem: 'chicken_medicine', medicineName: 'Obat Ayam',
-        daysToSick: 3, daysTodie: 2,
+        daysToSick: 5, daysTodie: 3, // 5 days no food → sick, 3 more days → dead (8 total)
     },
     cow: {
         id: 'cow', name: 'Sapi', emoji: '🐄',
@@ -51,7 +51,7 @@ const ANIMALS = {
         expPerCollect: 8,
         feedItem: 'cow_feed', feedName: 'Pakan Sapi',
         medicineItem: 'cow_medicine', medicineName: 'Obat Sapi',
-        daysToSick: 3, daysTodie: 2,
+        daysToSick: 5, daysTodie: 3,
     },
     sheep: {
         id: 'sheep', name: 'Domba', emoji: '🐑',
@@ -64,7 +64,7 @@ const ANIMALS = {
         expPerCollect: 6,
         feedItem: 'sheep_feed', feedName: 'Pakan Domba',
         medicineItem: 'sheep_medicine', medicineName: 'Obat Domba',
-        daysToSick: 3, daysTodie: 2,
+        daysToSick: 5, daysTodie: 3,
     },
 };
 

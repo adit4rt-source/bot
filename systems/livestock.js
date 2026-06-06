@@ -270,13 +270,32 @@ function sellAllProducts(userId) {
 
 function getHungerPercent(animal) {
     if (!animal.lastFed) return 0;
-    const lastFedTime = typeof animal.lastFed === 'string' ? new Date(animal.lastFed).getTime() : parseInt(animal.lastFed);
+    const lastFedTime = typeof animal.lastFed === 'string' 
+        ? (isNaN(Number(animal.lastFed)) ? new Date(animal.lastFed).getTime() : parseInt(animal.lastFed))
+        : parseInt(animal.lastFed);
     if (isNaN(lastFedTime)) return 0;
     const elapsed = Date.now() - lastFedTime;
     const hoursElapsed = elapsed / (1000 * 60 * 60);
-    // Turun 10% per jam, minimum 0%
-    const hunger = Math.max(0, Math.floor(100 - (hoursElapsed * 10)));
+    // Turun 5% per jam (full → 0% dalam 20 jam) — lebih forgiving
+    const hunger = Math.max(0, Math.floor(100 - (hoursElapsed * 5)));
     return hunger;
+}
+
+// Fungsi untuk kubur hewan mati (hapus dari DB, bebaskan slot)
+function buryAnimal(userId, animalId) {
+    const animal = db.prepare('SELECT * FROM livestock WHERE id = ? AND userId = ?').get(animalId, userId);
+    if (!animal) return { error: 'Hewan tidak ditemukan!' };
+    if (animal.status !== 'dead') return { error: 'Hewan ini belum mati!' };
+    const name = animal.name || ANIMALS[animal.animalType]?.name || 'Hewan';
+    db.prepare('DELETE FROM livestock WHERE id = ?').run(animalId);
+    return { success: true, name, level: animal.level };
+}
+
+function buryAllDead(userId) {
+    const dead = db.prepare("SELECT * FROM livestock WHERE userId = ? AND status = 'dead'").all(userId);
+    if (dead.length === 0) return { error: 'Tidak ada hewan mati!' };
+    db.prepare("DELETE FROM livestock WHERE userId = ? AND status = 'dead'").run(userId);
+    return { success: true, count: dead.length };
 }
 
 function feedAnimals(userId, animalType) {
@@ -430,4 +449,5 @@ module.exports = {
     feedAnimals, getHungerPercent, healAnimal, healAll,
     evolveAnimal, processDailyLivestock,
     getProductInventory, getProductCount,
+    buryAnimal, buryAllDead,
 };
