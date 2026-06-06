@@ -8,6 +8,7 @@ const { addComboFeature } = require('./combo');
 const { updateQuestProgress } = require('./quests');
 const state = require('../state');
 const { fishCooldowns, activeCoinflips } = state;
+const ui = require('./ui');
 
 // Roulette constants
 const RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
@@ -23,25 +24,28 @@ function buildCasinoPanel(guildId, userId, username) {
     const jackpots = getUserStat(guildId, userId, 'slot_jackpot_7_count') || 0;
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83c\udfb0 CASINO \u2014 ${username}`)
-        .setColor('#FFD700')
+        .setTitle(ui.title('🎰', 'CASINO', username))
+        .setColor(ui.COLORS.casino)
         .setDescription(
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
-            `\ud83d\udcb0 Saldo: \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**\n` +
-            `\ud83c\udfb2 Total Wins: **${totalWins}** | \ud83c\udfc6 Jackpots: **${jackpots}**\n` +
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
-            `Pilih permainan:\n\n` +
-            `> \ud83e\ude99 **Coinflip** \u2014 Tebak sisi koin (2x)\n` +
-            `> \ud83c\udfb0 **Slot** \u2014 Putar mesin slot (max 25x)\n` +
-            `> \ud83c\udfaf **Roulette** \u2014 Tebak warna/angka (max 36x)`
+            ui.statBlock([
+                `${ui.money(userData.balance)}`,
+                `🎲 Total Wins: **${totalWins}**  •  🏆 Jackpots: **${jackpots}**`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '🪙', label: 'Coinflip', desc: 'Tebak sisi koin — menang 2x' },
+                { emoji: '🎰', label: 'Slot', desc: 'Putar mesin slot — max 25x' },
+                { emoji: '🎯', label: 'Roulette', desc: 'Tebak warna/angka — max 14x' },
+            ]) +
+            `\n\n> ⚠️ *Main dengan bijak — gambling bisa bikin rugi!*`
         )
-        .setFooter({ text: 'Pilih game di bawah untuk bermain!' })
+        .setFooter({ text: ui.footer('Pilih game di bawah untuk bermain!') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('\ud83e\ude99 Coinflip').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('\ud83c\udfb0 Slot').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('\ud83c\udfaf Roulette').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('🪙 Coinflip').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('🎰 Slot').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('🎯 Roulette').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [row] };

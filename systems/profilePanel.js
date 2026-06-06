@@ -9,24 +9,23 @@ const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings } = require('./notifications');
 const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles } = require('./titles');
+const ui = require('./ui');
 
 
 // ============ BUILD: Main Profile Panel ============
 function buildProfilePanel(guildId, userId, username, member) {
     const userData = getOrCreateUser(guildId, userId);
     const targetXp = (userData.level + 1) * 100;
-    const percent = Math.min(100, Math.floor((userData.xp / targetXp) * 100));
-    const progressBar = '\u25b0'.repeat(Math.floor(percent / 10)) + '\u25b1'.repeat(10 - Math.floor(percent / 10));
 
     const sData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
     const streakCount = sData ? sData.count : 0;
-    const streakEmoji = getSetting(guildId, 'streak_emoji', '\ud83d\udd25');
+    const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
     const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
     const totalBadges = userAchs.length;
 
     const activePet = getPetData(guildId, userId);
-    const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level})` : '\ud83d\udc3e Pet'; })() : '*Belum punya pet*';
+    const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level})` : '🐾 Pet'; })() : '*Belum punya pet*';
 
     const fishCaught = getUserStat(guildId, userId, 'total_fish_caught') || 0;
     const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
@@ -35,39 +34,38 @@ function buildProfilePanel(guildId, userId, username, member) {
     // Get achievement title
     const achievementTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'achievement_title');
     const achievementTitle = achievementTitleRow ? achievementTitleRow.stat_value : null;
-    const titleLine = achievementTitle ? `\n\ud83c\udfc6 **Title:** ${achievementTitle}` : '';
+    const titleLine = achievementTitle ? `\n🏆 **Title:** ${achievementTitle}` : '';
 
     // Get rank title from score
     const rankTitle = getUserTitle(guildId, userId);
     const titleProgress = getTitleProgress(guildId, userId);
     const rankLine = `\n${rankTitle.emoji} **Rank:** ${rankTitle.name}`;
-    const progressLine = titleProgress.next 
+    const progressLine = titleProgress.next
         ? `\n> ${formatProgressBar(titleProgress.progress)} ${titleProgress.progress}% → ${titleProgress.next.emoji} ${titleProgress.next.name} (${titleProgress.remaining.toLocaleString('id-ID')} pts lagi)`
         : `\n> ${formatProgressBar(100)} **MAX RANK!** ⭐ ${titleProgress.score.toLocaleString('id-ID')} pts`;
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83d\udccb PROFIL \u2014 ${username}`)
-        .setColor(rankTitle.color || '#2B2D31')
+        .setTitle(ui.title('📋', 'PROFIL', username))
+        .setColor(rankTitle.color || ui.COLORS.profile)
         .setThumbnail(member ? member.displayAvatarURL({ dynamic: true, size: 256 }) : null)
         .setDescription(
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
-            `\ud83c\udfc5 **Level** \`${userData.level}\` \u2014 \ud83d\udcb0 **Saldo** \`${userData.balance.toLocaleString('id-ID')}\`\n` +
-            `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}${rankLine}${progressLine}\n\n` +
-            `\u2728 **EXP:** \`${progressBar}\` **${percent}%** (${userData.xp}/${targetXp})\n\n` +
-            `\ud83c\udfc6 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}\n` +
-            `\ud83d\udc3e **Pet:** ${petInfo}\n` +
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
-            `> \ud83c\udfa3 Ikan: **${fishCaught}** | \ud83c\udf3e Panen: **${harvests}** | \ud83d\udccb Quest: **${questsDone}**`
+            ui.statBlock([
+                `🏅 **Level** \`${userData.level}\`  •  ${ui.money(userData.balance)}`,
+                `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}${rankLine}${progressLine}`,
+                `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})`,
+                `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}  •  🐾 **Pet:** ${petInfo}`,
+            ]) +
+            `\n> 🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**`
         )
-        .setFooter({ text: 'Pilih menu di bawah untuk detail' })
+        .setFooter({ text: ui.footer('Pilih menu di bawah untuk detail') })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('\ud83c\udfc6 Achievement').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('\ud83c\udf92 Inventory').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_rank_${userId}`).setLabel('\ud83c\udfc5 Rank').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('\ud83d\udcca Stats').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('\ud83d\udd14 Notifs').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('🏆 Achievement').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('🎒 Inventory').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`profpnl_rank_${userId}`).setLabel('🏅 Rank').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('🔔 Notifs').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1] };
