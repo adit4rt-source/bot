@@ -5,6 +5,8 @@ node_modules/
 economy.sqlite
 *.sqlite
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # Environment / secrets
 .env

@@ -5,6 +5,21 @@ const path = require('path');
 
 const _rawDb = new Database('economy.sqlite');
 
+// ================= PRAGMA TUNING =================
+// WAL lets reads and writes proceed concurrently (readers don't block the writer
+// and vice versa), which suits a bot doing many small interleaved queries.
+// NORMAL sync is the safe+fast pairing with WAL. The rest reduce disk round-trips.
+try {
+    _rawDb.pragma('journal_mode = WAL');
+    _rawDb.pragma('synchronous = NORMAL');
+    _rawDb.pragma('foreign_keys = ON');
+    _rawDb.pragma('busy_timeout = 5000');   // wait up to 5s on a locked DB instead of throwing
+    _rawDb.pragma('cache_size = -16000');   // ~16MB page cache (negative = KiB)
+    _rawDb.pragma('temp_store = MEMORY');
+} catch (e) {
+    console.error('PRAGMA tuning failed (continuing with defaults):', e.message);
+}
+
 // ================= GLOBAL-MODE DB PROXY =================
 const GLOBAL_TABLES = new Set([
     'users', 'user_stats', 'achievements', 'pets', 'relics',

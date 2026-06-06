@@ -168,12 +168,21 @@ function computeSeasonalScores(seasonId) {
 
 function getSeasonalLeaderboard(limit = 10) {
     const seasonId = ensureSeason();
-    return { seasonId, entries: computeSeasonalScores(seasonId).slice(0, limit) };
+    const cache = require('./cache');
+    // The 10 GROUP-BY scans are identical for all viewers; cache the full sorted
+    // standings for 45s. Slicing per-call is cheap.
+    const all = cache.getOrCompute(`season:scores:${seasonId}`, 45 * 1000, () =>
+        computeSeasonalScores(seasonId)
+    );
+    return { seasonId, entries: all.slice(0, limit) };
 }
 
 function getUserSeasonalScore(userId) {
     const seasonId = ensureSeason();
-    const all = computeSeasonalScores(seasonId);
+    const cache = require('./cache');
+    const all = cache.getOrCompute(`season:scores:${seasonId}`, 45 * 1000, () =>
+        computeSeasonalScores(seasonId)
+    );
     const idx = all.findIndex(e => e.userId === userId);
     if (idx === -1) return { seasonId, score: 0, rank: null, total: all.length };
     return { seasonId, score: all[idx].score, rank: idx + 1, total: all.length };

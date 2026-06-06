@@ -38,6 +38,19 @@ function streakFire(count) {
 
 // ==================== BUILD LEADERBOARD EMBED ====================
 function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
+    // The heavy part is the data computation (the switch below), which is identical
+    // for every viewer of the same (kategori, scope, guild). Cache that for 45s.
+    // The buttons (per-user customIds) and timestamp are rebuilt cheaply per call.
+    const cache = require('./cache');
+    const cacheKey = `lb:${isGlobal ? 'g' : 's'}:${isGlobal ? 'GLOBAL' : guildId}:${kategori}`;
+    const content = cache.getOrCompute(cacheKey, 45 * 1000, () =>
+        computeLeaderboardContent(guildId, kategori, isGlobal)
+    );
+    return renderLeaderboard(content, kategori, userId, isGlobal);
+}
+
+// Computes only the data-heavy { title, desc, color, scopeLabel } for a leaderboard.
+function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
     let title, desc = '', color = '#FFD700';
     const scopePrefix = isGlobal ? '🌍 ' : '📍 ';
     const scopeLabel = isGlobal ? 'Global' : 'Server';
@@ -332,6 +345,13 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
     }
 
     if (!desc || desc.trim() === `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`) desc = '```\n  Belum ada data. Mulai bermain!\n```';
+
+    return { title, desc, color, scopeLabel };
+}
+
+// Builds the embed + navigation buttons from precomputed content (cheap, per-call).
+function renderLeaderboard(content, kategori, userId, isGlobal = false) {
+    const { title, desc, color, scopeLabel } = content;
 
     const embed = new EmbedBuilder()
         .setTitle(title)
