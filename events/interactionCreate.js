@@ -21,7 +21,7 @@ const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmMod
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
-const { handleEconomyPanelCommand, handleEconomyButton, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelModal } = require('../systems/economyPanel');
+const { handleEconomyPanelCommand, handleEconomyButton, handleEconomySelect, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelSelect, isEconomyPanelModal } = require('../systems/economyPanel');
 const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
 const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTradeModal, isTradePanelButton, isTradePanelSelectMenu, isTradePanelModal } = require('../systems/tradePanel');
@@ -665,6 +665,16 @@ async function routeInteraction(interaction) {
 
     }
 
+
+    // ================= USER SELECT MENU HANDLERS =================
+    // UserSelectMenu is distinct from StringSelectMenu in discord.js v14.
+    if (interaction.isUserSelectMenu && interaction.isUserSelectMenu()) {
+        // --- ECONOMY PANEL: gift recipient picker ---
+        if (isEconomyPanelSelect(interaction.customId)) {
+            return handleEconomySelect(interaction);
+        }
+        return; // no other user-select menus yet
+    }
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {

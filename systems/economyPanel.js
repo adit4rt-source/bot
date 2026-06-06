@@ -1,5 +1,5 @@
 // systems/economyPanel.js - Economy Panel UI System (Button-based navigation)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat } = require('../database');
 const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
@@ -123,14 +123,26 @@ async function handleEconomyButton(interaction) {
         return interaction.update(panel);
     }
 
-    // === GIFT (modal) ===
+    // === GIFT (step 1: pick recipient via dropdown — no more typing User ID) ===
     if (action === 'gift') {
-        const modal = new ModalBuilder().setCustomId(`ecopnl_modal_gift_${userId}`).setTitle('\ud83c\udf81 Gift Money');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('gift_target').setLabel('User ID penerima').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan user > Copy ID')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('gift_amount').setLabel('Jumlah (Max: 10,000)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: 1000'))
+        const embed = new EmbedBuilder()
+            .setTitle(ui.title('💸', 'Gift Money'))
+            .setColor(ui.COLORS.economy)
+            .setDescription(
+                `Pilih **siapa** yang mau kamu kasih money dari menu di bawah 👇\n\n` +
+                `> 1️⃣ Pilih penerima dari daftar\n` +
+                `> 2️⃣ Nanti kamu tinggal isi jumlahnya\n\n` +
+                `> 💡 *Kena pajak ${Math.round(GIFT_TAX_RATE * 100)}% (kecuali punya Tax-Free Voucher). Max ${GIFT_MAX_PER_TRANSACTION.toLocaleString('id-ID')}/kirim.*`
+            )
+            .setFooter({ text: ui.footer('Tinggal klik nama — nggak perlu copy User ID lagi!') });
+        const selectRow = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId(`ecopnl_giftpick_${userId}`)
+                .setPlaceholder('🎁 Pilih penerima gift...')
+                .setMinValues(1).setMaxValues(1)
         );
-        return interaction.showModal(modal);
+        const backRow = ui.backRow(`ecopnl_back_${userId}`);
+        return interaction.update({ embeds: [embed], components: [selectRow, backRow] });
     }
 
     // === REDEEM (modal) ===
@@ -172,6 +184,44 @@ async function handleEconomyButton(interaction) {
 }
 
 
+// ============ HANDLER: Economy panel user-select (gift recipient picker) ============
+async function handleEconomySelect(interaction) {
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '\u274c Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    // === GIFT: recipient picked → ask amount via modal ===
+    if (parts[1] === 'giftpick') {
+        const targetId = interaction.values[0];
+        if (targetId === userId) {
+            return interaction.reply({ content: '\u274c Tidak bisa kirim gift ke diri sendiri! Pilih orang lain.', ephemeral: true });
+        }
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (targetMember && targetMember.user.bot) {
+            return interaction.reply({ content: '\u274c Tidak bisa kirim gift ke bot! Pilih pemain lain.', ephemeral: true });
+        }
+        // Show a small modal asking only for the amount; recipient is encoded in the customId.
+        const modal = new ModalBuilder()
+            .setCustomId(`ecopnl_modal_giftamount_${targetId}_${userId}`)
+            .setTitle('🎁 Kirim Gift');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('gift_amount')
+                    .setLabel(`Jumlah money (max ${GIFT_MAX_PER_TRANSACTION.toLocaleString('id-ID')})`)
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+                    .setPlaceholder('Contoh: 1000')
+            )
+        );
+        return interaction.showModal(modal);
+    }
+}
+
 // ============ HANDLER: Economy panel modal submissions ============
 async function handleEconomyModal(interaction) {
     const guildId = interaction.guild.id;
@@ -183,11 +233,12 @@ async function handleEconomyModal(interaction) {
         return interaction.reply({ content: '\u274c Ini bukan panel kamu!', ephemeral: true });
     }
 
-    // === GIFT MODAL ===
-    if (parts[2] === 'gift') {
-        const targetId = interaction.fields.getTextInputValue('gift_target').trim();
+    // === GIFT AMOUNT MODAL (recipient picked via dropdown, amount typed here) ===
+    if (parts[2] === 'giftamount') {
+        // customId: ecopnl_modal_giftamount_<targetId>_<userId>
+        const targetId = parts[3];
         const amount = parseInt(interaction.fields.getTextInputValue('gift_amount'));
-        if (!/^\d{16,20}$/.test(targetId)) return interaction.reply({ content: '\u274c User ID tidak valid! Klik kanan user > Copy ID.', ephemeral: true });
+        if (!/^\d{16,20}$/.test(targetId)) return interaction.reply({ content: '\u274c Penerima tidak valid. Coba ulangi dari tombol Gift.', ephemeral: true });
         return processGift(interaction, userId, targetId, amount);
     }
 
@@ -210,7 +261,11 @@ async function handleEconomyModal(interaction) {
 
 // ============ UTILITY: Detection helpers ============
 function isEconomyPanelButton(customId) {
-    return customId.startsWith('ecopnl_') && !customId.startsWith('ecopnl_modal_');
+    return customId.startsWith('ecopnl_') && !customId.startsWith('ecopnl_modal_') && !customId.startsWith('ecopnl_giftpick_');
+}
+
+function isEconomyPanelSelect(customId) {
+    return customId.startsWith('ecopnl_giftpick_');
 }
 
 function isEconomyPanelModal(customId) {
@@ -283,8 +338,10 @@ module.exports = {
     buildEconomyPanel,
     handleEconomyPanelCommand,
     handleEconomyButton,
+    handleEconomySelect,
     handleEconomyModal,
     handleGiftCommand,
     isEconomyPanelButton,
+    isEconomyPanelSelect,
     isEconomyPanelModal
 };
