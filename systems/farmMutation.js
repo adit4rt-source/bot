@@ -6,12 +6,15 @@ const { getRandomInt } = require('../utils');
 const { getWeatherMutationBonus } = require('./farmWeather');
 
 // ==================== MUTATION DATA ====================
-// Every crop can mutate into a "Golden" or "Crystal" version worth 10x-20x
+// Every crop can mutate into a "Golden" or "Crystal" version worth 10x-25x.
+// Mutations are meant to be a RARE, exciting bonus — total base chance ~4%
+// (was ~10.4%, which made mutations the dominant farming income). Multipliers
+// kept the same; only the rarity was tightened.
 const MUTATION_TYPES = [
-    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 10, chance: 0.05, color: '#FFD700' },
-    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 20, chance: 0.02, color: '#B9F2FF' },
-    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 15, chance: 0.03, color: '#2C2F33' },
-    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 25, chance: 0.008, color: '#FF69B4' },
+    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 10, chance: 0.020, color: '#FFD700' },
+    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 20, chance: 0.006, color: '#B9F2FF' },
+    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 15, chance: 0.012, color: '#2C2F33' },
+    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 25, chance: 0.0025, color: '#FF69B4' },
 ];
 
 // ==================== PRESTIGE CROPS ====================
@@ -53,14 +56,22 @@ db.exec(`CREATE TABLE IF NOT EXISTS crop_rotation (
 
 // ==================== ROLL MUTATION ====================
 function rollMutation(guildId, userId, seedLevel = 0) {
-    const weatherBonus = getWeatherMutationBonus();
+    const weatherBonus = getWeatherMutationBonus();      // e.g. 0.05 (foggy) / 0.10 (rainbow)
     const seedUpgrade = SEED_UPGRADES[seedLevel] || SEED_UPGRADES[0];
-    const seedBonus = seedUpgrade.mutationBonus;
+    const seedBonus = seedUpgrade.mutationBonus;          // e.g. 0.02 .. 0.10
+    const extra = weatherBonus + seedBonus;               // flat bonus to the TOTAL chance
+
+    // Bug fix: the old code added `extra` to EVERY tier, so a +10% rainbow bonus
+    // turned four ~2% tiers into ~12% each (~42% total!). Instead we add the bonus
+    // to the TOTAL once and distribute it proportionally across tiers, preserving
+    // their rarity ratios. So "+10% mutation chance" honestly means total ~4% -> ~14%.
+    const baseTotal = MUTATION_TYPES.reduce((s, m) => s + m.chance, 0);
+    const scale = baseTotal > 0 ? (baseTotal + extra) / baseTotal : 1;
 
     // Try each mutation type (rarest first)
     const sorted = [...MUTATION_TYPES].sort((a, b) => a.chance - b.chance);
     for (const mutation of sorted) {
-        const totalChance = mutation.chance + weatherBonus + seedBonus;
+        const totalChance = mutation.chance * scale;
         if (Math.random() < totalChance) {
             return mutation;
         }
