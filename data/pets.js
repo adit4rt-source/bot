@@ -109,7 +109,17 @@ const PET_DATA = [
     { id: 'quetzalcoatl', name: 'Quetzalcoatl', emoji: '🐉', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
     { id: 'nine_tails', name: 'Nine-Tailed Fox', emoji: '🦊', tier: 'Mythic', price: 0, bonus: { type: 'event_luck', value: 25 } },
     { id: 'cerberus', name: 'Cerberus', emoji: '🐕', tier: 'Mythic', price: 0, bonus: { type: 'money_all', value: 25 } },
-    { id: 'leviathan_pet', name: 'Leviathan', emoji: '🐋', tier: 'Mythic', price: 0, bonus: { type: 'fish_luck', value: 30 } }
+    { id: 'leviathan_pet', name: 'Leviathan', emoji: '🐋', tier: 'Mythic', price: 0, bonus: { type: 'fish_luck', value: 30 } },
+    // SECRET (5 pets — ultra rare, only from Mythic Egg jackpot)
+    { id: 'shadow_monarch', name: 'Shadow Monarch', emoji: '👤', tier: 'Secret', price: 0, bonus: { type: 'all_reward', value: 35 } },
+    { id: 'astral_serpent', name: 'Astral Serpent', emoji: '🌌', tier: 'Secret', price: 0, bonus: { type: 'all_reward', value: 35 } },
+    { id: 'chrono_phoenix', name: 'Chrono Phoenix', emoji: '🦅', tier: 'Secret', price: 0, bonus: { type: 'xp_all', value: 40 } },
+    { id: 'abyss_kraken', name: 'Abyss Kraken', emoji: '🦑', tier: 'Secret', price: 0, bonus: { type: 'fish_luck', value: 45 } },
+    { id: 'prism_unicorn', name: 'Prism Unicorn', emoji: '🦄', tier: 'Secret', price: 0, bonus: { type: 'money_all', value: 40 } },
+    // GOD (3 pets — the absolute rarest, near-impossible jackpot)
+    { id: 'creator_dragon', name: 'Creator Dragon', emoji: '🐉', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 60 } },
+    { id: 'cosmic_deity', name: 'Cosmic Deity', emoji: '✨', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 60 } },
+    { id: 'omega_god', name: 'Omega (The All)', emoji: '🌠', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 75 } }
 ];
 
 const PET_FOODS = [
@@ -124,7 +134,8 @@ const PET_EGGS = [
     { id: 'common_egg', name: 'Common Egg', emoji: '🥚', price: 2000, rates: { Common: 60, Uncommon: 30, Rare: 10 } },
     { id: 'rare_egg', name: 'Rare Egg', emoji: '🥚', price: 10000, rates: { Uncommon: 35, Rare: 40, Epic: 20, Legendary: 5 } },
     { id: 'legendary_egg', name: 'Legendary Egg', emoji: '🥚', price: 50000, rates: { Rare: 25, Epic: 40, Legendary: 25, Mythic: 10 } },
-    { id: 'mythic_egg', name: 'Mythic Egg', emoji: '🌟', price: 150000, rates: { Epic: 30, Legendary: 45, Mythic: 25 } }
+    { id: 'mythic_egg', name: 'Mythic Egg', emoji: '🌟', price: 150000, rates: { Epic: 28, Legendary: 45, Mythic: 25, Secret: 2 } },
+    { id: 'celestial_egg', name: 'Celestial Egg', emoji: '🌌', price: 500000, rates: { Legendary: 40, Mythic: 45, Secret: 14, God: 1 } }
 ];
 
 const PET_CLASSES = ['warrior', 'tank', 'mage', 'ranger', 'healer'];

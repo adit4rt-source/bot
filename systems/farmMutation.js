@@ -7,14 +7,15 @@ const { getWeatherMutationBonus } = require('./farmWeather');
 
 // ==================== MUTATION DATA ====================
 // Every crop can mutate into a "Golden" or "Crystal" version worth 10x-25x.
-// Mutations are meant to be a RARE, exciting bonus — total base chance ~4%
-// (was ~10.4%, which made mutations the dominant farming income). Multipliers
-// kept the same; only the rarity was tightened.
+// Mutations are a VERY RARE jackpot bonus — total base chance ~2% (tightened
+// again from ~4%). Multipliers unchanged. NOTE: any flavor text shown to players
+// elsewhere may quote higher "chance %" numbers — those are cosmetic hype, not
+// the real odds defined here.
 const MUTATION_TYPES = [
-    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 10, chance: 0.020, color: '#FFD700' },
-    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 20, chance: 0.006, color: '#B9F2FF' },
-    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 15, chance: 0.012, color: '#2C2F33' },
-    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 25, chance: 0.0025, color: '#FF69B4' },
+    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 10, chance: 0.010, color: '#FFD700' },
+    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 20, chance: 0.003, color: '#B9F2FF' },
+    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 15, chance: 0.006, color: '#2C2F33' },
+    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 25, chance: 0.0012, color: '#FF69B4' },
 ];
 
 // ==================== PRESTIGE CROPS ====================

@@ -452,10 +452,10 @@ async function handlePetButton(interaction) {
     // === PET DEX (Catalog semua pet per tier) ===
     if (action === 'dex') {
         const tier = parts[2]; // pet_dex_TIER_userId
-        const validTiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const validTiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
         const currentTier = validTiers.includes(tier) ? tier : 'Common';
-        const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF1493' };
-        const tierEmojis = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴' };
+        const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF1493', Secret: '#8B00FF', God: '#FF0000' };
+        const tierEmojis = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴', Secret: '🟪', God: '👑' };
 
         // Get all pets of this tier
         const tierPets = PET_DATA.filter(p => p.tier === currentTier);
@@ -816,16 +816,26 @@ async function handlePetSelectMenu(interaction) {
         updateQuestProgress(guildId, userId, 'spend_money', egg.price);
         let roll = Math.random() * 100, cumulative = 0, selectedTier = 'Common';
         for (const [tier, rate] of Object.entries(egg.rates)) { cumulative += rate; if (roll <= cumulative) { selectedTier = tier; break; } }
-        const tierPets = PET_DATA.filter(p => p.tier === selectedTier);
+        let tierPets = PET_DATA.filter(p => p.tier === selectedTier);
+        // Safety: if a tier somehow has no pets (or rates don't reach 100), fall back
+        // to the lowest tier in this egg so the player still gets a pet (no money lost).
+        if (tierPets.length === 0) {
+            const firstTier = Object.keys(egg.rates)[0] || 'Common';
+            selectedTier = firstTier;
+            tierPets = PET_DATA.filter(p => p.tier === selectedTier);
+            if (tierPets.length === 0) tierPets = PET_DATA.filter(p => p.tier === 'Common');
+        }
         const wonPet = tierPets[Math.floor(Math.random() * tierPets.length)];
         const isFirst = allPets.length === 0 ? 1 : 0;
         const stats = generatePetStats(selectedTier);
         const pClass = PET_CLASSES[Math.floor(Math.random() * PET_CLASSES.length)];
         const pElement = PET_ELEMENTS[Math.floor(Math.random() * PET_ELEMENTS.length)];
         db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt, class, element, hp, atk, def, spd, crit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, wonPet.id, wonPet.name, isFirst, Date.now(), pClass, pElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit);
-        const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B' };
+        const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B', Secret: '#8B00FF', God: '#FF0000' };
         let title = '🥚 Egg Hatched!';
-        if (selectedTier === 'Mythic') title = '🌟✨ MYTHIC PET!!! ✨🌟';
+        if (selectedTier === 'God') title = '👑🌠 G O D   P E T !!!! 🌠👑';
+        else if (selectedTier === 'Secret') title = '🟪🔮 SECRET PET!!! 🔮🟪';
+        else if (selectedTier === 'Mythic') title = '🌟✨ MYTHIC PET!!! ✨🌟';
         else if (selectedTier === 'Legendary') title = '⭐ LEGENDARY PET! ⭐';
         else if (selectedTier === 'Epic') title = '💜 EPIC PET! 💜';
         const embed = new EmbedBuilder().setColor(tierColors[selectedTier] || '#2B2D31').setTitle(title)

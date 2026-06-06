@@ -136,7 +136,7 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
             desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
             data.forEach((u, i) => {
                 const pd = PET_DATA.find(p => p.id === u.petId);
-                const tierColor = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴' }[pd?.tier] || '⚪';
+                const tierColor = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴', Secret: '🟪', God: '👑' }[pd?.tier] || '⚪';
                 desc += `${medal(i)} <@${u.userId}>\n`;
                 desc += `> ${pd ? pd.emoji : '🐾'} **${u.name}** ${tierColor} Lv.**${u.level}** | ⚔️${u.atk} 🛡️${u.def}\n\n`;
             });

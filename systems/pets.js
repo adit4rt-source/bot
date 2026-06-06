@@ -4,7 +4,7 @@ const { PET_DATA, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, PET_EVOLUTIONS, P
 const { getRandomInt } = require('../utils');
 
 function generatePetStats(tier) {
-    const ranges = { Common:[60,100,10,25,5,15,5,12,3,8], Uncommon:[80,130,15,30,8,18,7,15,4,10], Rare:[100,160,20,40,10,25,10,20,5,12], Epic:[130,200,30,55,15,35,12,25,7,15], Legendary:[160,250,40,70,20,45,15,30,8,18], Mythic:[200,300,50,85,25,55,18,35,10,20] };
+    const ranges = { Common:[60,100,10,25,5,15,5,12,3,8], Uncommon:[80,130,15,30,8,18,7,15,4,10], Rare:[100,160,20,40,10,25,10,20,5,12], Epic:[130,200,30,55,15,35,12,25,7,15], Legendary:[160,250,40,70,20,45,15,30,8,18], Mythic:[200,300,50,85,25,55,18,35,10,20], Secret:[280,400,70,110,35,70,25,45,15,28], God:[400,550,100,150,50,90,35,60,22,38] };
     const r = ranges[tier] || ranges['Common'];
     return { hp: getRandomInt(r[0],r[1]), atk: getRandomInt(r[2],r[3]), def: getRandomInt(r[4],r[5]), spd: getRandomInt(r[6],r[7]), crit: getRandomInt(r[8],r[9]) };
 }

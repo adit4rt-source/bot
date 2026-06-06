@@ -17,10 +17,12 @@ const FUSION_CONFIG = {
     'Rare': { cost: 30000, successRate: 60, resultTier: 'Epic' },
     'Epic': { cost: 80000, successRate: 45, resultTier: 'Legendary' },
     'Legendary': { cost: 200000, successRate: 30, resultTier: 'Mythic' },
+    'Mythic': { cost: 600000, successRate: 15, resultTier: 'Secret' },
+    'Secret': { cost: 2000000, successRate: 6, resultTier: 'God' },
 };
 
-// Fusion cannot upgrade Mythic (already max tier)
-const FUSABLE_TIERS = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+// Fusion cannot upgrade God (already the absolute max tier)
+const FUSABLE_TIERS = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
 
 // ==================== DATABASE ====================
 db.exec(`CREATE TABLE IF NOT EXISTS fusion_history (
