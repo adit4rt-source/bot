@@ -11,6 +11,27 @@ const { getNotifSettings } = require('./notifications');
 const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles } = require('./titles');
 const ui = require('./ui');
 
+// ============ HELPER: Safe emoji for select-menu options ============
+// Discord's .setEmoji() only accepts ONE unicode emoji or a <:name:id> custom
+// emoji. Some items store a combined two-emoji string (e.g. '🛡️✨') in `emoji`,
+// which throws a shapeshift UnionValidator error. Prefer the single `menuEmoji`,
+// and only apply it if it looks valid; otherwise skip the emoji entirely.
+function applyMenuEmoji(option, def) {
+    const candidate = def.menuEmoji || def.emoji;
+    if (!candidate || typeof candidate !== 'string') return option;
+    // Custom emoji format <:name:id> / <a:name:id>
+    if (/^<a?:\w+:\d+>$/.test(candidate)) return option.setEmoji(candidate);
+    // Single unicode emoji: use Intl segmenter to count grapheme clusters when available.
+    let graphemes;
+    try {
+        graphemes = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(candidate)].length;
+    } catch (e) {
+        graphemes = Array.from(candidate).length; // fallback (rough)
+    }
+    if (graphemes !== 1) return option; // multi-emoji or weird string → skip emoji
+    try { return option.setEmoji(candidate); } catch (e) { return option; }
+}
+
 
 // ============ BUILD: Main Profile Panel ============
 function buildProfilePanel(guildId, userId, username, member) {
@@ -167,11 +188,10 @@ async function handleProfileButton(interaction) {
             usableItems.slice(0, 25).forEach(inv => {
                 const def = ITEMS.find(i => i.id === inv.itemId);
                 if (!def) return;
-                useMenu.addOptions(new StringSelectMenuOptionBuilder()
+                useMenu.addOptions(applyMenuEmoji(new StringSelectMenuOptionBuilder()
                     .setLabel(`${def.name} (x${inv.quantity})`)
                     .setValue(def.id)
-                    .setDescription(def.desc.substring(0, 50))
-                    .setEmoji(def.emoji));
+                    .setDescription((def.desc || ' ').substring(0, 50)), def));
             });
             components.push(new ActionRowBuilder().addComponents(useMenu));
         }
@@ -217,11 +237,10 @@ async function handleProfileButton(interaction) {
                 .setMinValues(1).setMaxValues(1);
 
             craftableRecipes.forEach(recipe => {
-                craftMenu.addOptions(new StringSelectMenuOptionBuilder()
+                craftMenu.addOptions(applyMenuEmoji(new StringSelectMenuOptionBuilder()
                     .setLabel(recipe.name)
                     .setValue(recipe.id)
-                    .setDescription(recipe.desc.substring(0, 50))
-                    .setEmoji(recipe.emoji));
+                    .setDescription((recipe.desc || ' ').substring(0, 50)), recipe));
             });
             components.push(new ActionRowBuilder().addComponents(craftMenu));
         }
@@ -629,11 +648,10 @@ async function handleProfileSelectMenu(interaction) {
         usableItems.slice(0, 25).forEach(inv => {
             const def = ITEMS.find(i => i.id === inv.itemId);
             if (!def) return;
-            useMenu.addOptions(new StringSelectMenuOptionBuilder()
+            useMenu.addOptions(applyMenuEmoji(new StringSelectMenuOptionBuilder()
                 .setLabel(`${def.name} (x${inv.quantity})`)
                 .setValue(def.id)
-                .setDescription(def.desc.substring(0, 50))
-                .setEmoji(def.emoji));
+                .setDescription((def.desc || ' ').substring(0, 50)), def));
         });
         components.push(new ActionRowBuilder().addComponents(useMenu));
     }
