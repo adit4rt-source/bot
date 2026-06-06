@@ -22,6 +22,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS livestock (
 // Migrations
 try { db.exec(`ALTER TABLE livestock ADD COLUMN diesAt INTEGER`); } catch(e) {}
 try { db.exec(`ALTER TABLE livestock ADD COLUMN name TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE livestock ADD COLUMN rarity TEXT DEFAULT 'normal'`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS livestock_data (
     userId TEXT,
@@ -118,9 +119,17 @@ function buyAnimal(userId, type) {
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const lifespanDays = Math.floor(Math.random() * 19) + 2; // 2-20 days
     const diesAt = Date.now() + (lifespanDays * 24 * 60 * 60 * 1000);
-    db.prepare('INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt) VALUES (?, ?, 1, 0, 0, ?, ?, ?, ?, ?)').run(userId, type, 'healthy', String(Date.now()), Date.now(), Date.now(), diesAt);
 
-    return { success: true, type, price: animal.price };
+    // 5% chance Golden, 1% chance Diamond (rare animals produce faster)
+    const rarityRoll = Math.random() * 100;
+    let rarity = 'normal';
+    if (rarityRoll < 1) rarity = 'diamond';
+    else if (rarityRoll < 6) rarity = 'golden';
+
+    db.prepare('INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, ?, 1, 0, 0, ?, ?, ?, ?, ?, ?)').run(userId, type, 'healthy', String(Date.now()), Date.now(), Date.now(), diesAt, rarity);
+
+    const rarityMsg = rarity === 'diamond' ? ' 💎 **DIAMOND!** (3x produksi!)' : rarity === 'golden' ? ' ✨ **GOLDEN!** (2x produksi!)' : '';
+    return { success: true, type, price: animal.price, rarity, rarityMsg };
 }
 
 function upgradeCoopLevel(userId) {
@@ -177,7 +186,11 @@ function collectProducts(userId, animalType) {
 
         // Random yield based on tier (like tanaman)
         const [minY, maxY] = getYieldRange(animalType, animal.tier);
-        const yieldCount = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
+        let yieldCount = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
+
+        // Rarity bonus: Golden = 2x, Diamond = 3x yield
+        if (animal.rarity === 'golden') yieldCount *= 2;
+        else if (animal.rarity === 'diamond') yieldCount *= 3;
 
         // Roll quality for each product
         const qualityChances = getQualityChance(animal.tier);
