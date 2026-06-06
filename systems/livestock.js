@@ -19,8 +19,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS livestock (
     diesAt INTEGER
 )`);
 
-// Migration: add diesAt column if not exists
+// Migrations
 try { db.exec(`ALTER TABLE livestock ADD COLUMN diesAt INTEGER`); } catch(e) {}
+try { db.exec(`ALTER TABLE livestock ADD COLUMN name TEXT`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS livestock_data (
     userId TEXT,
@@ -218,6 +219,13 @@ function collectProducts(userId, animalType) {
         } else {
             db.prepare('INSERT INTO farm_storage (userId, itemId, quantity) VALUES (?, ?, ?)').run(userId, key, qty);
         }
+    }
+
+    // Track stat for leaderboard
+    if (totalCollected > 0) {
+        const { incrementUserStat } = require('../database');
+        const statKey = animalType === 'chicken' ? 'total_eggs_collected' : animalType === 'cow' ? 'total_milk_collected' : 'total_wool_collected';
+        incrementUserStat(null, userId, statKey, totalCollected);
     }
 
     return { success: true, totalCollected, totalExp, products };

@@ -34,15 +34,18 @@ function buildCoopPanel(userId, username) {
         const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' 💀';
 
         if (chicken.status === 'sick') {
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            const name = chicken.name || 'Ayam';
+            animalList += `\`[${i + 1}]\` 🐔 **${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
         } else if (isReady) {
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            const name = chicken.name || 'Ayam';
+            animalList += `\`[${i + 1}]\` 🐔 **${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
+            const name = chicken.name || 'Ayam';
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            animalList += `\`[${i + 1}]\` 🐔 **Ayam** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` 🐔 **${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -76,13 +79,18 @@ function buildCoopPanel(userId, username) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_coop_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_coop_upgrade_${userId}`).setLabel('⬆️ Upgrade Kandang').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_coop_sell_${userId}`).setLabel('💰 Sell Telur').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_coop_sellbird_${userId}`).setLabel('🐔 Jual Ayam').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`farm_coop_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_coop_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary)
+    );
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_coop_leaderboard_${userId}`).setLabel('🏆 Leaderboard').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_coop_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ============ BUILD: Barn Panel (Peternakan - Sapi & Domba) ============
@@ -330,6 +338,51 @@ async function handleLivestockButton(interaction) {
         const result = upgradeCoopLevel(userId);
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         return interaction.reply({ content: `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
+    }
+
+    // === RENAME AYAM ===
+    if (customId === `farm_coop_rename_${userId}`) {
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        if (chickens.length === 0) return interaction.reply({ content: '❌ Tidak punya ayam!', ephemeral: true });
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`farm_coop_modal_rename_${userId}`).setTitle('Rename Ayam');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('slot').setLabel('Nomor ayam (contoh: 1)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('name').setLabel('Nama baru (max 20 karakter)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20))
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === SELL AYAM (jual hewan) ===
+    if (customId === `farm_coop_sellbird_${userId}`) {
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        if (chickens.length === 0) return interaction.reply({ content: '❌ Tidak punya ayam!', ephemeral: true });
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`farm_coop_modal_sellbird_${userId}`).setTitle('Jual Ayam');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('slot').setLabel('Nomor ayam yang mau dijual (contoh: 3)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3))
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === LEADERBOARD TERNAK ===
+    if (customId === `farm_coop_leaderboard_${userId}`) {
+        // Top farmers by total eggs collected (stat: total_eggs_collected)
+        const topFarmers = db.prepare("SELECT userId, stat_value as total FROM user_stats WHERE stat_key = 'total_eggs_collected' ORDER BY stat_value DESC LIMIT 10").all();
+        let desc = '';
+        if (topFarmers.length === 0) {
+            desc = '*Belum ada data.*';
+        } else {
+            topFarmers.forEach((r, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**${i + 1}.**`;
+                desc += `${medal} <@${r.userId}> — 🥚 **${r.total.toLocaleString('id-ID')}** telur\n`;
+            });
+        }
+        const embed = new EmbedBuilder().setTitle('🏆 Leaderboard Ternak').setColor('#FFD700').setDescription(desc).setFooter({ text: 'Top 10 — Total telur yang pernah di-collect' });
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
     if (customId === `farm_coop_shop_${userId}`) {
         // Show full coop shop with input buttons
@@ -625,6 +678,34 @@ async function handleLivestockModal(interaction) {
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    // === RENAME AYAM MODAL ===
+    if (customId === `farm_coop_modal_rename_${userId}`) {
+        const slot = parseInt(interaction.fields.getTextInputValue('slot'));
+        const newName = interaction.fields.getTextInputValue('name').trim();
+        if (isNaN(slot) || slot < 1) return interaction.reply({ content: '❌ Nomor slot tidak valid!', ephemeral: true });
+        if (!newName || newName.length > 20) return interaction.reply({ content: '❌ Nama harus 1-20 karakter!', ephemeral: true });
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada! (Punya ${chickens.length} ayam)`, ephemeral: true });
+        const chicken = chickens[slot - 1];
+        db.prepare('UPDATE livestock SET name = ? WHERE id = ?').run(newName, chicken.id);
+        return interaction.reply({ content: `✏️ Ayam #${slot} renamed menjadi **${newName}**!`, ephemeral: true });
+    }
+
+    // === SELL BIRD MODAL ===
+    if (customId === `farm_coop_modal_sellbird_${userId}`) {
+        const slot = parseInt(interaction.fields.getTextInputValue('slot'));
+        if (isNaN(slot) || slot < 1) return interaction.reply({ content: '❌ Nomor slot tidak valid!', ephemeral: true });
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada!`, ephemeral: true });
+        const chicken = chickens[slot - 1];
+        // Sell price: base 1000 + (level * 100) + (tier * 3000)
+        const sellPrice = 1000 + (chicken.level * 100) + (chicken.tier * 3000);
+        const name = chicken.name || 'Ayam';
+        db.prepare('DELETE FROM livestock WHERE id = ?').run(chicken.id);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(sellPrice, userId);
+        return interaction.reply({ content: `🐔 **${name}** (Lv.${chicken.level}) terjual! 🪙 **+${sellPrice.toLocaleString('id-ID')}**`, ephemeral: true });
     }
 
     const qty = parseInt(interaction.fields.getTextInputValue('qty'));
