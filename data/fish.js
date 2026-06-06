@@ -102,9 +102,9 @@ const FISHING_LOCATIONS = [
     { id: 'void_rift', name: '🕳️ Void Rift', desc: 'Dimensi lain — penuh monster langka', requiredRodTier: 6, luckPenalty: 30, bonusRare: 20, tiers: ['Epic','Legendary','Mythic','Secret'], monsterChance: 0 },
     { id: 'abyss', name: '👁️ The Abyss', desc: 'Dimensi tersembunyi di bawah Void Rift — hanya pemancing elite', requiredRodTier: 7, luckPenalty: 35, bonusRare: 25, tiers: ['Epic','Legendary','Mythic','Secret'], isSecret: true, monsterChance: 0 },
     // === NEW ADVANCED LOCATIONS (with Sea Monsters!) ===
-    { id: 'celestial_ocean', name: '🌟 Celestial Ocean', desc: 'Lautan bintang — ikan dewa tapi penuh monster laut!', requiredRodTier: 9, luckPenalty: 40, bonusRare: 30, tiers: ['Legendary','Mythic','Secret','God'], monsterChance: 25 },
-    { id: 'primordial_depths', name: '💀 Primordial Depths', desc: 'Kedalaman purba — monster mematikan mengintai setiap cast!', requiredRodTier: 10, luckPenalty: 45, bonusRare: 35, tiers: ['Mythic','Secret','God'], monsterChance: 33 },
-    { id: 'god_realm', name: '👑 God Realm', desc: 'Dimensi para dewa — hanya yang paling kuat yang bertahan!', requiredRodTier: 11, luckPenalty: 50, bonusRare: 45, tiers: ['Secret','God'], monsterChance: 45 },
+    { id: 'celestial_ocean', name: '🌟 Celestial Ocean', desc: 'Lautan bintang — ikan dewa tapi penuh monster laut!', requiredRodTier: 9, luckPenalty: 40, bonusRare: 30, tiers: ['Epic','Legendary','Mythic','Secret','God'], monsterChance: 25 },
+    { id: 'primordial_depths', name: '💀 Primordial Depths', desc: 'Kedalaman purba — monster mematikan mengintai setiap cast!', requiredRodTier: 10, luckPenalty: 45, bonusRare: 35, tiers: ['Epic','Legendary','Mythic','Secret','God'], monsterChance: 33 },
+    { id: 'god_realm', name: '👑 God Realm', desc: 'Dimensi para dewa — hanya yang paling kuat yang bertahan!', requiredRodTier: 11, luckPenalty: 50, bonusRare: 45, tiers: ['Legendary','Mythic','Secret','God'], monsterChance: 45 },
 ];
 
 // ==================== FISH DATA (Location-Based) ====================
@@ -226,6 +226,8 @@ const FISH_DATA = [
     { id: 'star_eater', name: 'Star Eater', tier: 'Secret', emoji: '🌟', location: 'celestial_ocean' },
     { id: 'astral_leviathan', name: 'Astral Leviathan', tier: 'God', emoji: '🐉', location: 'celestial_ocean' },
     { id: 'heaven_whale', name: 'Heaven Whale', tier: 'God', emoji: '🐋', location: 'celestial_ocean' },
+    { id: 'comet_marlin', name: 'Comet Marlin', tier: 'Epic', emoji: '☄️', location: 'celestial_ocean' },
+    { id: 'stardust_tuna', name: 'Stardust Tuna', tier: 'Epic', emoji: '🌟', location: 'celestial_ocean' },
 
     // ===== PRIMORDIAL DEPTHS (💀) — HEAVY MONSTER LOCATION =====
     { id: 'ancient_titan_fish', name: 'Ancient Titan Fish', tier: 'Mythic', emoji: '🦕', location: 'primordial_depths' },
@@ -238,6 +240,8 @@ const FISH_DATA = [
     { id: 'creator_fish', name: 'Creator Fish', tier: 'God', emoji: '✝️', location: 'primordial_depths' },
     { id: 'destroyer_of_worlds', name: 'Destroyer of Worlds', tier: 'God', emoji: '💥', location: 'primordial_depths' },
     { id: 'primordial_god', name: 'Primordial God', tier: 'God', emoji: '🔱', location: 'primordial_depths' },
+    { id: 'tar_serpent', name: 'Tar Serpent', tier: 'Epic', emoji: '🛢️', location: 'primordial_depths' },
+    { id: 'fossil_ray', name: 'Fossil Ray', tier: 'Legendary', emoji: '🦴', location: 'primordial_depths' },
 
     // ===== GOD REALM (👑) — EXTREME MONSTER LOCATION =====
     { id: 'divine_koi', name: 'Divine Koi', tier: 'Secret', emoji: '🐟', location: 'god_realm' },
@@ -248,6 +252,8 @@ const FISH_DATA = [
     { id: 'alpha_leviathan', name: 'Alpha Leviathan', tier: 'God', emoji: '⚡', location: 'god_realm' },
     { id: 'eternal_one', name: 'The Eternal One', tier: 'God', emoji: '♾️', location: 'god_realm' },
     { id: 'origin_fish', name: 'Origin Fish', tier: 'God', emoji: '🌌', location: 'god_realm' },
+    { id: 'seraph_eel', name: 'Seraph Eel', tier: 'Legendary', emoji: '😇', location: 'god_realm' },
+    { id: 'cherub_koi', name: 'Cherub Koi', tier: 'Mythic', emoji: '👼', location: 'god_realm' },
 ];
 
 // ==================== ROD UPGRADE REQUIREMENTS ====================
