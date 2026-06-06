@@ -438,7 +438,7 @@ async function handleExpeditionButton(interaction) {
         );
 
         // Check achievements
-        checkAchievements(guildId, userId, interaction);
+        checkAchievements(interaction.guild, userId, {});
 
         return interaction.update({ embeds: [embed], components: [row] });
     }

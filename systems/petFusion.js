@@ -429,7 +429,7 @@ async function handleFusionButton(interaction) {
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
         );
 
-        checkAchievements(guildId, userId, interaction);
+        checkAchievements(interaction.guild, userId, {});
         return interaction.update({ embeds: [embed], components: [row] });
     }
 }

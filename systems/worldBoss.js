@@ -360,7 +360,7 @@ async function handleWorldBossButton(interaction) {
             new ButtonBuilder().setCustomId(`wb_main_${userId}`).setLabel('🔙 Boss Panel').setStyle(ButtonStyle.Secondary)
         );
 
-        checkAchievements(guildId, userId, interaction);
+        checkAchievements(interaction.guild, userId, {});
         return interaction.update({ embeds: [embed], components: [row] });
     }
 

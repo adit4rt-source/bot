@@ -780,7 +780,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
             db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, plot.id);
             const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Atur pupuk per tanaman lewat `/farm` → 🧪 Pupuk!*` });
+            return interaction.reply({ content: `✅ ${fert.emoji} **${fert.name}** → [Slot] ${crop ? crop.emoji + ' ' + crop.name : 'tanaman'}!\n> ⏩ -${Math.round(fert.speedBonus*100)}% waktu${fert.yieldBonus > 0 ? ` | 📈 +${Math.round(fert.yieldBonus*100)}% hasil` : ''}\n\n💡 *Tip: Atur pupuk per tanaman lewat \`/farm\` → 🧪 Pupuk!*` });
         }
         if (interaction.customId === 'shop_buy_farming') {
             const selected = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
@@ -825,7 +825,7 @@ module.exports = async function handleInteractionCreate(interaction) {
                 addPetFood(guildId, interaction.user.id, foodId, 1);
                 updateQuestProgress(guildId, interaction.user.id, 'spend_money', food.price);
                 const owned = getPetFoodCount(guildId, interaction.user.id, foodId);
-                return interaction.reply({ content: `✅ Membeli ${food.emoji} **${food.name}**! Masuk ke inventory makanan.\n> 📦 Total ${food.name}: **${owned}**\n> 💡 Pakai lewat `/pet` → 🍖 Feed` });
+                return interaction.reply({ content: `✅ Membeli ${food.emoji} **${food.name}**! Masuk ke inventory makanan.\n> 📦 Total ${food.name}: **${owned}**\n> 💡 Pakai lewat \`/pet\` → 🍖 Feed` });
             }
             if (eggId) {
                 const egg = PET_EGGS.find(e => e.id === eggId);
@@ -1320,7 +1320,7 @@ module.exports = async function handleInteractionCreate(interaction) {
             db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
             addSeed(guildId, interaction.user.id, cropId, qty);
             const owned = getSeedCount(guildId, interaction.user.id, cropId);
-            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**!\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam lewat `/farm` → 🌱 Plant` });
+            return interaction.reply({ content: `✅ Membeli ${crop.emoji} **${crop.name}** x**${qty}**!\n> 💰 Total harga: 🪙 **${totalCost.toLocaleString('id-ID')}**\n> 📦 Total bibit ${crop.name}: **${owned}**\n> 💡 Tanam lewat \`/farm\` → 🌱 Plant` });
         }
     }
 };

@@ -72,7 +72,10 @@ async function handleFishingButton(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
     const parts = customId.split('_');
-    const userId = parts[parts.length - 1];
+    // customId format: fish_<action>_<userId>[_<extra>]. userId is always parts[2]
+    // (action names are single tokens, userId is a digits-only snowflake).
+    // Using parts[parts.length-1] breaks pagination buttons (fish_invp_<userId>_<page>).
+    const userId = parts[2];
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel fishing kamu!', ephemeral: true });
@@ -422,7 +425,7 @@ async function handleFishingButton(interaction) {
 
     // === INVENTORY PAGINATION ===
     if (action === 'invp' || action === 'invn') {
-        const currentPage = parseInt(parts[2]);
+        const currentPage = parseInt(parts[3]); // parts: fish_invp_<userId>_<page>
         const newPage = action === 'invp' ? currentPage - 1 : currentPage + 1;
         const tierOrder = { 'Secret': 0, 'Mythic': 1, 'Legendary': 2, 'Epic': 3, 'Rare': 4, 'Uncommon': 5, 'Common': 6, 'Trash': 7 };
         const allInventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ?').all(guildId, userId);

@@ -327,7 +327,7 @@ async function handleBlackjackButton(interaction) {
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
-            checkAchievements(guildId, userId, interaction);
+            checkAchievements(interaction.guild, userId, {});
             return interaction.update({ embeds: [embed], components: [row] });
         }
 
@@ -357,7 +357,7 @@ async function handleBlackjackButton(interaction) {
         const embed = buildGameEmbed(game, true, result);
         const row = buildGameButtons(userId, game, true);
         activeBlackjackGames.set(`${guildId}_${userId}_lastbet`, game.bet);
-        checkAchievements(guildId, userId, interaction);
+        checkAchievements(interaction.guild, userId, {});
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -414,7 +414,7 @@ async function handleBlackjackButton(interaction) {
         const embed = buildGameEmbed(game, true, result);
         const row = buildGameButtons(userId, game, true);
         activeBlackjackGames.set(`${guildId}_${userId}_lastbet`, game.bet / 2);
-        checkAchievements(guildId, userId, interaction);
+        checkAchievements(interaction.guild, userId, {});
         return interaction.update({ embeds: [embed], components: [row] });
     }
 }
