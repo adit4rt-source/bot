@@ -1,5 +1,5 @@
 // systems/tradePanel.js - Trade Panel UI System (Button + Select-menu based)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
 const { updateQuestProgress } = require('./quests');
 const { notifyTradeReceived, notifyTradeAccepted } = require('./notifications');
@@ -340,45 +340,31 @@ async function handleTradeSelectMenu(interaction) {
             if (!pet) return interaction.reply({ content: '❌ Pet itu sudah tidak ada!', ephemeral: true });
         }
 
+        // Store the chosen give-item, then ask WHO to trade with via a user-picker
+        // dropdown (no more typing User IDs). targetId is filled in the next step.
         pendingTradeGive.set(`${guildId}_${userId}`, { type, id });
 
-        const modal = new ModalBuilder()
-            .setCustomId(`trade_modal_offer_${userId}`)
-            .setTitle('📤 Buat Trade Offer');
+        const giveLabel = getItemDisplayName(type, id, guildId);
+        const embed = new EmbedBuilder()
+            .setTitle('📤 Trade — Pilih Lawan Trade')
+            .setColor(ui.COLORS.trade)
+            .setDescription(
+                `Kamu menawarkan: ${giveLabel}\n\n` +
+                `Sekarang pilih **siapa** yang mau diajak trade dari menu di bawah 👇\n` +
+                `> Nanti kamu tinggal isi barang yang kamu minta.`
+            )
+            .setFooter({ text: ui.footer('Tinggal klik nama — nggak perlu copy User ID lagi!') });
 
-        const userInput = new TextInputBuilder()
-            .setCustomId('trade_target_user')
-            .setLabel('User ID yang dituju')
-            .setPlaceholder('Contoh: 123456789012345678')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(20);
-
-        const wantInput = new TextInputBuilder()
-            .setCustomId('trade_want')
-            .setLabel('Yang kamu minta')
-            .setPlaceholder('fish:5 / relic:2 / pet:3 / money:1000')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true);
-
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(userInput),
-            new ActionRowBuilder().addComponents(wantInput)
+        const pickRow = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId(`trade_targetpick_${userId}`)
+                .setPlaceholder('🤝 Pilih lawan trade...')
+                .setMinValues(1).setMaxValues(1)
         );
-
-        // Money give needs an amount field
-        if (type === 'money') {
-            const amountInput = new TextInputBuilder()
-                .setCustomId('trade_money_amount')
-                .setLabel('Jumlah money yang diberikan')
-                .setPlaceholder('Contoh: 1000')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMaxLength(10);
-            modal.addComponents(new ActionRowBuilder().addComponents(amountInput));
-        }
-
-        return interaction.showModal(modal);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`trade_offer_${userId}`).setLabel('🔙 Pilih item lain').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [pickRow, backRow] });
     }
 
     // === ACCEPT selected ===
@@ -392,6 +378,64 @@ async function handleTradeSelectMenu(interaction) {
         const tradeId = parseInt(interaction.values[0]);
         return processTradeReject(interaction, guildId, userId, tradeId);
     }
+}
+
+// ============ HANDLER: Trade user-select (target picker) ============
+async function handleTradeUserSelect(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const userId = parts[parts.length - 1];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    if (!customId.startsWith('trade_targetpick_')) return;
+
+    const pendingKey = `${guildId}_${userId}`;
+    const pendingGive = pendingTradeGive.get(pendingKey);
+    if (!pendingGive) {
+        return interaction.reply({ content: '❌ Sesi offer kadaluarsa. Mulai lagi dari tombol Offer.', ephemeral: true });
+    }
+
+    const targetUserId = interaction.values[0];
+    if (targetUserId === userId) {
+        return interaction.reply({ content: '❌ Tidak bisa trade dengan diri sendiri! Pilih orang lain.', ephemeral: true });
+    }
+    const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+    if (targetMember && targetMember.user.bot) {
+        return interaction.reply({ content: '❌ Tidak bisa trade dengan bot! Pilih pemain lain.', ephemeral: true });
+    }
+
+    // Remember the chosen target alongside the give-item.
+    pendingTradeGive.set(pendingKey, { ...pendingGive, targetUserId });
+
+    // Show the modal that now only asks what you WANT (+ money amount if giving money).
+    const modal = new ModalBuilder()
+        .setCustomId(`trade_modal_offer_${userId}`)
+        .setTitle('📤 Lengkapi Trade Offer');
+
+    const wantInput = new TextInputBuilder()
+        .setCustomId('trade_want')
+        .setLabel('Yang kamu minta sebagai gantinya')
+        .setPlaceholder('fish:5 / relic:2 / pet:3 / money:1000')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+    modal.addComponents(new ActionRowBuilder().addComponents(wantInput));
+
+    if (pendingGive.type === 'money') {
+        const amountInput = new TextInputBuilder()
+            .setCustomId('trade_money_amount')
+            .setLabel('Jumlah money yang kamu berikan')
+            .setPlaceholder('Contoh: 1000')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(10);
+        modal.addComponents(new ActionRowBuilder().addComponents(amountInput));
+    }
+
+    return interaction.showModal(modal);
 }
 
 // ============ CORE: process an accept ============
@@ -545,7 +589,10 @@ async function handleTradeModal(interaction) {
             return interaction.reply({ content: '❌ Sesi offer kadaluarsa. Silakan pilih item lagi dari menu Offer.', ephemeral: true });
         }
 
-        const targetUserId = interaction.fields.getTextInputValue('trade_target_user').trim();
+        const targetUserId = pendingGive.targetUserId;
+        if (!targetUserId) {
+            return interaction.reply({ content: '❌ Lawan trade belum dipilih. Mulai lagi dari tombol Offer.', ephemeral: true });
+        }
         const want = interaction.fields.getTextInputValue('trade_want').trim().toLowerCase();
 
         // Build the "give" string from the stored selection
@@ -560,7 +607,7 @@ async function handleTradeModal(interaction) {
             give = `${pendingGive.type}:${pendingGive.id}`;
         }
 
-        // Validate target
+        // Validate target (already picked via dropdown, but re-check it still exists)
         if (targetUserId === userId) {
             return interaction.reply({ content: '❌ Tidak bisa trade dengan diri sendiri!', ephemeral: true });
         }
@@ -568,7 +615,7 @@ async function handleTradeModal(interaction) {
         try {
             targetMember = await interaction.guild.members.fetch(targetUserId);
         } catch (e) {
-            return interaction.reply({ content: '❌ User tidak ditemukan di server ini! Pastikan User ID benar.', ephemeral: true });
+            return interaction.reply({ content: '❌ User tujuan sudah tidak ada di server ini!', ephemeral: true });
         }
         if (targetMember.user.bot) {
             return interaction.reply({ content: '❌ Tidak bisa trade dengan bot!', ephemeral: true });
@@ -638,13 +685,18 @@ function isTradePanelButton(customId) {
         && !customId.startsWith('trade_modal_')
         && !customId.startsWith('trade_giveselect_')
         && !customId.startsWith('trade_acceptselect_')
-        && !customId.startsWith('trade_rejectselect_');
+        && !customId.startsWith('trade_rejectselect_')
+        && !customId.startsWith('trade_targetpick_');
 }
 
 function isTradePanelSelectMenu(customId) {
     return customId.startsWith('trade_giveselect_')
         || customId.startsWith('trade_acceptselect_')
         || customId.startsWith('trade_rejectselect_');
+}
+
+function isTradePanelUserSelect(customId) {
+    return customId.startsWith('trade_targetpick_');
 }
 
 function isTradePanelModal(customId) {
@@ -656,8 +708,10 @@ module.exports = {
     handleTradeCommand,
     handleTradeButton,
     handleTradeSelectMenu,
+    handleTradeUserSelect,
     handleTradeModal,
     isTradePanelButton,
     isTradePanelSelectMenu,
+    isTradePanelUserSelect,
     isTradePanelModal
 };

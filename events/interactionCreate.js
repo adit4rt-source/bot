@@ -24,7 +24,7 @@ const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelBut
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomySelect, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelSelect, isEconomyPanelModal } = require('../systems/economyPanel');
 const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
-const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTradeModal, isTradePanelButton, isTradePanelSelectMenu, isTradePanelModal } = require('../systems/tradePanel');
+const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTradeUserSelect, handleTradeModal, isTradePanelButton, isTradePanelSelectMenu, isTradePanelUserSelect, isTradePanelModal } = require('../systems/tradePanel');
 const { handleMarketCommand, handleMarketButton, handleMarketSelectMenu, handleMarketModal, isMarketPanelButton, isMarketPanelSelectMenu, isMarketPanelModal } = require('../systems/marketPanel');
 const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
 const { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton } = require('../systems/leaderboard');
@@ -672,6 +672,10 @@ async function routeInteraction(interaction) {
         // --- ECONOMY PANEL: gift recipient picker ---
         if (isEconomyPanelSelect(interaction.customId)) {
             return handleEconomySelect(interaction);
+        }
+        // --- TRADE PANEL: trade target picker ---
+        if (isTradePanelUserSelect(interaction.customId)) {
+            return handleTradeUserSelect(interaction);
         }
         return; // no other user-select menus yet
     }
