@@ -163,6 +163,9 @@ function collectProducts(userId, animalType) {
 
     for (const animal of animals) {
         if (animal.status === 'sick') continue;
+        // Skip hungry animals (hunger 0% = no production)
+        const hunger = getHungerPercent(animal);
+        if (hunger <= 0) continue;
 
         // Calculate produce time based on level + tier
         const produceTime = getProduceTime(animalType, animal.level, animal.tier) / seasonMult;
