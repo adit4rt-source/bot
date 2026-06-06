@@ -22,20 +22,21 @@ function buildStatsPanel(guildId, userId, username) {
         .setTitle(ui.title('📊', 'STATISTICS', username))
         .setColor(ui.COLORS.casino)
         .setDescription(
+            `Semua rekam jejakmu di server, dirangkum jadi satu. 📈\n` +
             ui.statBlock([
-                `💰 Income Today: **+${incomeToday.toLocaleString('id-ID')}**`,
-                `📈 Total Earned (all time): **${totalEarned.toLocaleString('id-ID')}**`,
-                `💳 Current Balance: ${ui.money(userData.balance)}`,
+                `💰 Pemasukan Hari Ini: **+${incomeToday.toLocaleString('id-ID')}**`,
+                `📈 Total Sepanjang Masa: **${totalEarned.toLocaleString('id-ID')}**`,
+                `💳 Saldo Sekarang: ${ui.money(userData.balance)}`,
             ]) +
-            `\n` +
+            `\n**Lihat rincian per kategori:**\n` +
             ui.menuList([
-                { emoji: '💰', label: 'Income', desc: 'Rincian sumber penghasilan' },
-                { emoji: '🎮', label: 'Activity', desc: 'Fishing, farming, quest, dll' },
-                { emoji: '⚔️', label: 'Battle', desc: 'Dungeon, boss, PvP' },
-                { emoji: '🎰', label: 'Gambling', desc: 'Coinflip, slot, roulette' },
+                { emoji: '💰', label: 'Income', desc: 'Dari mana saja uangmu datang' },
+                { emoji: '🎮', label: 'Activity', desc: 'Mancing, bertani, quest, & lainnya' },
+                { emoji: '⚔️', label: 'Battle', desc: 'Rekor dungeon, boss, & PvP' },
+                { emoji: '🎰', label: 'Gambling', desc: 'Catatan untung-rugi di casino' },
             ])
         )
-        .setFooter({ text: ui.footer(`Level ${userData.level} • Pilih kategori untuk detail`) })
+        .setFooter({ text: ui.footer(`Level ${userData.level} • Klik tombol untuk lihat detail`) })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(

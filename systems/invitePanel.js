@@ -16,17 +16,18 @@ function buildInvitePanel(guildId, userId, username, guild) {
         .setTitle(ui.title('📨', 'INVITE', username))
         .setColor(ui.COLORS.farming)
         .setDescription(
+            `Ajak teman gabung, pantau kontribusimu di sini! 🎉\n` +
             ui.statBlock([
                 `${invitedByLine}`,
-                `✅ Total Invites: **${stats.total}**  •  👻 Fake: **${stats.fake}**`,
-                `👋 Left: **${stats.left}**  •  📋 All-time: **${stats.totalAll}**`,
+                `✅ Undangan Sukses: **${stats.total}**  •  👻 Palsu: **${stats.fake}**`,
+                `👋 Sudah Keluar: **${stats.left}**  •  📋 Total: **${stats.totalAll}**`,
             ]) +
-            `\n` +
+            `\n**Menu:**\n` +
             ui.menuList([
-                { emoji: '🏆', label: 'Leaderboard', desc: 'Top inviters di server' },
-                { emoji: '📋', label: 'My Invites', desc: 'Siapa yang kamu undang' },
-                { emoji: '📊', label: 'Detail Stats', desc: 'Rincian & ranking kamu' },
-                { emoji: '⚙️', label: 'Settings', desc: 'Konfigurasi (Admin)' },
+                { emoji: '🏆', label: 'Leaderboard', desc: 'Siapa pengundang terbanyak di server' },
+                { emoji: '📋', label: 'My Invites', desc: 'Daftar orang yang kamu undang' },
+                { emoji: '📊', label: 'Detail Stats', desc: 'Rincian lengkap & peringkatmu' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Atur sistem invite (khusus Admin)' },
             ])
         )
         .setFooter({ text: ui.footer(`Status: ${settings.invite_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'} • ${guild.name}`) })

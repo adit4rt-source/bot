@@ -26,10 +26,10 @@ function buildWelcomerPanel(guildId, userId, guild) {
             ]) +
             `\n` +
             ui.menuList([
-                { emoji: '👁️', label: 'Preview', desc: 'Lihat contoh welcome' },
-                { emoji: '👋', label: 'Goodbye Preview', desc: 'Lihat contoh goodbye' },
-                { emoji: '⚙️', label: 'Settings', desc: 'Detail konfigurasi' },
-                { emoji: '📩', label: 'Test', desc: 'Kirim test message' },
+                { emoji: '👁️', label: 'Preview', desc: 'Intip tampilan pesan sambutan' },
+                { emoji: '👋', label: 'Goodbye Preview', desc: 'Intip tampilan pesan perpisahan' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Lihat konfigurasi lengkap' },
+                { emoji: '📩', label: 'Test', desc: 'Kirim pesan uji coba ke channel' },
             ])
         )
         .setFooter({ text: ui.footer(`${guild.name} • Ubah settings via Dashboard`) })

@@ -26,10 +26,10 @@ function buildTempvoicePanel(guildId, userId, guild) {
             ]) +
             `\n` +
             ui.menuList([
-                { emoji: '🎙️', label: 'Create', desc: 'Buat voice channel privat' },
-                { emoji: '📋', label: 'My Channel', desc: 'Kelola channel kamu' },
-                { emoji: '📊', label: 'Active List', desc: 'Lihat semua channel aktif' },
-                { emoji: '⚙️', label: 'Settings', desc: 'Konfigurasi (Admin)' },
+                { emoji: '🎙️', label: 'Create', desc: 'Bikin voice channel pribadimu sendiri' },
+                { emoji: '📋', label: 'My Channel', desc: 'Atur channel kamu (nama, limit, kick, lock)' },
+                { emoji: '📊', label: 'Active List', desc: 'Lihat semua channel yang sedang aktif' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Atur sistem temp voice (khusus Admin)' },
             ])
         )
         .setFooter({ text: ui.footer(`${guild.name} • Channel otomatis dihapus saat kosong`) })

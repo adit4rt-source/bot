@@ -28,16 +28,17 @@ function buildQuestPanel(guildId, userId, username) {
         .setTitle(ui.title('📜', 'QUEST', username))
         .setColor(dailyDone === 3 && weeklyDone === 3 ? ui.COLORS.success : ui.COLORS.quest)
         .setDescription(
+            `Selesaikan misi, kumpulkan hadiah! Cek progress kamu di bawah 👇\n` +
             ui.statBlock([
-                `📋 **Daily:** ${ui.progressLine(dailyDone, 3)}  (${dailyDone}/3)`,
-                `📅 **Weekly:** ${ui.progressLine(weeklyDone, 3)}  (${weeklyDone}/3)`,
-                `🏅 Perfect Days: **${perfectDays}**  •  🔥 Streak: **${consecutive}/7**`,
+                `📋 **Harian:** ${ui.progressLine(dailyDone, 3)}  (${dailyDone}/3 selesai)`,
+                `📅 **Mingguan:** ${ui.progressLine(weeklyDone, 3)}  (${weeklyDone}/3 selesai)`,
+                `🏅 Perfect Day: **${perfectDays}**  •  🔥 Beruntun: **${consecutive}/7**`,
             ]) +
-            `\n` +
+            `\n**Pilih jenis misi:**\n` +
             ui.menuList([
-                { emoji: '📋', label: 'Daily', desc: 'Misi harian (reset 00:00 WIB)' },
-                { emoji: '📅', label: 'Weekly', desc: 'Misi mingguan (reset Senin)' },
-                { emoji: '🔄', label: 'Refresh', desc: 'Perbarui progress' },
+                { emoji: '📋', label: 'Daily', desc: 'Misi ringan harian — reset tiap 00:00 WIB' },
+                { emoji: '📅', label: 'Weekly', desc: 'Misi besar mingguan — reset tiap Senin' },
+                { emoji: '🔄', label: 'Refresh', desc: 'Perbarui tampilan progress misi' },
             ])
         )
         .setFooter({ text: ui.footer('Daily reset 00:00 WIB • Weekly reset Senin 00:00 WIB') })
