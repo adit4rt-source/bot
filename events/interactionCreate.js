@@ -9,6 +9,7 @@ const { getContestState, startFishContest, addContestEntry, getContestLeaderboar
 const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet } = require('../systems/pets');
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
+const ui = require('../systems/ui');
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
@@ -117,7 +118,7 @@ async function routeInteraction(interaction) {
         }
 
         if (command === 'help') {
-            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Semua fitur berbasis **panel interaktif** — jalankan command lalu pakai tombol!\nGunakan `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
+            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor(ui.COLORS.info).setDescription('Semua fitur berbasis **panel interaktif** — jalankan command lalu pakai tombol!\nGunakan `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
                 { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli\n> \`/globalmarket\` — 🌍 Market lintas server`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
@@ -140,9 +141,20 @@ async function routeInteraction(interaction) {
         if (command === 'menu') {
             const menuEmbed = new EmbedBuilder()
                 .setTitle('📱 Menu Utama')
-                .setColor('#5865F2')
-                .setDescription(`Halo **${interaction.user.username}**! Pilih kategori di bawah:\n\n💰 **Economy** — Balance, Coinflip, Slot, Gift, Redeem\n🎣 **Fishing** — Mancing, Jual, Koleksi\n🌾 **Farming** — Tanam, Panen, Craft\n🐾 **Pet & Battle** — Pet, Dungeon, Boss, PvP\n📋 **Profil** — Profile, Achievement, Quest, Streak\n🛒 **Shop** — Beli item, rod, bibit, pet\n\n*Gunakan tombol di bawah untuk akses cepat!*`)
-                .setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Lv.${userData.level}` })
+                .setColor(ui.COLORS.info)
+                .setDescription(
+                    `Halo **${interaction.user.username}**! 👋\nPilih kategori di bawah untuk akses cepat:\n\n` +
+                    ui.menuList([
+                        { emoji: '💰', label: 'Economy', desc: 'Saldo, Casino, Gift, Redeem, Daily' },
+                        { emoji: '🎣', label: 'Fishing', desc: 'Mancing, koleksi, jual ikan' },
+                        { emoji: '🌾', label: 'Farming', desc: 'Tanam, panen, ternak, craft' },
+                        { emoji: '🐾', label: 'Pet & Battle', desc: 'Pet, Dungeon, Boss, PvP, Expedition' },
+                        { emoji: '📋', label: 'Profil', desc: 'Profile, Achievement, Quest, Streak' },
+                        { emoji: '🛒', label: 'Shop', desc: 'Beli item, rod, bibit, pet' },
+                    ]) +
+                    `\n\n> 💡 *Baru di sini? Ketik \`/help\` untuk panduan lengkap.*`
+                )
+                .setFooter({ text: ui.footer(`Saldo: ${userData.balance.toLocaleString('id-ID')} • Lv.${userData.level}`) })
                 .setTimestamp();
             
             const row1 = new ActionRowBuilder().addComponents(
