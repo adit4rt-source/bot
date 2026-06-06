@@ -2,6 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getSetting } = require('../database');
 const { getInviterStats, getInviteLeaderboard, getInvitedBy, getInvitedList, getAllInviteSettings } = require('./inviteTracker');
+const ui = require('./ui');
 
 // ============ BUILD: Main Invite Panel ============
 function buildInvitePanel(guildId, userId, username, guild) {
@@ -12,22 +13,23 @@ function buildInvitePanel(guildId, userId, username, guild) {
     const invitedByLine = invitedByData ? `📨 Diundang oleh: <@${invitedByData.inviterId}>` : '📨 Diundang oleh: *Tidak diketahui*';
 
     const embed = new EmbedBuilder()
-        .setTitle(`📨 INVITE PANEL — ${username}`)
-        .setColor('#43B581')
+        .setTitle(ui.title('📨', 'INVITE', username))
+        .setColor(ui.COLORS.farming)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `${invitedByLine}\n\n` +
-            `📊 **Statistik Invite Kamu:**\n` +
-            `> ✅ Total Invites: **${stats.total}**\n` +
-            `> 👻 Fake: **${stats.fake}**\n` +
-            `> 👋 Left: **${stats.left}**\n` +
-            `> 📋 All-time: **${stats.totalAll}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 🏆 **Leaderboard** — Top inviters\n` +
-            `> 📋 **My Invites** — Siapa yang kamu undang\n` +
-            `> ⚙️ **Settings** — Konfigurasi (Admin)`
+            ui.statBlock([
+                `${invitedByLine}`,
+                `✅ Total Invites: **${stats.total}**  •  👻 Fake: **${stats.fake}**`,
+                `👋 Left: **${stats.left}**  •  📋 All-time: **${stats.totalAll}**`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '🏆', label: 'Leaderboard', desc: 'Top inviters di server' },
+                { emoji: '📋', label: 'My Invites', desc: 'Siapa yang kamu undang' },
+                { emoji: '📊', label: 'Detail Stats', desc: 'Rincian & ranking kamu' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Konfigurasi (Admin)' },
+            ])
         )
-        .setFooter({ text: `Status: ${settings.invite_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'} | Server: ${guild.name}` })
+        .setFooter({ text: ui.footer(`Status: ${settings.invite_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'} • ${guild.name}`) })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -74,8 +76,7 @@ async function handleInviteButton(interaction) {
             desc = '*Belum ada data invite.*';
         } else {
             rows.forEach((r, i) => {
-                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**${i + 1}.**`;
-                desc += `${medal} <@${r.userId}> — ✅ **${r.total}** invites`;
+                desc += `${ui.medal(i)} <@${r.userId}> — ✅ **${r.total}** invites`;
                 if (r.fake > 0) desc += ` | 👻 ${r.fake}`;
                 if (r.left > 0) desc += ` | 👋 ${r.left}`;
                 desc += '\n';
@@ -83,14 +84,12 @@ async function handleInviteButton(interaction) {
         }
 
         const embed = new EmbedBuilder()
-            .setTitle('🏆 Invite Leaderboard')
-            .setColor('#FFD700')
+            .setTitle(ui.title('🏆', 'Invite Leaderboard'))
+            .setColor(ui.COLORS.leaderboard)
             .setDescription(desc)
-            .setFooter({ text: 'Top 10 Inviters | ✅ = Valid | 👻 = Fake | 👋 = Left' });
+            .setFooter({ text: ui.footer('Top 10 Inviters • ✅ Valid | 👻 Fake | 👋 Left') });
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`invpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
+        const row = ui.backRow(`invpnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 

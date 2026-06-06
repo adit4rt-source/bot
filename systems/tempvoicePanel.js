@@ -1,6 +1,7 @@
 // systems/tempvoicePanel.js - Tempvoice Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
 const { db, getSetting } = require('../database');
+const ui = require('./ui');
 
 // ============ BUILD: Main Tempvoice Panel ============
 function buildTempvoicePanel(guildId, userId, guild) {
@@ -14,25 +15,24 @@ function buildTempvoicePanel(guildId, userId, guild) {
     const userVoice = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
 
     const embed = new EmbedBuilder()
-        .setTitle('🎙️ TEMPVOICE PANEL')
-        .setColor('#00D4AA')
+        .setTitle(ui.title('🎙️', 'TEMPVOICE'))
+        .setColor(ui.COLORS.trade)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Kelola temporary voice channels.\n\n` +
-            `**📊 Status:**\n` +
-            `> System: ${enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'}\n` +
-            `> Category: ${categoryId ? `Set ✅` : '❌ Belum setup'}\n` +
-            `> Active Channels: **${activeVoices.length}**\n` +
-            `> Your Channel: ${userVoice ? `<#${userVoice.channelId}> ✅` : '*Tidak ada*'}\n\n` +
-            `**⚙️ Default Settings:**\n` +
-            `> Name: \`${defaultName}\`\n` +
-            `> Limit: ${defaultLimit === '0' ? 'Unlimited' : defaultLimit + ' users'}\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 🎙️ **Create** — Buat channel baru\n` +
-            `> 📋 **My Channel** — Kelola channel kamu\n` +
-            `> 📊 **Active List** — Lihat semua channel aktif`
+            ui.statBlock([
+                `System: ${enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'}  •  Category: ${categoryId ? '✅' : '❌ Belum setup'}`,
+                `📊 Active Channels: **${activeVoices.length}**`,
+                `📋 Your Channel: ${userVoice ? `<#${userVoice.channelId}> ✅` : '*Tidak ada*'}`,
+                `⚙️ Default: \`${defaultName}\` • Limit: ${defaultLimit === '0' ? 'Unlimited' : defaultLimit}`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '🎙️', label: 'Create', desc: 'Buat voice channel privat' },
+                { emoji: '📋', label: 'My Channel', desc: 'Kelola channel kamu' },
+                { emoji: '📊', label: 'Active List', desc: 'Lihat semua channel aktif' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Konfigurasi (Admin)' },
+            ])
         )
-        .setFooter({ text: `Server: ${guild.name} | Channel otomatis dihapus saat kosong` })
+        .setFooter({ text: ui.footer(`${guild.name} • Channel otomatis dihapus saat kosong`) })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(

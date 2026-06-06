@@ -2,6 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db } = require('../database');
 const { getAllWelcomerSettings, getWelcomerSetting } = require('./welcomer');
+const ui = require('./ui');
 
 // ============ BUILD: Main Welcomer Panel ============
 function buildWelcomerPanel(guildId, userId, guild) {
@@ -13,25 +14,25 @@ function buildWelcomerPanel(guildId, userId, guild) {
     const autoroles = settings.welcome_autorole ? settings.welcome_autorole.split(',').filter(Boolean) : [];
 
     const embed = new EmbedBuilder()
-        .setTitle('👋 WELCOMER PANEL')
-        .setColor(settings.welcome_embed_color || '#5865F2')
+        .setTitle(ui.title('👋', 'WELCOMER'))
+        .setColor(settings.welcome_embed_color || ui.COLORS.info)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Konfigurasi welcome & goodbye messages.\n\n` +
-            `**📊 Status:**\n` +
-            `> 👋 Welcome Message: ${welcomeStatus}\n` +
-            `> 👋 Goodbye Message: ${goodbyeStatus}\n` +
-            `> 📩 Welcome DM: ${dmStatus}\n` +
-            `> 🎭 Auto-Roles: ${autoroles.length > 0 ? autoroles.map(r => `<@&${r}>`).join(', ') : '*Tidak ada*'}\n\n` +
-            `**📍 Channel:**\n` +
-            `> Welcome: ${settings.welcome_channel ? `<#${settings.welcome_channel}>` : '*Belum diset*'}\n` +
-            `> Goodbye: ${settings.goodbye_channel ? `<#${settings.goodbye_channel}>` : '*Belum diset*'}\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 👁️ **Preview** — Lihat contoh pesan\n` +
-            `> ⚙️ **Settings** — Detail konfigurasi\n` +
-            `> 📩 **Test** — Kirim test message`
+            ui.statBlock([
+                `👋 Welcome: ${welcomeStatus}  •  📩 DM: ${dmStatus}`,
+                `👋 Goodbye: ${goodbyeStatus}`,
+                `🎭 Auto-Roles: ${autoroles.length > 0 ? autoroles.map(r => `<@&${r}>`).join(', ') : '*Tidak ada*'}`,
+                `📍 Welcome ch: ${settings.welcome_channel ? `<#${settings.welcome_channel}>` : '*Belum diset*'}`,
+                `📍 Goodbye ch: ${settings.goodbye_channel ? `<#${settings.goodbye_channel}>` : '*Belum diset*'}`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '👁️', label: 'Preview', desc: 'Lihat contoh welcome' },
+                { emoji: '👋', label: 'Goodbye Preview', desc: 'Lihat contoh goodbye' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Detail konfigurasi' },
+                { emoji: '📩', label: 'Test', desc: 'Kirim test message' },
+            ])
         )
-        .setFooter({ text: `Server: ${guild.name} | Gunakan Dashboard untuk mengubah settings` })
+        .setFooter({ text: ui.footer(`${guild.name} • Ubah settings via Dashboard`) })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(

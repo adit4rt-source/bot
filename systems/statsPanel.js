@@ -1,6 +1,13 @@
 // systems/statsPanel.js - Statistics Dashboard Panel
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat } = require('../database');
+const ui = require('./ui');
+
+// Local helper: horizontal text bar-chart row (12-wide) used by income/activity charts.
+function chartBar(value, maxVal) {
+    const len = maxVal > 0 ? Math.max(0, Math.round((value / maxVal) * 12)) : 0;
+    return '█'.repeat(len) + '░'.repeat(12 - len);
+}
 
 // ============ BUILD: Main Stats Panel ============
 function buildStatsPanel(guildId, userId, username) {
@@ -12,17 +19,23 @@ function buildStatsPanel(guildId, userId, username) {
     const totalEarned = getUserStat(guildId, userId, 'total_earned') || 0;
 
     const embed = new EmbedBuilder()
-        .setTitle(`📊 STATISTICS — ${username}`)
-        .setColor('#9B59B6')
+        .setTitle(ui.title('📊', 'STATISTICS', username))
+        .setColor(ui.COLORS.casino)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `💰 Income Today: **+${incomeToday.toLocaleString('id-ID')}**\n` +
-            `📈 Total Earned (all time): **${totalEarned.toLocaleString('id-ID')}**\n` +
-            `💳 Current Balance: **${userData.balance.toLocaleString('id-ID')}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> Pilih kategori statistik di bawah untuk detail lengkap.`
+            ui.statBlock([
+                `💰 Income Today: **+${incomeToday.toLocaleString('id-ID')}**`,
+                `📈 Total Earned (all time): **${totalEarned.toLocaleString('id-ID')}**`,
+                `💳 Current Balance: ${ui.money(userData.balance)}`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '💰', label: 'Income', desc: 'Rincian sumber penghasilan' },
+                { emoji: '🎮', label: 'Activity', desc: 'Fishing, farming, quest, dll' },
+                { emoji: '⚔️', label: 'Battle', desc: 'Dungeon, boss, PvP' },
+                { emoji: '🎰', label: 'Gambling', desc: 'Coinflip, slot, roulette' },
+            ])
         )
-        .setFooter({ text: `Level ${userData.level} | Pilih kategori` })
+        .setFooter({ text: ui.footer(`Level ${userData.level} • Pilih kategori untuk detail`) })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -37,8 +50,6 @@ function buildStatsPanel(guildId, userId, username) {
 
 // ============ BUILD: Income Sub-Panel ============
 function buildIncomePanel(guildId, userId, username) {
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-
     const fishIncome = getUserStat(guildId, userId, 'income_fishing') || 0;
     const farmIncome = getUserStat(guildId, userId, 'income_farming') || 0;
     const gamblingIncome = getUserStat(guildId, userId, 'income_gambling') || 0;
@@ -60,30 +71,23 @@ function buildIncomePanel(guildId, userId, username) {
 
     let chart = '';
     sources.forEach(s => {
-        const barLen = Math.max(0, Math.round((s.value / maxVal) * 12));
-        const bar = '█'.repeat(barLen) + '░'.repeat(12 - barLen);
-        chart += `${s.name}\n\`${bar}\` ${s.value.toLocaleString('id-ID')}\n`;
+        chart += `${s.name}\n\`${chartBar(s.value, maxVal)}\` ${s.value.toLocaleString('id-ID')}\n`;
     });
 
     const embed = new EmbedBuilder()
-        .setTitle(`💰 INCOME — ${username}`)
-        .setColor('#F1C40F')
+        .setTitle(ui.title('💰', 'INCOME', username))
+        .setColor(ui.COLORS.economy)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `**📊 Income Breakdown (All Time)**\n\n` +
+            `**📊 Income Breakdown (All Time)**\n` + ui.DIVIDER + `\n` +
             chart +
-            `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
+            ui.DIVIDER + `\n` +
             `**💸 Pengeluaran:**\n` +
             `> 🛒 Shop: **${shopSpent.toLocaleString('id-ID')}**\n\n` +
             `**📈 Net Total: ${netTotal >= 0 ? '+' : ''}${netTotal.toLocaleString('id-ID')}**`
         )
-        .setFooter({ text: 'Sumber penghasilan kamu' });
+        .setFooter({ text: ui.footer('Sumber penghasilan kamu') });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`stats_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
-
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [ui.backRow(`stats_back_${userId}`)] };
 }
 
 // ============ BUILD: Activity Sub-Panel ============
@@ -109,31 +113,24 @@ function buildActivityPanel(guildId, userId, username) {
 
     let chart = '';
     activities.forEach(a => {
-        const barLen = Math.max(0, Math.round((a.value / maxVal) * 12));
-        const bar = '█'.repeat(barLen) + '░'.repeat(12 - barLen);
-        chart += `${a.name}\n\`${bar}\` ${a.value.toLocaleString('id-ID')}\n`;
+        chart += `${a.name}\n\`${chartBar(a.value, maxVal)}\` ${a.value.toLocaleString('id-ID')}\n`;
     });
 
     const embed = new EmbedBuilder()
-        .setTitle(`🎮 ACTIVITY — ${username}`)
-        .setColor('#3498DB')
+        .setTitle(ui.title('🎮', 'ACTIVITY', username))
+        .setColor(ui.COLORS.fishing)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `**📊 Activity Overview**\n\n` +
+            `**📊 Activity Overview**\n` + ui.DIVIDER + `\n` +
             chart +
-            `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
+            ui.DIVIDER + `\n` +
             `**📋 Lainnya:**\n` +
             `> 🛒 Total Buys: **${totalBuys}**\n` +
             `> 💰 Fish Sold: **${fishSold}**\n` +
             `> 🎁 Daily Claims: **${dailyClaims}**`
         )
-        .setFooter({ text: 'Semua aktivitas kamu' });
+        .setFooter({ text: ui.footer('Semua aktivitas kamu') });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`stats_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
-
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [ui.backRow(`stats_back_${userId}`)] };
 }
 
 // ============ BUILD: Battle Sub-Panel ============
@@ -146,32 +143,24 @@ function buildBattlePanel(guildId, userId, username) {
     const winRate = totalPvp > 0 ? Math.round((pvpWins / totalPvp) * 100) : 0;
     const huntMissions = getUserStat(guildId, userId, 'hunt_missions') || 0;
 
-    // Win rate bar
-    const winBarLen = Math.round(winRate / 10);
-    const winBar = '█'.repeat(winBarLen) + '░'.repeat(10 - winBarLen);
-
     const embed = new EmbedBuilder()
-        .setTitle(`⚔️ BATTLE STATS — ${username}`)
-        .setColor('#E74C3C')
+        .setTitle(ui.title('⚔️', 'BATTLE STATS', username))
+        .setColor(ui.COLORS.battle)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `**🏰 PvE:**\n` +
-            `> 🏔️ Dungeon Clears: **${dungeonClears}**\n` +
-            `> 👹 Boss Kills: **${bossKills}**\n` +
-            `> 🐾 Hunt Missions: **${huntMissions}**\n\n` +
-            `**⚔️ PvP:**\n` +
-            `> ✅ Wins: **${pvpWins}** | ❌ Losses: **${pvpLosses}**\n` +
-            `> 📊 Win Rate: \`${winBar}\` **${winRate}%**\n` +
-            `> 🎯 Total Battles: **${totalPvp}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━`
+            ui.statBlock([
+                `**🏰 PvE:**`,
+                `> 🏔️ Dungeon Clears: **${dungeonClears}**`,
+                `> 👹 Boss Kills: **${bossKills}**`,
+                `> 🐾 Hunt Missions: **${huntMissions}**`,
+            ]) +
+            `\n**⚔️ PvP:**\n` +
+            `> ✅ Wins: **${pvpWins}**  •  ❌ Losses: **${pvpLosses}**\n` +
+            `> 📊 Win Rate: ${ui.progressLine(winRate, 100)}\n` +
+            `> 🎯 Total Battles: **${totalPvp}**`
         )
-        .setFooter({ text: 'Battle records' });
+        .setFooter({ text: ui.footer('Catatan pertarungan kamu') });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`stats_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
-
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [ui.backRow(`stats_back_${userId}`)] };
 }
 
 // ============ BUILD: Gambling Sub-Panel ============
@@ -189,31 +178,28 @@ function buildGamblingPanel(guildId, userId, username) {
     const totalGamblingLost = getUserStat(guildId, userId, 'total_gambling_lost') || 0;
     const netGambling = totalGamblingIncome - totalGamblingLost;
 
+    const cfRate = cfWins + cfLosses > 0 ? Math.round((cfWins / (cfWins + cfLosses)) * 100) : 0;
+    const slotRate = slotWins + slotLosses > 0 ? Math.round((slotWins / (slotWins + slotLosses)) * 100) : 0;
+    const rlRate = rouletteWins + rouletteLosses > 0 ? Math.round((rouletteWins / (rouletteWins + rouletteLosses)) * 100) : 0;
+
     const embed = new EmbedBuilder()
-        .setTitle(`🎰 GAMBLING STATS — ${username}`)
-        .setColor('#E67E22')
+        .setTitle(ui.title('🎰', 'GAMBLING STATS', username))
+        .setColor(ui.COLORS.pet)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `**📊 Overview:**\n` +
-            `> 🎲 Total Bets: **${totalBets.toLocaleString('id-ID')}**\n` +
-            `> 🏆 Total Wins: **${totalWins.toLocaleString('id-ID')}**\n` +
-            `> 💎 Biggest Win: **${biggestWin.toLocaleString('id-ID')}**\n` +
-            `> ${netGambling >= 0 ? '📈' : '📉'} Net: **${netGambling >= 0 ? '+' : ''}${netGambling.toLocaleString('id-ID')}**\n\n` +
-            `**🪙 Coinflip:**\n` +
-            `> ✅ ${cfWins}W / ❌ ${cfLosses}L (${cfWins + cfLosses > 0 ? Math.round((cfWins / (cfWins + cfLosses)) * 100) : 0}%)\n\n` +
-            `**🎰 Slot:**\n` +
-            `> ✅ ${slotWins}W / ❌ ${slotLosses}L (${slotWins + slotLosses > 0 ? Math.round((slotWins / (slotWins + slotLosses)) * 100) : 0}%)\n\n` +
-            `**🎯 Roulette:**\n` +
-            `> ✅ ${rouletteWins}W / ❌ ${rouletteLosses}L (${rouletteWins + rouletteLosses > 0 ? Math.round((rouletteWins / (rouletteWins + rouletteLosses)) * 100) : 0}%)\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━`
+            ui.statBlock([
+                `**📊 Overview:**`,
+                `> 🎲 Total Bets: **${totalBets.toLocaleString('id-ID')}**`,
+                `> 🏆 Total Wins: **${totalWins.toLocaleString('id-ID')}**`,
+                `> 💎 Biggest Win: **${biggestWin.toLocaleString('id-ID')}**`,
+                `> ${netGambling >= 0 ? '📈' : '📉'} Net: **${netGambling >= 0 ? '+' : ''}${netGambling.toLocaleString('id-ID')}**`,
+            ]) +
+            `\n**🪙 Coinflip:** ✅ ${cfWins}W / ❌ ${cfLosses}L (${cfRate}%)\n` +
+            `**🎰 Slot:** ✅ ${slotWins}W / ❌ ${slotLosses}L (${slotRate}%)\n` +
+            `**🎯 Roulette:** ✅ ${rouletteWins}W / ❌ ${rouletteLosses}L (${rlRate}%)`
         )
-        .setFooter({ text: 'Gambling history' });
+        .setFooter({ text: ui.footer('Riwayat gambling kamu') });
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`stats_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
-
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [ui.backRow(`stats_back_${userId}`)] };
 }
 
 // ============ HANDLER: /stats command ============

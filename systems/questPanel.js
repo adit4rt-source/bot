@@ -3,12 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { db, getOrCreateUser, getSetting, getUserStat, incrementUserStat, addIncome, addItem } = require('../database');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('./quests');
 const { checkAchievements } = require('./achievements');
-
-// ============ HELPER: Build progress bar ============
-function makeBar(percent) {
-    const filled = Math.floor(percent / 10);
-    return '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
-}
+const ui = require('./ui');
 
 // ============ HELPER: Get daily quests for user ============
 function getDailyQuests(guildId, userId) {
@@ -30,25 +25,28 @@ function buildQuestPanel(guildId, userId, username) {
     const consecutive = getUserStat(guildId, userId, 'quest_consecutive_perfect') || 0;
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83d\udcdc QUEST PANEL \u2014 ${username}`)
-        .setColor(dailyDone === 3 && weeklyDone === 3 ? '#2ECC71' : '#5865F2')
+        .setTitle(ui.title('📜', 'QUEST', username))
+        .setColor(dailyDone === 3 && weeklyDone === 3 ? ui.COLORS.success : ui.COLORS.quest)
         .setDescription(
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
-            `\ud83d\udccb **Daily Quest:** ${dailyDone}/3 selesai\n` +
-            `\ud83d\udcc5 **Weekly Quest:** ${weeklyDone}/3 selesai\n` +
-            `\ud83c\udfc5 **Perfect Days:** ${perfectDays} | \ud83d\udd25 **Consecutive:** ${consecutive}/7\n` +
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
-            `> \ud83d\udccb Klik **Daily** untuk misi harian\n` +
-            `> \ud83d\udcc5 Klik **Weekly** untuk misi mingguan\n` +
-            `> \ud83d\udd04 Klik **Refresh** untuk update progress`
+            ui.statBlock([
+                `📋 **Daily:** ${ui.progressLine(dailyDone, 3)}  (${dailyDone}/3)`,
+                `📅 **Weekly:** ${ui.progressLine(weeklyDone, 3)}  (${weeklyDone}/3)`,
+                `🏅 Perfect Days: **${perfectDays}**  •  🔥 Streak: **${consecutive}/7**`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '📋', label: 'Daily', desc: 'Misi harian (reset 00:00 WIB)' },
+                { emoji: '📅', label: 'Weekly', desc: 'Misi mingguan (reset Senin)' },
+                { emoji: '🔄', label: 'Refresh', desc: 'Perbarui progress' },
+            ])
         )
-        .setFooter({ text: `Daily reset 00:00 WIB | Weekly reset Senin 00:00 WIB` })
+        .setFooter({ text: ui.footer('Daily reset 00:00 WIB • Weekly reset Senin 00:00 WIB') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`quest_daily_${userId}`).setLabel('\ud83d\udccb Daily').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`quest_weekly_${userId}`).setLabel('\ud83d\udcc5 Weekly').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`quest_refresh_${userId}`).setLabel('\ud83d\udd04 Refresh').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`quest_daily_${userId}`).setLabel('📋 Daily').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`quest_weekly_${userId}`).setLabel('📅 Weekly').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`quest_refresh_${userId}`).setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -66,30 +64,28 @@ function buildDailyPanel(guildId, userId, username) {
     const bonusKey = `quest_bonus_${today}`;
     const bonusGiven = getUserStat(guildId, userId, bonusKey);
 
-    let desc = `\ud83d\udccb **MISI HARIAN** \u2014 Reset 00:00 WIB\n\n`;
+    let desc = `📋 **MISI HARIAN** — Reset 00:00 WIB\n\n`;
 
     quests.forEach((q, i) => {
         const diff = DIFFICULTY_TIERS[q.difficulty] || DIFFICULTY_TIERS.easy;
-        const percent = Math.min(100, Math.floor((q.progress / q.target) * 100));
-        const bar = makeBar(percent);
-        const status = q.claimed ? '\u2705 DIKLAIM' : `${q.progress}/${q.target}`;
-        desc += `${diff.stars} **Misi ${i + 1}** \u2014 ${diff.label}\n`;
+        const status = q.claimed ? '✅ DIKLAIM' : `${q.progress}/${q.target}`;
+        desc += `${diff.stars} **Misi ${i + 1}** — ${diff.label}\n`;
         desc += `${q.desc}\n`;
-        desc += `> \ud83e\ude99 **${q.reward} Money**\n`;
-        desc += `> \`[${bar}]\` ${percent}% \u2014 ${status}\n\n`;
+        desc += `> 🪙 **${q.reward} Money**\n`;
+        desc += `> ${ui.progressLine(q.progress, q.target)} — ${status}\n\n`;
     });
 
     if (allDailyDone) {
-        const bonusStatus = bonusGiven ? '\u2705 sudah diklaim' : '\ud83c\udf81 belum diklaim';
-        desc += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
-        desc += `\ud83c\udf81 **All Done Bonus:** +200 Money (${bonusStatus})`;
+        const bonusStatus = bonusGiven ? '✅ sudah diklaim' : '🎁 belum diklaim';
+        desc += `${ui.DIVIDER}\n`;
+        desc += `🎁 **All Done Bonus:** +200 Money (${bonusStatus})`;
     }
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83d\udccb DAILY QUEST \u2014 ${username}`)
-        .setColor(allDailyDone ? '#2ECC71' : '#F39C12')
+        .setTitle(ui.title('📋', 'DAILY QUEST', username))
+        .setColor(allDailyDone ? ui.COLORS.success : ui.COLORS.warning)
         .setDescription(desc)
-        .setFooter({ text: `\ud83c\udfc5 Perfect Days: ${perfectDays} | \ud83d\udd25 Consecutive: ${consecutive}/7 \u2192 Bonus 1000 + Mystery Box` });
+        .setFooter({ text: ui.footer(`Perfect Days: ${perfectDays} • Streak: ${consecutive}/7 → Bonus 1000 + Mystery Box`) });
 
     // Claim buttons
     const buttons = new ActionRowBuilder();
@@ -102,9 +98,7 @@ function buildDailyPanel(guildId, userId, username) {
         buttons.addComponents(btn);
     });
 
-    const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`quest_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-    );
+    const navRow = ui.backRow(`quest_back_${userId}`);
 
     return { embeds: [embed], components: [buttons, navRow] };
 }
@@ -114,24 +108,22 @@ function buildWeeklyPanel(guildId, userId, username) {
     const weeklyQuests = getOrCreateWeeklyQuests(guildId, userId);
     const allWeeklyDone = weeklyQuests.every(q => q.claimed);
 
-    let desc = `\ud83d\udcc5 **MISI MINGGUAN** \u2014 Reset Senin 00:00 WIB\n`;
-    desc += `> \ud83c\udd94 Week: **${getWeekId()}**\n\n`;
+    let desc = `📅 **MISI MINGGUAN** — Reset Senin 00:00 WIB\n`;
+    desc += `> 🆔 Week: **${getWeekId()}**\n\n`;
 
     weeklyQuests.forEach((q, i) => {
-        const percent = Math.min(100, Math.floor((q.progress / q.target) * 100));
-        const bar = makeBar(percent);
-        const status = q.claimed ? '\u2705 DIKLAIM' : `${q.progress}/${q.target}`;
-        desc += `\ud83c\udfc6 **Weekly ${i + 1}**\n`;
+        const status = q.claimed ? '✅ DIKLAIM' : `${q.progress}/${q.target}`;
+        desc += `🏆 **Weekly ${i + 1}**\n`;
         desc += `${q.desc}\n`;
-        desc += `> \ud83e\ude99 **${q.reward.toLocaleString('id-ID')} Money**\n`;
-        desc += `> \`[${bar}]\` ${percent}% \u2014 ${status}\n\n`;
+        desc += `> 🪙 **${q.reward.toLocaleString('id-ID')} Money**\n`;
+        desc += `> ${ui.progressLine(q.progress, q.target)} — ${status}\n\n`;
     });
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83d\udcc5 WEEKLY QUEST \u2014 ${username}`)
-        .setColor(allWeeklyDone ? '#F1C40F' : '#3498DB')
+        .setTitle(ui.title('📅', 'WEEKLY QUEST', username))
+        .setColor(allWeeklyDone ? ui.COLORS.economy : ui.COLORS.fishing)
         .setDescription(desc)
-        .setFooter({ text: `Misi besar dengan hadiah besar! | Week: ${getWeekId()}` });
+        .setFooter({ text: ui.footer(`Misi besar dengan hadiah besar! • Week: ${getWeekId()}`) });
 
     // Claim buttons
     const buttons = new ActionRowBuilder();
@@ -144,9 +136,7 @@ function buildWeeklyPanel(guildId, userId, username) {
         buttons.addComponents(btn);
     });
 
-    const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`quest_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-    );
+    const navRow = ui.backRow(`quest_back_${userId}`);
 
     return { embeds: [embed], components: [buttons, navRow] };
 }
