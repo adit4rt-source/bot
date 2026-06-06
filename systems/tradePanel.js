@@ -82,18 +82,19 @@ function buildTradePanel(guildId, userId, username) {
         .setTitle(ui.title('🔄', 'TRADE', username))
         .setColor(ui.COLORS.trade)
         .setDescription(
+            `Tukar item dengan teman secara aman, langsung di dalam bot. 🤝\n` +
             ui.statBlock([
-                `📤 Pending Sent: **${sentPending.cnt}**  •  📥 Pending Received: **${receivedPending.cnt}**`,
+                `📤 Tawaran Terkirim: **${sentPending.cnt}**  •  📥 Tawaran Masuk: **${receivedPending.cnt}**`,
             ]) +
-            `\n` +
+            `\n**Apa yang mau kamu lakukan?**\n` +
             ui.menuList([
-                { emoji: '📤', label: 'Offer', desc: 'Tawarkan item ke player lain' },
-                { emoji: '📋', label: 'List', desc: 'Lihat trade yang pending' },
-                { emoji: '✅', label: 'Accept', desc: 'Terima trade yang masuk' },
-                { emoji: '❌', label: 'Reject', desc: 'Tolak / batalkan trade' },
+                { emoji: '📤', label: 'Offer', desc: 'Tawarkan itemmu ke pemain lain' },
+                { emoji: '📋', label: 'List', desc: 'Lihat semua tawaran yang masih berjalan' },
+                { emoji: '✅', label: 'Accept', desc: 'Setujui tawaran yang masuk ke kamu' },
+                { emoji: '❌', label: 'Reject', desc: 'Tolak tawaran masuk / batalkan punyamu' },
             ])
         )
-        .setFooter({ text: ui.footer('Trade berlaku 24 jam setelah dibuat') })
+        .setFooter({ text: ui.footer('Tawaran otomatis hangus 24 jam setelah dibuat') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(

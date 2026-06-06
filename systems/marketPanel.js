@@ -228,16 +228,17 @@ function buildMarketPanel(guildId, userId, username) {
         .setTitle(ui.title('🏪', 'MARKET', username))
         .setColor(ui.COLORS.market)
         .setDescription(
+            `Pasar terbuka server — jual barangmu atau buru penawaran terbaik! 🛍️\n` +
             ui.statBlock([
-                `📊 Active Listings: **${activeCount}**  •  ${ui.money(userData.balance)}`,
+                `📊 Barang Dijual Saat Ini: **${activeCount}**  •  ${ui.money(userData.balance)}`,
             ]) +
-            `\n` +
+            `\n**Menu pasar:**\n` +
             ui.menuList([
-                { emoji: '📋', label: 'Browse', desc: 'Lihat & beli listing player lain' },
-                { emoji: '📤', label: 'Sell', desc: 'Jual item dari inventory kamu' },
-                { emoji: '📦', label: 'My Listings', desc: 'Kelola listing kamu' },
+                { emoji: '📋', label: 'Browse', desc: 'Jelajahi & beli barang dari pemain lain' },
+                { emoji: '📤', label: 'Sell', desc: 'Pasang itemmu untuk dijual' },
+                { emoji: '📦', label: 'My Listings', desc: 'Kelola barang yang kamu jual' },
             ]) +
-            `\n\n> ⏳ *Listing otomatis expired setelah 7 hari (item dikembalikan)*`
+            `\n\n> ⏳ *Barang yang tak laku dalam 7 hari otomatis dikembalikan ke kamu.*`
         )
         .setFooter({ text: ui.footer('Market — jual beli aman antar player') })
         .setTimestamp();
