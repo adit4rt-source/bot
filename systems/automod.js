@@ -51,6 +51,18 @@ const DUPLICATE_THRESHOLD = 3;
 function checkAntiInvites(c) { return /(discord\.gg|discord\.com\/invite|discordapp\.com\/invite)\/[\w-]+/gi.test(c); }
 function checkAntiLinks(c) { return /https?:\/\/[^\s<]+/gi.test(c); }
 function checkAntiSpam(guildId, userId, content) { const key = `${guildId}_${userId}`, now = Date.now(); if (!spamTracker.has(key)) spamTracker.set(key, { messages: [] }); const t = spamTracker.get(key); t.messages = t.messages.filter(m => now - m.time < SPAM_WINDOW); t.messages.push({ content, time: now }); if (t.messages.length >= SPAM_THRESHOLD) return { spam: true, reason: `${SPAM_THRESHOLD} messages in ${SPAM_WINDOW/1000}s` }; if (t.messages.filter(m => m.content === content).length >= DUPLICATE_THRESHOLD) return { spam: true, reason: `${DUPLICATE_THRESHOLD} duplicate messages` }; return { spam: false }; }
+
+// Periodically evict spam-tracker entries whose messages have all expired, so the
+// Map doesn't retain one key per user forever (unbounded memory growth).
+const _spamSweep = setInterval(() => {
+    const now = Date.now();
+    for (const [key, t] of spamTracker) {
+        if (!t.messages.length || now - t.messages[t.messages.length - 1].time > SPAM_WINDOW) {
+            spamTracker.delete(key);
+        }
+    }
+}, 60 * 1000);
+if (typeof _spamSweep.unref === 'function') _spamSweep.unref();
 function checkAntiBadwords(guildId, content) { const words = getBlockedWords(guildId); if (!words.length) return false; const l = content.toLowerCase(); return words.find(w => l.includes(w)) || false; }
 function checkAntiMention(content, message) { const m = (message.mentions?.users?.size || 0) + (message.mentions?.roles?.size || 0); return m > 5 || content.includes('@everyone') || content.includes('@here'); }
 function checkAntiCaps(c) { if (c.length < 10) return false; return (c.match(/[A-Z]/g) || []).length / c.length > 0.7; }

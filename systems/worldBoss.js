@@ -71,8 +71,15 @@ function getCurrentBoss() {
     if (!boss) {
         // Spawn new boss for this week
         const bossData = WORLD_BOSSES[Math.floor(Math.random() * WORLD_BOSSES.length)];
-        // Scale HP based on participation from last week
-        const lastWeekAttackers = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM world_boss_damage WHERE weekId != ? ORDER BY weekId DESC LIMIT 1').get(weekId)?.cnt || 5;
+        // Scale HP based on participation from the PREVIOUS week only.
+        // (The old query did COUNT(DISTINCT userId) over ALL past weeks with a
+        // no-op ORDER BY/LIMIT, so HP inflated every week until unbeatable.)
+        const prevWeek = db.prepare('SELECT weekId FROM world_boss_damage WHERE weekId != ? ORDER BY weekId DESC LIMIT 1').get(weekId);
+        let lastWeekAttackers = 5;
+        if (prevWeek) {
+            const row = db.prepare('SELECT COUNT(DISTINCT userId) as cnt FROM world_boss_damage WHERE weekId = ?').get(prevWeek.weekId);
+            lastWeekAttackers = (row && row.cnt) ? row.cnt : 5;
+        }
         const hpScale = Math.max(1, Math.floor(lastWeekAttackers / 5));
         const scaledHp = bossData.hp * hpScale;
 
@@ -360,7 +367,7 @@ async function handleWorldBossButton(interaction) {
             new ButtonBuilder().setCustomId(`wb_main_${userId}`).setLabel('🔙 Boss Panel').setStyle(ButtonStyle.Secondary)
         );
 
-        checkAchievements(interaction.guild, userId, {});
+        await checkAchievements(interaction.guild, userId, {});
         return interaction.update({ embeds: [embed], components: [row] });
     }
 

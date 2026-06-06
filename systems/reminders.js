@@ -1,6 +1,6 @@
 // systems/reminders.js - Automatic DM reminders (daily reward + hungry pet + more)
 // Runs on timers, independent of chat, with per-user dedup so users aren't spammed.
-const { db, getUserStat, setUserStat, getUsersForDailyReminder, getActivePetsHungry } = require('../database');
+const { db, getUserStat, setUserStat, getUsersForDailyReminder, getActivePetsHungry, checkGlobalMode } = require('../database');
 const { notifyDailyReady, notifyPetHungry, notifyFarmReady, sendNotification } = require('./notifications');
 
 let log = () => {};
@@ -220,10 +220,13 @@ async function runFarmReadyCheck(client) {
                     continue;
                 }
 
-                // Plot ini siap panen dan masih hidup → kumpulkan per user
-                const key = `${plot.guildId}_${plot.userId}`;
+                // Plot ini siap panen dan masih hidup → kumpulkan per user.
+                // In GLOBAL mode farm_plots has no guildId column, so plot.guildId
+                // is undefined; normalize to 'global' to avoid undefined keys/args.
+                const plotGuildId = plot.guildId || 'global';
+                const key = `${plotGuildId}_${plot.userId}`;
                 if (!readyByUser[key]) {
-                    readyByUser[key] = { guildId: plot.guildId, userId: plot.userId, crops: [], plotIds: [] };
+                    readyByUser[key] = { guildId: plotGuildId, userId: plot.userId, crops: [], plotIds: [] };
                 }
                 readyByUser[key].crops.push(crop.name);
                 readyByUser[key].plotIds.push(plot.id);
@@ -286,8 +289,12 @@ async function runWorldBossReminderCheck(client) {
         const today = wibDate(0);
         const todayInt = parseInt(today.replace(/-/g, ''), 10);
 
-        // Get all active users from last week
-        const recentUsers = db.prepare("SELECT DISTINCT guildId, userId FROM users WHERE lastDaily IS NOT NULL").all();
+        // Get all active users from last week. In GLOBAL mode the `users` table
+        // has no guildId column, so selecting it would throw "no such column"
+        // (silently swallowed) and the reminder would never fire.
+        const recentUsers = checkGlobalMode()
+            ? db.prepare("SELECT DISTINCT userId FROM users WHERE lastDaily IS NOT NULL").all().map(r => ({ guildId: null, userId: r.userId }))
+            : db.prepare("SELECT DISTINCT guildId, userId FROM users WHERE lastDaily IS NOT NULL").all();
 
         for (const { guildId, userId } of recentUsers.slice(0, 100)) { // Limit to prevent spam
             try {
