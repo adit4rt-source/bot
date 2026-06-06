@@ -310,9 +310,21 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: `💊 Berhasil menyembuhkan **${result.healed}** ayam!`, ephemeral: true });
     }
     if (customId === `farm_coop_sell_${userId}`) {
-        const result = sellAllProducts(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `💰 Semua produk terjual! Pendapatan: 🪙 **${result.totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        // Sell egg products from farm_storage
+        const { PRODUCT_QUALITY } = require('../data/livestock');
+        const eggItems = db.prepare("SELECT * FROM farm_storage WHERE userId = ? AND itemId LIKE 'egg_%' AND quantity > 0").all(userId);
+        if (eggItems.length === 0) return interaction.reply({ content: '❌ Tidak ada telur untuk dijual! Collect dulu.', ephemeral: true });
+        let totalPrice = 0;
+        for (const item of eggItems) {
+            const lastU = item.itemId.lastIndexOf('_');
+            const prodId = item.itemId.substring(0, lastU);
+            const quality = item.itemId.substring(lastU + 1);
+            const qData = PRODUCT_QUALITY[prodId]?.find(q => q.quality === quality);
+            if (qData) totalPrice += qData.price * item.quantity;
+        }
+        db.prepare("DELETE FROM farm_storage WHERE userId = ? AND itemId LIKE 'egg_%'").run(userId);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
+        return interaction.reply({ content: `💰 Semua telur terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
     }
     if (customId === `farm_coop_upgrade_${userId}`) {
         const result = upgradeCoopLevel(userId);
@@ -431,9 +443,21 @@ async function handleLivestockButton(interaction) {
         return interaction.reply({ content: `🎾 **Bermain dengan hewan!**\n> ${msg}\n> ⚡ Produksi dipercepat 5 menit untuk semua hewan!`, ephemeral: true });
     }
     if (customId === `farm_barn_sell_${userId}`) {
-        const result = sellAllProducts(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `💰 Semua produk terjual! 🪙 **${result.totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        // Sell milk + wool products from farm_storage
+        const { PRODUCT_QUALITY } = require('../data/livestock');
+        const barnItems = db.prepare("SELECT * FROM farm_storage WHERE userId = ? AND (itemId LIKE 'milk_%' OR itemId LIKE 'wool_%') AND quantity > 0").all(userId);
+        if (barnItems.length === 0) return interaction.reply({ content: '❌ Tidak ada susu/bulu untuk dijual! Collect dulu.', ephemeral: true });
+        let totalPrice = 0;
+        for (const item of barnItems) {
+            const lastU = item.itemId.lastIndexOf('_');
+            const prodId = item.itemId.substring(0, lastU);
+            const quality = item.itemId.substring(lastU + 1);
+            const qData = PRODUCT_QUALITY[prodId]?.find(q => q.quality === quality);
+            if (qData) totalPrice += qData.price * item.quantity;
+        }
+        db.prepare("DELETE FROM farm_storage WHERE userId = ? AND (itemId LIKE 'milk_%' OR itemId LIKE 'wool_%')").run(userId);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
+        return interaction.reply({ content: `💰 Semua susu & bulu terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
     }
     if (customId === `farm_barn_upgrade_${userId}`) {
         const result = upgradeBarnLevel(userId);
