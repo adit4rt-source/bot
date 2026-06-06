@@ -31,16 +31,17 @@ function buildFishingPanel(guildId, userId, username) {
         .setTitle(ui.title('🎣', 'FISHING', username))
         .setColor(ui.COLORS.fishing)
         .setDescription(
+            `Lempar pancingmu dan lihat apa yang nyangkut! 🐟\n` +
             ui.statBlock([
                 `📍 Lokasi: **${location.name}** — *${location.desc}*`,
-                `🎋 Rod: **${rod.emoji} ${rod.name}**  •  🪱 Bait: **${bait.emoji} ${bait.name}** (x${eq.bait !== 'none' ? eq.bait_count : 0})`,
-                `🐟 Caught: **${totalCaught}**  •  📖 Collection: **${collected.c}/${totalFish}**`,
-                `⏱️ Cooldown: ${rod.cooldown}s  •  Rare+: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
+                `🎋 Joran: **${rod.emoji} ${rod.name}**  •  🪱 Umpan: **${bait.emoji} ${bait.name}** (sisa ${eq.bait !== 'none' ? eq.bait_count : 0})`,
+                `🐟 Tertangkap: **${totalCaught}**  •  📖 Koleksi: **${collected.c}/${totalFish}** jenis`,
+                `⏱️ Jeda lempar: ${rod.cooldown}s  •  Peluang langka: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
                 `${ui.money(userData.balance)}`,
             ]) +
-            `\n> 🎣 **Cast** untuk mancing  •  Kelola koleksi & rod lewat tombol di bawah!`
+            `\n> 🎣 Tekan **Cast** untuk mulai mancing. Kelola koleksi, ganti lokasi, & upgrade joran lewat tombol di bawah!`
         )
-        .setFooter({ text: ui.footer('Cast terus untuk naikkan combo & temukan ikan langka!') });
+        .setFooter({ text: ui.footer('Mancing beruntun nambah combo — makin tinggi combo, makin cuan!') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary),

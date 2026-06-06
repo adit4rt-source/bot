@@ -100,17 +100,18 @@ function buildFarmPanel(guildId, userId, username) {
         .setColor(readyCount > 0 ? ui.COLORS.economy : ui.COLORS.farming)
         .setDescription(
             (decoDisplay ? decoDisplay : '') +
+            `Tanam, rawat, panen — bangun kebun impianmu! 🌻\n` +
             ui.statBlock([
                 `🏡 **${levelInfo.name}**  •  ${weather.emoji} **${weather.name}**`,
                 `> ${weather.desc}`,
-                `📊 Slots: **${plots.length}/${maxSlots}**  •  📦 Storage: **${storageCount}** items`,
+                `📊 Petak: **${plots.length}/${maxSlots}** terpakai  •  📦 Gudang: **${storageCount}** item`,
                 `${ui.money(userData.balance)}`,
-                (readyCount > 0 ? `🔔 **${readyCount} tanaman siap panen!**` : '🌱 *Tanaman sedang tumbuh...*'),
-                (pestCount > 0 ? `🐛 **${pestCount} hama menyerang!** Gunakan 🧴 Pestisida` : ''),
+                (readyCount > 0 ? `🔔 **${readyCount} tanaman siap dipanen!**` : '🌱 *Tanaman masih tumbuh, sabar ya...*'),
+                (pestCount > 0 ? `🐛 **${pestCount} tanaman kena hama!** Segera pakai 🧴 Pestisida` : ''),
             ].filter(Boolean)) +
-            `\n📋 **Status Tanaman:**\n${plotStatus}`
+            `\n📋 **Status Kebun:**\n${plotStatus}`
         )
-        .setFooter({ text: ui.footer('✅ Panen • 🌱 Growing • 🥀 Layu (siram!) • ☠️ Mati • 🔄 Refresh') });
+        .setFooter({ text: ui.footer('✅ Siap panen • 🌱 Tumbuh • 🥀 Layu (siram!) • ☠️ Mati • 🔄 Refresh') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
