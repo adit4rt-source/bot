@@ -45,7 +45,7 @@ const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
 const { isBlocked, getBlockRemaining, hasPendingCaptcha, shouldTriggerCaptcha, sendCaptcha } = require('../systems/captcha');
 
-module.exports = async function handleInteractionCreate(interaction) {
+async function routeInteraction(interaction) {
     if (!interaction.guild) return interaction.reply({content: 'Hanya di Server!', ephemeral: true});
     const guildId = interaction.guild.id;
 
@@ -1324,3 +1324,41 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
     }
 };
+
+// ================= SAFETY NET: catch unhandled component/modal interactions =================
+// Some button/select/modal customIds may not match any routing branch above (e.g. stale
+// messages after a bot update, or a missed detector). If we never acknowledge the interaction,
+// Discord shows the user a confusing "This interaction failed". This wrapper guarantees every
+// component/modal interaction is acknowledged exactly once.
+module.exports = async function handleInteractionCreate(interaction) {
+    await routeInteraction(interaction);
+
+    // Chat input commands and autocomplete are always handled by their branches.
+    if (interaction.isChatInputCommand && interaction.isChatInputCommand()) return;
+    if (interaction.isAutocomplete && interaction.isAutocomplete()) return;
+
+    // For components/modals: if routing forgot to acknowledge, do it now so the user
+    // doesn't see "This interaction failed". This only fires when nothing else replied.
+    const isComponent = (interaction.isButton && interaction.isButton())
+        || (interaction.isAnySelectMenu && interaction.isAnySelectMenu())
+        || (interaction.isStringSelectMenu && interaction.isStringSelectMenu())
+        || (interaction.isModalSubmit && interaction.isModalSubmit());
+
+    if (isComponent && !interaction.replied && !interaction.deferred) {
+        try {
+            const { log } = require('../systems/logger');
+            log('WARN', `Unhandled interaction acknowledged by safety net: ${interaction.customId}`, null, {
+                guildId: interaction.guild?.id,
+                userId: interaction.user?.id,
+                command: interaction.customId
+            });
+        } catch (e) { /* logging must never break the safety net */ }
+        try {
+            await interaction.reply({
+                content: '⚠️ Tombol/menu ini sudah tidak berlaku (mungkin dari pesan lama setelah update bot). Coba jalankan command-nya lagi.',
+                ephemeral: true
+            });
+        } catch (e) { /* already acknowledged or expired — nothing more to do */ }
+    }
+};
+
