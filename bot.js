@@ -107,8 +107,8 @@ client.once(Events.ClientReady, async c => {
 
     // Start voice tick (periodic quest progress for users in VC)
     const { startVoiceTickInterval } = require('./events/voiceStateUpdate');
-    startVoiceTickInterval(client);
-    console.log('🎙️ Voice tick: quest progress setiap 5 menit');
+    startVoiceTickInterval();
+    console.log('🎙️ Voice tick: quest progress setiap 1 menit');
 
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);

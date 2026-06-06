@@ -5,7 +5,7 @@ const { checkAchievements } = require('../systems/achievements');
 const { updateQuestProgress, addXpAndMoney } = require('../systems/quests');
 const state = require('../state');
 
-module.exports = async function handleVoiceStateUpdate(oldState, newState) {
+async function handleVoiceStateUpdate(oldState, newState) {
     if (newState.member.user.bot) return;
     const guildId = newState.guild.id;
 
@@ -17,22 +17,21 @@ module.exports = async function handleVoiceStateUpdate(oldState, newState) {
 
     const cdKey = `${guildId}_${newState.member.id}`;
 
-    // === JOIN VC (or unmute) → start session ===
-    if (!oldState.channelId && newState.channelId && !newState.selfDeaf) {
-        state.voiceSessions.set(cdKey, Date.now());
+    // === JOIN VC → start session ===
+    if (!oldState.channelId && newState.channelId) {
+        if (!newState.selfDeaf) {
+            state.voiceSessions.set(cdKey, Date.now());
+        }
     }
 
-    // === LEAVE VC (or mute/deafen) → end session, give rewards ===
-    if ((oldState.channelId && !newState.channelId) || newState.selfDeaf) {
+    // === LEAVE VC → end session, give XP (quest handled by tick) ===
+    else if (oldState.channelId && !newState.channelId) {
         if (state.voiceSessions.has(cdKey)) {
             const durationMins = Math.floor((Date.now() - state.voiceSessions.get(cdKey)) / 60000);
             if (durationMins >= 1) {
-                // XP reward (per voice_cooldown interval, default 5 min)
                 const voiceCd = parseInt(getSetting(guildId, 'voice_xp_cooldown', '') || getConf(guildId, 'voice_cooldown', 5)) || 5;
                 const multiplier = Math.floor(durationMins / voiceCd);
                 if (multiplier > 0) await addXpAndMoney(newState.member, 'voice', multiplier);
-
-                // Quest progress (raw minutes)
                 updateQuestProgress(guildId, newState.member.id, 'voice', durationMins);
                 incrementUserStat(guildId, newState.member.id, 'total_voice_mins', durationMins);
                 await checkAchievements(newState.guild, newState.member.id, { type: 'voice' });
@@ -41,36 +40,51 @@ module.exports = async function handleVoiceStateUpdate(oldState, newState) {
         }
     }
 
-    // === SWITCH CHANNEL (stay in VC) → keep session ===
-    if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+    // === DEAFEN → pause (end session) ===
+    else if (oldState.channelId && newState.channelId && !oldState.selfDeaf && newState.selfDeaf) {
+        if (state.voiceSessions.has(cdKey)) {
+            const durationMins = Math.floor((Date.now() - state.voiceSessions.get(cdKey)) / 60000);
+            if (durationMins >= 1) {
+                updateQuestProgress(guildId, newState.member.id, 'voice', durationMins);
+                incrementUserStat(guildId, newState.member.id, 'total_voice_mins', durationMins);
+            }
+            state.voiceSessions.delete(cdKey);
+        }
+    }
+
+    // === UNDEAFEN → resume (start session) ===
+    else if (oldState.channelId && newState.channelId && oldState.selfDeaf && !newState.selfDeaf) {
+        state.voiceSessions.set(cdKey, Date.now());
+    }
+
+    // === SWITCH CHANNEL → keep session running ===
+    else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
         if (!state.voiceSessions.has(cdKey) && !newState.selfDeaf) {
             state.voiceSessions.set(cdKey, Date.now());
         }
     }
+}
 
-    // === UNMUTE → restart session if not tracked ===
-    if (oldState.channelId && newState.channelId && oldState.selfDeaf && !newState.selfDeaf) {
-        state.voiceSessions.set(cdKey, Date.now());
-    }
-};
-
-// === PERIODIC VOICE TICK (every 5 min, update quest progress for active sessions) ===
-// Called from bot.js on ready
-function startVoiceTickInterval(client) {
+// === PERIODIC VOICE TICK ===
+// Every 1 minute, update quest progress for users currently in VC
+// This ensures quest updates even if user stays in VC without leaving
+function startVoiceTickInterval() {
     setInterval(() => {
         const now = Date.now();
         for (const [cdKey, startTime] of state.voiceSessions.entries()) {
             const durationMins = Math.floor((now - startTime) / 60000);
-            if (durationMins >= 5) {
-                const [guildId, userId] = cdKey.split('_');
-                // Update quest progress with accumulated minutes
+            if (durationMins >= 1) {
+                const idx = cdKey.indexOf('_');
+                const guildId = cdKey.substring(0, idx);
+                const userId = cdKey.substring(idx + 1);
                 updateQuestProgress(guildId, userId, 'voice', durationMins);
                 incrementUserStat(guildId, userId, 'total_voice_mins', durationMins);
-                // Reset session start to now (so we don't double count)
+                // Reset start time so we don't double-count
                 state.voiceSessions.set(cdKey, now);
             }
         }
-    }, 5 * 60 * 1000); // every 5 minutes
+    }, 60 * 1000); // every 1 minute
 }
 
+module.exports = handleVoiceStateUpdate;
 module.exports.startVoiceTickInterval = startVoiceTickInterval;
