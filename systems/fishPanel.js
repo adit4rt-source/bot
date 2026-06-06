@@ -13,6 +13,7 @@ const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGia
 const { hasSecretLocation, tryUnlockSecretLocation, trackLocationCatch, buildSecretLocationUnlockEmbed, buildSecretLocationProgressEmbed, SECRET_LOCATION } = require('./secretLocation');
 const state = require('../state');
 const { fishCooldowns, activeFishEvents } = state;
+const ui = require('./ui');
 
 
 // ============ HELPER: Build main fishing panel embed + buttons ============
@@ -27,16 +28,19 @@ function buildFishingPanel(guildId, userId, username) {
     const totalFish = FISH_DATA.length;
 
     const embed = new EmbedBuilder()
-        .setTitle(`🎣 FISHING PANEL — ${username}`)
-        .setColor('#3498DB')
+        .setTitle(ui.title('🎣', 'FISHING', username))
+        .setColor(ui.COLORS.fishing)
         .setDescription(
-            `📍 Lokasi: **${location.name}** — *${location.desc}*\n` +
-            `🎋 Rod: **${rod.emoji} ${rod.name}** | 🪱 Bait: **${bait.emoji} ${bait.name}** (x${eq.bait !== 'none' ? eq.bait_count : 0})\n` +
-            `🐟 Total Caught: **${totalCaught}** | 📖 Collection: **${collected.c}**/${totalFish}\n\n` +
-            `> ⏱️ Cooldown: ${rod.cooldown}s | Rare+: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%\n` +
-            `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`
+            ui.statBlock([
+                `📍 Lokasi: **${location.name}** — *${location.desc}*`,
+                `🎋 Rod: **${rod.emoji} ${rod.name}**  •  🪱 Bait: **${bait.emoji} ${bait.name}** (x${eq.bait !== 'none' ? eq.bait_count : 0})`,
+                `🐟 Caught: **${totalCaught}**  •  📖 Collection: **${collected.c}/${totalFish}**`,
+                `⏱️ Cooldown: ${rod.cooldown}s  •  Rare+: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
+                `${ui.money(userData.balance)}`,
+            ]) +
+            `\n> 🎣 **Cast** untuk mancing  •  Kelola koleksi & rod lewat tombol di bawah!`
         )
-        .setFooter({ text: 'Pilih aksi di bawah!' });
+        .setFooter({ text: ui.footer('Cast terus untuk naikkan combo & temukan ikan langka!') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary),

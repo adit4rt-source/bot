@@ -14,6 +14,7 @@ const { getPetData } = require('./pets');
 const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
 const state = require('../state');
 const { fishCooldowns } = state;
+const ui = require('./ui');
 
 
 // ============ HELPER: Build main farm panel embed + buttons ============
@@ -95,22 +96,21 @@ function buildFarmPanel(guildId, userId, username) {
     }
 
     const embed = new EmbedBuilder()
-        .setTitle(`🌾 FARM PANEL — ${username}`)
-        .setColor(readyCount > 0 ? '#F1C40F' : '#2ECC71')
+        .setTitle(ui.title('🌾', 'FARM', username))
+        .setColor(readyCount > 0 ? ui.COLORS.economy : ui.COLORS.farming)
         .setDescription(
             (decoDisplay ? decoDisplay : '') +
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏡 **${levelInfo.name}** | ${weather.emoji} **${weather.name}**\n` +
-            `> ${weather.desc}\n` +
-            `> 📊 Slots: **${plots.length}** / ${maxSlots} terpakai\n` +
-            `> 📦 Storage: **${storageCount}** items\n` +
-            `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
-            (readyCount > 0 ? `> 🔔 **${readyCount} tanaman siap panen!**\n` : '') +
-            (pestCount > 0 ? `> 🐛 **${pestCount} hama menyerang!** Gunakan 🧴 Pestisida\n` : '') +
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📋 **Status Tanaman:**\n${plotStatus}`
+            ui.statBlock([
+                `🏡 **${levelInfo.name}**  •  ${weather.emoji} **${weather.name}**`,
+                `> ${weather.desc}`,
+                `📊 Slots: **${plots.length}/${maxSlots}**  •  📦 Storage: **${storageCount}** items`,
+                `${ui.money(userData.balance)}`,
+                (readyCount > 0 ? `🔔 **${readyCount} tanaman siap panen!**` : '🌱 *Tanaman sedang tumbuh...*'),
+                (pestCount > 0 ? `🐛 **${pestCount} hama menyerang!** Gunakan 🧴 Pestisida` : ''),
+            ].filter(Boolean)) +
+            `\n📋 **Status Tanaman:**\n${plotStatus}`
         )
-        .setFooter({ text: '✅ Panen | 🌱 Growing | 🥀 Layu (siram!) | ☠️ Mati | 🔄 Refresh' });
+        .setFooter({ text: ui.footer('✅ Panen • 🌱 Growing • 🥀 Layu (siram!) • ☠️ Mati • 🔄 Refresh') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
