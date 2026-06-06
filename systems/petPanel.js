@@ -11,6 +11,7 @@ const { updateQuestProgress } = require('./quests');
 const { getUserStat, incrementUserStat, addIncome } = require('../database');
 const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
+const ui = require('./ui');
 
 
 // ============ HELPER: Build main pet panel embed + buttons ============
@@ -21,14 +22,14 @@ function buildMainPanel(guildId, userId, username) {
     if (!pet) {
         // No pet - show adopt panel
         const embed = new EmbedBuilder()
-            .setTitle('🐾 PET PANEL')
-            .setColor('#FF69B4')
+            .setTitle(ui.title('🐾', 'PET'))
+            .setColor(ui.COLORS.pet)
             .setDescription(`Halo **${username}**! Kamu belum punya pet.\n\n` +
                 `Adopsi pet pertamamu untuk mulai petualangan!\n` +
                 `Pet memberi **passive bonus**, bisa diajak **battle**, **dungeon**, dan **boss raid**!\n\n` +
                 `> 🛒 Buka **Shop** untuk beli pet atau telur gacha\n` +
-                `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**`)
-            .setFooter({ text: 'Klik Shop untuk mulai!' });
+                `> ${ui.money(userData.balance)}`)
+            .setFooter({ text: ui.footer('Klik Shop untuk mulai!') });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
@@ -42,12 +43,8 @@ function buildMainPanel(guildId, userId, username) {
     const expNeeded = getExpNeeded(pet.level);
     const happyPercent = pet.happiness;
     const hungerPercent = pet.hunger;
-    const expPercent = Math.min(100, Math.floor((pet.exp / expNeeded) * 100));
 
-    const makeBar = (val) => {
-        const filled = Math.floor(val / 10);
-        return '█'.repeat(filled) + '░'.repeat(10 - filled);
-    };
+    const bar = (val) => ui.progressBar(val, 100);
 
     const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
     const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
@@ -66,19 +63,19 @@ function buildMainPanel(guildId, userId, username) {
 
 
     const embed = new EmbedBuilder()
-        .setTitle(`🐾 PET PANEL — ${pet.name} (Lv.${pet.level})`)
-        .setColor(bonusActive ? '#2ECC71' : '#E74C3C')
+        .setTitle(ui.title('🐾', 'PET', `${pet.name} (Lv.${pet.level})`))
+        .setColor(bonusActive ? ui.COLORS.success : ui.COLORS.danger)
         .setDescription(
             `${petDef.emoji} **${petDef.name}** — *${petDef.tier}*\n\n` +
-            `❤️ Happy: \`${makeBar(happyPercent)}\` **${happyPercent}%**\n` +
-            `🍖 Hunger: \`${makeBar(hungerPercent)}\` **${hungerPercent}%**\n` +
-            `✨ EXP: \`${makeBar(expPercent)}\` **${pet.exp}/${expNeeded}**\n\n` +
+            `❤️ Happy: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
+            `🍖 Hunger: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
+            `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
             `⚔️ ATK: **${pet.atk}** | 🛡️ DEF: **${pet.def}** | 💨 SPD: **${pet.spd}**\n` +
             `❤️ HP: **${pet.hp}** | 🎯 CRIT: **${pet.crit}%**\n` +
             `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅' : '❌'}` +
             huntInfo + evoInfo
         )
-        .setFooter({ text: `💰 ${userData.balance.toLocaleString('id-ID')} | Class: ${pet.class || 'warrior'} | Element: ${pet.element || 'fire'}` });
+        .setFooter({ text: ui.footer(`${ui.money(userData.balance)} • Class: ${pet.class || 'warrior'} • Element: ${pet.element || 'fire'}`) });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_info_${userId}`).setLabel('📋 Info').setStyle(ButtonStyle.Secondary),

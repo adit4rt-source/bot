@@ -1,6 +1,7 @@
 // systems/livestockPanel.js — Livestock Panel UI (Kandang Ayam, Peternakan, Crafting)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getItemCount } = require('../database');
+const ui = require('./ui');
 
 // Helper: reply yang auto-delete setelah 4 detik (non-ephemeral)
 async function tempReply(interaction, content) {
@@ -65,19 +66,19 @@ function buildCoopPanel(userId, username) {
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
-        .setTitle(`🐔 KANDANG AYAM — ${username}`)
-        .setColor(totalReady > 0 ? '#FFD700' : '#FFA500')
+        .setTitle(ui.title('🐔', 'KANDANG AYAM', username))
+        .setColor(totalReady > 0 ? ui.COLORS.economy : ui.COLORS.pet)
         .setDescription(
-            `🏠 **${coopInfo.name}** (Lv.${coopLvl}) | ${season.emoji} ${season.name}\n` +
-            `> 🐔 Ayam: **${chickens.length}**/${maxSlots} | 🥚 Siap: **${totalReady}**\n` +
+            `🏠 **${coopInfo.name}** (Lv.${coopLvl})  •  ${season.emoji} ${season.name}\n` +
+            `> 🐔 Ayam: **${chickens.length}**/${maxSlots}  •  🥚 Siap: **${totalReady}**\n` +
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
-            `> 📈 Produksi: **${Math.round(prodMult * 100)}%** | 💰 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
+            `> 📈 Produksi: **${Math.round(prodMult * 100)}%**  •  ${ui.money(userData.balance)}\n` +
             (sickCount > 0 ? `> ⚠️ **${sickCount} ayam sakit!** Beri obat segera.\n` : '') +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            ui.DIVIDER + `\n` +
             `📋 **Daftar Ayam:**\n` +
             animalList
         )
-        .setFooter({ text: `🥚 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | ⚠️🍗 Kelaparan | 🔄 Refresh` });
+        .setFooter({ text: ui.footer('🥚 Ready • ⏳ Growing • 🤒 Sakit • 🍗 Lapar • 🔄 Refresh') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
@@ -183,20 +184,20 @@ function buildBarnPanel(userId, username) {
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
-        .setTitle(`🐄 PETERNAKAN — ${username}`)
-        .setColor((totalMilk + totalWool) > 0 ? '#FFD700' : '#8B4513')
+        .setTitle(ui.title('🐄', 'PETERNAKAN', username))
+        .setColor((totalMilk + totalWool) > 0 ? ui.COLORS.economy : '#8B4513')
         .setDescription(
-            `🏠 **${barnInfo.name}** (Lv.${barnLvl}) | ${season.emoji} ${season.name}\n` +
-            `> 🐄 Sapi: **${cows.length}** | 🐑 Domba: **${sheep.length}** (${totalAnimals}/${maxSlots})\n` +
-            `> 🥛 Siap: **${totalMilk}** | 🧶 Siap: **${totalWool}**\n` +
+            `🏠 **${barnInfo.name}** (Lv.${barnLvl})  •  ${season.emoji} ${season.name}\n` +
+            `> 🐄 Sapi: **${cows.length}**  •  🐑 Domba: **${sheep.length}** (${totalAnimals}/${maxSlots})\n` +
+            `> 🥛 Siap: **${totalMilk}**  •  🧶 Siap: **${totalWool}**\n` +
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
-            `> 💰 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
+            `> ${ui.money(userData.balance)}\n` +
             (totalSick > 0 ? `> ⚠️ **${totalSick} hewan sakit!**\n` : '') +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            ui.DIVIDER + `\n` +
             `📋 **Sapi:**\n${cowList}\n` +
             `📋 **Domba:**\n${sheepList}`
         )
-        .setFooter({ text: `🥛🧶 Ready | ⏳ Growing | 🤒 Sakit | 🍗 Lapar | ⚠️🍗 Kelaparan | 🎾 Play boost` });
+        .setFooter({ text: ui.footer('🥛🧶 Ready • ⏳ Growing • 🤒 Sakit • 🍗 Lapar • 🎾 Play boost') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_barn_milk_${userId}`).setLabel(`🥛 Milk (${totalMilk})`).setStyle(ButtonStyle.Primary).setDisabled(totalMilk === 0),
