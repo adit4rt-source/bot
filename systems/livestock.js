@@ -194,15 +194,15 @@ function collectProducts(userId, animalType) {
             totalCollected++;
         }
 
-        // Add EXP
+        // Add EXP (faster leveling: level * 10 EXP needed)
         const expGain = animalDef.expPerCollect * yieldCount;
         const newExp = animal.exp + expGain;
-        const expNeeded = animal.level * 20;
+        const expNeeded = animal.level * 10;
         let newLevel = animal.level;
         let remainExp = newExp;
 
-        while (remainExp >= newLevel * 20 && newLevel < 100) {
-            remainExp -= newLevel * 20;
+        while (remainExp >= newLevel * 10 && newLevel < 100) {
+            remainExp -= newLevel * 10;
             newLevel++;
         }
 

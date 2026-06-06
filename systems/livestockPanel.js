@@ -75,7 +75,7 @@ function buildCoopPanel(userId, username) {
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_collect_${userId}`).setLabel(`🥚 Collect (${totalReady})`).setStyle(ButtonStyle.Primary).setDisabled(totalReady === 0),
         new ButtonBuilder().setCustomId(`farm_coop_feed_${userId}`).setLabel('🌾 Feed All').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_coop_heal_${userId}`).setLabel(`💊 Heal${sickCount > 0 ? ` (${sickCount})` : ''}`).setStyle(sickCount > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary).setDisabled(sickCount === 0),
+        new ButtonBuilder().setCustomId(`farm_coop_heal_${userId}`).setLabel(`💊 Heal`).setStyle(sickCount > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_coop_evolve_${userId}`).setLabel('⬆️ Evolve').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
@@ -309,17 +309,37 @@ async function handleLivestockButton(interaction) {
         const result = collectProducts(userId, 'chicken');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         await interaction.reply({ content: `🥚 Collected **${result.totalCollected}** telur! (+${result.totalExp} EXP)`, ephemeral: true });
+        setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
         return;
     }
     if (customId === `farm_coop_feed_${userId}`) {
         const result = feedAnimals(userId, 'chicken');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `🌾 Berhasil memberi makan **${result.fed}** ayam! (Pakan: -${result.feedUsed})`, ephemeral: true });
+        await interaction.reply({ content: `🌾 Berhasil memberi makan **${result.fed}** ayam! (Pakan: -${result.feedUsed})`, ephemeral: true });
+        setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        return;
     }
     if (customId === `farm_coop_heal_${userId}`) {
-        const result = healAll(userId, 'chicken');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `💊 Berhasil menyembuhkan **${result.healed}** ayam!`, ephemeral: true });
+        // Heal sick animals OR feed starving animals (hunger 0 → auto feed if possible)
+        const { getHungerPercent } = require('./livestock');
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        const sickOnes = chickens.filter(a => a.status === 'sick');
+        const starvingOnes = chickens.filter(a => a.status !== 'sick' && getHungerPercent(a) <= 0);
+        
+        let msg = '';
+        if (sickOnes.length > 0) {
+            const result = healAll(userId, 'chicken');
+            if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+            msg += `💊 Menyembuhkan **${result.healed}** ayam sakit!`;
+        }
+        if (starvingOnes.length > 0 && !msg) {
+            // If no sick but starving, suggest feed
+            return interaction.reply({ content: `❌ Ayam kelaparan (💀), bukan sakit. Gunakan **🌾 Feed All** untuk memberi makan!`, ephemeral: true });
+        }
+        if (!msg) return interaction.reply({ content: `❌ Tidak ada ayam yang sakit!`, ephemeral: true });
+        await interaction.reply({ content: msg, ephemeral: true });
+        setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        return;
     }
     if (customId === `farm_coop_sell_${userId}`) {
         // Sell egg products from farm_storage
