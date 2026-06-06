@@ -613,13 +613,36 @@ function isExpeditionConfirm(customId) {
     return customId.startsWith('exp_confirm_');
 }
 
+// ==================== SAFETY WRAPPER ====================
+// Wraps an interaction handler so any thrown error surfaces as an ephemeral
+// message instead of a silent "This interaction failed". Without this, a DB
+// throw inside a handler leaves the interaction unacknowledged.
+function withErrorHandling(handlerName, handler) {
+    return async function (interaction) {
+        try {
+            return await handler(interaction);
+        } catch (err) {
+            console.error(`[expedition] Error in ${handlerName} (customId=${interaction.customId}):`, err);
+            const errMsg = { content: '⚠️ Terjadi error saat memproses ekspedisi. Coba lagi sebentar lagi.', ephemeral: true };
+            try {
+                if (interaction.replied || interaction.deferred) {
+                    return await interaction.followUp(errMsg);
+                }
+                return await interaction.reply(errMsg);
+            } catch (replyErr) {
+                console.error(`[expedition] Failed to send error reply for ${handlerName}:`, replyErr);
+            }
+        }
+    };
+}
+
 // ==================== EXPORTS ====================
 module.exports = {
     EXPEDITION_ZONES,
     buildExpeditionPanel,
-    handleExpeditionButton,
-    handleExpeditionSelectMenu,
-    handleExpeditionConfirm,
+    handleExpeditionButton: withErrorHandling('handleExpeditionButton', handleExpeditionButton),
+    handleExpeditionSelectMenu: withErrorHandling('handleExpeditionSelectMenu', handleExpeditionSelectMenu),
+    handleExpeditionConfirm: withErrorHandling('handleExpeditionConfirm', handleExpeditionConfirm),
     isExpeditionButton,
     isExpeditionSelectMenu,
     isExpeditionConfirm,
