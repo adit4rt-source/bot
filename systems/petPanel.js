@@ -24,12 +24,12 @@ function buildMainPanel(guildId, userId, username) {
         const embed = new EmbedBuilder()
             .setTitle(ui.title('🐾', 'PET'))
             .setColor(ui.COLORS.pet)
-            .setDescription(`Halo **${username}**! Kamu belum punya pet.\n\n` +
-                `Adopsi pet pertamamu untuk mulai petualangan!\n` +
-                `Pet memberi **passive bonus**, bisa diajak **battle**, **dungeon**, dan **boss raid**!\n\n` +
-                `> 🛒 Buka **Shop** untuk beli pet atau telur gacha\n` +
+            .setDescription(`Halo **${username}**! Kamu belum punya pet nih. 🥺\n\n` +
+                `Yuk adopsi pet pertamamu dan mulai petualangan bareng!\n` +
+                `Pet kasih **bonus pasif** otomatis, dan bisa diajak **bertarung**, **masuk dungeon**, sampai **lawan boss raid**!\n\n` +
+                `> 🛒 Buka **Shop** untuk adopsi pet atau buka telur gacha\n` +
                 `> ${ui.money(userData.balance)}`)
-            .setFooter({ text: ui.footer('Klik Shop untuk mulai!') });
+            .setFooter({ text: ui.footer('Klik Shop untuk adopsi pet pertamamu!') });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
@@ -67,12 +67,12 @@ function buildMainPanel(guildId, userId, username) {
         .setColor(bonusActive ? ui.COLORS.success : ui.COLORS.danger)
         .setDescription(
             `${petDef.emoji} **${petDef.name}** — *${petDef.tier}*\n\n` +
-            `❤️ Happy: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
-            `🍖 Hunger: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
+            `❤️ Senang: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
+            `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
             `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
             `⚔️ ATK: **${pet.atk}** | 🛡️ DEF: **${pet.def}** | 💨 SPD: **${pet.spd}**\n` +
             `❤️ HP: **${pet.hp}** | 🎯 CRIT: **${pet.crit}%**\n` +
-            `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅' : '❌'}` +
+            `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` +
             huntInfo + evoInfo
         )
         .setFooter({ text: ui.footer(`${ui.money(userData.balance)} • Class: ${pet.class || 'warrior'} • Element: ${pet.element || 'fire'}`) });
