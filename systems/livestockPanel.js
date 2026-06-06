@@ -1,6 +1,12 @@
 // systems/livestockPanel.js — Livestock Panel UI (Kandang Ayam, Peternakan, Crafting)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getItemCount } = require('../database');
+
+// Helper: reply yang auto-delete setelah 4 detik (non-ephemeral)
+async function tempReply(interaction, content) {
+    const msg = await interaction.reply({ content, fetchReply: true });
+    setTimeout(() => msg.delete().catch(() => {}), 4000);
+}
 const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES } = require('../data/livestock');
 const { FARM_RECIPES } = require('../data/farming');
 const { getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots, getAnimals, collectProducts, feedAnimals, sellAllProducts, getProductInventory } = require('./livestock');
@@ -307,7 +313,7 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_coop_collect_${userId}`) {
         const result = collectProducts(userId, 'chicken');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
         const reply = await interaction.reply({ content: `🥚 Collected **${result.totalCollected}** telur! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
@@ -315,7 +321,7 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_coop_feed_${userId}`) {
         const result = feedAnimals(userId, 'chicken');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
         const reply = await interaction.reply({ content: `🌾 Berhasil memberi makan **${result.fed}** ayam! (Pakan: -${result.feedUsed})`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
@@ -329,16 +335,16 @@ async function handleLivestockButton(interaction) {
         
         if (sickOnes.length > 0) {
             const result = healAll(userId, 'chicken');
-            if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+            if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
             const reply = await interaction.reply({ content: `💊 Menyembuhkan **${result.healed}** ayam!`, fetchReply: true });
             setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
             setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
             return;
         }
         if (starvingOnes.length > 0) {
-            return interaction.reply({ content: `❌ Ayam kelaparan, bukan sakit. Gunakan **🌾 Feed All**!`, ephemeral: true });
+            return interaction.reply({ content: `❌ Ayam kelaparan, bukan sakit. Gunakan **🌾 Feed All**!`); return;
         }
-        return interaction.reply({ content: `❌ Tidak ada ayam sakit!`, ephemeral: true });
+        return interaction.reply({ content: `❌ Tidak ada ayam sakit!`); return;
     }
     if (customId === `farm_coop_sell_${userId}`) {
         // Sell egg products from farm_storage
@@ -355,12 +361,12 @@ async function handleLivestockButton(interaction) {
         }
         db.prepare("DELETE FROM farm_storage WHERE userId = ? AND itemId LIKE 'egg_%'").run(userId);
         db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
-        return interaction.reply({ content: `💰 Semua telur terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        await tempReply(interaction, `💰 Semua telur terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`); return;
     }
     if (customId === `farm_coop_upgrade_${userId}`) {
         const result = upgradeCoopLevel(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`); return;
     }
 
     // === RENAME AYAM ===
@@ -412,8 +418,8 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_coop_bury_${userId}`) {
         const { buryAllDead } = require('./livestock');
         const result = buryAllDead(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `⚰️ **${result.count}** ayam mati telah dikubur. Slot kandang dibebaskan.`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `⚰️ **${result.count}** ayam mati telah dikubur. Slot kandang dibebaskan.`); return;
     }
     if (customId === `farm_coop_shop_${userId}`) {
         // Show full coop shop with input buttons
@@ -445,8 +451,8 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_coop_buyhen_${userId}`) {
         const result = buyAnimal(userId, 'chicken');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `🐔 Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `🐔 Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_coop_buyfeed_input_${userId}`) {
         const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -479,7 +485,7 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_barn_milk_${userId}`) {
         const result = collectProducts(userId, 'cow');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
         const reply = await interaction.reply({ content: `🥛 Collected **${result.totalCollected}** susu! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
@@ -487,7 +493,7 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_barn_shear_${userId}`) {
         const result = collectProducts(userId, 'sheep');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
         const reply = await interaction.reply({ content: `🧶 Collected **${result.totalCollected}** bulu! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
@@ -499,7 +505,7 @@ async function handleLivestockButton(interaction) {
         const msgs = [];
         if (cowResult.success) msgs.push(`🐄 Fed ${cowResult.fed} sapi`);
         if (sheepResult.success) msgs.push(`🐑 Fed ${sheepResult.fed} domba`);
-        if (msgs.length === 0) return interaction.reply({ content: `❌ ${cowResult.error || sheepResult.error || 'Tidak ada hewan!'}`, ephemeral: true });
+        if (msgs.length === 0) return interaction.reply({ content: `❌ ${cowResult.error || sheepResult.error || 'Tidak ada hewan!'}`); return;
         const reply = await interaction.reply({ content: `🌾 ${msgs.join(' | ')}`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
@@ -521,9 +527,9 @@ async function handleLivestockButton(interaction) {
             return;
         }
         if (starvingOnes.length > 0) {
-            return interaction.reply({ content: `❌ Hewan kelaparan, bukan sakit. Gunakan **🌾 Feed All**!`, ephemeral: true });
+            return interaction.reply({ content: `❌ Hewan kelaparan, bukan sakit. Gunakan **🌾 Feed All**!`); return;
         }
-        return interaction.reply({ content: `❌ Tidak ada hewan sakit!`, ephemeral: true });
+        return interaction.reply({ content: `❌ Tidak ada hewan sakit!`); return;
     }
     if (customId === `farm_barn_play_${userId}`) {
         // Play with barn animals — boosts production speed temporarily
@@ -535,7 +541,7 @@ async function handleLivestockButton(interaction) {
         const playCD = 30 * 60 * 1000; // 30 menit
         if (Date.now() - lastPlay < playCD) {
             const remaining = Math.ceil((playCD - (Date.now() - lastPlay)) / 60000);
-            return interaction.reply({ content: `⏳ Hewan masih capek bermain! Tunggu **${remaining} menit** lagi.`, ephemeral: true });
+            return interaction.reply({ content: `⏳ Hewan masih capek bermain! Tunggu **${remaining} menit** lagi.`); return;
         }
         // Play effect: reset lastCollect to speed up next production by 50%
         setLivestockData(userId, 'barn_last_play', String(Date.now()));
@@ -546,7 +552,7 @@ async function handleLivestockButton(interaction) {
         }
         const playMsgs = ['🐄 Sapi berlari senang!', '🐑 Domba melompat-lompat!', '🎾 Hewan-hewan bermain bersama!', '🌿 Mereka makan rumput segar sambil bermain!'];
         const msg = playMsgs[Math.floor(Math.random() * playMsgs.length)];
-        return interaction.reply({ content: `🎾 **Bermain dengan hewan!**\n> ${msg}\n> ⚡ Produksi dipercepat 5 menit untuk semua hewan!`, ephemeral: true });
+        await tempReply(interaction, `🎾 **Bermain dengan hewan!**\n> ${msg}\n> ⚡ Produksi dipercepat 5 menit untuk semua hewan!`); return;
     }
     if (customId === `farm_barn_sell_${userId}`) {
         // Sell milk + wool products from farm_storage
@@ -563,18 +569,18 @@ async function handleLivestockButton(interaction) {
         }
         db.prepare("DELETE FROM farm_storage WHERE userId = ? AND (itemId LIKE 'milk_%' OR itemId LIKE 'wool_%')").run(userId);
         db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
-        return interaction.reply({ content: `💰 Semua susu & bulu terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        await tempReply(interaction, `💰 Semua susu & bulu terjual! 🪙 **+${totalPrice.toLocaleString('id-ID')}**`); return;
     }
     if (customId === `farm_barn_upgrade_${userId}`) {
         const result = upgradeBarnLevel(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `⬆️ Peternakan upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `⬆️ Peternakan upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`); return;
     }
     if (customId === `farm_barn_bury_${userId}`) {
         const { buryAllDead } = require('./livestock');
         const result = buryAllDead(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `⚰️ **${result.count}** hewan mati telah dikubur. Slot kandang dibebaskan.`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `⚰️ **${result.count}** hewan mati telah dikubur. Slot kandang dibebaskan.`); return;
     }
     if (customId === `farm_barn_shop_${userId}`) {
         const userData2 = getOrCreateUser(null, userId);
@@ -610,13 +616,13 @@ async function handleLivestockButton(interaction) {
     }
     if (customId === `farm_barn_buycow_${userId}`) {
         const result = buyAnimal(userId, 'cow');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `🐄 Berhasil beli sapi! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `🐄 Berhasil beli sapi! (-🪙 ${result.price.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_barn_buysheep_${userId}`) {
         const result = buyAnimal(userId, 'sheep');
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `🐑 Berhasil beli domba! (-🪙 ${result.price.toLocaleString('id-ID')})`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        await tempReply(interaction, `🐑 Berhasil beli domba! (-🪙 ${result.price.toLocaleString('id-ID')})`); return;
     }
     // Modal inputs for barn shop
     if (customId === `farm_barn_buycowfeed_input_${userId}`) {
@@ -654,8 +660,8 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_craft_sellall_${userId}`) {
         const { sellAllProducts: sellLP } = require('./livestock');
         const result = sellLP(userId);
-        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        return interaction.reply({ content: `💰 Semua produk ternak terjual! 🪙 **${result.totalPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`); return;
+        return interaction.reply({ content: `💰 Semua produk ternak terjual! 🪙 **${result.totalPrice.toLocaleString('id-ID')}**`); return;
     }
 
     // === CRAFTING PRODUCTS VIEW ===
@@ -708,7 +714,7 @@ async function handleLivestockButton(interaction) {
         if (totalMoney === 0) return interaction.reply({ content: '❌ Tidak ada item untuk dijual!', ephemeral: true });
 
         db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalMoney, userId);
-        return interaction.reply({ content: `💰 Semua item terjual! Total: 🪙 **${totalMoney.toLocaleString('id-ID')}**`, ephemeral: true });
+        return interaction.reply({ content: `💰 Semua item terjual! Total: 🪙 **${totalMoney.toLocaleString('id-ID')}**`); return;
     }
 }
 
@@ -746,10 +752,10 @@ async function handleLivestockModal(interaction) {
         if (isNaN(slot) || slot < 1) return interaction.reply({ content: '❌ Nomor slot tidak valid!', ephemeral: true });
         if (!newName || newName.length > 20) return interaction.reply({ content: '❌ Nama harus 1-20 karakter!', ephemeral: true });
         const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
-        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada! (Punya ${chickens.length} ayam)`, ephemeral: true });
+        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada! (Punya ${chickens.length} ayam)`); return;
         const chicken = chickens[slot - 1];
         db.prepare('UPDATE livestock SET name = ? WHERE id = ?').run(newName, chicken.id);
-        return interaction.reply({ content: `✏️ Ayam #${slot} renamed menjadi **${newName}**!`, ephemeral: true });
+        return interaction.reply({ content: `✏️ Ayam #${slot} renamed menjadi **${newName}**!`); return;
     }
 
     // === SELL BIRD MODAL ===
@@ -757,14 +763,14 @@ async function handleLivestockModal(interaction) {
         const slot = parseInt(interaction.fields.getTextInputValue('slot'));
         if (isNaN(slot) || slot < 1) return interaction.reply({ content: '❌ Nomor slot tidak valid!', ephemeral: true });
         const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
-        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada!`, ephemeral: true });
+        if (slot > chickens.length) return interaction.reply({ content: `❌ Slot ${slot} tidak ada!`); return;
         const chicken = chickens[slot - 1];
         // Sell price: base 1000 + (level * 100) + (tier * 3000)
         const sellPrice = 1000 + (chicken.level * 100) + (chicken.tier * 3000);
         const name = chicken.name || 'Ayam';
         db.prepare('DELETE FROM livestock WHERE id = ?').run(chicken.id);
         db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(sellPrice, userId);
-        return interaction.reply({ content: `🐔 **${name}** (Lv.${chicken.level}) terjual! 🪙 **+${sellPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        return interaction.reply({ content: `🐔 **${name}** (Lv.${chicken.level}) terjual! 🪙 **+${sellPrice.toLocaleString('id-ID')}**`); return;
     }
 
     const qty = parseInt(interaction.fields.getTextInputValue('qty'));
@@ -776,61 +782,61 @@ async function handleLivestockModal(interaction) {
     // Coop modals
     if (customId === `farm_coop_modal_feed_${userId}`) {
         const cost = qty * 60;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'chicken_feed', qty);
-        return interaction.reply({ content: `🌾 Beli Pakan Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `🌾 Beli Pakan Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_coop_modal_meds_${userId}`) {
         const cost = qty * 250;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'chicken_medicine', qty);
-        return interaction.reply({ content: `💊 Beli Obat Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `💊 Beli Obat Ayam x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_coop_modal_premium_${userId}`) {
         const cost = qty * 1200;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${cost.toLocaleString('id-ID')}`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'premium_feed', qty);
-        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
 
     // Barn modals
     if (customId === `farm_barn_modal_cowfeed_${userId}`) {
         const cost = qty * 90;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'cow_feed', qty);
-        return interaction.reply({ content: `🌾 Beli Pakan Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `🌾 Beli Pakan Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_barn_modal_sheepfeed_${userId}`) {
         const cost = qty * 70;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'sheep_feed', qty);
-        return interaction.reply({ content: `🌾 Beli Pakan Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `🌾 Beli Pakan Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_barn_modal_cowmeds_${userId}`) {
         const cost = qty * 400;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'cow_medicine', qty);
-        return interaction.reply({ content: `💊 Beli Obat Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `💊 Beli Obat Sapi x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_barn_modal_sheepmeds_${userId}`) {
         const cost = qty * 350;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'sheep_medicine', qty);
-        return interaction.reply({ content: `💊 Beli Obat Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `💊 Beli Obat Domba x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
     if (customId === `farm_barn_modal_premium_${userId}`) {
         const cost = qty * 1200;
-        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`, ephemeral: true });
+        if (user.balance < cost) return interaction.reply({ content: `❌ Saldo kurang!`); return;
         db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
         addI(null, userId, 'premium_feed', qty);
-        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`, ephemeral: true });
+        return interaction.reply({ content: `⭐ Beli Pakan Premium x**${qty}**! (-🪙 ${cost.toLocaleString('id-ID')})`); return;
     }
 }
 
@@ -876,7 +882,7 @@ async function handleLivestockSelectMenu(interaction) {
             if (have < ing.qty) {
                 const c = ALL_CROPS.find(cr => cr.id === ing.id);
                 const name = c ? c.name : ing.id;
-                return interaction.reply({ content: `❌ Bahan kurang! Butuh **${name}** × ${ing.qty} (punya: ${have})`, ephemeral: true });
+                return interaction.reply({ content: `❌ Bahan kurang! Butuh **${name}** × ${ing.qty} (punya: ${have})`); return;
             }
         }
 
@@ -898,7 +904,7 @@ async function handleLivestockSelectMenu(interaction) {
             return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} ×${ing.qty}`;
         }).join(' + ');
 
-        return interaction.reply({ content: `🧪 **Craft: ${recipe.emoji} ${recipe.name}!**\n> Bahan: ${ingredients}\n> Hasil: 🪙 **+${recipe.sellPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+        return interaction.reply({ content: `🧪 **Craft: ${recipe.emoji} ${recipe.name}!**\n> Bahan: ${ingredients}\n> Hasil: 🪙 **+${recipe.sellPrice.toLocaleString('id-ID')}**`); return;
     }
 }
 
