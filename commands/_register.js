@@ -57,8 +57,6 @@ const commands = [
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
-    new SlashCommandBuilder().setName('ask').setDescription('🤖 Tanya AI tentang fitur bot')
-        .addStringOption(opt => opt.setName('pertanyaan').setDescription('Pertanyaan kamu tentang fitur bot').setRequired(true)),
 
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()

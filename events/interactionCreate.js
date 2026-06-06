@@ -115,25 +115,6 @@ module.exports = async function handleInteractionCreate(interaction) {
             interaction.channel.send({ embeds: [welcomeEmbed], components: [welcomeRow] }).catch(() => {});
         }
 
-        if (command === 'ask') {
-            const question = interaction.options.getString('pertanyaan');
-            await interaction.deferReply();
-            const { askGemini } = require('../systems/aiChat');
-            const apiKey = process.env.GEMINI_API_KEY;
-            const result = await askGemini(question, apiKey);
-            if (result.error) {
-                return interaction.editReply({ content: `❌ ${result.error}` });
-            }
-            const { EmbedBuilder: EB } = require('discord.js');
-            const embed = new EB()
-                .setTitle('🤖 AI Assistant')
-                .setColor('#4285F4')
-                .setDescription(result.answer.length > 4000 ? result.answer.substring(0, 4000) + '...' : result.answer)
-                .setFooter({ text: `Pertanyaan: ${question.substring(0, 100)}` })
-                .setTimestamp();
-            return interaction.editReply({ embeds: [embed] });
-        }
-
         if (command === 'help') {
             const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor('#5865F2').setDescription('Semua fitur kini berbasis **panel interaktif** — cukup jalankan command lalu pakai tombol/menu!\nGunakan `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
