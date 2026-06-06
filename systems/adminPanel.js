@@ -18,6 +18,44 @@ function isAdminUser(interaction) {
     return interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 }
 
+// ============ HELPER: Resolve a target user from flexible input ============
+// Admins can now type ANY of these in the "User" field instead of a raw ID:
+//   - a mention:   <@123456789012345678> or <@!123...>
+//   - a raw ID:    123456789012345678
+//   - a username:  budi  (matched against guild members, case-insensitive)
+// Returns a userId string, or null if nothing matched.
+async function resolveTargetId(interaction, raw) {
+    if (!raw) return null;
+    const input = String(raw).trim();
+
+    // 1) Mention form <@123> / <@!123>
+    const mention = input.match(/^<@!?(\d{16,20})>$/);
+    if (mention) return mention[1];
+
+    // 2) Raw numeric ID
+    if (/^\d{16,20}$/.test(input)) return input;
+
+    // 3) Username / display name lookup against the server's members
+    const query = input.replace(/^@/, '').toLowerCase();
+    try {
+        // Try the cache first (fast), then a fetch as a fallback.
+        let member = interaction.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === query ||
+            (m.nickname && m.nickname.toLowerCase() === query) ||
+            (m.user.globalName && m.user.globalName.toLowerCase() === query)
+        );
+        if (!member) {
+            const fetched = await interaction.guild.members.fetch({ query: input.replace(/^@/, ''), limit: 5 }).catch(() => null);
+            if (fetched && fetched.size > 0) {
+                member = fetched.find(m => m.user.username.toLowerCase() === query) || fetched.first();
+            }
+        }
+        if (member) return member.id;
+    } catch (e) { /* ignore lookup errors, fall through to null */ }
+
+    return null;
+}
+
 // ============ BUILD: Main Admin Panel ============
 function buildAdminPanel(guildId) {
     const embed = new EmbedBuilder()
@@ -377,7 +415,7 @@ async function handleAdminButton(interaction) {
         const act = actionMap[customId];
         const modal = new ModalBuilder().setCustomId(`admpnl_modal_money_${act}`).setTitle(labelMap[act]);
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target_user_id').setLabel('User ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan user > Copy ID')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target_user_id').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('@user / 123456789012345678 / budi')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('amount').setLabel('Jumlah').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: 5000'))
         );
         return interaction.showModal(modal);
@@ -420,7 +458,7 @@ async function handleAdminButton(interaction) {
         const titleMap = { set: 'Set Streak', reset: 'Reset Streak', restore: 'Restore Streak' };
         const modal = new ModalBuilder().setCustomId(`admpnl_modal_streak_${act}`).setTitle(titleMap[act]);
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target_user_id').setLabel('User ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan user > Copy ID'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target_user_id').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('@user / 123456789012345678 / budi'))
         );
         if (act === 'set') {
             modal.addComponents(
@@ -617,7 +655,9 @@ async function handleAdminModal(interaction) {
             return interaction.reply({ content: '🛑 Hanya **pemilik bot** yang bisa menggunakan fitur Money!', flags: 1 << 6 });
         }
         const act = customId.replace('admpnl_modal_money_', '');
-        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+        const rawTarget = interaction.fields.getTextInputValue('target_user_id').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget);
+        if (!targetId) return interaction.reply({ content: '\u274c User tidak ketemu! Coba tag (@user), User ID, atau username yang benar.', flags: 1 << 6 });
         const amount = parseInt(interaction.fields.getTextInputValue('amount'));
         if (isNaN(amount) || amount < 1) return interaction.reply({ content: '\u274c Jumlah tidak valid!', flags: 1 << 6 });
         const tData = getOrCreateUser(guildId, targetId);
@@ -655,7 +695,9 @@ async function handleAdminModal(interaction) {
     // === STREAK: Set/Reset/Restore ===
     if (customId.startsWith('admpnl_modal_streak_')) {
         const act = customId.replace('admpnl_modal_streak_', '');
-        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+        const rawTarget = interaction.fields.getTextInputValue('target_user_id').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget);
+        if (!targetId) return interaction.reply({ content: '\u274c User tidak ketemu! Coba tag (@user), User ID, atau username yang benar.', flags: 1 << 6 });
 
         if (act === 'set') {
             const amount = parseInt(interaction.fields.getTextInputValue('streak_amount'));
@@ -758,8 +800,8 @@ async function handleDbToolsButton(interaction) {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_petlookup').setTitle('🔍 Pet Lookup');
         modal.addComponents(
             new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('target_user_id').setLabel('Discord User ID').setStyle(TextInputStyle.Short)
-                    .setRequired(true).setPlaceholder('Contoh: 123456789012345678')
+                new TextInputBuilder().setCustomId('target_user_id').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short)
+                    .setRequired(true).setPlaceholder('@user / 123456789012345678 / budi')
             )
         );
         return interaction.showModal(modal);
@@ -776,8 +818,8 @@ async function handleDbToolsButton(interaction) {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_restorepet').setTitle('🔄 Restore Pet dari Backup');
         modal.addComponents(
             new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('target_user_id').setLabel('Discord User ID target').setStyle(TextInputStyle.Short)
-                    .setRequired(true).setPlaceholder('Contoh: 123456789012345678')
+                new TextInputBuilder().setCustomId('target_user_id').setLabel('User target (tag, ID, username)').setStyle(TextInputStyle.Short)
+                    .setRequired(true).setPlaceholder('@user / 123456789012345678 / budi')
             ),
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder().setCustomId('backup_name').setLabel('Nama backup (kosong = backup terbaru)')
@@ -904,7 +946,8 @@ async function handleDbToolsModal(interaction) {
 
     // === Pet Lookup Modal ===
     if (customId === 'admpnl_modal_petlookup') {
-        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+        const rawTarget = interaction.fields.getTextInputValue('target_user_id').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget) || rawTarget;
 
         // Query pets dari database utama (semua userId matching, termasuk GLOBAL_MARKET)
         const allPets = db.prepare('SELECT * FROM pets WHERE userId = ? ORDER BY active DESC, level DESC').all(targetId);
@@ -953,7 +996,8 @@ async function handleDbToolsModal(interaction) {
 
     // === Restore Pet from Backup Modal ===
     if (customId === 'admpnl_modal_restorepet') {
-        const targetId = interaction.fields.getTextInputValue('target_user_id').trim();
+        const rawTarget = interaction.fields.getTextInputValue('target_user_id').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget) || rawTarget;
         const backupInput = interaction.fields.getTextInputValue('backup_name').trim();
 
         const { listBackups } = require('./backup');
