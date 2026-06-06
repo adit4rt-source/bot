@@ -55,9 +55,9 @@ function buildProfilePanel(guildId, userId, username, member) {
                 `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})`,
                 `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}  •  🐾 **Pet:** ${petInfo}`,
             ]) +
-            `\n> 🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**`
+            `\n> 🎣 Ikan ditangkap: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest selesai: **${questsDone}**`
         )
-        .setFooter({ text: ui.footer('Pilih menu di bawah untuk detail') })
+        .setFooter({ text: ui.footer('Klik tombol di bawah untuk Achievement, Inventory, Rank, & lainnya') })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(

@@ -27,19 +27,20 @@ function buildCasinoPanel(guildId, userId, username) {
         .setTitle(ui.title('🎰', 'CASINO', username))
         .setColor(ui.COLORS.casino)
         .setDescription(
+            `Selamat datang di meja judi! Pasang taruhan, semoga hoki. 🍀\n` +
             ui.statBlock([
                 `${ui.money(userData.balance)}`,
-                `🎲 Total Wins: **${totalWins}**  •  🏆 Jackpots: **${jackpots}**`,
+                `🎲 Total Menang: **${totalWins}**  •  🏆 Jackpot: **${jackpots}**`,
             ]) +
-            `\n` +
+            `\n**Pilih permainanmu:**\n` +
             ui.menuList([
-                { emoji: '🪙', label: 'Coinflip', desc: 'Tebak sisi koin — menang 2x' },
-                { emoji: '🎰', label: 'Slot', desc: 'Putar mesin slot — max 25x' },
-                { emoji: '🎯', label: 'Roulette', desc: 'Tebak warna/angka — max 14x' },
+                { emoji: '🪙', label: 'Coinflip', desc: 'Tebak kepala/ekor — tebakan benar, uang jadi 2x' },
+                { emoji: '🎰', label: 'Slot', desc: 'Tarik tuas, samakan simbol — hadiah hingga 25x' },
+                { emoji: '🎯', label: 'Roulette', desc: 'Pasang di warna/angka — hadiah hingga 14x' },
             ]) +
-            `\n\n> ⚠️ *Main dengan bijak — gambling bisa bikin rugi!*`
+            `\n\n> ⚠️ *Ingat: ini hiburan, bukan cara cari uang. Main secukupnya ya!*`
         )
-        .setFooter({ text: ui.footer('Pilih game di bawah untuk bermain!') })
+        .setFooter({ text: ui.footer('Klik salah satu game untuk mulai bertaruh') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
