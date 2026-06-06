@@ -879,11 +879,12 @@ module.exports = async function handleInteractionCreate(interaction) {
         }
 
         // --- EXPEDITION PANEL BUTTONS ---
-        if (isExpeditionButton(interaction.customId)) {
-            return handleExpeditionButton(interaction);
-        }
+        // Check the more specific confirm detector first.
         if (isExpeditionConfirm(interaction.customId)) {
             return handleExpeditionConfirm(interaction);
+        }
+        if (isExpeditionButton(interaction.customId)) {
+            return handleExpeditionButton(interaction);
         }
 
         // --- FUSION PANEL BUTTONS ---

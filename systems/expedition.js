@@ -598,7 +598,11 @@ async function handleExpeditionConfirm(interaction) {
 
 // ==================== DETECTOR ====================
 function isExpeditionButton(customId) {
-    return customId.startsWith('exp_') && !customId.startsWith('exp_zone_select_');
+    // Must exclude exp_zone_select_ (select menu) AND exp_confirm_ (confirm button)
+    // so those are routed to their dedicated handlers instead of being swallowed here.
+    return customId.startsWith('exp_')
+        && !customId.startsWith('exp_zone_select_')
+        && !customId.startsWith('exp_confirm_');
 }
 
 function isExpeditionSelectMenu(customId) {
