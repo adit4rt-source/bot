@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.2.0';
-const BUILD_DATE = '2026-06-05';
+const BOT_VERSION = '3.3.0';
+const BUILD_DATE = '2026-06-06';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -105,6 +105,11 @@ client.once(Events.ClientReady, async c => {
     startReminderSchedules(client);
     console.log('🔔 Reminder: daily (1 jam) + pet lapar (10 menit)');
 
+    // Start voice tick (periodic quest progress for users in VC)
+    const { startVoiceTickInterval } = require('./events/voiceStateUpdate');
+    startVoiceTickInterval(client);
+    console.log('🎙️ Voice tick: quest progress setiap 5 menit');
+
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     try {
@@ -119,163 +124,75 @@ client.once(Events.ClientReady, async c => {
     // Post update changelog (only once per version, deduped)
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
-        // === EMBED 1: Main Header ===
         new ChangelogEmbed()
             .setColor('#5865F2')
             .setTitle(`📦 Update — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `🌐 **BOT SEKARANG GLOBAL!**\n` +
-                `> Semua data player (balance, pet, fish, farm, achievement, inventory) sekarang **SHARED lintas server**!\n` +
-                `> ✅ Main di server A = progress sama di server B\n` +
-                `> ✅ Pet, balance, streak, level — semuanya 1 akun\n` +
-                `> ✅ Tidak perlu ulang dari awal di server baru\n\n` +
+                `🐔🐄 **FARMING & PETERNAKAN — MAJOR UPDATE!**\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
-        // === EMBED 2: Fishing Features ===
         new ChangelogEmbed()
-            .setColor('#3498DB')
-            .setTitle('🎣 FISHING — Update Lengkap')
+            .setColor('#FFA500')
+            .setTitle('🐔 Kandang Ayam — NEW!')
             .setDescription(
-                `**🐋 Giant Fish (Boss Fish) — NEW!**\n` +
-                `> • 1% chance muncul saat mancing di lokasi **Deep Sea+**\n` +
-                `> • Butuh **3-5 cast berturut dalam 60 detik** untuk ditangkap\n` +
-                `> • Reward: 🪙 **5.000-20.000 money** + exclusive badge!\n` +
-                `> • 9 Boss variants: Megalodon, Kraken, Frost Whale, Magma Wyrm, dll\n` +
-                `> • HP bar UI + timer countdown\n` +
-                `> • Stats tracking di panel (defeated, encounters, success rate)\n\n` +
-                `**🏝️ Secret Location: The Abyss — NEW!**\n` +
-                `> • Unlock setelah: 🎣 50 ikan di Void Rift **ATAU** 🔮 5 Secret tier fish\n` +
-                `> • **11 ikan EKSKLUSIF** yang tidak ada di lokasi lain:\n` +
-                `>   • 3 Epic: Abyssal Angler, Shadow Leviathan, Depth Crawler\n` +
-                `>   • 3 Legendary: Eternal Jellyfish, Abyssal Whale King, Void Emperor\n` +
-                `>   • 3 Mythic: Primordial Serpent, Soul Devourer, Abyss Guardian\n` +
-                `>   • 2 Secret: The Forgotten One 👁️, Universe Fish 🌠\n` +
-                `> • Requires Joran Celestial (Tier 7+), +25% rare bonus\n` +
-                `> • Progress bar & info di Location panel\n\n` +
-                `**🔥 Fishing Combo System**\n` +
-                `> • Cast berturut tanpa jeda >2 menit = combo naik\n` +
-                `> • Multiplier: x1.2 (3 combo) → x3.0 (20 combo!)\n` +
-                `> • Combo multiplier apply ke nilai jual ikan\n\n` +
-                `**📦 Treasure Drops**\n` +
-                `> • 5% base chance dapat item saat mancing\n` +
-                `> • Combo tinggi = chance treasure lebih besar\n` +
-                `> • Drops: Mystery Box, Rod Parts, Lucky Charm, XP Booster, dll\n\n` +
-                `**📍 8+1 Lokasi Fishing:**\n` +
-                `> 🏞️ Sungai → 🌿 Rawa → 🌊 Danau → 🏖️ Pesisir → 🌊 Laut Dalam → ❄️ Gua Es → 🌋 Lahar → 🕳️ Void Rift → 👁️ The Abyss (Secret!)`
+                `> • Beli ayam (🪙 3,000/ekor)\n` +
+                `> • Collect telur otomatis (3-10 menit per cycle)\n` +
+                `> • Quality telur: Normal → Premium → Superior → Excellent → Perfect\n` +
+                `> • Evolution tier 0-10 (setiap 10 level)\n` +
+                `> • Semakin tinggi tier = produksi cepat + quality bagus\n` +
+                `> • Hunger system (turun 10%/jam, feed untuk reset)\n` +
+                `> • Hewan punya umur rahasia 2-20 hari\n` +
+                `> • Kandang level 1-7 (3-25 slot)\n\n` +
+                `**Harga Jual Telur:**\n` +
+                `> ⚪ Normal: 50 | 🟡 Premium: 100 | 🟠 Superior: 500\n` +
+                `> 🔴 Excellent: 2,000 | 💎 Perfect: 10,000`
             ),
 
-        // === EMBED 3: Pet & Battle Features ===
         new ChangelogEmbed()
-            .setColor('#9B59B6')
-            .setTitle('🐾 PET & BATTLE — Fitur Lengkap')
+            .setColor('#8B4513')
+            .setTitle('🐄🐑 Peternakan — NEW!')
             .setDescription(
-                `**🐾 Pet System:**\n` +
-                `> • Gacha Egg (Common → Mythic tier)\n` +
-                `> • Feed, Play, Hunt — status management\n` +
-                `> • Level up + stat growth (HP, ATK, DEF, SPD, CRIT)\n` +
-                `> • Class & Element system\n` +
-                `> • Evolution system (stage 1-3)\n` +
-                `> • Skill milestones setiap level tertentu\n` +
-                `> • Max 10 pet per player, swap aktif\n\n` +
-                `**⚔️ Battle System:**\n` +
-                `> • PvP auto-battle (\`/battle @user\`)\n` +
-                `> • Taruhan money (opsional)\n` +
-                `> • Dungeon (5 tier difficulty)\n` +
-                `> • Boss Raid (party max 10 orang)\n` +
-                `> • Relic drops (weapon/armor/accessory)\n` +
-                `> • Refine relic (+0 → +20)\n\n` +
-                `**🌊 Expedition:**\n` +
-                `> • Kirim pet ke ekspedisi untuk reward pasif\n` +
-                `> • Durasi & reward tergantung level pet\n\n` +
-                `**🗺️ World Boss:**\n` +
-                `> • Boss global — semua player serang bersama\n` +
-                `> • Reward berdasarkan damage kontribusi\n\n` +
-                `**🔮 Pet Fusion & Awakening:**\n` +
-                `> • Fuse 2 pet → pet baru tier lebih tinggi\n` +
-                `> • Awakening crystal untuk boost permanent`
+                `> • Sapi (🪙 10,000) → produce susu | Domba (🪙 8,000) → produce bulu\n` +
+                `> • Sistem sama dengan ayam (evolution, hunger, quality)\n` +
+                `> • 🎾 Play button — ajak hewan bermain (boost produksi 5 menit)\n` +
+                `> • Shop pakai input jumlah (beli berapa saja)\n` +
+                `> • Semua produk masuk Storage Hub\n\n` +
+                `**Harga Susu:** Normal: 70 | Premium: 150 | Superior: 700 | Excellent: 3,000 | Perfect: 15,000\n` +
+                `**Harga Bulu:** Normal: 60 | Premium: 120 | Superior: 600 | Excellent: 2,500 | Perfect: 12,000`
             ),
 
-        // === EMBED 4: Farm Features ===
         new ChangelogEmbed()
             .setColor('#2ECC71')
-            .setTitle('🌾 FARMING — Fitur Lengkap')
+            .setTitle('🌦️ Season System + Farm Hub')
             .setDescription(
-                `**🌱 Farm System:**\n` +
-                `> • Plant, Water, Harvest — full cycle\n` +
-                `> • 20+ jenis bibit (Common → Legendary)\n` +
-                `> • Upgrade lahan (Level 1-6), lebih banyak slot\n` +
-                `> • Pupuk: speedup + yield bonus\n` +
-                `> • Auto-Harvest Pass (DM otomatis saat siap panen)\n` +
-                `> • Farm Mutations (tanaman bisa mutasi jadi rare!)\n` +
-                `> • Weather system (bonus/penalty per hari)\n\n` +
-                `**🍳 Craft & Storage:**\n` +
-                `> • Craft hasil panen → produk jual tinggi\n` +
-                `> • Storage inventory per-player\n` +
-                `> • Resep craft unlock dari farming level\n\n` +
-                `**🎨 Farm Decorations:**\n` +
-                `> • Beli dekorasi di shop\n` +
-                `> • Bonus passive dari dekorasi tertentu`
+                `> • Season berubah **setiap hari** (Spring → Summer → Autumn → Winter)\n` +
+                `> • Efek ke tanaman: grow speed, yield, death chance\n` +
+                `> • Efek ke hewan: produksi rate, sickness, feed consumption\n` +
+                `> • Farm Hub baru: [Tanaman] [Kandang Ayam] [Peternakan] [Crafting] [Storage]\n` +
+                `> • Storage Hub gabungkan semua item (panen + produk ternak)\n` +
+                `> • Crafting ada di hub (36 resep tanaman)`
             ),
 
-        // === EMBED 5: Economy & Social Features ===
         new ChangelogEmbed()
-            .setColor('#F1C40F')
-            .setTitle('💰 ECONOMY & SOCIAL — Fitur Lengkap')
+            .setColor('#43B581')
+            .setTitle('📨👋🎙️ Fitur Server Baru')
             .setDescription(
-                `**💰 Economy:**\n` +
-                `> • \`/daily\` — Reward harian + streak bonus\n` +
-                `> • \`/calendar\` — Login calendar 30 hari\n` +
-                `> • \`/gift @user\` — Kirim money (pajak 10%)\n` +
-                `> • \`/shop\` — Toko lengkap (fishing, farm, pet, battle, role)\n` +
-                `> • \`/trade\` — Tukar item antar player\n` +
-                `> • \`/market\` — Marketplace jual/beli item\n` +
-                `> • \`/globalmarket\` — Marketplace lintas server\n\n` +
-                `**🎰 Casino:**\n` +
-                `> • Coinflip (animasi 3 stage)\n` +
-                `> • Slot Machine (jackpot 7️⃣7️⃣7️⃣ = 25x!)\n` +
-                `> • Blackjack (hit/stand/double)\n\n` +
-                `**📜 Quest System:**\n` +
-                `> • 3 Daily Quest (reset 00:00 WIB)\n` +
-                `> • 3 Weekly Quest\n` +
-                `> • Perfect Day bonus + 7-day streak\n\n` +
-                `**🏆 Achievement System:**\n` +
-                `> • **96 badge** di 10+ kategori\n` +
-                `> • Milestone rewards (10/25/50/75/96 badge)\n` +
-                `> • Auto-role berdasarkan jumlah badge\n` +
-                `> • Achievement channel notification`
-            ),
-
-        // === EMBED 6: Infrastructure + How to Play ===
-        new ChangelogEmbed()
-            .setColor('#E74C3C')
-            .setTitle('⚙️ INFRASTRUKTUR & CARA MAIN')
-            .setDescription(
-                `**🌐 Global Mode (AKTIF!):**\n` +
-                `> • Semua data **1 akun global** — lintas server!\n` +
-                `> • Balance, pet, fish, farm, achievement = shared\n` +
-                `> • Pindah server? Progress tetap aman 100%\n` +
-                `> • Market & Trade bisa lintas server\n\n` +
-                `**🔒 Anti-Abuse:**\n` +
-                `> • Captcha random setiap 15 menit\n` +
-                `> • Block sementara jika gagal verifikasi\n` +
-                `> • Cooldown per-command\n\n` +
-                `**💾 Data Safety:**\n` +
-                `> • Auto-backup setiap 6 jam\n` +
-                `> • Database SQLite + WAL mode\n` +
-                `> • Crash recovery otomatis\n\n` +
-                `**📱 Cara Mulai:**\n` +
-                `> 1. \`/menu\` — Navigasi utama\n` +
-                `> 2. \`/daily\` — Klaim reward harian\n` +
-                `> 3. \`/fish\` atau \`/fishing\` — Mulai mancing\n` +
-                `> 4. \`/farm\` — Mulai berkebun\n` +
-                `> 5. \`/pet\` — Gacha & kelola pet\n` +
-                `> 6. \`/quest\` — Misi harian & mingguan\n` +
-                `> 7. \`/help\` — Panduan lengkap`
+                `**📨 Invite Tracker** (/invite)\n` +
+                `> • Track siapa invite siapa, leaderboard, fake detection\n\n` +
+                `**👋 Welcomer** (/welcomer - Admin)\n` +
+                `> • Welcome/Goodbye message, DM, Auto-role\n\n` +
+                `**🎙️ Tempvoice** (/tempvoice)\n` +
+                `> • Buat private voice channel, lock/hide/kick/block\n\n` +
+                `**🔧 Lainnya:**\n` +
+                `> • Voice quest fix (progress terupdate tiap 5 menit)\n` +
+                `> • Streak/Level notif auto-delete 15 detik\n` +
+                `> • Dashboard: semua ID diganti dropdown selector\n` +
+                `> • Admin Panel: 11 tab super powerful`
             )
-            .setFooter({ text: 'idcommunity Bot v3.2.0 — Global Economy & RPG | discord.gg/idcommunity' })
+            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()
     ]);
 });
