@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder
 const { db, getOrCreateUser, getUserStat, incrementUserStat } = require('../database');
 const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
+const ui = require('./ui');
 
 // Gift cooldown (per sender): 10 seconds
 const giftCooldowns = new Map();
@@ -16,22 +17,25 @@ function buildEconomyPanel(guildId, userId, username) {
     const totalBuys = getUserStat(guildId, userId, 'total_buys') || 0;
 
     const embed = new EmbedBuilder()
-        .setTitle(`\ud83d\udcb0 ECONOMY \u2014 ${username}`)
-        .setColor('#F1C40F')
+        .setTitle(ui.title('💰', 'ECONOMY', username))
+        .setColor(ui.COLORS.economy)
         .setDescription(
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
-            `\ud83e\ude99 Saldo: **${userData.balance.toLocaleString('id-ID')}**\n` +
-            `\ud83d\udcc8 Level: **${userData.level}** | \u2728 EXP: **${userData.xp}/${(userData.level + 1) * 100}**\n` +
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
-            `> \ud83d\udcb3 **Balance** \u2014 Cek saldo detail\n` +
-            `> \ud83c\udf81 **Daily** \u2014 Klaim hadiah harian\n` +
-            `> \ud83c\udfb0 **Casino** \u2014 Buka panel gambling\n` +
-            `> \ud83c\udf81 **Gift** \u2014 Kirim money ke player lain\n` +
-            `> \ud83c\udf9f\ufe0f **Redeem** \u2014 Tukar kode voucher\n` +
-            `> \ud83c\udfc6 **Leaderboard** \u2014 Ranking global\n` +
-            `> \ud83d\uded2 **Shop** \u2014 Beli item & role`
+            ui.statBlock([
+                `${ui.money(userData.balance)}  •  📈 Level **${userData.level}**`,
+                `✨ EXP: ${ui.progressLine(userData.xp, (userData.level + 1) * 100)}`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '💳', label: 'Balance', desc: 'Cek saldo & statistik detail' },
+                { emoji: '🎁', label: 'Daily', desc: 'Klaim hadiah harian' },
+                { emoji: '🎰', label: 'Casino', desc: 'Coinflip, slot, roulette, blackjack' },
+                { emoji: '💸', label: 'Gift', desc: 'Kirim money ke player lain' },
+                { emoji: '🎟️', label: 'Redeem', desc: 'Tukar kode voucher' },
+                { emoji: '🏆', label: 'Leaderboard', desc: 'Ranking money' },
+                { emoji: '🛒', label: 'Shop', desc: 'Beli item & role' },
+            ])
         )
-        .setFooter({ text: `\ud83c\udfb2 CF Wins: ${cfWins} | \ud83c\udfb0 Slot Wins: ${slotWins} | \ud83d\uded2 Total Buys: ${totalBuys}` })
+        .setFooter({ text: ui.footer(`CF Wins: ${cfWins} • Slot Wins: ${slotWins} • Total Buys: ${totalBuys}`) })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -82,19 +86,19 @@ async function handleEconomyButton(interaction) {
         const totalEarned = getUserStat(guildId, userId, 'slot_total_winnings') || 0;
         const rouletteWin = getUserStat(guildId, userId, 'roulette_total_winnings') || 0;
         const embed = new EmbedBuilder()
-            .setTitle(`\ud83d\udcb3 Balance Detail \u2014 ${interaction.user.username}`)
-            .setColor('#F1C40F')
+            .setTitle(ui.title('💳', 'Balance Detail', interaction.user.username))
+            .setColor(ui.COLORS.economy)
             .setDescription(
-                `> \ud83e\ude99 **Saldo:** ${userData.balance.toLocaleString('id-ID')}\n` +
-                `> \ud83d\udcc8 **Level:** ${userData.level}\n` +
-                `> \u2728 **EXP:** ${userData.xp}/${(userData.level + 1) * 100}\n\n` +
-                `\ud83d\udcca **Statistik:**\n` +
-                `> \ud83c\udfb0 Slot Winnings: \ud83e\ude99 ${totalEarned.toLocaleString('id-ID')}\n` +
-                `> \ud83c\udfaf Roulette Winnings: \ud83e\ude99 ${rouletteWin.toLocaleString('id-ID')}`
-            );
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ecopnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-        );
+                ui.statBlock([
+                    `${ui.money(userData.balance)}`,
+                    `📈 Level **${userData.level}**  •  ✨ ${userData.xp}/${(userData.level + 1) * 100} XP`,
+                ]) +
+                `\n📊 **Statistik Casino:**\n` +
+                `> 🎰 Slot Winnings: ${ui.money(totalEarned)}\n` +
+                `> 🎯 Roulette Winnings: ${ui.money(rouletteWin)}`
+            )
+            .setFooter({ text: ui.footer('Main casino & daily untuk nambah saldo!') });
+        const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -102,13 +106,11 @@ async function handleEconomyButton(interaction) {
     // === DAILY (redirect info) ===
     if (action === 'daily') {
         const embed = new EmbedBuilder()
-            .setTitle('\ud83c\udf81 Daily Reward')
-            .setColor('#2ECC71')
-            .setDescription('Gunakan command `/daily` untuk klaim hadiah harian!\n\n> \ud83e\ude99 Money random\n> \u2728 EXP bonus\n> \ud83d\udce6 Chance item')
-            .setFooter({ text: 'Ketik /daily di chat' });
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ecopnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-        );
+            .setTitle(ui.title('🎁', 'Daily Reward'))
+            .setColor(ui.COLORS.success)
+            .setDescription('Ketik `/daily` di chat untuk klaim hadiah harian!\n\n> 🪙 Money random\n> ✨ EXP bonus\n> 📦 Chance dapat item\n> 🔥 Streak makin tinggi = reward makin besar')
+            .setFooter({ text: ui.footer('Jangan lupa klaim tiap hari biar streak jalan!') });
+        const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -144,30 +146,25 @@ async function handleEconomyButton(interaction) {
         const data = db.prepare('SELECT * FROM users WHERE guildId = ? ORDER BY balance DESC LIMIT 10').all(guildId);
         let desc = data.length ? '' : '*Belum ada data.*';
         data.forEach((u, i) => {
-            const medal = i === 0 ? '\ud83e\udd47' : i === 1 ? '\ud83e\udd48' : i === 2 ? '\ud83e\udd49' : `**${i + 1}.**`;
-            desc += `${medal} <@${u.userId}> \u2014 \ud83e\ude99 **${u.balance.toLocaleString('id-ID')}**\n`;
+            desc += `${ui.medal(i)} <@${u.userId}> — ${ui.money(u.balance)}\n`;
         });
         const embed = new EmbedBuilder()
-            .setTitle('\ud83c\udfc6 Money Leaderboard')
-            .setColor('#FFD700')
+            .setTitle(ui.title('🏆', 'Money Leaderboard'))
+            .setColor(ui.COLORS.leaderboard)
             .setDescription(desc)
-            .setFooter({ text: 'Top 10 Money 💰 | /levelpanel untuk ranking level' });
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ecopnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-        );
+            .setFooter({ text: ui.footer('Top 10 Money • /levelpanel untuk ranking level') });
+        const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === SHOP (redirect info) ===
     if (action === 'shop') {
         const embed = new EmbedBuilder()
-            .setTitle('\ud83d\uded2 Shop')
-            .setColor('#2ECC71')
-            .setDescription('Gunakan command `/shop` untuk membuka toko lengkap!\n\n> \ud83c\udfa8 Role shop\n> \ud83d\udce6 Item virtual\n> \ud83c\udfa8 Custom Role\n> \ud83c\udfa3 Fishing shop (rod & bait)')
-            .setFooter({ text: 'Ketik /shop di chat' });
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ecopnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-        );
+            .setTitle(ui.title('🛒', 'Shop'))
+            .setColor(ui.COLORS.success)
+            .setDescription('Ketik `/shop` di chat untuk membuka toko lengkap!\n\n> 🎨 Role shop\n> 📦 Item virtual\n> 🎨 Custom Role\n> 🎣 Fishing shop (rod & bait)')
+            .setFooter({ text: ui.footer('Semua pembelian otomatis masuk inventory') });
+        const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 }
