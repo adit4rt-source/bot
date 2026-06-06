@@ -135,16 +135,17 @@ function buildBarnPanel(userId, username) {
         const hunger = getHungerPercent(cow);
         const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
 
+        const rarityIcon = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
         if (cow.status === 'sick') {
-            cowList += `\`[${i + 1}]\` 🐄 **Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
         } else if (isReady) {
-            cowList += `\`[${i + 1}]\` 🐄 **Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            cowList += `\`[${i + 1}]\` 🐄 **Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -159,16 +160,17 @@ function buildBarnPanel(userId, username) {
         const hunger = getHungerPercent(s);
         const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
 
+        const rarityIcon = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
         if (s.status === 'sick') {
-            sheepList += `\`[${i + 1}]\` 🐑 **Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
         } else if (isReady) {
-            sheepList += `\`[${i + 1}]\` 🐑 **Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            sheepList += `\`[${i + 1}]\` 🐑 **Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -207,6 +209,7 @@ function buildBarnPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_barn_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_barn_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_barn_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_barn_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
         ...(deadBarnCount > 0 ? [new ButtonBuilder().setCustomId(`farm_barn_bury_${userId}`).setLabel(`⚰️ Kubur (${deadBarnCount})`).setStyle(ButtonStyle.Danger)] : []),
         new ButtonBuilder().setCustomId(`farm_barn_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
@@ -615,6 +618,37 @@ async function handleLivestockButton(interaction) {
         const result = buryAllDead(userId);
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         await tempReply(interaction, `⚰️ **${result.count}** hewan mati telah dikubur. Slot kandang dibebaskan.`); return;
+    }
+    if (customId === `farm_barn_stats_${userId}`) {
+        const { getUserStat } = require('../database');
+        const cows = getAnimals(userId, 'cow').filter(a => a.status !== 'dead');
+        const sheep = getAnimals(userId, 'sheep').filter(a => a.status !== 'dead');
+        const allBarn = [...cows, ...sheep];
+        const goldenCount = allBarn.filter(a => a.rarity === 'golden').length;
+        const diamondCount = allBarn.filter(a => a.rarity === 'diamond').length;
+        const totalMilk = getUserStat(null, userId, 'total_milk_collected') || 0;
+        const totalWool = getUserStat(null, userId, 'total_wool_collected') || 0;
+        const highestLv = allBarn.length > 0 ? Math.max(...allBarn.map(a => a.level)) : 0;
+        const highestTier = allBarn.length > 0 ? Math.max(...allBarn.map(a => a.tier)) : 0;
+
+        const embed = new EmbedBuilder()
+            .setTitle('📊 Stats Peternakan')
+            .setColor('#8B4513')
+            .setDescription(
+                `**📈 Overview:**\n` +
+                `> 🐄 Sapi: **${cows.length}** | 🐑 Domba: **${sheep.length}**\n` +
+                `> ✨ Golden: **${goldenCount}** | 💎 Diamond: **${diamondCount}**\n` +
+                `> 🥛 Total Susu Collected: **${totalMilk.toLocaleString('id-ID')}**\n` +
+                `> 🧶 Total Bulu Collected: **${totalWool.toLocaleString('id-ID')}**\n` +
+                `> 🏆 Level Tertinggi: **${highestLv}**\n` +
+                `> ⭐ Tier Tertinggi: **${highestTier}**\n\n` +
+                `**🎲 Rarity Chance:**\n` +
+                `> Normal: 94% | ✨ Golden: 5% (2x) | 💎 Diamond: 1% (3x)`
+            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
     if (customId === `farm_barn_shop_${userId}`) {
         const userData2 = getOrCreateUser(null, userId);
