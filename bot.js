@@ -110,6 +110,14 @@ client.once(Events.ClientReady, async c => {
     startVoiceTickInterval();
     console.log('🎙️ Voice tick: quest progress setiap 1 menit');
 
+    // Initialize seasonal leaderboard (snapshots baselines + handles monthly rollover)
+    try {
+        const { ensureSeason, getSeasonInfo } = require('./systems/season');
+        ensureSeason();
+        const info = getSeasonInfo();
+        console.log(`🗓️ Seasonal leaderboard: season ${info.seasonId} (sisa ${info.daysLeft} hari)`);
+    } catch (e) { console.error('Season init error:', e); }
+
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     try {

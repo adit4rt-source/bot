@@ -43,6 +43,7 @@ const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATION
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
+const cooldowns = require('../systems/cooldowns');
 const { isBlocked, getBlockRemaining, hasPendingCaptcha, shouldTriggerCaptcha, sendCaptcha } = require('../systems/captcha');
 
 async function routeInteraction(interaction) {
@@ -361,8 +362,8 @@ async function routeInteraction(interaction) {
 
         // ================= BATTLE PVP =================
         if (command === 'battle') {
-            const battleCd = `battle_${guildId}_${interaction.user.id}`;
-            if (fishCooldowns.has(battleCd) && Date.now() < fishCooldowns.get(battleCd)) { return interaction.reply({ content: '⏳ Tunggu 5 menit sebelum battle lagi.', ephemeral: true }); }
+            const battleCdCheck = cooldowns.getRemaining('battle', guildId, interaction.user.id);
+            if (battleCdCheck > 0) { return interaction.reply({ content: `⏳ Tunggu **${Math.ceil(battleCdCheck / 1000)} detik** sebelum battle lagi.`, ephemeral: true }); }
             const myPet = getPetData(guildId, interaction.user.id);
             if (!myPet) return interaction.reply({ content: '❌ Kamu belum punya pet aktif!', ephemeral: true });
             const target = interaction.options.getUser('lawan');
@@ -376,7 +377,7 @@ async function routeInteraction(interaction) {
                 const enemyData = getOrCreateUser(guildId, target.id);
                 if (enemyData.balance < taruhan) return interaction.reply({ content: `❌ <@${target.id}> saldo kurang untuk taruhan! (Butuh 🪙 ${taruhan.toLocaleString('id-ID')})`, ephemeral: true });
             }
-            fishCooldowns.set(battleCd, Date.now() + 120000);
+            cooldowns.setCooldown('battle', guildId, interaction.user.id, 120000);
             addComboFeature(guildId, interaction.user.id, 'battle');
             const myPetDef = PET_DATA.find(p => p.id === myPet.petId);
             const enemyPetDef = PET_DATA.find(p => p.id === enemyPet.petId);

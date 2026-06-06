@@ -631,6 +631,50 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
     }
 }
 
+// ================= PERFORMANCE INDEXES =================
+// Speeds up the hot read paths: leaderboards (ORDER BY / GROUP BY over large
+// tables), per-user inventory lookups, and time-ranged log scans. Each index is
+// created independently and wrapped in try/catch so a missing table/column (e.g.
+// guildId in GLOBAL mode, or a table created lazily by another module) never
+// blocks startup. CREATE INDEX is not rewritten by the global proxy, so we list
+// guildId-composite indexes only when NOT in global mode.
+(function createPerformanceIndexes() {
+    const globalMode = checkGlobalMode();
+
+    // Indexes valid in BOTH modes (columns always present).
+    const commonIndexes = [
+        'CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_users_level_xp ON users(level DESC, xp DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_user_stats_key_value ON user_stats(stat_key, stat_value DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_user_stats_user_key ON user_stats(userId, stat_key)',
+        'CREATE INDEX IF NOT EXISTS idx_pets_active_level ON pets(active, level DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_pets_user ON pets(userId, level DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_streaks_count ON streaks(count DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(userId)',
+        'CREATE INDEX IF NOT EXISTS idx_fish_inventory_user ON fish_inventory(userId)',
+        'CREATE INDEX IF NOT EXISTS idx_farm_plots_user ON farm_plots(userId)',
+        'CREATE INDEX IF NOT EXISTS idx_relics_user ON relics(userId)',
+        'CREATE INDEX IF NOT EXISTS idx_logs_time ON logs(time DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_market_listings_status ON market_listings(status)',
+    ];
+
+    // Indexes that reference guildId — only valid in per-guild (non-global) mode.
+    const perGuildIndexes = [
+        'CREATE INDEX IF NOT EXISTS idx_users_guild_balance ON users(guildId, balance DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_user_stats_guild_key ON user_stats(guildId, stat_key, stat_value DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_fish_inventory_guild_user ON fish_inventory(guildId, userId)',
+        'CREATE INDEX IF NOT EXISTS idx_farm_plots_guild_user ON farm_plots(guildId, userId)',
+        'CREATE INDEX IF NOT EXISTS idx_logs_guild_time ON logs(guildId, time DESC)',
+    ];
+
+    const indexes = globalMode ? commonIndexes : commonIndexes.concat(perGuildIndexes);
+    let created = 0;
+    for (const stmt of indexes) {
+        try { _rawDb.exec(stmt); created++; } catch (e) { /* table/column may not exist yet */ }
+    }
+    if (created > 0) console.log(`⚡ Performance indexes ready (${created}/${indexes.length})`);
+})();
+
 // ================= EXPORTS (always at the very bottom) =================
 module.exports = {
     db, checkGlobalMode,

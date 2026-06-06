@@ -214,6 +214,39 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
             });
             break;
         }
+        case 'season': {
+            const { getSeasonalLeaderboard, getSeasonInfo, getLastSeasonWinners } = require('./season');
+            title = `${scopePrefix}🗓️ Seasonal — Top 10 (Bulan Ini)`;
+            color = '#E67E22';
+            const info = getSeasonInfo();
+            const { entries } = getSeasonalLeaderboard(10);
+
+            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
+            desc += `> 📅 Season **${info.seasonId}** • ⏳ Sisa **${info.daysLeft}** hari\n`;
+            desc += `> 🔄 Reset otomatis tiap awal bulan (skor = aktivitas bulan ini)\n\n`;
+
+            if (entries.length === 0) {
+                desc += '*Belum ada aktivitas musim ini. Mulai mancing, farming, atau battle!*\n\n';
+            } else {
+                const maxScore = entries[0]?.score || 1;
+                entries.forEach((e, i) => {
+                    const bar = progressBar(e.score, maxScore);
+                    desc += `${medal(i)} <@${e.userId}> — 🏆 **${e.score.toLocaleString('id-ID')}** pts\n`;
+                    desc += `> \`${bar}\`\n\n`;
+                });
+            }
+
+            // Show last season's winners (if any archived).
+            const last = getLastSeasonWinners(3);
+            if (last.winners.length > 0) {
+                desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
+                desc += `> 🏅 **Juara Season ${last.seasonId}:**\n`;
+                last.winners.forEach(w => {
+                    desc += `> ${medal(w.rank - 1)} <@${w.userId}> — ${w.score.toLocaleString('id-ID')} pts\n`;
+                });
+            }
+            break;
+        }
         case 'overall':
         default: {
             title = `${scopePrefix}⭐ Top 10 — Overall Score`;
@@ -330,10 +363,11 @@ function buildLeaderboard(guildId, kategori, userId, isGlobal = false) {
     );
     const row2 = new ActionRowBuilder().addComponents(...row2Buttons);
     
-    // Toggle button between Server and Global
+    // Toggle button between Server and Global, plus Seasonal mode
     const row3 = new ActionRowBuilder().addComponents(
-        btn(`lb_server_${userId}`, '📍 Server', !isGlobal),
-        btn(`lbg_global_${userId}`, '🌍 Global', isGlobal),
+        btn(`lb_server_${userId}`, '📍 Server', !isGlobal && kategori !== 'season'),
+        btn(`lbg_global_${userId}`, '🌍 Global', isGlobal && kategori !== 'season'),
+        btn(`lb_season_${userId}`, '🗓️ Seasonal', kategori === 'season'),
     );
 
     return { embeds: [embed], components: [row1, row2, row3] };
