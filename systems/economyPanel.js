@@ -20,22 +20,23 @@ function buildEconomyPanel(guildId, userId, username) {
         .setTitle(ui.title('💰', 'ECONOMY', username))
         .setColor(ui.COLORS.economy)
         .setDescription(
+            `Pusat kendali keuangan kamu — semua soal duit ada di sini. 💵\n` +
             ui.statBlock([
                 `${ui.money(userData.balance)}  •  📈 Level **${userData.level}**`,
                 `✨ EXP: ${ui.progressLine(userData.xp, (userData.level + 1) * 100)}`,
             ]) +
-            `\n` +
+            `\n**Mau ngapain hari ini?**\n` +
             ui.menuList([
-                { emoji: '💳', label: 'Balance', desc: 'Cek saldo & statistik detail' },
-                { emoji: '🎁', label: 'Daily', desc: 'Klaim hadiah harian' },
-                { emoji: '🎰', label: 'Casino', desc: 'Coinflip, slot, roulette, blackjack' },
-                { emoji: '💸', label: 'Gift', desc: 'Kirim money ke player lain' },
-                { emoji: '🎟️', label: 'Redeem', desc: 'Tukar kode voucher' },
-                { emoji: '🏆', label: 'Leaderboard', desc: 'Ranking money' },
-                { emoji: '🛒', label: 'Shop', desc: 'Beli item & role' },
+                { emoji: '💳', label: 'Balance', desc: 'Lihat saldo lengkap & rincian statistikmu' },
+                { emoji: '🎁', label: 'Daily', desc: 'Klaim hadiah harian — jangan putus streak!' },
+                { emoji: '🎰', label: 'Casino', desc: 'Coba peruntungan: coinflip, slot, roulette, blackjack' },
+                { emoji: '💸', label: 'Gift', desc: 'Transfer money ke teman (kena pajak kecil)' },
+                { emoji: '🎟️', label: 'Redeem', desc: 'Punya kode voucher? Tukar jadi hadiah di sini' },
+                { emoji: '🏆', label: 'Leaderboard', desc: 'Lihat siapa yang paling tajir di server' },
+                { emoji: '🛒', label: 'Shop', desc: 'Belanja item, role, & perlengkapan' },
             ])
         )
-        .setFooter({ text: ui.footer(`CF Wins: ${cfWins} • Slot Wins: ${slotWins} • Total Buys: ${totalBuys}`) })
+        .setFooter({ text: ui.footer(`Menang Coinflip: ${cfWins} • Menang Slot: ${slotWins} • Belanja: ${totalBuys}x`) })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -93,11 +94,12 @@ async function handleEconomyButton(interaction) {
                     `${ui.money(userData.balance)}`,
                     `📈 Level **${userData.level}**  •  ✨ ${userData.xp}/${(userData.level + 1) * 100} XP`,
                 ]) +
-                `\n📊 **Statistik Casino:**\n` +
-                `> 🎰 Slot Winnings: ${ui.money(totalEarned)}\n` +
-                `> 🎯 Roulette Winnings: ${ui.money(rouletteWin)}`
+                `\n📊 **Total Kemenangan Casino:**\n` +
+                `> 🎰 Dari Slot: ${ui.money(totalEarned)}\n` +
+                `> 🎯 Dari Roulette: ${ui.money(rouletteWin)}\n\n` +
+                `> 💡 *Saldo dipakai untuk belanja, gift, dan taruhan casino.*`
             )
-            .setFooter({ text: ui.footer('Main casino & daily untuk nambah saldo!') });
+            .setFooter({ text: ui.footer('Rajin daily & menang casino untuk nambah saldo!') });
         const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -108,8 +110,8 @@ async function handleEconomyButton(interaction) {
         const embed = new EmbedBuilder()
             .setTitle(ui.title('🎁', 'Daily Reward'))
             .setColor(ui.COLORS.success)
-            .setDescription('Ketik `/daily` di chat untuk klaim hadiah harian!\n\n> 🪙 Money random\n> ✨ EXP bonus\n> 📦 Chance dapat item\n> 🔥 Streak makin tinggi = reward makin besar')
-            .setFooter({ text: ui.footer('Jangan lupa klaim tiap hari biar streak jalan!') });
+            .setDescription('Login tiap hari, dapat hadiah tiap hari! Ketik `/daily` untuk klaim:\n\n> 🪙 **Money** — jumlah acak tiap hari\n> ✨ **Bonus EXP** — bantu naik level\n> 📦 **Item kejutan** — kadang dapat, kadang nggak 😉\n> 🔥 **Streak** — makin lama login beruntun, makin gede hadiahnya!')
+            .setFooter({ text: ui.footer('Bolong sehari = streak reset. Jangan sampai kelewat ya!') });
         const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -162,8 +164,8 @@ async function handleEconomyButton(interaction) {
         const embed = new EmbedBuilder()
             .setTitle(ui.title('🛒', 'Shop'))
             .setColor(ui.COLORS.success)
-            .setDescription('Ketik `/shop` di chat untuk membuka toko lengkap!\n\n> 🎨 Role shop\n> 📦 Item virtual\n> 🎨 Custom Role\n> 🎣 Fishing shop (rod & bait)')
-            .setFooter({ text: ui.footer('Semua pembelian otomatis masuk inventory') });
+            .setDescription('Buka toko lengkap dengan ketik `/shop` di chat. Yang bisa dibeli:\n\n> 🎨 **Role Shop** — role keren buat dipajang\n> 📦 **Item Virtual** — berbagai item berguna\n> 🎨 **Custom Role** — bikin role sendiri (nama & warna bebas!)\n> 🎣 **Fishing Shop** — joran & umpan buat mancing')
+            .setFooter({ text: ui.footer('Semua pembelian langsung masuk ke inventory kamu') });
         const row = ui.backRow(`ecopnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }

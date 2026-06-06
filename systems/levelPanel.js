@@ -17,19 +17,20 @@ function buildLevelPanel(guildId, userId, username) {
         .setTitle(ui.title('🌟', 'LEVEL', username))
         .setColor(ui.COLORS.level)
         .setDescription(
+            `Makin aktif di server, makin tinggi levelmu! 🚀\n` +
             ui.statBlock([
                 `🏅 **Level:** ${userData.level}  •  🏆 **Rank:** #${rank}`,
                 `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp)}`,
-                `> ${userData.xp.toLocaleString('id-ID')} / ${targetXp.toLocaleString('id-ID')} XP`,
+                `> Tinggal **${(targetXp - userData.xp).toLocaleString('id-ID')} XP** lagi menuju Level ${userData.level + 1}`,
             ]) +
-            `\n` +
+            `\n**Jelajahi lebih lanjut:**\n` +
             ui.menuList([
-                { emoji: '📊', label: 'Rank', desc: 'Lihat detail rank kamu' },
-                { emoji: '🏆', label: 'Leaderboard', desc: 'Top player level di server' },
-                { emoji: '🎁', label: 'Rewards', desc: 'Hadiah otomatis per level' },
+                { emoji: '📊', label: 'Rank', desc: 'Detail progress & cara cepat naik level' },
+                { emoji: '🏆', label: 'Leaderboard', desc: 'Adu level dengan member lain' },
+                { emoji: '🎁', label: 'Rewards', desc: 'Hadiah yang menanti di tiap level' },
             ])
         )
-        .setFooter({ text: ui.footer('Dapatkan XP dari chat, voice, dan reaction!') })
+        .setFooter({ text: ui.footer('XP didapat dari ngobrol, nongkrong di voice, & kasih reaction!') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -88,12 +89,12 @@ async function handleLevelButton(interaction) {
                     `✨ **Progress:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')}`,
                     `> ${userData.xp} / ${targetXp} XP`,
                 ]) +
-                `\n**⚙️ Cara dapat XP:**\n` +
-                `> 💬 Chat: ${chatMin}-${chatMax} XP (CD: ${chatCd}s)\n` +
-                `> 🎙️ Voice: ${voiceMin}-${voiceMax} XP/menit\n` +
-                `> 😄 Reaction juga memberi XP!`
+                `\n**⚙️ Dari mana XP datang?**\n` +
+                `> 💬 **Ngobrol** — ${chatMin}-${chatMax} XP per pesan (jeda ${chatCd} detik)\n` +
+                `> 🎙️ **Voice** — ${voiceMin}-${voiceMax} XP tiap menit nongkrong\n` +
+                `> 😄 **Reaction** — kasih emoji ke pesan juga dapat XP!`
             )
-            .setFooter({ text: ui.footer('Makin aktif, makin cepat naik level!') });
+            .setFooter({ text: ui.footer('Tips: aktif di voice paling cepat naikin level.') });
         const row = ui.backRow(`lvlpnl_back_${userId}`);
         return interaction.update({ embeds: [embed], components: [row] });
     }
