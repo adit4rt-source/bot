@@ -6,6 +6,7 @@ const { FISH_DATA } = require('../data/fish');
 const { PET_DATA } = require('../data/pets');
 const { ITEMS } = require('../data/items');
 const { pendingMarketSell } = require('../state');
+const ui = require('./ui');
 
 // ============ DATABASE SETUP ============
 db.exec(`CREATE TABLE IF NOT EXISTS market_listings (
@@ -224,18 +225,21 @@ function buildMarketPanel(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
 
     const embed = new EmbedBuilder()
-        .setTitle(`🏪 MARKET — ${username}`)
-        .setColor('#E67E22')
+        .setTitle(ui.title('🏪', 'MARKET', username))
+        .setColor(ui.COLORS.market)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📊 Active Listings: **${activeCount}** | 💰 Saldo: **${userData.balance.toLocaleString('id-ID')}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 📋 **Browse** — Lihat & beli listing (pilih dari menu)\n` +
-            `> 📤 **Sell** — Jual item (pilih dari daftar item kamu)\n` +
-            `> 📦 **My Listings** — Kelola listing kamu\n\n` +
-            `💡 *Listing expired setelah 7 hari*`
+            ui.statBlock([
+                `📊 Active Listings: **${activeCount}**  •  ${ui.money(userData.balance)}`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '📋', label: 'Browse', desc: 'Lihat & beli listing player lain' },
+                { emoji: '📤', label: 'Sell', desc: 'Jual item dari inventory kamu' },
+                { emoji: '📦', label: 'My Listings', desc: 'Kelola listing kamu' },
+            ]) +
+            `\n\n> ⏳ *Listing otomatis expired setelah 7 hari (item dikembalikan)*`
         )
-        .setFooter({ text: 'Market — Jual beli antar player' })
+        .setFooter({ text: ui.footer('Market — jual beli aman antar player') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(

@@ -6,6 +6,7 @@ const { notifyTradeReceived, notifyTradeAccepted } = require('./notifications');
 const { PET_DATA } = require('../data/pets');
 const { FISH_DATA } = require('../data/fish');
 const { pendingTradeGive } = require('../state');
+const ui = require('./ui');
 
 // ============ HELPER: Parse trade item string ============
 function parseTradeItem(str) {
@@ -78,18 +79,21 @@ function buildTradePanel(guildId, userId, username) {
     const receivedPending = db.prepare('SELECT COUNT(*) as cnt FROM trades WHERE guildId = ? AND receiverId = ? AND status = ?').get(guildId, userId, 'pending');
 
     const embed = new EmbedBuilder()
-        .setTitle(`🔄 TRADE PANEL — ${username}`)
-        .setColor('#3498DB')
+        .setTitle(ui.title('🔄', 'TRADE', username))
+        .setColor(ui.COLORS.trade)
         .setDescription(
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📤 Pending Sent: **${sentPending.cnt}** | 📥 Pending Received: **${receivedPending.cnt}**\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `> 📤 **Offer** — Pilih item dari daftar untuk ditawarkan\n` +
-            `> 📋 **List** — Lihat trade yang pending\n` +
-            `> ✅ **Accept** — Pilih trade masuk untuk diterima\n` +
-            `> ❌ **Reject** — Pilih trade untuk ditolak/dibatalkan`
+            ui.statBlock([
+                `📤 Pending Sent: **${sentPending.cnt}**  •  📥 Pending Received: **${receivedPending.cnt}**`,
+            ]) +
+            `\n` +
+            ui.menuList([
+                { emoji: '📤', label: 'Offer', desc: 'Tawarkan item ke player lain' },
+                { emoji: '📋', label: 'List', desc: 'Lihat trade yang pending' },
+                { emoji: '✅', label: 'Accept', desc: 'Terima trade yang masuk' },
+                { emoji: '❌', label: 'Reject', desc: 'Tolak / batalkan trade' },
+            ])
         )
-        .setFooter({ text: 'Trade berlaku 24 jam setelah dibuat' })
+        .setFooter({ text: ui.footer('Trade berlaku 24 jam setelah dibuat') })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
