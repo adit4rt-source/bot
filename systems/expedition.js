@@ -561,10 +561,10 @@ async function handleExpeditionSelectMenu(interaction) {
 async function handleExpeditionConfirm(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
-    // Format: exp_confirm_zoneId_userId
+    // Format: exp_confirm_zoneId_userId (zoneId may contain underscores!)
     const parts = customId.split('_');
     const userId = parts[parts.length - 1];
-    const zoneId = parts[2];
+    const zoneId = parts.slice(2, -1).join('_'); // everything between 'confirm' and userId
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
