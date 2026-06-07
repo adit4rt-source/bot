@@ -481,11 +481,14 @@ async function routeInteraction(interaction) {
             componentsRows.push(new ActionRowBuilder().addComponents(petShopMenu));
 
             // 🎒 ITEMS section (ALL game items: Battle, Booster, Special, etc) — Row 4
+            // Hanya tampilkan item yang BISA dibeli (price > 0). Item price 0 = material
+            // langka (Mythic Fragment, Awakening Crystal) yang hanya didapat dari drop.
+            const shopItems = ITEMS.filter(item => item.price > 0);
             shopDesc += '🎒 **ITEMS & BATTLE**\n';
-            ITEMS.forEach(item => { shopDesc += `> ${item.emoji} ${item.name} — 🪙 **${item.price.toLocaleString('id-ID')}** | ${item.desc}\n`; });
+            shopItems.forEach(item => { shopDesc += `> ${item.emoji} ${item.name} — 🪙 **${item.price.toLocaleString('id-ID')}** | ${item.desc}\n`; });
             shopDesc += '\n';
             const gameItemMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_game_item').setPlaceholder('🎒 Beli Item (Battle/Booster/Special)...').setMinValues(1).setMaxValues(1);
-            ITEMS.forEach(item => { gameItemMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${item.menuEmoji} ${item.name} (🪙 ${item.price.toLocaleString('id-ID')})`).setDescription(`${item.desc.substring(0, 50)}`).setValue(item.id)); });
+            shopItems.forEach(item => { gameItemMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${item.menuEmoji} ${item.name} (🪙 ${item.price.toLocaleString('id-ID')})`).setDescription(`${item.desc.substring(0, 50)}`).setValue(item.id)); });
             componentsRows.push(new ActionRowBuilder().addComponents(gameItemMenu));
 
             // 🎭 ROLE & LAINNYA section — Row 5 (jika ada)
@@ -808,6 +811,7 @@ async function routeInteraction(interaction) {
             const itemId = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
             const itemDef = ITEMS.find(i => i.id === itemId);
             if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
+            if (!itemDef.price || itemDef.price <= 0) return interaction.reply({ content: '❌ Item ini tidak dijual di toko! Hanya bisa didapat dari drop/event.', ephemeral: true });
             if (userData.balance < itemDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
             userData.balance -= itemDef.price;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
