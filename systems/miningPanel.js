@@ -5,6 +5,9 @@ const { db, getOrCreateUser, incrementUserStat, getUserStat, addIncome, addItem 
 const { getRandomInt } = require('../utils');
 const ui = require('./ui');
 const { getPetData, simulateBattle, ELEMENT_EMOJI } = require('./pets');
+const { hasAbility } = require('./petAbilities');
+const { checkAchievements } = require('./achievements');
+const { updateQuestProgress } = require('./quests');
 const { PET_DATA } = require('../data/pets');
 const {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
@@ -12,7 +15,7 @@ const {
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
-    getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
+    getMiningExpNeeded, staminaRegenPerMin, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
 
 // ==================== DB ====================
@@ -44,10 +47,12 @@ function syncStamina(row) {
     const now = Date.now();
     if (!row.staminaTs) row.staminaTs = now;
     if (row.stamina >= max) { row.stamina = max; row.staminaTs = now; return row; }
-    const regen = Math.floor((now - row.staminaTs) / STAMINA_REGEN_MS);
-    if (regen > 0) {
+    const perMin = staminaRegenPerMin(row.level);
+    const minutes = Math.floor((now - row.staminaTs) / STAMINA_REGEN_MS);
+    if (minutes > 0) {
+        const regen = minutes * perMin;
         row.stamina = Math.min(max, row.stamina + regen);
-        row.staminaTs = row.stamina >= max ? now : row.staminaTs + regen * STAMINA_REGEN_MS;
+        row.staminaTs = row.stamina >= max ? now : row.staminaTs + minutes * STAMINA_REGEN_MS;
     }
     return row;
 }
@@ -185,7 +190,7 @@ function buildMiningPanel(guildId, userId, username) {
             `\n**⚒️ Mining Lv.${row.level}**  ${row.level >= MAX_MINING_LEVEL ? '🏆 MAX' : ''}\n` +
             `> \`${bar(expPct)}\` ${row.level >= MAX_MINING_LEVEL ? '' : `${row.exp}/${expNeed} EXP`}\n` +
             `**⚡ Stamina ${row.stamina}/${max}**\n` +
-            `> \`${bar(staPct)}\` ${row.stamina < max ? `+1/menit` : '🔋 penuh!'}\n` +
+            `> \`${bar(staPct)}\` ${row.stamina < max ? `+${staminaRegenPerMin(row.level)}/menit` : '🔋 penuh!'}\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📍 **Kedalaman ${row.depth}m** — ${layer.name}\n` +
             `> ⛰️ Ore di sini: ${orePreview}\n` +
@@ -492,7 +497,11 @@ async function handleMiningButton(interaction) {
         const row = getMiningData(guildId, userId);
         const pickaxe = getPickaxe(row.pickaxe);
         const sockets = getSockets(row);
-        const staCost = Math.max(1, pickaxe.staminaCost - socketBonus(sockets, 'stamina'));
+        // Pet mining abilities
+        const abOreFinder = hasAbility(guildId, userId, 'ore_finder');   // +1 ore/dig
+        const abGemFinder = hasAbility(guildId, userId, 'gem_finder');   // +8% gem chance
+        const abTough = hasAbility(guildId, userId, 'tough_miner');      // -1 stamina + 50% block cave-in/gas
+        const staCost = Math.max(1, pickaxe.staminaCost - socketBonus(sockets, 'stamina') - (abTough ? 1 : 0));
         if (row.stamina < staCost) {
             const eta = staminaETA(row);
             return interaction.reply({ content: `❌ Stamina kurang! Butuh **${staCost}**, punya **${row.stamina}**.${eta ? ` (+1 dalam ${eta}s)` : ''}`, ephemeral: true });
@@ -502,7 +511,7 @@ async function handleMiningButton(interaction) {
 
         const layer = getLayerForDepth(row.depth);
         const max = maxStamina(row.level);
-        const bYield = socketBonus(sockets, 'yield');
+        const bYield = socketBonus(sockets, 'yield') + (abOreFinder ? 1 : 0);
         const bExp = socketBonus(sockets, 'exp');
         const bLuck = socketBonus(sockets, 'luck');
         const rareOreId = layer.ores.map(o => o.ore).sort((a, b) => getOreDef(b).value - getOreDef(a).value)[0];
@@ -520,10 +529,14 @@ async function handleMiningButton(interaction) {
             }
             for (const [o, q] of Object.entries(gained)) addOre(guildId, userId, o, q);
             expGain = Math.floor(expGain * (1 + bExp / 100));
-            // Gem drop (langka)
+            // Gem drop (langka) — Gem Hunter ability +8%
             let gemId = null;
-            const gemChance = GEM_DROP_BASE + row.depth * 0.00005 + bLuck * 0.01;
+            const gemChance = GEM_DROP_BASE + row.depth * 0.00005 + bLuck * 0.01 + (abGemFinder ? 0.08 : 0);
             if (Math.random() < gemChance) { gemId = pickGem(); addOre(guildId, userId, gemId, 1); }
+            // Quest + achievement (fire-and-forget, dipanggil tiap dig sukses)
+            updateQuestProgress(guildId, userId, 'mine', 1);
+            checkAchievements(interaction.guild, userId, { type: 'mining_dig' }).catch(() => {});
+            if (gemId) checkAchievements(interaction.guild, userId, { type: 'mining_gem' }).catch(() => {});
             return { gained, expGain, gemId };
         };
         const gainedText = (gained, gemId) => {
@@ -538,6 +551,8 @@ async function handleMiningButton(interaction) {
             const tot = HAZARD_WEIGHTS.cavein + HAZARD_WEIGHTS.gas + HAZARD_WEIGHTS.monster;
             let rr = Math.random() * tot;
             hazardType = (rr -= HAZARD_WEIGHTS.cavein) < 0 ? 'cavein' : (rr -= HAZARD_WEIGHTS.gas) < 0 ? 'gas' : 'monster';
+            // Tough Miner: 50% peluang menangkal cave-in & gas (bukan monster)
+            if (abTough && (hazardType === 'cavein' || hazardType === 'gas') && Math.random() < 0.5) hazardType = null;
         }
 
         // No hazard -> normal dig
@@ -609,6 +624,7 @@ async function handleMiningButton(interaction) {
                 const lvl = addMiningExp(row, expGain + 20);
                 row.totalDigs++; saveMiningData(guildId, userId, row);
                 incrementUserStat(guildId, userId, 'mining_monsters_defeated');
+                checkAchievements(interaction.guild, userId, { type: 'mining_monster' }).catch(() => {});
                 let d = `👹${elIcon} **Monster dikalahkan ${petDef ? petDef.emoji : '🐾'} ${pet.name}!** Loot + bonus diamankan!\n\n${gainedText(gained, gemId)}\n\n> ✨ +${expGain + 20} EXP • ⚡ ${row.stamina}/${max}\n> ❤️ HP pet sisa: ${result.remainingHp}`;
                 if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
                 return interaction.update({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('👹 Monster Dikalahkan!').setDescription(d)], components: [digRow()] });
@@ -673,6 +689,7 @@ async function handleMiningButton(interaction) {
             addOre(guildId, userId, 'void_crystal', getRandomInt(2, 3));
             const lvl = addMiningExp(row, 200); saveMiningData(guildId, userId, row);
             incrementUserStat(guildId, userId, 'mining_core_clears');
+            checkAchievements(interaction.guild, userId, { type: 'mining_core' }).catch(() => {});
             let d = `👑🌑 **THE CORE DITAKLUKKAN!** ${petDef ? petDef.emoji : '🐾'} ${pet.name} menang!\n\n> 🔱 **Artifact Fragment** ×${frags}\n> 💠 Void Crystal ×2-3\n> ✨ +200 Mining EXP\n> ❤️ HP pet sisa: ${result.remainingHp}`;
             if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
             d += `\n\n> 🔨 Kumpulkan Fragment → tempa **Legendary Drill** / **Miner's Artifact** di Smith!`;
@@ -704,6 +721,7 @@ async function handleMiningButton(interaction) {
         row.level = 1; row.exp = 0; row.depth = 0; row.prestige = (row.prestige || 0) + 1;
         saveMiningData(guildId, userId, row);
         incrementUserStat(guildId, userId, 'mining_prestige');
+        checkAchievements(interaction.guild, userId, { type: 'mining_prestige' }).catch(() => {});
         const embed = new EmbedBuilder().setColor('#FFD700').setTitle('⭐ PRESTIGE!')
             .setDescription(`Kamu sekarang **Prestige ${row.prestige}**! 🎉\n\n> 📈 Mining Level reset ke 1\n> 💰 Bonus permanen: **+${Math.round(row.prestige * PRESTIGE_BONUS * 100)}%** nilai jual ore\n> ⛏️ Grind ulang, tapi cuan ore makin gede tiap prestige!`);
         const r = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary));
@@ -774,6 +792,8 @@ async function handleMiningSelectMenu(interaction) {
         const lvl = addMiningExp(row, recipe.exp * possible);
         saveMiningData(guildId, userId, row);
         incrementUserStat(guildId, userId, 'mining_bars_smelted', possible);
+        updateQuestProgress(guildId, userId, 'mine_smelt', possible);
+        checkAchievements(interaction.guild, userId, { type: 'mining_smelt' }).catch(() => {});
         let d = `🔥 Melebur **${possible}× ${barDef.emoji} ${barDef.name}**!\n\n> 🪨 −${recipe.oreQty * possible}× ${oreDef.name}\n> 🪵 −${recipe.fuel * possible}× ${fuelDef.name}\n> ✨ +${recipe.exp * possible} Mining EXP`;
         if (lvl.leveledUp) d += `\n> 🎉 **LEVEL UP!** → Lv.${lvl.newLevel}`;
         const embed = new EmbedBuilder().setColor('#E67E22').setTitle('🔥 Peleburan Selesai').setDescription(d);
@@ -822,6 +842,7 @@ async function handleMiningSelectMenu(interaction) {
         const lvl = addMiningExp(row, recipe.exp);
         saveMiningData(guildId, userId, row);
         incrementUserStat(guildId, userId, 'mining_items_smithed');
+        checkAchievements(interaction.guild, userId, { type: 'mining_smith' }).catch(() => {});
         const usedStr = recipe.inputs.map(i => `${i.qty}× ${getMaterialDef(i.mat).emoji}`).join(' + ');
         const dest = recipe.out === 'mine' ? '⛏️ Masuk kantong tambang' : '📦 Masuk inventory';
         let d = `🔨 Berhasil menempa **${recipe.emoji} ${recipe.name}**!\n\n> 🔩 Pakai: ${usedStr}\n> ${dest} — *${recipe.desc}*\n> ✨ +${recipe.exp} Mining EXP`;

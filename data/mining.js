@@ -160,6 +160,12 @@ function getMiningExpNeeded(level) {
     return 60 + level * 30;
 }
 
+// Regen stamina per menit, skala dengan level mining (biar endgame tidak nunggu ~10 jam).
+// Lv1 = +1/mnt, Lv20 = +2, Lv40 = +3, ... Lv100 = +6/mnt.
+function staminaRegenPerMin(level) {
+    return 1 + Math.floor((level || 1) / 20);
+}
+
 function getLayerForDepth(depth) {
     return MINE_LAYERS.find(l => depth >= l.min && depth < l.max) || MINE_LAYERS[0];
 }
@@ -192,5 +198,5 @@ module.exports = {
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
-    getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
+    getMiningExpNeeded, staminaRegenPerMin, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
