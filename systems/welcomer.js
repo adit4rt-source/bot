@@ -174,30 +174,33 @@ async function handleWelcome(member) {
         const channel = member.guild.channels.cache.get(channelId);
         if (channel) {
             const message = replaceVariables(getWelcomerSetting(guildId, 'welcome_message', 'Welcome {user.mention}!'), member);
-            const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
-            const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
-            const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
-            const image = getWelcomerSetting(guildId, 'welcome_embed_image', '');
-
-            const embed = new EmbedBuilder()
-                .setColor(color)
-                .setTitle(title)
-                .setDescription(message)
-                .setTimestamp();
-
-            if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
-            if (image && image.startsWith('http')) embed.setImage(image);
-
-            // Generated card is sent as a standalone attachment (NOT embed.setImage)
-            // so Discord renders it at full media width — much larger than an
-            // embed image. The embed below carries the welcome text.
             const banner = await buildBannerAttachment(member, 'welcome');
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
-            channel.send({
-                content: `<@${member.id}>`,
-                embeds: [embed],
-                files: banner ? [banner] : [],
-            }).catch(onErr);
+
+            if (banner) {
+                // Kythia-style single block: greeting line as plain text, then the
+                // large card image directly below it. No embed (keeps it as one
+                // visual block and lets the card render at full media width).
+                channel.send({
+                    content: message,
+                    files: [banner],
+                    allowedMentions: { users: [member.id] },
+                }).catch(onErr);
+            } else {
+                // No generated card -> fall back to a text embed.
+                const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+                const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
+                const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
+                const image = getWelcomerSetting(guildId, 'welcome_embed_image', '');
+                const embed = new EmbedBuilder()
+                    .setColor(color)
+                    .setTitle(title)
+                    .setDescription(message)
+                    .setTimestamp();
+                if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
+                if (image && image.startsWith('http')) embed.setImage(image);
+                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+            }
         } else {
             log('WARN', `[welcomer] welcome_channel="${channelId}" tidak ditemukan di guild ${guildId} (channel dihapus / bot tidak melihatnya).`);
         }
@@ -250,15 +253,19 @@ async function handleGoodbye(member) {
     if (!channel) return;
 
     const message = replaceVariables(getWelcomerSetting(guildId, 'goodbye_message', '👋 {user.name} left.'), member);
-    const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
-
-    const embed = new EmbedBuilder()
-        .setColor(color)
-        .setDescription(message)
-        .setTimestamp();
-
     const banner = await buildBannerAttachment(member, 'goodbye');
-    channel.send({ embeds: [embed], files: banner ? [banner] : [] }).catch(() => {});
+
+    if (banner) {
+        // Single block: goodbye line + large card image, no embed.
+        channel.send({ content: message, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
+    } else {
+        const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
+        const embed = new EmbedBuilder()
+            .setColor(color)
+            .setDescription(message)
+            .setTimestamp();
+        channel.send({ embeds: [embed] }).catch(() => {});
+    }
 }
 
 // ==================== TEST FUNCTION (for dashboard) ====================
@@ -272,21 +279,24 @@ async function testWelcomer(member) {
     if (!channel) throw new Error('Channel not found');
 
     const message = replaceVariables(getWelcomerSetting(guildId, 'welcome_message', 'Welcome {user.mention}!'), member);
-    const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
-    const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
-    const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', ''), member);
-
-    const embed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle(`[TEST] ${title}`)
-        .setDescription(message)
-        .setFooter({ text: '⚠️ This is a test message from dashboard' })
-        .setTimestamp();
-
-    if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
-
     const banner = await buildBannerAttachment(member, 'welcome');
-    await channel.send({ embeds: [embed], files: banner ? [banner] : [] });
+
+    if (banner) {
+        // Single block (matches real welcome): greeting text + large card image.
+        await channel.send({ content: `🧪 [TEST] ${message}`, files: [banner], allowedMentions: { parse: [] } });
+    } else {
+        const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+        const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
+        const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', ''), member);
+        const embed = new EmbedBuilder()
+            .setColor(color)
+            .setTitle(`[TEST] ${title}`)
+            .setDescription(message)
+            .setFooter({ text: '⚠️ This is a test message from dashboard' })
+            .setTimestamp();
+        if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
+        await channel.send({ embeds: [embed] });
+    }
 }
 
 module.exports = {

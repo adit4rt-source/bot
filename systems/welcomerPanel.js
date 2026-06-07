@@ -204,23 +204,24 @@ async function handleWelcomerButton(interaction) {
             .replace(/{server\.name}/g, interaction.guild.name)
             .replace(/{server\.memberCount}/g, String(interaction.guild.memberCount));
 
-        const title = (settings.welcome_embed_title || '👋 Welcome!')
-            .replace(/{user\.name}/g, member.user.username)
-            .replace(/{server\.name}/g, interaction.guild.name);
-
-        const embed = new EmbedBuilder()
-            .setTitle(`[TEST] ${title}`)
-            .setColor(settings.welcome_embed_color || '#5865F2')
-            .setDescription(message)
-            .setFooter({ text: '⚠️ Test message from /welcomer panel' })
-            .setTimestamp();
-
-        const thumbnail = (settings.welcome_embed_thumbnail || '').replace(/{user\.avatar}/g, member.user.displayAvatarURL({ size: 256 }));
-        if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
-
         const banner = await buildBannerAttachment(member, 'welcome');
-        // Card as standalone attachment (renders larger than an embed image).
-        await channel.send({ embeds: [embed], files: banner ? [banner] : [] }).catch(() => {});
+        if (banner) {
+            // Single block (matches real welcome): greeting text + large card.
+            await channel.send({ content: `🧪 [TEST] ${message}`, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
+        } else {
+            const title = (settings.welcome_embed_title || '👋 Welcome!')
+                .replace(/{user\.name}/g, member.user.username)
+                .replace(/{server\.name}/g, interaction.guild.name);
+            const embed = new EmbedBuilder()
+                .setTitle(`[TEST] ${title}`)
+                .setColor(settings.welcome_embed_color || '#5865F2')
+                .setDescription(message)
+                .setFooter({ text: '⚠️ Test message from /welcomer panel' })
+                .setTimestamp();
+            const thumbnail = (settings.welcome_embed_thumbnail || '').replace(/{user\.avatar}/g, member.user.displayAvatarURL({ size: 256 }));
+            if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
+            await channel.send({ embeds: [embed] }).catch(() => {});
+        }
         return interaction.reply({ content: `✅ Test message sent to <#${settings.welcome_channel}>!`, ephemeral: true });
     }
 }
