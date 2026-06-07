@@ -42,27 +42,27 @@ function buildAdminPanel(guildId, userId, guild) {
     const lines = menus.length
         ? menus.map(m => {
             const opts = sr.getOptions(m.id);
-            const status = m.messageId ? `🟢 <#${m.channelId}>` : '⚪ *belum dipost*';
-            return `> **#${m.id}** ${m.title || '(tanpa judul)'} — ${opts.length} role • ${m.type === 'unique' ? '🔘 unik' : '✅ multi'} • ${status}`;
+            const status = m.messageId ? `✅ sudah tampil di <#${m.channelId}>` : '⏳ belum dikirim';
+            return `> **${m.title || 'Menu tanpa nama'}** — ${opts.length} role • ${status}`;
         }).join('\n')
-        : '> *Belum ada menu self-role. Klik **Buat Menu** untuk mulai.*';
+        : '> _Belum ada menu. Tekan **Buat Menu Baru** untuk mulai._';
 
     const embed = new EmbedBuilder()
         .setColor(ui.COLORS.info)
-        .setTitle(ui.title('🎭', 'SELF ROLES'))
+        .setTitle('🎭 Self Roles')
         .setDescription(
-            ui.statBlock([`📋 Total menu: **${menus.length}**`]) +
-            `\n${lines}\n\n` +
-            ui.menuList([
-                { emoji: '➕', label: 'Buat Menu', desc: 'Bikin menu self-role baru' },
-                { emoji: '🛠️', label: 'Kelola', desc: 'Tambah/hapus role, publish' },
-            ])
+            'Bikin menu biar member bisa **ambil role sendiri** lewat dropdown (tanpa react emoji).\n\n' +
+            '**Cara pakai (3 langkah):**\n' +
+            '1️⃣ Tekan **Buat Menu Baru** → isi nama menu\n' +
+            '2️⃣ Tekan **Atur Menu** → **Tambah Role**\n' +
+            '3️⃣ Tekan **Kirim ke Channel** → pilih channel\n\n' +
+            `**Menu kamu (${menus.length}):**\n${lines}`
         )
-        .setFooter({ text: ui.footer(`${guild.name} • member pilih role lewat dropdown (tanpa reaction)`) });
+        .setFooter({ text: ui.footer(guild.name) });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`sradm_create_${userId}`).setLabel('➕ Buat Menu').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`sradm_manage_${userId}`).setLabel('🛠️ Kelola').setStyle(ButtonStyle.Primary).setDisabled(menus.length === 0)
+        new ButtonBuilder().setCustomId(`sradm_create_${userId}`).setLabel('Buat Menu Baru').setEmoji('➕').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`sradm_manage_${userId}`).setLabel('Atur Menu').setEmoji('🛠️').setStyle(ButtonStyle.Primary).setDisabled(menus.length === 0)
     );
     return { embeds: [embed], components: [row] };
 }
@@ -74,31 +74,37 @@ function buildManageView(guildId, userId, guild, menuId) {
     const opts = sr.getOptions(menuId);
     const roleLines = opts.length
         ? opts.map(o => `> ${o.emoji ? o.emoji + ' ' : ''}<@&${o.roleId}>${o.description ? ` — *${o.description}*` : ''}`).join('\n')
-        : '> *Belum ada role. Tambahkan dengan tombol **Tambah Role**.*';
+        : '> _Belum ada role. Tekan **Tambah Role** dulu._';
+
+    const ruleText = menu.type === 'unique'
+        ? '🔘 Member cuma bisa ambil **1 role** dari menu ini'
+        : '✅ Member bisa ambil **banyak role** sekaligus';
+
+    const nextStep = opts.length === 0
+        ? '\n\n👉 **Langkah berikutnya:** tekan **Tambah Role**.'
+        : (!menu.messageId ? '\n\n👉 **Langkah berikutnya:** tekan **Kirim ke Channel**.' : '');
 
     const embed = new EmbedBuilder()
         .setColor(menu.color || ui.COLORS.info)
-        .setTitle(`🛠️ Kelola Menu #${menu.id}`)
+        .setTitle(`🛠️ Atur Menu: ${menu.title || 'tanpa nama'}`)
         .setDescription(
-            ui.statBlock([
-                `📛 Judul: **${menu.title || '(tanpa judul)'}**`,
-                `📝 Deskripsi: ${menu.description ? menu.description.slice(0, 80) : '*kosong*'}`,
-                `🔀 Tipe: ${menu.type === 'unique' ? '🔘 Unik (1 role)' : '✅ Multi (toggle)'}`,
-                `📍 Status: ${menu.messageId ? `🟢 Terpost di <#${menu.channelId}>` : '⚪ Belum dipublish'}`,
-            ]) +
-            `\n**Role di menu ini (${opts.length}/25):**\n${roleLines}`
+            `📝 Keterangan: ${menu.description ? menu.description.slice(0, 100) : '_kosong_'}\n` +
+            `🎯 Aturan pilih: ${ruleText}\n` +
+            `📍 Status: ${menu.messageId ? `✅ sudah tampil di <#${menu.channelId}>` : '⏳ belum dikirim ke channel'}\n\n` +
+            `**Role di menu ini (${opts.length}/25):**\n${roleLines}` +
+            nextStep
         )
-        .setFooter({ text: ui.footer('Perubahan role otomatis ter-update di pesan yang sudah dipost') });
+        .setFooter({ text: ui.footer('Setiap perubahan langsung ke-update di pesan yang sudah dikirim') });
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`sradm_addrole_${menuId}_${userId}`).setLabel('➕ Tambah Role').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`sradm_delrole_${menuId}_${userId}`).setLabel('➖ Hapus Role').setStyle(ButtonStyle.Secondary).setDisabled(opts.length === 0),
-        new ButtonBuilder().setCustomId(`sradm_publish_${menuId}_${userId}`).setLabel(menu.messageId ? '🔁 Publish Ulang' : '📤 Publish').setStyle(ButtonStyle.Primary).setDisabled(opts.length === 0)
+        new ButtonBuilder().setCustomId(`sradm_addrole_${menuId}_${userId}`).setLabel('Tambah Role').setEmoji('➕').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`sradm_delrole_${menuId}_${userId}`).setLabel('Hapus Role').setEmoji('➖').setStyle(ButtonStyle.Secondary).setDisabled(opts.length === 0),
+        new ButtonBuilder().setCustomId(`sradm_publish_${menuId}_${userId}`).setLabel(menu.messageId ? 'Kirim Ulang' : 'Kirim ke Channel').setEmoji('📤').setStyle(ButtonStyle.Primary).setDisabled(opts.length === 0)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`sradm_type_${menuId}_${userId}`).setLabel(menu.type === 'unique' ? '🔀 Jadikan Multi' : '🔀 Jadikan Unik').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`sradm_delete_${menuId}_${userId}`).setLabel('🗑️ Hapus Menu').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`sradm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`sradm_type_${menuId}_${userId}`).setLabel(menu.type === 'unique' ? 'Ubah: boleh banyak role' : 'Ubah: cuma 1 role').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`sradm_delete_${menuId}_${userId}`).setLabel('Hapus Menu').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`sradm_back_${userId}`).setLabel('Kembali').setEmoji('🔙').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2] };
 }
@@ -129,9 +135,8 @@ async function handleSelfRoleButton(interaction) {
     if (action === 'create') {
         const modal = new ModalBuilder().setCustomId(`srmod_create_${userId}`).setTitle('Buat Menu Self-Role');
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Contoh: Pilih Role Notifikasi')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_desc').setLabel('Deskripsi (opsional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_type').setLabel('Tipe: multi / unique').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(10).setPlaceholder('multi'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_title').setLabel('Nama menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Contoh: Pilih Role Notifikasi')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_desc').setLabel('Keterangan (boleh dikosongi)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500).setPlaceholder('Contoh: Pilih role buat dapat notifikasi event'))
         );
         return interaction.showModal(modal);
     }
@@ -139,12 +144,12 @@ async function handleSelfRoleButton(interaction) {
     if (action === 'manage') {
         const menus = sr.getMenus(guildId);
         if (!menus.length) return interaction.reply({ content: '❌ Belum ada menu.', ephemeral: true });
-        const select = new StringSelectMenuBuilder().setCustomId(`srsel_pick_${userId}`).setPlaceholder('🛠️ Pilih menu untuk dikelola...');
+        const select = new StringSelectMenuBuilder().setCustomId(`srsel_pick_${userId}`).setPlaceholder('🛠️ Pilih menu yang mau diatur...');
         for (const m of menus.slice(0, 25)) {
             const opt = new StringSelectMenuOptionBuilder()
-                .setLabel(`#${m.id} ${(m.title || 'tanpa judul').slice(0, 90)}`)
+                .setLabel((m.title || 'Menu tanpa nama').slice(0, 90))
                 .setValue(String(m.id))
-                .setDescription(`${sr.getOptions(m.id).length} role • ${m.type === 'unique' ? 'unik' : 'multi'}`);
+                .setDescription(`${sr.getOptions(m.id).length} role`);
             select.addOptions(opt);
         }
         return interaction.update({ embeds: [buildAdminPanel(guildId, userId, interaction.guild).embeds[0]], components: [new ActionRowBuilder().addComponents(select)] });
@@ -298,9 +303,9 @@ async function handleSelfRoleModal(interaction) {
     if (kind === 'create') {
         const title = interaction.fields.getTextInputValue('sr_title').trim();
         const desc = (interaction.fields.getTextInputValue('sr_desc') || '').trim();
-        const typeRaw = (interaction.fields.getTextInputValue('sr_type') || '').trim().toLowerCase();
-        const type = typeRaw === 'unique' ? 'unique' : 'multi';
-        const menuId = sr.createMenu(guildId, { title, description: desc, type });
+        // Default: members can pick many roles. Admin can switch to "1 role only"
+        // later with a clearly-labelled button in the manage view.
+        const menuId = sr.createMenu(guildId, { title, description: desc, type: 'multi' });
         const view = buildManageView(guildId, userId, interaction.guild, menuId);
         return interaction.reply({ ...view, ephemeral: false });
     }

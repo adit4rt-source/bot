@@ -126,11 +126,11 @@ function buildPublicMessage(menu, options, guild) {
             (options.length
                 ? `${ui.DIVIDER}\n${lines.join('\n')}\n${ui.DIVIDER}\n` +
                   (isUnique
-                      ? '🔘 *Pilih **satu** role dari menu di bawah (pilihan lama otomatis diganti).*'
-                      : '✅ *Pilih role di menu di bawah untuk menambah/melepas (toggle). Bisa pilih lebih dari satu.*')
+                      ? '🔘 *Pilih **1 role** dari menu di bawah. Mau ganti? Tinggal pilih yang lain.*'
+                      : '✅ *Pilih role yang kamu mau di menu di bawah. Mau lepas role? Pilih lagi role yang sama.*')
                 : '*Belum ada role di menu ini.*')
         )
-        .setFooter({ text: ui.footer('Klik menu di bawah untuk mengatur role kamu') });
+        .setFooter({ text: ui.footer('Pilih dari menu di bawah untuk mengatur role kamu') });
 
     const components = [];
     if (options.length) {
