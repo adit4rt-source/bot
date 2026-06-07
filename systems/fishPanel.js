@@ -581,12 +581,23 @@ async function handleFishingButton(interaction) {
             return interaction.reply({ content: '⏳ Tunggu sebentar sebelum menjual lagi.', ephemeral: true });
         }
         fishCooldowns.set(sellCdKey, Date.now() + 10000);
-        const inventory = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').all(guildId, userId);
-        if (inventory.length === 0) {
-            return interaction.reply({ content: '❌ Tidak ada ikan yang bisa dijual! (Ikan yang di-lock tidak terjual)', ephemeral: true });
+        // Auto-protect ultra-rare fish from accidental Sell All (Secret & God never auto-sold)
+        const PROTECTED_TIERS = ['Secret', 'God'];
+        const unlocked = db.prepare('SELECT * FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').all(guildId, userId);
+        const sellable = [], protectedFish = [];
+        for (const item of unlocked) {
+            const fishDef = FISH_DATA.find(f => f.id === item.fishId);
+            if (fishDef && PROTECTED_TIERS.includes(fishDef.tier)) protectedFish.push(item);
+            else sellable.push(item);
+        }
+        if (sellable.length === 0) {
+            const protMsg = protectedFish.length > 0
+                ? ` 🔮 **${protectedFish.length} ikan Secret/God dilindungi otomatis** (tidak ikut Sell All). Cek 📦 Inventory.`
+                : ' (Ikan yang di-lock tidak terjual)';
+            return interaction.reply({ content: `❌ Tidak ada ikan biasa yang bisa dijual!${protMsg}`, ephemeral: true });
         }
         let totalValue = 0, countByTier = {};
-        for (const item of inventory) {
+        for (const item of sellable) {
             const fishDef = FISH_DATA.find(f => f.id === item.fishId);
             const tierDef = fishDef ? FISH_TIERS.find(t => t.tier === fishDef.tier) : FISH_TIERS[0];
             const weightRatio = tierDef ? (item.weight - tierDef.minWeight) / (tierDef.maxWeight - tierDef.minWeight) : 0;
@@ -598,14 +609,17 @@ async function handleFishingButton(interaction) {
         const freshData = getOrCreateUser(guildId, userId);
         freshData.balance += totalValue;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, userId);
-        db.prepare('DELETE FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 0').run(guildId, userId);
+        // Delete ONLY the sellable fish (by id) so protected Secret/God stay safe
+        const delStmt = db.prepare('DELETE FROM fish_inventory WHERE id = ?');
+        for (const item of sellable) delStmt.run(item.id);
         incrementUserStat(guildId, userId, 'total_fish_sold_value', totalValue);
-        incrementUserStat(guildId, userId, 'total_fish_sold_count', inventory.length);
+        incrementUserStat(guildId, userId, 'total_fish_sold_count', sellable.length);
         addIncome(guildId, userId, 'fishing', totalValue);
         const lockedCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE guildId = ? AND userId = ? AND locked = 1').get(guildId, userId).c;
         let breakdown = Object.entries(countByTier).map(([t, c]) => `> ${(FISH_TIERS.find(ft => ft.tier === t) || { emoji: '🐟' }).emoji} ${t}: **${c}**`).join('\n');
+        const protectedNote = protectedFish.length > 0 ? `\n> 🔮 Dilindungi (Secret/God): **${protectedFish.length}** — *tidak ikut terjual*` : '';
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('💰 IKAN TERJUAL!')
-            .setDescription(`**${inventory.length} ikan** dijual:\n\n🪙 **${totalValue.toLocaleString('id-ID')} Money**\n\n${breakdown}\n\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**${lockedCount > 0 ? `\n> 🔒 Locked: **${lockedCount}**` : ''}`);
+            .setDescription(`**${sellable.length} ikan** dijual:\n\n🪙 **${totalValue.toLocaleString('id-ID')} Money**\n\n${breakdown}\n\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**${lockedCount > 0 ? `\n> 🔒 Locked: **${lockedCount}**` : ''}${protectedNote}`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
