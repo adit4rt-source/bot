@@ -14,7 +14,7 @@ const {
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
-    STAMINA_REGEN_MS, STAMINA_REFILL_COST_PER, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
+    STAMINA_REGEN_MS, staminaRefillCostPerPoint, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, staminaRegenPerMin, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
 
@@ -353,7 +353,8 @@ function buildShopPanel(guildId, userId, username) {
     const current = getPickaxe(data.pickaxe);
     const max = maxStamina(data.level);
     const missing = max - data.stamina;
-    const refillCost = missing * STAMINA_REFILL_COST_PER;
+    const perPoint = staminaRefillCostPerPoint(data.level);
+    const refillCost = missing * perPoint;
     const DIV = '━━━━━━━━━━━━━━━━━━━━';
 
     let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n`;
@@ -383,7 +384,7 @@ function buildShopPanel(guildId, userId, username) {
     // --- Stamina ---
     desc += `\n${DIV}\n**⚡ Isi Ulang Stamina**\n`;
     if (missing <= 0) desc += `> 🔋 Stamina sudah penuh!\n`;
-    else desc += `> Isi penuh **+${missing}** stamina → 🪙 **${refillCost.toLocaleString('id-ID')}** (🪙${STAMINA_REFILL_COST_PER}/poin)\n`;
+    else desc += `> Isi penuh **+${missing}** stamina → 🪙 **${refillCost.toLocaleString('id-ID')}** (🪙${perPoint}/poin)\n`;
 
     const components = [];
     if (buyable.length > 0) {
@@ -501,7 +502,7 @@ async function handleMiningButton(interaction) {
         const max = maxStamina(row.level);
         const missing = max - row.stamina;
         if (missing <= 0) return interaction.reply({ content: '🔋 Stamina kamu sudah penuh!', ephemeral: true });
-        const cost = missing * STAMINA_REFILL_COST_PER;
+        const cost = missing * staminaRefillCostPerPoint(row.level);
         const userData = getOrCreateUser(guildId, userId);
         if (userData.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Isi penuh stamina butuh 🪙 **${cost.toLocaleString('id-ID')}**`, ephemeral: true });
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(cost, guildId, userId);

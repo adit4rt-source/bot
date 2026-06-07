@@ -151,7 +151,11 @@ const CORE_RECIPES = [
 ];
 
 const STAMINA_REGEN_MS = 60000;   // +1 stamina / menit (skala level via staminaRegenPerMin)
-const STAMINA_REFILL_COST_PER = 8; // harga isi ulang per 1 stamina yang hilang (money)
+// Harga isi ulang stamina per 1 poin — skala level mining (money sink).
+// Lv1 = 30/poin, Lv50 = 130, Lv100 = 230. Full refill Lv100 (~595) ≈ 137rb.
+function staminaRefillCostPerPoint(level) {
+    return 30 + (level || 1) * 2;
+}
 const STAMINA_BASE = 100;         // max = STAMINA_BASE + level * STAMINA_PER_LEVEL
 const STAMINA_PER_LEVEL = 5;
 const DESCEND_STEP = 25;          // meter per turun
@@ -198,6 +202,6 @@ module.exports = {
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
-    STAMINA_REGEN_MS, STAMINA_REFILL_COST_PER, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
+    STAMINA_REGEN_MS, staminaRefillCostPerPoint, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, staminaRegenPerMin, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
