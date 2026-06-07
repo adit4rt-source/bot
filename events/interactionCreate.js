@@ -17,6 +17,7 @@ const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = requir
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
+const { handleGuideButton, isGuideButton } = require('../systems/guidePanel');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -134,8 +135,14 @@ async function routeInteraction(interaction) {
                 { name: '\u200b', value: `> \`/invite\` — 📨 Invite Tracker (statistik invite)\n> \`/welcomer\` — 👋 Welcomer Panel (Admin)\n> \`/tempvoice\` — 🎙️ Buat voice channel privat`, inline: false }
             );
             if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel\n> \`/welcomer\` — 👋 Konfigurasi welcome/goodbye`, inline: false });
-            helpEmbed.setFooter({ text: '💡 /menu navigasi | /leaderboard ranking | /gift kirim money | discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
+            helpEmbed.setFooter({ text: '💡 /guide panduan mekanik | /menu navigasi | /leaderboard ranking | discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
             return interaction.reply({ embeds: [helpEmbed] });
+        }
+
+        // ================= GUIDE (in-bot feature guide) =================
+        if (command === 'guide') {
+            const { buildGuidePanel } = require('../systems/guidePanel');
+            return interaction.reply(buildGuidePanel(interaction.user.id, 'overview'));
         }
 
         // ================= MENU HUB =================
@@ -949,6 +956,11 @@ async function routeInteraction(interaction) {
         // --- AWAKENING BUTTONS ---
         if (isAwakeningButton(interaction.customId)) {
             return handleAwakeningButton(interaction);
+        }
+
+        // --- GUIDE BUTTONS ---
+        if (isGuideButton(interaction.customId)) {
+            return handleGuideButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---
