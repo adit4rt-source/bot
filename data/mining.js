@@ -3,28 +3,31 @@
 
 // ==================== PICKAXE TIERS ====================
 // staminaCost: stamina per swing | yieldBonus: max extra ore per dig | maxDepth: how deep you can descend (meters)
+// NOTE: yieldBonus di-nerf (v3.4.1) agar mining tidak jadi air terjun uang.
 const PICKAXE_TYPES = [
-    { id: 'wood',       name: 'Beliung Kayu',      emoji: '🪵', tier: 0, price: 0,      staminaCost: 5, yieldBonus: 0,  maxDepth: 50 },
-    { id: 'stone',      name: 'Beliung Batu',      emoji: '⛏️', tier: 1, price: 2000,   staminaCost: 5, yieldBonus: 1,  maxDepth: 120 },
-    { id: 'copper',     name: 'Beliung Tembaga',   emoji: '⛏️', tier: 2, price: 8000,   staminaCost: 4, yieldBonus: 2,  maxDepth: 250 },
-    { id: 'iron',       name: 'Beliung Besi',      emoji: '⚒️', tier: 3, price: 25000,  staminaCost: 4, yieldBonus: 3,  maxDepth: 450 },
-    { id: 'gold',       name: 'Beliung Emas',      emoji: '⚒️', tier: 4, price: 70000,  staminaCost: 3, yieldBonus: 5,  maxDepth: 700 },
-    { id: 'mithril',    name: 'Bor Mithril',       emoji: '🛠️', tier: 5, price: 150000, staminaCost: 3, yieldBonus: 8,  maxDepth: 1000 },
-    { id: 'adamantite', name: 'Bor Adamantite',    emoji: '🛠️', tier: 6, price: 400000, staminaCost: 2, yieldBonus: 12, maxDepth: 1500 },
-    { id: 'legendary_drill', name: 'Legendary Drill', emoji: '🌀', tier: 7, price: 0, staminaCost: 1, yieldBonus: 20, maxDepth: 99999, craftOnly: true },
+    { id: 'wood',       name: 'Beliung Kayu',      emoji: '🪵', tier: 0, price: 0,      staminaCost: 5, yieldBonus: 0, maxDepth: 50 },
+    { id: 'stone',      name: 'Beliung Batu',      emoji: '⛏️', tier: 1, price: 2000,   staminaCost: 5, yieldBonus: 1, maxDepth: 120 },
+    { id: 'copper',     name: 'Beliung Tembaga',   emoji: '⛏️', tier: 2, price: 8000,   staminaCost: 4, yieldBonus: 1, maxDepth: 250 },
+    { id: 'iron',       name: 'Beliung Besi',      emoji: '⚒️', tier: 3, price: 25000,  staminaCost: 4, yieldBonus: 2, maxDepth: 450 },
+    { id: 'gold',       name: 'Beliung Emas',      emoji: '⚒️', tier: 4, price: 70000,  staminaCost: 3, yieldBonus: 3, maxDepth: 700 },
+    { id: 'mithril',    name: 'Bor Mithril',       emoji: '🛠️', tier: 5, price: 150000, staminaCost: 3, yieldBonus: 4, maxDepth: 1000 },
+    { id: 'adamantite', name: 'Bor Adamantite',    emoji: '🛠️', tier: 6, price: 400000, staminaCost: 2, yieldBonus: 6, maxDepth: 1500 },
+    { id: 'legendary_drill', name: 'Legendary Drill', emoji: '🌀', tier: 7, price: 0, staminaCost: 1, yieldBonus: 8, maxDepth: 99999, craftOnly: true },
 ];
 
 // ==================== ORE TIERS ====================
 // value: harga jual per unit | exp: mining exp saat digali
+// NOTE: value di-nerf besar (v3.4.1). Mining difokuskan ke MATERIAL (smelt/smith/craft),
+// bukan sumber uang utama — jual ore jadi income kecil-menengah saja.
 const ORE_TIERS = [
-    { id: 'stone',        name: 'Batu',          emoji: '🪨', rarity: 'Trash',     value: 2,    exp: 1 },
-    { id: 'copper',       name: 'Bijih Tembaga', emoji: '🟤', rarity: 'Common',    value: 15,   exp: 2 },
-    { id: 'iron',         name: 'Bijih Besi',    emoji: '⚪', rarity: 'Uncommon',  value: 40,   exp: 4 },
-    { id: 'gold',         name: 'Bijih Emas',    emoji: '🟡', rarity: 'Rare',      value: 120,  exp: 8 },
-    { id: 'titanium',     name: 'Titanium',      emoji: '🔷', rarity: 'Epic',      value: 350,  exp: 15 },
-    { id: 'mithril',      name: 'Mithril',       emoji: '🟣', rarity: 'Legendary', value: 900,  exp: 30 },
-    { id: 'adamantite',   name: 'Adamantite',    emoji: '🌈', rarity: 'Mythic',    value: 2500, exp: 60 },
-    { id: 'void_crystal', name: 'Void Crystal',  emoji: '💠', rarity: 'Secret',    value: 6000, exp: 120 },
+    { id: 'stone',        name: 'Batu',          emoji: '🪨', rarity: 'Trash',     value: 1,    exp: 1 },
+    { id: 'copper',       name: 'Bijih Tembaga', emoji: '🟤', rarity: 'Common',    value: 5,    exp: 2 },
+    { id: 'iron',         name: 'Bijih Besi',    emoji: '⚪', rarity: 'Uncommon',  value: 12,   exp: 4 },
+    { id: 'gold',         name: 'Bijih Emas',    emoji: '🟡', rarity: 'Rare',      value: 30,   exp: 8 },
+    { id: 'titanium',     name: 'Titanium',      emoji: '🔷', rarity: 'Epic',      value: 70,   exp: 15 },
+    { id: 'mithril',      name: 'Mithril',       emoji: '🟣', rarity: 'Legendary', value: 150,  exp: 30 },
+    { id: 'adamantite',   name: 'Adamantite',    emoji: '🌈', rarity: 'Mythic',    value: 350,  exp: 60 },
+    { id: 'void_crystal', name: 'Void Crystal',  emoji: '💠', rarity: 'Secret',    value: 800,  exp: 120 },
 ];
 
 // ==================== MINE LAYERS (depth zones) ====================
