@@ -8,6 +8,61 @@ const BUILD_DATE = '2026-06-07';
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
 
+// ================= AUTO-RESTORE (env-gated, runs BEFORE database loads) =================
+// Set RESTORE_BACKUP=<nama_file_backup> di env Pterodactyl untuk memulihkan DB saat start.
+// Contoh: RESTORE_BACKUP=economy_2026-06-07_10-41-50.sqlite
+// Bot akan: backup DB sekarang -> timpa economy.sqlite dengan backup itu -> lanjut start.
+// Setelah berhasil, KOSONGKAN/HAPUS env RESTORE_BACKUP supaya tidak restore berulang tiap restart.
+(function maybeAutoRestore() {
+    const target = (process.env.RESTORE_BACKUP || '').trim();
+
+    // Mode list: set LIST_BACKUPS=1 untuk cetak daftar backup ke console saat start.
+    if (String(process.env.LIST_BACKUPS || '').trim() === '1') {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const ROOT = __dirname;
+            const out = [];
+            const bdir = path.join(ROOT, 'backups');
+            if (fs.existsSync(bdir)) for (const f of fs.readdirSync(bdir)) if (f.startsWith('economy_') && f.endsWith('.sqlite')) { const p = path.join(bdir, f); out.push({ f, m: fs.statSync(p).mtimeMs }); }
+            for (const f of fs.readdirSync(ROOT)) if (f.startsWith('economy.backup-') && f.endsWith('.sqlite')) { const p = path.join(ROOT, f); out.push({ f, m: fs.statSync(p).mtimeMs }); }
+            out.sort((a, b) => b.m - a.m);
+            log('INFO', '===== DAFTAR BACKUP (terbaru -> terlama) =====');
+            if (!out.length) log('INFO', '(kosong)');
+            out.forEach((b, i) => log('INFO', `${i + 1}. ${b.f}  |  ${new Date(b.m).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`));
+            log('INFO', '===== Set RESTORE_BACKUP=<nama_file> untuk memulihkan, lalu restart =====');
+        } catch (e) { log('ERROR', `[LIST_BACKUPS] ${e.message}`); }
+    }
+
+    if (!target) return;
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const ROOT = __dirname;
+        const DB_PATH = path.join(ROOT, 'economy.sqlite');
+        // Cari file backup di backups/ atau di root
+        const candidates = [
+            path.join(ROOT, 'backups', target),
+            path.join(ROOT, target),
+        ];
+        const src = candidates.find(p => fs.existsSync(p));
+        if (!src) {
+            log('ERROR', `[AUTO-RESTORE] Backup "${target}" tidak ditemukan (cek backups/ atau root). Start normal tanpa restore.`);
+            return;
+        }
+        if (fs.existsSync(DB_PATH)) {
+            const safety = `economy.pre-restore-full-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
+            fs.copyFileSync(DB_PATH, path.join(ROOT, safety));
+            log('WARN', `[AUTO-RESTORE] Backup kondisi DB sekarang -> ${safety}`);
+        }
+        fs.copyFileSync(src, DB_PATH);
+        log('INFO', `[AUTO-RESTORE] economy.sqlite dipulihkan dari: ${path.relative(ROOT, src)}`);
+        log('WARN', `[AUTO-RESTORE] KOSONGKAN env RESTORE_BACKUP sekarang agar tidak restore lagi tiap restart!`);
+    } catch (e) {
+        log('ERROR', `[AUTO-RESTORE] Gagal: ${e.message}. Start normal tanpa restore.`);
+    }
+})();
+
 // Load database (runs migrations on require)
 require('./database');
 
