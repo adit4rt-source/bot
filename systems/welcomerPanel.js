@@ -219,12 +219,8 @@ async function handleWelcomerButton(interaction) {
         if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
 
         const banner = await buildBannerAttachment(member, 'welcome');
-        if (banner) {
-            embed.setImage('attachment://welcome.png');
-            await channel.send({ embeds: [embed], files: [banner] }).catch(() => {});
-        } else {
-            await channel.send({ embeds: [embed] }).catch(() => {});
-        }
+        // Card as standalone attachment (renders larger than an embed image).
+        await channel.send({ embeds: [embed], files: banner ? [banner] : [] }).catch(() => {});
         return interaction.reply({ content: `✅ Test message sent to <#${settings.welcome_channel}>!`, ephemeral: true });
     }
 }

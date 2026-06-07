@@ -188,10 +188,11 @@ async function handleWelcome(member) {
             if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
             if (image && image.startsWith('http')) embed.setImage(image);
 
-            // Banner image (generated) is shown as the embed's main image when enabled.
+            // Generated card is sent as a standalone attachment (NOT embed.setImage)
+            // so Discord renders it at full media width — much larger than an
+            // embed image. The embed below carries the welcome text.
             const banner = await buildBannerAttachment(member, 'welcome');
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
-            if (banner) embed.setImage('attachment://welcome.png');
             channel.send({
                 content: `<@${member.id}>`,
                 embeds: [embed],
@@ -257,7 +258,6 @@ async function handleGoodbye(member) {
         .setTimestamp();
 
     const banner = await buildBannerAttachment(member, 'goodbye');
-    if (banner) embed.setImage('attachment://goodbye.png');
     channel.send({ embeds: [embed], files: banner ? [banner] : [] }).catch(() => {});
 }
 
@@ -286,7 +286,6 @@ async function testWelcomer(member) {
     if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
 
     const banner = await buildBannerAttachment(member, 'welcome');
-    if (banner) embed.setImage('attachment://welcome.png');
     await channel.send({ embeds: [embed], files: banner ? [banner] : [] });
 }
 
