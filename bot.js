@@ -133,65 +133,24 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#5865F2')
+            .setColor('#DC143C')
             .setTitle(`📦 Update — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `⛏️ **MINING / TAMBANG — MAJOR UPDATE!**\n` +
-                `Pilar gathering ke-4, lengkap dari awal sampai endgame!\n` +
+                `🛠️ **PERBAIKAN & PENYEIMBANGAN**\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#C9A227')
-            .setTitle('⛏️ Sistem Tambang — NEW! (`/mine`)')
-            .setDescription(
-                `> 🪏 **Dig** — gali ore pakai sistem **Stamina** (regen otomatis tiap menit)\n` +
-                `> ⬇️ **Kedalaman** — makin dalam, ore makin langka (Permukaan → The Void)\n` +
-                `> ⛏️ **7 Pickaxe** — upgrade buat hemat stamina, yield lebih, gali lebih dalam\n` +
-                `> 🔥 **Smelt** — lebur ore jadi batangan (bar)\n` +
-                `> 🔨 **Smith** — tempa bar jadi item: Refine Stone, Rod Parts, Protection Stone, Mythic Fragment, Penyangga, Masker Gas, Mystery Box, Lucky Charm, Money Magnet!\n` +
-                `> ☠️ **Bahaya bawah tanah** — cave-in, gas beracun, & MONSTER (lawan pakai pet + element!)\n` +
-                `> ⚡ **Beli Stamina** di Toko Tambang (langsung penuh)`
-            ),
-
-        new ChangelogEmbed()
-            .setColor('#8E44AD')
-            .setTitle('💎👑 Endgame Tambang')
-            .setDescription(
-                `> 💎 **Gem & Socket** — pasang gem ke pickaxe buat bonus permanen (+ Fusion!)\n` +
-                `> 👑 **THE CORE** — boss endgame di 1500m+, drop Artifact Fragment\n` +
-                `> 🌀 **Legendary Drill** & 🏺 **Miner's Artifact** — craft endgame\n` +
-                `> ⭐ **Prestige Mining** — reset level buat bonus permanen, ulang makin kuat\n` +
-                `> 🏆 **Top Miners** leaderboard\n\n` +
-                `**🐾 Integrasi:**\n` +
-                `> • 3 Pet Ability baru (Ore Finder, Tough Miner, Gem Hunter)\n` +
-                `> • 9 Achievement Mining baru\n` +
-                `> • Quest baru: gali ore & lebur bar (daily/weekly)`
-            ),
-
-        new ChangelogEmbed()
             .setColor('#E74C3C')
-            .setTitle('🛠️ Perbaikan & Balancing')
+            .setTitle('🛠️ Perbaikan')
             .setDescription(
-                `> 🐛 Fix: item langka kebeli GRATIS di /shop\n` +
-                `> 🐛 Fix: Voucher redeem sekarang berfungsi!\n` +
+                `> 🐛 Fix: item langka tidak bisa lagi dibeli GRATIS di /shop\n` +
+                `> 🐛 Fix: Voucher redeem sekarang berfungsi normal\n` +
                 `> 🎟️ Voucher cuma bisa diredeem di server **ID Community** (anti-exploit multi-akun)\n` +
-                `> 🐛 Fix: panel Fusion & Peternakan error\n` +
-                `> ⚖️ Regen stamina mining skala level\n` +
-                `> 🎨 UI panel mining dipercantik`
-            ),
-
-        new ChangelogEmbed()
-            .setColor('#F1C40F')
-            .setTitle('🎁 KODE REDEEM SPESIAL!')
-            .setDescription(
-                `Buruan klaim hadiahnya! 🤑\n\n` +
-                `> 🎟️ Kode: **\`MANTAP\`**\n` +
-                `> 📍 Cara klaim: ketik \`/wallet\` → klik **🎟️ Redeem** → masukkan kode\n` +
-                `> ⚠️ Cuma bisa diredeem di server **ID Community** & 1x per orang!\n\n` +
-                `💡 Ketik \`/mine\` buat mulai menambang & \`/guide\` buat panduan lengkap!`
+                `> 🐛 Fix: panel Fusion & Peternakan yang sempat error\n` +
+                `> 🐾 Pet: Pet Dex Secret/GOD, element matchup, Release Pet`
             )
             .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()

@@ -27,9 +27,6 @@ const PET_ABILITIES = {
         { id: 'hunger_slow', name: 'Slow Hunger', emoji: '🍖', tier: 1, level: 30,
           desc: 'Pet hunger turun 50% lebih lambat',
           detail: 'Hunger decay rate dikurangi setengah. Pet bisa bertahan 2x lebih lama tanpa makan.' },
-        { id: 'ore_finder', name: 'Ore Finder', emoji: '🪨', tier: 1, level: 30,
-          desc: '+1 ore tiap menggali di tambang',
-          detail: 'Saat ⛏️ Dig di tambang, hasil galian +1 ore. Stack dengan yield pickaxe & gem.' },
     ],
     // TIER 2 (Lv.50)
     tier2: [
@@ -48,9 +45,6 @@ const PET_ABILITIES = {
         { id: 'shop_discount', name: 'Bargain Hunter', emoji: '🏷️', tier: 2, level: 50,
           desc: '-15% harga semua pembelian di shop',
           detail: 'Semua pembelian di shop (item, rod, bait, pet food, egg) diskon 15%.' },
-        { id: 'tough_miner', name: 'Tough Miner', emoji: '⛑️', tier: 2, level: 50,
-          desc: '-1 stamina per gali + tahan cave-in/gas',
-          detail: 'Biaya gali tambang −1 stamina (min 1) & 50% chance hazard cave-in/gas tidak berefek.' },
     ],
     // TIER 3 (Lv.100)
     tier3: [
@@ -69,9 +63,6 @@ const PET_ABILITIES = {
         { id: 'expedition_rush', name: 'Swift Explorer', emoji: '🚀', tier: 3, level: 100,
           desc: 'Expedition time -25%',
           detail: 'Semua expedition duration dikurangi 25%. 8 jam → 6 jam, 2 jam → 1.5 jam.' },
-        { id: 'gem_finder', name: 'Gem Hunter', emoji: '💠', tier: 3, level: 100,
-          desc: '+8% chance dapat gem saat menggali',
-          detail: 'Tambah 8% peluang drop gem di tambang. Cocok untuk farming gem & socket.' },
     ],
 };
 

@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 119, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 110, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -140,16 +140,6 @@ const ACHIEVEMENTS = [
     { id: 'pet_mythic', name: 'Mythic Tamer', emoji: '🔴', desc: 'Dapatkan pet Mythic pertama', category: 'Pet', reward: 8000 },
     { id: 'pet_secret', name: 'Secret Keeper', emoji: '🟪', desc: 'Dapatkan pet Secret pertama', category: 'Pet', reward: 25000 },
     { id: 'pet_god', name: 'Divine Tamer', emoji: '👑', desc: 'Dapatkan pet GOD tier pertama', category: 'Pet', reward: 100000 },
-    // --- MINING ---
-    { id: 'mine_first', name: 'Penambang Pemula', emoji: '⛏️', desc: 'Pertama kali menggali di tambang', category: 'Mining', reward: 100 },
-    { id: 'mine_100', name: 'Penggali Tekun', emoji: '🪏', desc: 'Menggali 100 kali', category: 'Mining', reward: 500 },
-    { id: 'mine_1000', name: 'Penambang Veteran', emoji: '⛰️', desc: 'Menggali 1.000 kali', category: 'Mining', reward: 3000 },
-    { id: 'mine_smelt_first', name: 'Pandai Lebur', emoji: '🔥', desc: 'Melebur batangan pertama', category: 'Mining', reward: 200 },
-    { id: 'mine_smith_first', name: 'Pandai Besi', emoji: '🔨', desc: 'Menempa item pertama', category: 'Mining', reward: 200 },
-    { id: 'mine_monster', name: 'Pembasmi Bawah Tanah', emoji: '👹', desc: 'Kalahkan monster tambang pertama', category: 'Mining', reward: 500 },
-    { id: 'mine_gem', name: 'Pemburu Permata', emoji: '💎', desc: 'Dapatkan gem pertama dari tambang', category: 'Mining', reward: 800 },
-    { id: 'mine_core', name: 'Penakluk Inti', emoji: '👑', desc: 'Taklukkan The Core pertama kali', category: 'Mining', reward: 10000 },
-    { id: 'mine_prestige', name: 'Tambang Abadi', emoji: '⭐', desc: 'Prestige Mining pertama kali', category: 'Mining', reward: 25000 },
 
 ];
 
@@ -241,7 +231,7 @@ const ACHIEVEMENT_ROLES = [
     { minBadges: 30, name: '💎 Veteran', color: '#9B59B6' },
     { minBadges: 50, name: '🔥 Elite', color: '#E74C3C' },
     { minBadges: 70, name: '👑 Master', color: '#F1C40F' },
-    { minBadges: 119, name: '🏆 Completionist', color: '#FFFFFF' },
+    { minBadges: 110, name: '🏆 Completionist', color: '#FFFFFF' },
 ];
 
 async function updateAchievementRole(guild, userId, badgeCount) {
@@ -357,13 +347,6 @@ async function checkAchievements(guild, userId, context = {}) {
         if (context.tier === 'Secret') checks.push('pet_secret');
         if (context.tier === 'God') checks.push('pet_god');
     }
-    if (context.type === 'mining_dig') { const c = getUserStat(guildId, userId, 'mining_digs'); if (c >= 1) checks.push('mine_first'); if (c >= 100) checks.push('mine_100'); if (c >= 1000) checks.push('mine_1000'); }
-    if (context.type === 'mining_smelt') checks.push('mine_smelt_first');
-    if (context.type === 'mining_smith') checks.push('mine_smith_first');
-    if (context.type === 'mining_monster') checks.push('mine_monster');
-    if (context.type === 'mining_gem') checks.push('mine_gem');
-    if (context.type === 'mining_core') checks.push('mine_core');
-    if (context.type === 'mining_prestige') checks.push('mine_prestige');
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 

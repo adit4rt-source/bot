@@ -26,8 +26,6 @@ const QUEST_POOL = [
     { type: 'coinflip', descFn: (q) => `🪙 Main coinflip ${q.target} kali`, targetRange: { easy: [2,2], medium: [3,4], hard: [4,5] } },
     { type: 'battle', descFn: (q) => `⚔️ Lawan player di PvP ${q.target > 1 ? q.target + ' kali' : ''}`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,2] } },
     { type: 'craft', descFn: (q) => `🧪 Craft ${q.target} produk farming`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
-    { type: 'mine', descFn: (q) => `⛏️ Gali ${q.target} kali di tambang`, targetRange: { easy: [5,8], medium: [10,15], hard: [18,25] } },
-    { type: 'mine_smelt', descFn: (q) => `🔥 Lebur ${q.target} batangan (bar)`, targetRange: { easy: [2,3], medium: [4,6], hard: [8,10] } },
 ];
 
 // ================= DIFFICULTY TIERS =================

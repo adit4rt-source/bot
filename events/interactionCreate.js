@@ -18,7 +18,6 @@ const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, get
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
 const { handleGuideButton, isGuideButton } = require('../systems/guidePanel');
-const { handleMiningCommand, handleMiningButton, handleMiningSelectMenu, isMiningButton, isMiningSelectMenu } = require('../systems/miningPanel');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
@@ -158,11 +157,6 @@ async function routeInteraction(interaction) {
         if (command === 'guide') {
             const { buildGuidePanel } = require('../systems/guidePanel');
             return interaction.reply(buildGuidePanel(interaction.user.id, 'overview'));
-        }
-
-        // ================= MINING =================
-        if (command === 'mine') {
-            return handleMiningCommand(interaction);
         }
 
         // ================= MENU HUB =================
@@ -734,11 +728,6 @@ async function routeInteraction(interaction) {
             return handlePetSelectMenu(interaction);
         }
 
-        // --- MINING SELECT MENUS ---
-        if (isMiningSelectMenu(interaction.customId)) {
-            return handleMiningSelectMenu(interaction);
-        }
-
         // --- EXPEDITION SELECT MENUS ---
         if (isExpeditionSelectMenu(interaction.customId)) {
             return handleExpeditionSelectMenu(interaction);
@@ -990,11 +979,6 @@ async function routeInteraction(interaction) {
         // --- GUIDE BUTTONS ---
         if (isGuideButton(interaction.customId)) {
             return handleGuideButton(interaction);
-        }
-
-        // --- MINING BUTTONS ---
-        if (isMiningButton(interaction.customId)) {
-            return handleMiningButton(interaction);
         }
 
         // --- QUEST PANEL BUTTONS ---

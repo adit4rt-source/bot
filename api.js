@@ -84,9 +84,6 @@ app.get('/api/stats', (req, res) => {
         const totalAchievements = db.prepare('SELECT COUNT(*) as count FROM achievements').get();
         const totalMoney = db.prepare('SELECT SUM(balance) as total FROM users').get();
         const totalCommands = db.prepare('SELECT SUM(count) as total FROM command_summary').get();
-        const totalMiningDigs = db.prepare('SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = ?').get('mining_digs');
-        let totalMiners = { count: 0 };
-        try { totalMiners = db.prepare('SELECT COUNT(*) as count FROM mining_data').get() || { count: 0 }; } catch (e) { /* table may not exist yet */ }
 
         res.json({
             users: totalUsers?.count || 0,
@@ -101,8 +98,6 @@ app.get('/api/stats', (req, res) => {
                 totalAchievements: totalAchievements?.count || 0,
                 totalMoney: totalMoney?.total || 0,
                 totalCommands: totalCommands?.total || 0,
-                totalMiningDigs: totalMiningDigs?.total || 0,
-                totalMiners: totalMiners?.count || 0,
             }
         });
     } catch (e) {
@@ -146,11 +141,6 @@ app.get('/api/leaderboard/:type', async (req, res) => {
                 break;
             case 'pet':
                 rows = db.prepare('SELECT userId, MAX(level) as maxLevel, COUNT(*) as petCount FROM pets GROUP BY userId ORDER BY maxLevel DESC LIMIT ?').all(limit);
-                break;
-            case 'mining':
-                try {
-                    rows = db.prepare('SELECT userId, level, prestige, totalDigs FROM mining_data ORDER BY prestige DESC, level DESC, totalDigs DESC LIMIT ?').all(limit);
-                } catch (e) { rows = []; }
                 break;
             default:
                 return res.status(400).json({ error: 'Invalid leaderboard type' });
@@ -463,16 +453,6 @@ app.get('/api/admin/catalog', adminCheck, (req, res) => {
         const { FARM_CROPS, FARM_FERTILIZERS, FARM_DECORATIONS } = require('./data/farming');
         const { ROD_TYPES, BAIT_TYPES, FISHING_LOCATIONS } = require('./data/fish');
         const { ACHIEVEMENTS: ACH_LIST } = require('./systems/achievements');
-        let mining = { pickaxes: [], ores: [], bars: [], gems: [] };
-        try {
-            const M = require('./data/mining');
-            mining = {
-                pickaxes: M.PICKAXE_TYPES.map(p => ({ id: p.id, name: p.name, tier: p.tier, maxDepth: p.maxDepth })),
-                ores: M.ORE_TIERS.map(o => ({ id: o.id, name: o.name, emoji: o.emoji, rarity: o.rarity, value: o.value })),
-                bars: (M.BARS || []).map(b => ({ id: b.id, name: b.name, emoji: b.emoji, value: b.value })),
-                gems: (M.GEMS || []).map(g => ({ id: g.id, name: g.name, emoji: g.emoji, stat: g.stat })),
-            };
-        } catch (e) { /* mining data optional */ }
         res.json({
             items: ITEMS.map(i => ({ id: i.id, name: i.name, emoji: i.menuEmoji || i.emoji, category: i.category, price: i.price })),
             pets: PET_DATA.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, tier: p.tier })),
@@ -483,7 +463,6 @@ app.get('/api/admin/catalog', adminCheck, (req, res) => {
             baits: BAIT_TYPES.map(b => ({ id: b.id, name: b.name, price: b.price })),
             locations: FISHING_LOCATIONS.map(l => ({ id: l.id, name: l.name })),
             achievements: ACH_LIST ? ACH_LIST.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, category: a.category })) : [],
-            mining,
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -531,12 +510,6 @@ app.post('/api/admin/reset-user', adminCheck, (req, res) => {
             case 'pets':
                 db.prepare('DELETE FROM pets WHERE userId = ?').run(userId);
                 break;
-            case 'mining':
-                try {
-                    db.prepare('DELETE FROM mining_data WHERE userId = ?').run(userId);
-                    db.prepare('DELETE FROM ore_inventory WHERE userId = ?').run(userId);
-                } catch (e) { /* tables optional */ }
-                break;
             case 'all':
                 db.prepare('DELETE FROM users WHERE userId = ?').run(userId);
                 db.prepare('DELETE FROM user_stats WHERE userId = ?').run(userId);
@@ -545,10 +518,6 @@ app.post('/api/admin/reset-user', adminCheck, (req, res) => {
                 db.prepare('DELETE FROM fish_inventory WHERE userId = ?').run(userId);
                 db.prepare('DELETE FROM fish_collection WHERE userId = ?').run(userId);
                 db.prepare('DELETE FROM item_inventory WHERE userId = ?').run(userId);
-                try {
-                    db.prepare('DELETE FROM mining_data WHERE userId = ?').run(userId);
-                    db.prepare('DELETE FROM ore_inventory WHERE userId = ?').run(userId);
-                } catch (e) { /* mining tables optional */ }
                 break;
             default:
                 return res.status(400).json({ error: 'Invalid resetType' });
@@ -1004,102 +973,6 @@ app.get('/api/pets/stats', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-});
-
-// ==================== MINING STATS ====================
-app.get('/api/mining/stats', async (req, res) => {
-    try {
-        const stat = (k) => { const r = db.prepare('SELECT SUM(stat_value) as total FROM user_stats WHERE stat_key = ?').get(k); return r?.total || 0; };
-        let totalMiners = 0, topByLevel = [], topByPrestige = [], maxDepth = 0;
-        try {
-            totalMiners = db.prepare('SELECT COUNT(*) as c FROM mining_data').get()?.c || 0;
-            topByLevel = db.prepare('SELECT userId, level, prestige, totalDigs, depth FROM mining_data ORDER BY prestige DESC, level DESC, totalDigs DESC LIMIT 10').all();
-            topByPrestige = db.prepare('SELECT userId, prestige, level FROM mining_data WHERE prestige > 0 ORDER BY prestige DESC LIMIT 10').all();
-            maxDepth = db.prepare('SELECT MAX(depth) as max FROM mining_data').get()?.max || 0;
-        } catch (e) { /* mining tables not created yet */ }
-
-        let layers = [], pickaxes = [], ores = [];
-        try {
-            const M = require('./data/mining');
-            layers = M.MINE_LAYERS.map(l => ({ id: l.id, name: l.name, min: l.min, max: l.max, hazard: l.hazard || 0 }));
-            pickaxes = M.PICKAXE_TYPES.map(p => ({ id: p.id, name: p.name, tier: p.tier, maxDepth: p.maxDepth }));
-            ores = M.ORE_TIERS.map(o => ({ id: o.id, name: o.name, rarity: o.rarity, value: o.value }));
-        } catch (e) { /* optional */ }
-
-        res.json({
-            totalMiners,
-            maxDepthReached: maxDepth,
-            totalDigs: stat('mining_digs'),
-            totalOreSold: stat('mining_ore_sold'),
-            totalBarsSmelted: stat('mining_bars_smelted'),
-            totalItemsSmithed: stat('mining_items_smithed'),
-            totalHazards: stat('mining_hazards'),
-            totalMonstersDefeated: stat('mining_monsters_defeated'),
-            totalGemsFused: stat('mining_gems_fused'),
-            totalCoreClears: stat('mining_core_clears'),
-            totalPrestige: stat('mining_prestige'),
-            totalLayers: layers.length,
-            totalPickaxes: pickaxes.length,
-            totalOreTypes: ores.length,
-            layers, pickaxes, ores,
-            topMiners: await enrichLeaderboard(topByLevel),
-            topPrestige: await enrichLeaderboard(topByPrestige),
-        });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// ==================== ADMIN: MINING ====================
-app.get('/api/admin/mining/:userId', adminCheck, (req, res) => {
-    try {
-        const { userId } = req.params;
-        let data = null, ores = [];
-        try {
-            data = db.prepare('SELECT * FROM mining_data WHERE userId = ?').get(userId) || null;
-            ores = db.prepare('SELECT oreId, quantity FROM ore_inventory WHERE userId = ? AND quantity > 0').all(userId);
-        } catch (e) { /* tables optional */ }
-        res.json({ userId, mining: data, ores });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/admin/mining', adminCheck, (req, res) => {
-    try {
-        const { userId, level, prestige, depth, stamina, pickaxe } = req.body;
-        if (!userId) return res.status(400).json({ error: 'Missing userId' });
-        // Ensure row exists
-        let row = db.prepare('SELECT * FROM mining_data WHERE userId = ?').get(userId);
-        if (!row) {
-            db.prepare('INSERT INTO mining_data (guildId, userId, level, exp, pickaxe, depth, stamina, staminaTs) VALUES (?, ?, 1, 0, ?, 0, 100, ?)').run('global', userId, 'wood', Date.now());
-        }
-        if (level !== undefined) db.prepare('UPDATE mining_data SET level = ? WHERE userId = ?').run(parseInt(level), userId);
-        if (prestige !== undefined) db.prepare('UPDATE mining_data SET prestige = ? WHERE userId = ?').run(parseInt(prestige), userId);
-        if (depth !== undefined) db.prepare('UPDATE mining_data SET depth = ? WHERE userId = ?').run(parseInt(depth), userId);
-        if (stamina !== undefined) db.prepare('UPDATE mining_data SET stamina = ?, staminaTs = ? WHERE userId = ?').run(parseInt(stamina), Date.now(), userId);
-        if (pickaxe) db.prepare('UPDATE mining_data SET pickaxe = ? WHERE userId = ?').run(pickaxe, userId);
-        const updated = db.prepare('SELECT * FROM mining_data WHERE userId = ?').get(userId);
-        res.json({ success: true, userId, mining: updated });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/admin/mining/ore', adminCheck, (req, res) => {
-    try {
-        const { userId, oreId, action, quantity } = req.body;
-        if (!userId || !oreId || !action) return res.status(400).json({ error: 'Missing fields' });
-        const qty = parseInt(quantity) || 1;
-        const existing = db.prepare('SELECT quantity FROM ore_inventory WHERE userId = ? AND oreId = ?').get(userId, oreId);
-        if (action === 'give') {
-            if (existing) db.prepare('UPDATE ore_inventory SET quantity = quantity + ? WHERE userId = ? AND oreId = ?').run(qty, userId, oreId);
-            else db.prepare('INSERT INTO ore_inventory (guildId, userId, oreId, quantity) VALUES (?, ?, ?, ?)').run('global', userId, oreId, qty);
-        } else if (action === 'remove') {
-            if (existing) {
-                db.prepare('UPDATE ore_inventory SET quantity = MAX(0, quantity - ?) WHERE userId = ? AND oreId = ?').run(qty, userId, oreId);
-                db.prepare('DELETE FROM ore_inventory WHERE userId = ? AND oreId = ? AND quantity <= 0').run(userId, oreId);
-            }
-        } else return res.status(400).json({ error: 'Invalid action (give/remove)' });
-        const current = db.prepare('SELECT quantity FROM ore_inventory WHERE userId = ? AND oreId = ?').get(userId, oreId);
-        res.json({ success: true, userId, oreId, action, currentCount: current?.quantity || 0 });
-    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ==================== CASINO STATS ====================
