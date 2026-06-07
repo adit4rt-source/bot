@@ -5,6 +5,7 @@ const { getRandomInt } = require('../utils');
 const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
+const { ITEMS } = require('../data/items');
 const { checkAchievements } = require('./achievements');
 const { getComboMultiplier, addComboFeature } = require('./combo');
 const { updateQuestProgress } = require('./quests');
@@ -12,6 +13,53 @@ const { getUserStat, incrementUserStat, addIncome } = require('../database');
 const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
 const ui = require('./ui');
+
+// ============ HELPER: Reward & loot for dungeon/boss ============
+// Scaling reward per level pet: reward * (1 + level/200) → Lv50 ×1.25, Lv100 ×1.5, Lv150 ×1.75
+function applyLevelScaling(reward, level) {
+    return Math.floor(reward * (1 + (level || 1) / 200));
+}
+
+// Hitung penalti kalah: min(reward_max * 0.3, cap, saldo). Tidak pernah lebih dari saldo.
+function computePenalty(entry, balance) {
+    const maxReward = (entry.reward && entry.reward[1]) || 0;
+    const cap = entry.penaltyCap || 2000;
+    return Math.max(0, Math.min(Math.floor(maxReward * 0.3), cap, Math.max(0, balance)));
+}
+
+// Roll loot table → apply addItem & return display string.
+function rollLoot(guildId, userId, lootTable) {
+    if (!Array.isArray(lootTable) || lootTable.length === 0) return '';
+    const lines = [];
+    for (const entry of lootTable) {
+        if (Math.random() < (entry.chance ?? 1)) {
+            const qty = getRandomInt(entry.min || 1, entry.max || 1);
+            if (qty <= 0) continue;
+            addItem(guildId, userId, entry.item, qty);
+            const def = ITEMS.find(i => i.id === entry.item);
+            const emoji = def ? (def.menuEmoji || def.emoji) : '📦';
+            const name = def ? def.name : entry.item;
+            lines.push(`> ${emoji} +${qty} ${name}`);
+        }
+    }
+    return lines.join('\n');
+}
+
+// Roll relic drop (equipment) → insert ke DB & return display string.
+function rollRelicDrop(guildId, userId, chance, rareBonus) {
+    if (!chance || Math.random() >= chance) return '';
+    const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
+    const r = Math.random();
+    let rarity;
+    if (rareBonus) rarity = r < 0.25 ? 'Legendary' : r < 0.60 ? 'Epic' : 'Rare';
+    else rarity = r < 0.10 ? 'Legendary' : r < 0.30 ? 'Epic' : 'Rare';
+    const names = RELIC_NAMES[slot];
+    const name = names[Math.floor(Math.random() * names.length)];
+    const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
+    const statVal = rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
+    db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, name, slot, rarity, statType, statVal);
+    return `\n> 📿 **RELIC DROP:** ${name} (${rarity})`;
+}
 
 
 // ============ HELPER: Build main pet panel embed + buttons ============
@@ -348,7 +396,7 @@ async function handlePetButton(interaction) {
             let embed;
             incrementUserStat(guildId, userId, 'hunt_missions');
             if (success) {
-                const reward = getRandomInt(30, 150);
+                const reward = applyLevelScaling(getRandomInt(100, 400), pet.level);
                 userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
                 addIncome(guildId, userId, 'battle', reward);
@@ -356,8 +404,14 @@ async function handlePetButton(interaction) {
                 let lvlMsg = '';
                 if (expResult && expResult.leveledUp) lvlMsg = `\n> 🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
                 if (expResult && expResult.newSkill) lvlMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
+                const huntLoot = rollLoot(guildId, userId, [
+                    { item: 'refine_stone', chance: 0.12, min: 1, max: 1 },
+                    { item: 'mystery_box', chance: 0.08, min: 1, max: 1 },
+                    { item: 'rod_part', chance: 0.05, min: 1, max: 1 }
+                ]);
+                const lootMsg = huntLoot ? `\n${huntLoot}` : '';
                 embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🏹 Hunt Complete!')
-                    .setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** kembali dari berburu!\n\n> ✅ Hasil: 🪙 **${reward} Money**\n> ✨ Pet EXP: +20${lvlMsg}\n\n*Buff pet kembali aktif!*`);
+                    .setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** kembali dari berburu!\n\n> ✅ Hasil: 🪙 **${reward.toLocaleString('id-ID')} Money**\n> ✨ Pet EXP: +20${lvlMsg}${lootMsg}\n\n*Buff pet kembali aktif!*`);
             } else {
                 addPetExp(guildId, userId, 8);
                 embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🏹 Hunt Gagal...')
@@ -894,11 +948,11 @@ async function handlePetSelectMenu(interaction) {
 
         setTimeout(async () => {
             const result = simulateBattle(pet, petDef, enemies);
-            let reward = 0, expGain = 0;
+            let reward = 0, expGain = 0, lootText = '', relicText = '';
             if (result.alive) {
                 reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
                 const comboMult = getComboMultiplier(guildId, userId);
-                reward = Math.floor(reward * comboMult);
+                reward = applyLevelScaling(Math.floor(reward * comboMult), pet.level);
                 expGain = dungeon.exp;
                 db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
                 addPetExp(guildId, userId, expGain);
@@ -906,17 +960,20 @@ async function handlePetSelectMenu(interaction) {
                 addIncome(guildId, userId, 'battle', reward);
                 updateQuestProgress(guildId, userId, 'dungeon', 1);
                 await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
+                lootText = rollLoot(guildId, userId, dungeon.loot);
+                relicText = rollRelicDrop(guildId, userId, dungeon.relicChance, dungeon.relicRareBonus);
             } else {
                 const freshData = getOrCreateUser(guildId, userId);
-                const penalty = Math.floor(freshData.balance * 0.1);
-                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
+                const penalty = computePenalty(dungeon, freshData.balance);
+                if (penalty > 0) db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
                 db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(pet.id);
                 addPetExp(guildId, userId, Math.floor(dungeon.exp * 0.3));
                 reward = -penalty;
             }
+            const lootBlock = (lootText || relicText) ? `\n${[lootText, relicText.replace(/^\n/, '')].filter(Boolean).join('\n')}` : '';
             const statusText = result.alive
-                ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}`
-                : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money (10%)\n> ❤️ Happiness -20`;
+                ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}${lootBlock}`
+                : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money\n> ❤️ Happiness -20`;
             const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`)
                 .setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`)
                 .setFooter({ text: `Pet: ${pet.name} Lv.${pet.level} | CD: ${Math.round((dungeon.cooldown||300000)/60000)} menit` });
@@ -1011,39 +1068,30 @@ async function handlePetSelectMenu(interaction) {
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         const result = simulateBattle(pet, petDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def }]);
 
-        let reward = 0, expGain = 0;
-        let relicDrop = '';
+        let reward = 0, expGain = 0, lootText = '', relicText = '';
         if (result.alive) {
-            reward = getRandomInt(boss.reward[0], boss.reward[1]);
+            reward = applyLevelScaling(getRandomInt(boss.reward[0], boss.reward[1]), pet.level);
             expGain = boss.exp;
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
             addPetExp(guildId, userId, expGain);
             incrementUserStat(guildId, userId, 'boss_kills');
             addIncome(guildId, userId, 'battle', reward);
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
-            if (Math.random() < 0.3) {
-                const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
-                const rarity = Math.random() < 0.1 ? 'Legendary' : Math.random() < 0.3 ? 'Epic' : 'Rare';
-                const names = RELIC_NAMES[slot];
-                const name = names[Math.floor(Math.random() * names.length)];
-                const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
-                const statVal = rarity === 'Legendary' ? getRandomInt(50,80) : rarity === 'Epic' ? getRandomInt(35,50) : getRandomInt(20,35);
-                db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, name, slot, rarity, statType, statVal);
-                relicDrop = `\n> 📿 **DROP:** ${name} (${rarity})`;
-            }
-            addItem(guildId, userId, 'refine_stone', getRandomInt(1, 3));
+            relicText = rollRelicDrop(guildId, userId, boss.relicChance, boss.relicRareBonus);
+            lootText = rollLoot(guildId, userId, boss.loot);
         } else {
             const freshData = getOrCreateUser(guildId, userId);
-            const penalty = Math.floor(freshData.balance * 0.05);
-            db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
+            const penalty = computePenalty(boss, freshData.balance);
+            if (penalty > 0) db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
             db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 10) WHERE id = ?').run(pet.id);
             addPetExp(guildId, userId, Math.floor(boss.exp * 0.3));
             reward = -penalty;
         }
 
+        const lootBlock = (lootText || relicText) ? `\n${[lootText, relicText.replace(/^\n/, '')].filter(Boolean).join('\n')}` : '';
         const statusText = result.alive
-            ? `🏆 **BOSS DEFEATED!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> 🪨 +1-3 Refine Stone${relicDrop}`
-            : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} (5% penalty)\n> ❤️ Happiness -10`;
+            ? `🏆 **BOSS DEFEATED!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP${lootBlock}`
+            : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money\n> ❤️ Happiness -10`;
         const embed = new EmbedBuilder().setColor(result.alive ? '#FFD700' : '#E74C3C').setTitle(`👹 Solo Boss: ${boss.name}`)
             .setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`)
             .setFooter({ text: 'Cooldown: 10 menit' });
