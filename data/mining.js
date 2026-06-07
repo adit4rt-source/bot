@@ -42,6 +42,36 @@ const MINE_LAYERS = [
       ores: [ { ore: 'mithril', w: 22 }, { ore: 'adamantite', w: 48 }, { ore: 'void_crystal', w: 30 } ] },
 ];
 
+// ==================== BARS (hasil smelting) ====================
+const BARS = [
+    { id: 'bar_copper',     name: 'Batangan Tembaga',    emoji: '🟫', value: 60 },
+    { id: 'bar_iron',       name: 'Batangan Besi',       emoji: '⬜', value: 150 },
+    { id: 'bar_gold',       name: 'Batangan Emas',       emoji: '🟨', value: 450 },
+    { id: 'bar_titanium',   name: 'Batangan Titanium',   emoji: '🟦', value: 1200 },
+    { id: 'bar_mithril',    name: 'Batangan Mithril',    emoji: '🟪', value: 3000 },
+    { id: 'bar_adamantite', name: 'Batangan Adamantite', emoji: '🟥', value: 8000 },
+];
+
+// ==================== SMELTING (ore + fuel -> bar) ====================
+const FUEL_ORE = 'stone'; // Batu jadi bahan bakar tungku
+const SMELT_RECIPES = [
+    { bar: 'bar_copper',     ore: 'copper',     oreQty: 3, fuel: 2, exp: 5 },
+    { bar: 'bar_iron',       ore: 'iron',       oreQty: 3, fuel: 3, exp: 10 },
+    { bar: 'bar_gold',       ore: 'gold',       oreQty: 3, fuel: 4, exp: 18 },
+    { bar: 'bar_titanium',   ore: 'titanium',   oreQty: 4, fuel: 5, exp: 30 },
+    { bar: 'bar_mithril',    ore: 'mithril',    oreQty: 4, fuel: 6, exp: 50 },
+    { bar: 'bar_adamantite', ore: 'adamantite', oreQty: 5, fuel: 8, exp: 90 },
+];
+
+// ==================== SMITHING (bars -> existing item) ====================
+// id = item id yang sudah ada di data/items.js (dipakai pet/fishing/awakening)
+const SMITH_RECIPES = [
+    { id: 'refine_stone',     name: 'Refine Stone',     emoji: '🪨', inputs: [{ mat: 'bar_copper', qty: 2 }], exp: 15, desc: 'Upgrade relic pet' },
+    { id: 'rod_part',         name: 'Rod Parts',        emoji: '🔧', inputs: [{ mat: 'bar_iron', qty: 2 }], exp: 25, desc: 'Upgrade joran mancing' },
+    { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', inputs: [{ mat: 'bar_gold', qty: 2 }, { mat: 'bar_titanium', qty: 1 }], exp: 50, desc: 'Cegah relic turun saat refine' },
+    { id: 'mythic_fragment',  name: 'Mythic Fragment',  emoji: '🌟', inputs: [{ mat: 'bar_mithril', qty: 3 }, { mat: 'bar_adamantite', qty: 1 }], exp: 120, desc: 'Material langka Awakening pet' },
+];
+
 const STAMINA_REGEN_MS = 60000;   // +1 stamina / menit
 const STAMINA_BASE = 100;         // max = STAMINA_BASE + level * STAMINA_PER_LEVEL
 const STAMINA_PER_LEVEL = 5;
@@ -64,8 +94,17 @@ function getOreDef(id) {
     return ORE_TIERS.find(o => o.id === id) || ORE_TIERS[0];
 }
 
+// Material = ore ATAU bar. Return { id, name, emoji, value, kind }.
+function getMaterialDef(id) {
+    const ore = ORE_TIERS.find(o => o.id === id);
+    if (ore) return { ...ore, kind: 'ore' };
+    const bar = BARS.find(b => b.id === id);
+    if (bar) return { ...bar, kind: 'bar' };
+    return { id, name: id, emoji: '📦', value: 0, kind: 'unknown' };
+}
+
 module.exports = {
-    PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS,
+    PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
-    getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef,
+    getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
