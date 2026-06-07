@@ -206,16 +206,30 @@ module.exports = function register() {
     });
   });
 
+  test('giveaway: pickWeightedWinners unique + respects exclude', () => {
+    const entries = [{ userId: 'a', weight: 5 }, { userId: 'b', weight: 1 }, { userId: 'c', weight: 1 }];
+    const w = giveaway.pickWeightedWinners(entries, 2);
+    if (w.length !== 2) throw new Error('should pick 2');
+    if (new Set(w).size !== 2) throw new Error('winners must be unique');
+    const w2 = giveaway.pickWeightedWinners(entries, 3, ['a']);
+    if (w2.includes('a')) throw new Error('exclude failed');
+  });
+
   test('giveaway: endGiveaway picks winners + marks ended', () => {
     const id = giveaway.createGiveaway(G, { prize: 'End', winners: 1, hostId: U, durationMs: 1000 });
     giveaway.addEntry(id, 'wA'); giveaway.addEntry(id, 'wB');
     giveaway.updateGiveaway(id, { channelId: 'c1', messageId: 'm1' });
-    const fakeMsg = { edit: async () => {} };
+    const fakeMsg = { edit: async () => {}, url: 'https://discord.com/x' };
     const fakeChannel = { messages: { fetch: async () => fakeMsg }, send: async () => ({}) };
-    const client = { channels: { cache: new Map([['c1', fakeChannel]]) } };
+    let dmCount = 0;
+    const client = {
+      channels: { cache: new Map([['c1', fakeChannel]]) },
+      users: { fetch: async () => ({ send: async () => { dmCount++; } }) },
+    };
     return Promise.resolve(giveaway.endGiveaway(client, giveaway.getGiveaway(id))).then((winners) => {
       if (!winners.length) throw new Error('no winners picked');
       if (giveaway.getGiveaway(id).ended !== 1) throw new Error('not marked ended');
+      if (dmCount !== winners.length) throw new Error('winners not DMed');
     });
   });
 };

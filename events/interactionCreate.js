@@ -34,7 +34,7 @@ const { handleInviteCommand, handleInviteButton, isInvitePanelButton } = require
 const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton } = require('../systems/welcomerPanel');
 const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handleSelfRoleRoleSelect, handleSelfRoleChannelSelect, handleSelfRoleModal, isSelfRolePanelButton, isSelfRolePanelSelect, isSelfRoleRoleSelect, isSelfRoleChannelSelect, isSelfRolePanelModal } = require('../systems/selfRolePanel');
 const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
-const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
+const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
@@ -732,6 +732,9 @@ async function routeInteraction(interaction) {
         }
         if (isGiveawayRoleSelect(interaction.customId)) {
             return handleGiveawayRoleSelect(interaction);
+        }
+        if (isGiveawayBonusRoleSelect(interaction.customId)) {
+            return handleGiveawayBonusRoleSelect(interaction);
         }
         return;
     }

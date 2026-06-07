@@ -77,6 +77,8 @@ function buildManageView(userId, guild, gwId) {
             `⏰ ${ended ? 'Status: **SELESAI**' : `Berakhir: <t:${Math.floor(g.endsAt / 1000)}:R>`}\n` +
             `📍 ${g.messageId ? `Tampil di <#${g.channelId}>` : '⏳ Belum diposting'}\n` +
             (g.requiredRoleId ? `🔒 Syarat role: <@&${g.requiredRoleId}>\n` : '') +
+            (g.minAccountAgeDays > 0 ? `🛡️ Umur akun min: **${g.minAccountAgeDays} hari**\n` : '') +
+            (g.bonusRoleId && g.bonusEntries > 0 ? `🎟️ Bonus: <@&${g.bonusRoleId}> +**${g.bonusEntries}** entry\n` : '') +
             (ended && winners.length ? `\n🎉 Pemenang: ${winners.map(w => `<@${w}>`).join(', ')}` : '')
         )
         .setFooter({ text: ui.footer('Kelola giveaway') });
@@ -84,13 +86,18 @@ function buildManageView(userId, guild, gwId) {
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`gwadm_endnow_${gwId}_${userId}`).setLabel('Tutup Sekarang').setEmoji('⏱️').setStyle(ButtonStyle.Primary).setDisabled(ended || !g.messageId),
         new ButtonBuilder().setCustomId(`gwadm_reroll_${gwId}_${userId}`).setLabel('Undi Ulang').setEmoji('🔁').setStyle(ButtonStyle.Secondary).setDisabled(!ended),
-        new ButtonBuilder().setCustomId(`gwadm_setrole_${gwId}_${userId}`).setLabel('Set Syarat Role').setEmoji('🔒').setStyle(ButtonStyle.Secondary).setDisabled(ended)
+        new ButtonBuilder().setCustomId(`gwadm_extend_${gwId}_${userId}`).setLabel('Tambah Waktu').setEmoji('⏳').setStyle(ButtonStyle.Secondary).setDisabled(ended)
     );
     const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`gwadm_setrole_${gwId}_${userId}`).setLabel('Syarat Role').setEmoji('🔒').setStyle(ButtonStyle.Secondary).setDisabled(ended),
+        new ButtonBuilder().setCustomId(`gwadm_antialt_${gwId}_${userId}`).setLabel('Anti-Alt (umur akun)').setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(ended),
+        new ButtonBuilder().setCustomId(`gwadm_bonus_${gwId}_${userId}`).setLabel('Bonus Entry Role').setEmoji('🎟️').setStyle(ButtonStyle.Secondary).setDisabled(ended)
+    );
+    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`gwadm_cancel_${gwId}_${userId}`).setLabel('Batalkan / Hapus').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`gwadm_back_${userId}`).setLabel('Kembali').setEmoji('🔙').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ==================== COMMAND ====================
@@ -152,6 +159,28 @@ async function handleGiveawayButton(interaction) {
     if (action === 'setrole') {
         const roleSelect = new RoleSelectMenuBuilder().setCustomId(`gwrole_${gwId}_${userId}`).setPlaceholder('Pilih role syarat ikut...').setMinValues(1).setMaxValues(1);
         return interaction.reply({ content: '🔒 Pilih role yang wajib dimiliki untuk ikut giveaway ini:', components: [new ActionRowBuilder().addComponents(roleSelect)], ephemeral: true });
+    }
+
+    if (action === 'extend') {
+        const modal = new ModalBuilder().setCustomId(`gwmod_extend_${gwId}_${userId}`).setTitle('Tambah Waktu Giveaway');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('gw_extend').setLabel('Tambah berapa lama? (cth: 30m, 2h)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20).setPlaceholder('1h'))
+        );
+        return interaction.showModal(modal);
+    }
+
+    if (action === 'antialt') {
+        const g = gv.getGiveaway(gwId);
+        const modal = new ModalBuilder().setCustomId(`gwmod_antialt_${gwId}_${userId}`).setTitle('Anti-Alt: Umur Akun');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('gw_minage').setLabel('Umur akun minimal (hari, 0 = nonaktif)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(4).setPlaceholder('7').setValue(String((g && g.minAccountAgeDays) || 0)))
+        );
+        return interaction.showModal(modal);
+    }
+
+    if (action === 'bonus') {
+        const roleSelect = new RoleSelectMenuBuilder().setCustomId(`gwbrole_${gwId}_${userId}`).setPlaceholder('Pilih role yang dapat bonus entry...').setMinValues(1).setMaxValues(1);
+        return interaction.reply({ content: '🎟️ Pilih role yang akan mendapat **entry bonus** (mis. Booster):', components: [new ActionRowBuilder().addComponents(roleSelect)], ephemeral: true });
     }
 
     if (action === 'cancel') {
@@ -227,6 +256,23 @@ async function handleGiveawayRoleSelect(interaction) {
     return interaction.update({ content: `✅ Syarat role diset ke <@&${roleId}>.`, components: [] });
 }
 
+// ==================== ROLE SELECT (bonus entry role) ====================
+async function handleGiveawayBonusRoleSelect(interaction) {
+    if (!ownerOk(interaction)) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (!isAdmin(interaction)) return interaction.reply({ content: '❌ Butuh izin Manage Server!', ephemeral: true });
+
+    const parts = interaction.customId.split('_'); // gwbrole_<gwId>_<userId>
+    const gwId = parseInt(parts[1], 10);
+    const userId = parts[2];
+    const roleId = interaction.values[0];
+
+    const modal = new ModalBuilder().setCustomId(`gwmod_bonusamt_${gwId}_${roleId}_${userId}`).setTitle('Bonus Entry');
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('gw_bonusamt').setLabel('Entry tambahan untuk role ini').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(2).setPlaceholder('2'))
+    );
+    return interaction.showModal(modal);
+}
+
 // ==================== MODAL ====================
 async function handleGiveawayModal(interaction) {
     if (!isAdmin(interaction)) return interaction.reply({ content: '❌ Butuh izin Manage Server!', ephemeral: true });
@@ -254,6 +300,50 @@ async function handleGiveawayModal(interaction) {
             ephemeral: true,
         });
     }
+
+    if (kind === 'extend') {
+        const gwId = parseInt(parts[2], 10);
+        const add = gv.parseDuration(interaction.fields.getTextInputValue('gw_extend'));
+        if (!add) return interaction.reply({ content: '❌ Durasi tidak valid. Pakai `30m`, `2h`, `1d`.', ephemeral: true });
+        const g = gv.getGiveaway(gwId);
+        if (!g || g.ended === 1) return interaction.reply({ content: '❌ Giveaway tidak aktif.', ephemeral: true });
+        gv.updateGiveaway(gwId, { endsAt: g.endsAt + add });
+        await refreshGiveawayMessage(interaction, gwId);
+        const view = buildManageView(userId, interaction.guild, gwId);
+        return interaction.update(view || buildAdminPanel(guildId, userId, interaction.guild));
+    }
+
+    if (kind === 'antialt') {
+        const gwId = parseInt(parts[2], 10);
+        let days = parseInt(interaction.fields.getTextInputValue('gw_minage'), 10);
+        if (isNaN(days) || days < 0) days = 0;
+        if (days > 3650) days = 3650;
+        gv.updateGiveaway(gwId, { minAccountAgeDays: days });
+        await refreshGiveawayMessage(interaction, gwId);
+        const view = buildManageView(userId, interaction.guild, gwId);
+        return interaction.update(view || buildAdminPanel(guildId, userId, interaction.guild));
+    }
+
+    if (kind === 'bonusamt') {
+        const gwId = parseInt(parts[2], 10);
+        const roleId = parts[3];
+        let amt = parseInt(interaction.fields.getTextInputValue('gw_bonusamt'), 10);
+        if (isNaN(amt) || amt < 1) amt = 1;
+        if (amt > 50) amt = 50;
+        gv.updateGiveaway(gwId, { bonusRoleId: roleId, bonusEntries: amt });
+        await refreshGiveawayMessage(interaction, gwId);
+        return interaction.reply({ content: `✅ Role <@&${roleId}> sekarang dapat **+${amt} entry**. (Berlaku untuk yang ikut setelah ini.)`, ephemeral: true });
+    }
+}
+
+// Best-effort: re-render the posted giveaway message after an admin edit.
+async function refreshGiveawayMessage(interaction, gwId) {
+    const g = gv.getGiveaway(gwId);
+    if (!g || !g.channelId || !g.messageId) return;
+    try {
+        const ch = interaction.guild.channels.cache.get(g.channelId);
+        if (ch) { const msg = await ch.messages.fetch(g.messageId).catch(() => null); if (msg) await msg.edit(gv.buildGiveawayMessage(g, gv.countEntries(gwId))).catch(() => {}); }
+    } catch (_) { /* ignore */ }
 }
 
 // ==================== DETECTORS ====================
@@ -261,12 +351,13 @@ function isGiveawayPanelButton(customId) { return typeof customId === 'string' &
 function isGiveawayPanelSelect(customId) { return typeof customId === 'string' && customId.startsWith('gwsel_'); }
 function isGiveawayChannelSelect(customId) { return typeof customId === 'string' && customId.startsWith('gwchan_'); }
 function isGiveawayRoleSelect(customId) { return typeof customId === 'string' && customId.startsWith('gwrole_'); }
+function isGiveawayBonusRoleSelect(customId) { return typeof customId === 'string' && customId.startsWith('gwbrole_'); }
 function isGiveawayPanelModal(customId) { return typeof customId === 'string' && customId.startsWith('gwmod_'); }
 
 module.exports = {
     buildAdminPanel, buildManageView,
     handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect,
-    handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayModal,
+    handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal,
     isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect,
-    isGiveawayRoleSelect, isGiveawayPanelModal,
+    isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal,
 };

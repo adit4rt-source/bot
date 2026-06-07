@@ -35,6 +35,15 @@ db.exec(`
     PRIMARY KEY (giveawayId, userId)
   );
 `);
+// Migrations (each wrapped so it's a no-op once the column exists).
+for (const stmt of [
+    'ALTER TABLE giveaways ADD COLUMN bonusRoleId TEXT',
+    'ALTER TABLE giveaways ADD COLUMN bonusEntries INTEGER DEFAULT 0',
+    'ALTER TABLE giveaways ADD COLUMN minAccountAgeDays INTEGER DEFAULT 0',
+    'ALTER TABLE giveaway_entries ADD COLUMN weight INTEGER DEFAULT 1',
+]) {
+    try { db.exec(stmt); } catch (_) { /* already exists */ }
+}
 
 // ==================== DURATION PARSING ====================
 // Accepts things like "30m", "2h", "1d", "1d12h", "90s". Returns ms or null.
@@ -92,7 +101,7 @@ function getDueGiveaways(now = Date.now()) {
 }
 
 function updateGiveaway(id, fields) {
-    const allowed = ['channelId', 'messageId', 'prize', 'winners', 'requiredRoleId', 'endsAt', 'ended', 'winnerIds'];
+    const allowed = ['channelId', 'messageId', 'prize', 'winners', 'requiredRoleId', 'endsAt', 'ended', 'winnerIds', 'bonusRoleId', 'bonusEntries', 'minAccountAgeDays'];
     const sets = [], vals = [];
     for (const [k, v] of Object.entries(fields)) {
         if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
@@ -111,14 +120,18 @@ function deleteGiveaway(id) {
 function hasEntry(giveawayId, userId) {
     return !!db.prepare('SELECT 1 FROM giveaway_entries WHERE giveawayId = ? AND userId = ?').get(giveawayId, userId);
 }
-function addEntry(giveawayId, userId) {
-    db.prepare('INSERT OR IGNORE INTO giveaway_entries (giveawayId, userId, createdAt) VALUES (?, ?, ?)').run(giveawayId, userId, Date.now());
+function addEntry(giveawayId, userId, weight = 1) {
+    db.prepare('INSERT OR IGNORE INTO giveaway_entries (giveawayId, userId, weight, createdAt) VALUES (?, ?, ?, ?)').run(giveawayId, userId, Math.max(1, Number(weight) || 1), Date.now());
 }
 function removeEntry(giveawayId, userId) {
     db.prepare('DELETE FROM giveaway_entries WHERE giveawayId = ? AND userId = ?').run(giveawayId, userId);
 }
 function getEntryIds(giveawayId) {
     return db.prepare('SELECT userId FROM giveaway_entries WHERE giveawayId = ?').all(giveawayId).map(r => r.userId);
+}
+function getEntriesWithWeight(giveawayId) {
+    return db.prepare('SELECT userId, weight FROM giveaway_entries WHERE giveawayId = ?').all(giveawayId)
+        .map(r => ({ userId: r.userId, weight: Math.max(1, r.weight || 1) }));
 }
 function countEntries(giveawayId) {
     return db.prepare('SELECT COUNT(*) AS c FROM giveaway_entries WHERE giveawayId = ?').get(giveawayId).c;
@@ -133,6 +146,25 @@ function pickWinners(entryIds, count, exclude = []) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, Math.max(1, count));
+}
+
+// Weighted draw: an entrant with weight N has N times the chance, but can only
+// win once. Returns up to `count` unique winners.
+function pickWeightedWinners(entries, count, exclude = []) {
+    const pool = [];
+    for (const e of entries) {
+        if (exclude.includes(e.userId)) continue;
+        for (let i = 0; i < Math.max(1, e.weight); i++) pool.push(e.userId);
+    }
+    const winners = [];
+    while (winners.length < Math.max(1, count) && pool.length) {
+        const idx = Math.floor(Math.random() * pool.length);
+        const pick = pool[idx];
+        winners.push(pick);
+        // remove all tickets of the chosen user so they can't win twice
+        for (let i = pool.length - 1; i >= 0; i--) { if (pool[i] === pick) pool.splice(i, 1); }
+    }
+    return winners;
 }
 
 // ==================== PUBLIC MESSAGE BUILDER ====================
@@ -151,6 +183,8 @@ function buildGiveawayMessage(gw, entryCount = 0) {
           `⏰ Berakhir: <t:${endTs}:R> (<t:${endTs}:f>)\n` +
           `👤 Host: <@${gw.hostId}>\n` +
           (gw.requiredRoleId ? `🔒 Syarat: harus punya role <@&${gw.requiredRoleId}>\n` : '') +
+          (gw.minAccountAgeDays > 0 ? `🛡️ Syarat: umur akun minimal **${gw.minAccountAgeDays} hari**\n` : '') +
+          (gw.bonusRoleId && gw.bonusEntries > 0 ? `🎟️ Bonus: <@&${gw.bonusRoleId}> dapat **+${gw.bonusEntries} entry**\n` : '') +
           `🎫 Peserta: **${entryCount}**\n\n` +
           `Tekan tombol **🎉 Ikut Giveaway** di bawah untuk ikutan!`;
 
@@ -178,9 +212,17 @@ async function handleGiveawayJoin(interaction) {
     if (!gw) return interaction.reply({ content: '❌ Giveaway ini sudah tidak ada.', ephemeral: true });
     if (gw.ended === 1) return interaction.reply({ content: '❌ Giveaway ini sudah berakhir.', ephemeral: true });
 
-    // Requirement check
+    // Requirement: required role
     if (gw.requiredRoleId && !interaction.member.roles.cache.has(gw.requiredRoleId)) {
         return interaction.reply({ content: `❌ Kamu butuh role <@&${gw.requiredRoleId}> untuk ikut giveaway ini.`, ephemeral: true });
+    }
+
+    // Requirement: minimum account age (anti-alt)
+    if (gw.minAccountAgeDays > 0) {
+        const ageDays = (Date.now() - interaction.user.createdTimestamp) / 86400000;
+        if (ageDays < gw.minAccountAgeDays) {
+            return interaction.reply({ content: `❌ Akun kamu harus berumur minimal **${gw.minAccountAgeDays} hari** untuk ikut giveaway ini.`, ephemeral: true });
+        }
     }
 
     const userId = interaction.user.id;
@@ -189,8 +231,13 @@ async function handleGiveawayJoin(interaction) {
         removeEntry(giveawayId, userId);
         msg = '➖ Kamu keluar dari giveaway. Tekan tombol lagi kalau berubah pikiran.';
     } else {
-        addEntry(giveawayId, userId);
-        msg = '✅ Kamu ikut giveaway! Semoga beruntung 🍀';
+        // Weighted entry: bonus role grants extra tickets.
+        const hasBonus = gw.bonusRoleId && gw.bonusEntries > 0 && interaction.member.roles.cache.has(gw.bonusRoleId);
+        const weight = 1 + (hasBonus ? gw.bonusEntries : 0);
+        addEntry(giveawayId, userId, weight);
+        msg = hasBonus
+            ? `✅ Kamu ikut giveaway dengan **${weight} entry** (bonus role)! Semoga beruntung 🍀`
+            : '✅ Kamu ikut giveaway! Semoga beruntung 🍀';
     }
 
     // Refresh entry count on the original message (best-effort).
@@ -205,20 +252,21 @@ async function handleGiveawayJoin(interaction) {
 // ==================== END / REROLL ====================
 // Ends a giveaway: picks winners, edits the message, announces in-channel.
 async function endGiveaway(client, gw, { reroll = false } = {}) {
-    const entryIds = getEntryIds(gw.id);
+    const entries = getEntriesWithWeight(gw.id);
     const previous = gw.winnerIds ? JSON.parse(gw.winnerIds) : [];
-    const winners = pickWinners(entryIds, gw.winners, reroll ? previous : []);
+    const winners = pickWeightedWinners(entries, gw.winners, reroll ? previous : []);
 
     updateGiveaway(gw.id, { ended: 1, winnerIds: JSON.stringify(winners) });
     const fresh = getGiveaway(gw.id);
 
     try {
         const channel = client.channels.cache.get(gw.channelId) || await client.channels.fetch(gw.channelId).catch(() => null);
+        let jumpUrl = null;
         if (channel) {
             const payload = buildGiveawayMessage(fresh, countEntries(gw.id));
             if (gw.messageId) {
                 const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
-                if (msg) await msg.edit(payload).catch(() => {});
+                if (msg) { await msg.edit(payload).catch(() => {}); jumpUrl = msg.url; }
             }
             if (winners.length) {
                 await channel.send({
@@ -228,6 +276,13 @@ async function endGiveaway(client, gw, { reroll = false } = {}) {
             } else {
                 await channel.send({ content: `😢 Giveaway **${gw.prize}** berakhir tanpa peserta.` }).catch(() => {});
             }
+        }
+        // Best-effort DM to each winner.
+        for (const w of winners) {
+            try {
+                const user = await client.users.fetch(w).catch(() => null);
+                if (user) await user.send(`🎉 Selamat! Kamu memenangkan **${gw.prize}**${jumpUrl ? `\n🔗 ${jumpUrl}` : ''}`).catch(() => {});
+            } catch (_) { /* DMs closed */ }
         }
     } catch (e) {
         log('WARN', `[giveaway] Gagal menutup giveaway ${gw.id}: ${e.message}`);
@@ -257,7 +312,7 @@ function isGiveawayJoin(customId) {
 module.exports = {
     parseDuration, formatDuration,
     createGiveaway, getGiveaway, getGuildGiveaways, getDueGiveaways, updateGiveaway, deleteGiveaway,
-    hasEntry, addEntry, removeEntry, getEntryIds, countEntries,
-    pickWinners, buildGiveawayMessage, handleGiveawayJoin, endGiveaway,
+    hasEntry, addEntry, removeEntry, getEntryIds, getEntriesWithWeight, countEntries,
+    pickWinners, pickWeightedWinners, buildGiveawayMessage, handleGiveawayJoin, endGiveaway,
     startGiveawayScheduler, isGiveawayJoin,
 };
