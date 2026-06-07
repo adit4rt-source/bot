@@ -28,7 +28,8 @@ const GLOBAL_TABLES = new Set([
     'farm_plots', 'farm_storage', 'farm_data', 'farm_decorations',
     'auto_harvest', 'combo_tracker', 'trades', 'market_listings',
     'command_summary', 'pet_evolution_history',
-    'giant_fish_encounters', 'giant_fish_active', 'secret_locations_unlocked', 'fishing_combo'
+    'giant_fish_encounters', 'giant_fish_active', 'secret_locations_unlocked', 'fishing_combo',
+    'mining_data', 'ore_inventory'
 ]);
 
 function isGlobalTable(sql) {

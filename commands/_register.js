@@ -59,6 +59,7 @@ const commands = [
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
+    new SlashCommandBuilder().setName('mine').setDescription('⛏️ Tambang — gali ore, kelola stamina, upgrade pickaxe'),
 
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
