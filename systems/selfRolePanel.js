@@ -25,6 +25,18 @@ const {
 const sr = require('./selfRoles');
 const ui = require('./ui');
 
+// Preset colors for the "Ganti Warna" picker (label -> hex).
+const COLOR_PRESETS = [
+    { label: 'Biru (default)', value: '#5865F2', emoji: '🔵' },
+    { label: 'Hijau', value: '#57F287', emoji: '🟢' },
+    { label: 'Merah', value: '#ED4245', emoji: '🔴' },
+    { label: 'Kuning', value: '#FEE75C', emoji: '🟡' },
+    { label: 'Ungu', value: '#9B59B6', emoji: '🟣' },
+    { label: 'Pink', value: '#EB459E', emoji: '🩷' },
+    { label: 'Oranye', value: '#E67E22', emoji: '🟠' },
+    { label: 'Abu Gelap', value: '#2B2D31', emoji: '⚫' },
+];
+
 // ==================== HELPERS ====================
 function lastSeg(customId) { const p = customId.split('_'); return p[p.length - 1]; }
 
@@ -78,7 +90,9 @@ function buildManageView(guildId, userId, guild, menuId) {
 
     const ruleText = menu.type === 'unique'
         ? '🔘 Member cuma bisa ambil **1 role** dari menu ini'
-        : '✅ Member bisa ambil **banyak role** sekaligus';
+        : (menu.maxRoles > 0
+            ? `✅ Member bisa ambil **banyak role**, maksimal **${menu.maxRoles}**`
+            : '✅ Member bisa ambil **banyak role** (tanpa batas)');
 
     const nextStep = opts.length === 0
         ? '\n\n👉 **Langkah berikutnya:** tekan **Tambah Role**.'
@@ -102,11 +116,16 @@ function buildManageView(guildId, userId, guild, menuId) {
         new ButtonBuilder().setCustomId(`sradm_publish_${menuId}_${userId}`).setLabel(menu.messageId ? 'Kirim Ulang' : 'Kirim ke Channel').setEmoji('📤').setStyle(ButtonStyle.Primary).setDisabled(opts.length === 0)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`sradm_type_${menuId}_${userId}`).setLabel(menu.type === 'unique' ? 'Ubah: boleh banyak role' : 'Ubah: cuma 1 role').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`sradm_editinfo_${menuId}_${userId}`).setLabel('Edit Nama/Keterangan').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`sradm_color_${menuId}_${userId}`).setLabel('Ganti Warna').setEmoji('🎨').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`sradm_maxroles_${menuId}_${userId}`).setLabel('Batas Jumlah Role').setEmoji('🔢').setStyle(ButtonStyle.Secondary).setDisabled(menu.type === 'unique')
+    );
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`sradm_type_${menuId}_${userId}`).setLabel(menu.type === 'unique' ? 'Ubah: boleh banyak role' : 'Ubah: cuma 1 role').setEmoji('🔁').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`sradm_delete_${menuId}_${userId}`).setLabel('Hapus Menu').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`sradm_back_${userId}`).setLabel('Kembali').setEmoji('🔙').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ==================== COMMAND ====================
@@ -176,6 +195,35 @@ async function handleSelfRoleButton(interaction) {
         return interaction.reply({ content: '📤 Pilih channel tempat menu akan dipublish:', components: [new ActionRowBuilder().addComponents(chanSelect)], ephemeral: true });
     }
 
+    if (action === 'editinfo') {
+        const menu = sr.getMenu(guildId, menuId);
+        if (!menu) return interaction.reply({ content: '❌ Menu tidak ditemukan.', ephemeral: true });
+        const modal = new ModalBuilder().setCustomId(`srmod_edit_${menuId}_${userId}`).setTitle('Edit Nama & Keterangan');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_title').setLabel('Nama menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setValue(menu.title || '')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_desc').setLabel('Keterangan (boleh dikosongi)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500).setValue(menu.description || ''))
+        );
+        return interaction.showModal(modal);
+    }
+
+    if (action === 'color') {
+        const select = new StringSelectMenuBuilder().setCustomId(`srsel_color_${menuId}_${userId}`).setPlaceholder('🎨 Pilih warna...');
+        for (const c of COLOR_PRESETS) {
+            select.addOptions(new StringSelectMenuOptionBuilder().setLabel(c.label).setValue(c.value).setEmoji(c.emoji));
+        }
+        return interaction.reply({ content: '🎨 Pilih warna embed untuk menu ini:', components: [new ActionRowBuilder().addComponents(select)], ephemeral: true });
+    }
+
+    if (action === 'maxroles') {
+        const menu = sr.getMenu(guildId, menuId);
+        if (!menu) return interaction.reply({ content: '❌ Menu tidak ditemukan.', ephemeral: true });
+        const modal = new ModalBuilder().setCustomId(`srmod_max_${menuId}_${userId}`).setTitle('Batas Jumlah Role');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('sr_max').setLabel('Maksimal role (0 = tanpa batas)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(2).setPlaceholder('0').setValue(String(menu.maxRoles || 0)))
+        );
+        return interaction.showModal(modal);
+    }
+
     if (action === 'type') {
         const menu = sr.getMenu(guildId, menuId);
         if (!menu) return interaction.reply({ content: '❌ Menu tidak ditemukan.', ephemeral: true });
@@ -228,6 +276,14 @@ async function handleSelfRoleSelect(interaction) {
         sr.removeOption(menuId, roleId);
         await sr.refreshPublicMessage(interaction.guild, sr.getMenu(guildId, menuId));
         return interaction.update({ content: `✅ Role <@&${roleId}> dihapus dari menu #${menuId}.`, components: [] });
+    }
+
+    if (kind === 'color') {
+        const menuId = parseInt(parts[2], 10);
+        const color = interaction.values[0];
+        sr.updateMenu(guildId, menuId, { color });
+        await sr.refreshPublicMessage(interaction.guild, sr.getMenu(guildId, menuId));
+        return interaction.update({ content: `✅ Warna menu #${menuId} diubah ke \`${color}\`. (Tekan **Atur Menu** lagi untuk lihat panel terbaru.)`, components: [] });
     }
 }
 
@@ -323,6 +379,29 @@ async function handleSelfRoleModal(interaction) {
         }
         await sr.refreshPublicMessage(interaction.guild, sr.getMenu(guildId, menuId));
         return interaction.reply({ content: `✅ Role <@&${roleId}> ditambahkan ke menu #${menuId}.${emoji && !sr.normalizeEmoji(emoji) ? '\n⚠️ Emoji diabaikan (harus 1 emoji atau format <:nama:id>).' : ''}`, ephemeral: true });
+    }
+
+    if (kind === 'edit') {
+        const menuId = parseInt(parts[2], 10);
+        const title = interaction.fields.getTextInputValue('sr_title').trim();
+        const desc = (interaction.fields.getTextInputValue('sr_desc') || '').trim();
+        sr.updateMenu(guildId, menuId, { title, description: desc });
+        await sr.refreshPublicMessage(interaction.guild, sr.getMenu(guildId, menuId));
+        const view = buildManageView(guildId, userId, interaction.guild, menuId);
+        if (!view) return interaction.reply({ content: '✅ Tersimpan.', ephemeral: true });
+        return interaction.update(view);
+    }
+
+    if (kind === 'max') {
+        const menuId = parseInt(parts[2], 10);
+        let max = parseInt(interaction.fields.getTextInputValue('sr_max'), 10);
+        if (isNaN(max) || max < 0) max = 0;
+        if (max > 25) max = 25;
+        sr.updateMenu(guildId, menuId, { maxRoles: max });
+        await sr.refreshPublicMessage(interaction.guild, sr.getMenu(guildId, menuId));
+        const view = buildManageView(guildId, userId, interaction.guild, menuId);
+        if (!view) return interaction.reply({ content: `✅ Batas role diset ke ${max === 0 ? 'tanpa batas' : max}.`, ephemeral: true });
+        return interaction.update(view);
     }
 }
 

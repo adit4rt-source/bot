@@ -39,6 +39,9 @@ db.exec(`
     createdAt INTEGER
   );
 `);
+// Migration: per-menu cap on how many roles a member may hold from a "multi" menu
+// (0 = unlimited). Wrapped in try/catch so it's a no-op once the column exists.
+try { db.exec('ALTER TABLE selfrole_menus ADD COLUMN maxRoles INTEGER DEFAULT 0'); } catch (_) { /* already exists */ }
 
 // ==================== EMOJI VALIDATION ====================
 // Discord rejects multi-grapheme strings as emoji. Accept a single grapheme OR a
@@ -55,10 +58,10 @@ function normalizeEmoji(raw) {
 }
 
 // ==================== CRUD: MENUS ====================
-function createMenu(guildId, { title, description, type = 'multi', color = ui.COLORS.info }) {
+function createMenu(guildId, { title, description, type = 'multi', color = ui.COLORS.info, maxRoles = 0 }) {
     const res = db.prepare(
-        'INSERT INTO selfrole_menus (guildId, title, description, type, color, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(guildId, title, description || '', type === 'unique' ? 'unique' : 'multi', color, Date.now());
+        'INSERT INTO selfrole_menus (guildId, title, description, type, color, maxRoles, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(guildId, title, description || '', type === 'unique' ? 'unique' : 'multi', color, Number(maxRoles) || 0, Date.now());
     return Number(res.lastInsertRowid);
 }
 
@@ -71,7 +74,7 @@ function getMenus(guildId) {
 }
 
 function updateMenu(guildId, menuId, fields) {
-    const allowed = ['title', 'description', 'type', 'color', 'channelId', 'messageId'];
+    const allowed = ['title', 'description', 'type', 'color', 'channelId', 'messageId', 'maxRoles'];
     const sets = [], vals = [];
     for (const [k, v] of Object.entries(fields)) {
         if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
@@ -110,6 +113,7 @@ function removeOption(menuId, roleId) {
 // Returns { embeds, components } for the member-facing self-role message.
 function buildPublicMessage(menu, options, guild) {
     const isUnique = menu.type === 'unique';
+    const limit = (!isUnique && menu.maxRoles > 0) ? Math.min(menu.maxRoles, options.length || 1) : null;
     const lines = options.map(o => {
         const role = guild?.roles?.cache?.get(o.roleId);
         const name = o.label || (role ? role.name : `role ${o.roleId}`);
@@ -118,17 +122,20 @@ function buildPublicMessage(menu, options, guild) {
         return `> ${em}<@&${o.roleId}> ${desc ? `*${o.description}*` : ''}`.trimEnd();
     });
 
+    let howto;
+    if (!options.length) howto = '*Belum ada role di menu ini.*';
+    else if (isUnique) howto = '🔘 *Pilih **1 role** dari menu di bawah. Mau ganti? Tinggal pilih yang lain.*';
+    else if (limit) howto = `✅ *Pilih sampai **${limit} role** dari menu di bawah. Mau lepas role? Pilih lagi role yang sama.*`;
+    else howto = '✅ *Pilih role yang kamu mau di menu di bawah. Mau lepas role? Pilih lagi role yang sama.*';
+
     const embed = new EmbedBuilder()
         .setColor(menu.color || ui.COLORS.info)
         .setTitle(menu.title || '🎭 Self Roles')
         .setDescription(
             (menu.description ? `${menu.description}\n\n` : '') +
             (options.length
-                ? `${ui.DIVIDER}\n${lines.join('\n')}\n${ui.DIVIDER}\n` +
-                  (isUnique
-                      ? '🔘 *Pilih **1 role** dari menu di bawah. Mau ganti? Tinggal pilih yang lain.*'
-                      : '✅ *Pilih role yang kamu mau di menu di bawah. Mau lepas role? Pilih lagi role yang sama.*')
-                : '*Belum ada role di menu ini.*')
+                ? `${ui.DIVIDER}\n${lines.join('\n')}\n${ui.DIVIDER}\n${howto}`
+                : howto)
         )
         .setFooter({ text: ui.footer('Pilih dari menu di bawah untuk mengatur role kamu') });
 
@@ -138,7 +145,7 @@ function buildPublicMessage(menu, options, guild) {
             .setCustomId(`srpick_${menu.id}`)
             .setPlaceholder(isUnique ? '🔘 Pilih satu role...' : '🎭 Pilih role kamu...')
             .setMinValues(0)
-            .setMaxValues(isUnique ? 1 : options.length);
+            .setMaxValues(isUnique ? 1 : (limit || options.length));
         for (const o of options) {
             const role = guild?.roles?.cache?.get(o.roleId);
             const opt = new StringSelectMenuOptionBuilder()
@@ -169,6 +176,7 @@ async function handleSelfRolePick(interaction) {
     const member = interaction.member;
 
     const added = [], removed = [], failed = [];
+    let limitHit = false;
 
     const tryAdd = async (roleId) => {
         if (member.roles.cache.has(roleId)) return;
@@ -194,9 +202,18 @@ async function handleSelfRolePick(interaction) {
         }
     } else {
         // Multi: toggle each selected role; leave unselected roles untouched.
+        // Respect the optional per-menu cap (maxRoles, 0 = unlimited).
+        const limit = menu.maxRoles && menu.maxRoles > 0 ? menu.maxRoles : null;
+        let owned = menuRoleIds.filter(r => member.roles.cache.has(r)).length;
         for (const rid of selected) {
-            if (member.roles.cache.has(rid)) await tryRemove(rid);
-            else await tryAdd(rid);
+            if (member.roles.cache.has(rid)) {
+                await tryRemove(rid);
+                owned--;
+            } else {
+                if (limit && owned >= limit) { limitHit = true; continue; }
+                await tryAdd(rid);
+                owned++;
+            }
         }
     }
 
@@ -204,6 +221,7 @@ async function handleSelfRolePick(interaction) {
     const parts = [];
     if (added.length) parts.push(`➕ Ditambahkan: ${fmt(added)}`);
     if (removed.length) parts.push(`➖ Dilepas: ${fmt(removed)}`);
+    if (limitHit) parts.push(`⚠️ Maksimal **${menu.maxRoles} role** untuk menu ini — sebagian tidak ditambahkan.`);
     if (failed.length) parts.push(`⚠️ Gagal (cek posisi role bot / izin): ${fmt(failed)}`);
     if (!parts.length) parts.push('ℹ️ Tidak ada perubahan role.');
 

@@ -108,14 +108,52 @@ module.exports = function register() {
   });
 
   test('selfrole: create modal submit creates a menu (acknowledges)', () => {
-    const before = selfRoles.getMenus(G).length;
-    const it = mockInteraction({ userId: U, guildId: G, customId: `srmod_create_${U}`, fields: { sr_title: 'From Modal', sr_desc: '', sr_type: 'unique' } });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srmod_create_${U}`, fields: { sr_title: 'From Modal XYZ', sr_desc: '' } });
     it.isModalSubmit = () => true;
     return Promise.resolve(srPanel.handleSelfRoleModal(it)).then(() => {
       if (!it._cap.reply) throw new Error('did not acknowledge');
-      if (selfRoles.getMenus(G).length !== before + 1) throw new Error('menu not created');
+      if (!selfRoles.getMenus(G).some(m => m.title === 'From Modal XYZ')) throw new Error('menu not created');
     });
   });
 
   h('selfrole: addrole button shows role select', srPanel, 'handleSelfRoleButton', `sradm_addrole_1_${U}`);
+
+  test('selfrole: maxRoles cap blocks extra roles (multi)', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'Capped', type: 'multi', maxRoles: 1 });
+    selfRoles.addOption(menuId, { roleId: 'cap_a' });
+    selfRoles.addOption(menuId, { roleId: 'cap_b' });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srpick_${menuId}`, values: ['cap_a', 'cap_b'] });
+    return Promise.resolve(selfRoles.handleSelfRolePick(it)).then(() => {
+      const out = it._cap.reply;
+      if (!out) throw new Error('did not acknowledge');
+      const content = typeof out === 'string' ? out : out.content;
+      if (!/Maksimal/i.test(content || '')) throw new Error('cap warning not shown');
+    });
+  });
+
+  test('selfrole: edit modal updates title', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'Lama', type: 'multi' });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srmod_edit_${menuId}_${U}`, fields: { sr_title: 'Judul Baru', sr_desc: 'ket' } });
+    it.isModalSubmit = () => true;
+    return Promise.resolve(srPanel.handleSelfRoleModal(it)).then(() => {
+      if (selfRoles.getMenu(G, menuId).title !== 'Judul Baru') throw new Error('title not updated');
+    });
+  });
+
+  test('selfrole: maxroles modal sets the cap', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'SetCap', type: 'multi' });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srmod_max_${menuId}_${U}`, fields: { sr_max: '3' } });
+    it.isModalSubmit = () => true;
+    return Promise.resolve(srPanel.handleSelfRoleModal(it)).then(() => {
+      if (selfRoles.getMenu(G, menuId).maxRoles !== 3) throw new Error('maxRoles not set');
+    });
+  });
+
+  test('selfrole: color select changes embed color', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'Warna', type: 'multi' });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srsel_color_${menuId}_${U}`, values: ['#57F287'] });
+    return Promise.resolve(srPanel.handleSelfRoleSelect(it)).then(() => {
+      if (selfRoles.getMenu(G, menuId).color !== '#57F287') throw new Error('color not updated');
+    });
+  });
 };
