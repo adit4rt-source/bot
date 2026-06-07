@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS } = require('../data/items');
@@ -547,7 +547,7 @@ async function handlePetButton(interaction) {
             .setDescription(desc)
             .setFooter({ text: `${ownedCount}/${tierPets.length} collected | Gunakan tombol untuk ganti tier` });
 
-        // Tier navigation buttons
+        // Tier navigation buttons (8 tiers across 2 rows + nav row)
         const row1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_dex_Common_${userId}`).setLabel('⚪ Common').setStyle(currentTier === 'Common' ? ButtonStyle.Success : ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`pet_dex_Uncommon_${userId}`).setLabel('🟢 Uncommon').setStyle(currentTier === 'Uncommon' ? ButtonStyle.Success : ButtonStyle.Secondary),
@@ -557,11 +557,15 @@ async function handlePetButton(interaction) {
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_dex_Legendary_${userId}`).setLabel('🟡 Legendary').setStyle(currentTier === 'Legendary' ? ButtonStyle.Success : ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`pet_dex_Mythic_${userId}`).setLabel('🔴 Mythic').setStyle(currentTier === 'Mythic' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_Secret_${userId}`).setLabel('🟪 Secret').setStyle(currentTier === 'Secret' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_dex_God_${userId}`).setLabel('👑 GOD').setStyle(currentTier === 'God' ? ButtonStyle.Success : ButtonStyle.Secondary),
+        );
+        const row3 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('📦 My Pets').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary),
         );
 
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
+        return interaction.update({ embeds: [embed], components: [row1, row2, row3] });
     }
 
 
@@ -708,7 +712,7 @@ async function handlePetButton(interaction) {
             dungeonMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(`${d.name} (Lv.${d.minLevel}+, ${d.waves} waves)`)
                 .setValue(d.id)
-                .setDescription(`${canEnter ? '✅' : '🔒'} Reward: 🪙${d.reward[0]}-${d.reward[1]} | ${d.exp} EXP`));
+                .setDescription(`${canEnter ? '✅' : '🔒'} ${ELEMENT_EMOJI[d.element] || ''} Reward: 🪙${d.reward[0]}-${d.reward[1]} | ${d.exp} EXP`));
         });
         const embed = new EmbedBuilder().setTitle('🏰 Dungeon').setColor('#9B59B6')
             .setDescription(`${PET_DATA.find(p => p.id === pet.petId)?.emoji || '🐾'} **${pet.name}** (Lv.${pet.level})\n\nPilih dungeon untuk masuk:`);
@@ -939,7 +943,7 @@ async function handlePetSelectMenu(interaction) {
         fishCooldowns.set(dungeonCd, Date.now() + (dungeon.cooldown || 300000));
         addComboFeature(guildId, userId, 'dungeon');
         const petDef = PET_DATA.find(p => p.id === pet.petId);
-        const enemies = dungeon.monsterHp.map((hp, i) => ({ hp, atk: dungeon.monsterAtk[i], def: Math.floor(dungeon.monsterAtk[i] * 0.3) }));
+        const enemies = dungeon.monsterHp.map((hp, i) => ({ hp, atk: dungeon.monsterAtk[i], def: Math.floor(dungeon.monsterAtk[i] * 0.3), element: dungeon.element }));
 
         // Show "entering dungeon" then resolve
         const enterEmbed = new EmbedBuilder().setColor('#F39C12').setTitle(`🏰 ${dungeon.name}`)
@@ -996,7 +1000,7 @@ async function handlePetSelectMenu(interaction) {
 
         if (selected === 'list') {
             let desc = '👹 **DAFTAR BOSS**\n\n';
-            BOSS_LIST.forEach(b => { desc += `${b.name}\n> Level: **${b.minLevel}+** | HP: **${b.hp.toLocaleString()}** | ATK: ${b.atk} | DEF: ${b.def}\n> Reward: 🪙 ${b.reward[0].toLocaleString()}-${b.reward[1].toLocaleString()} + ${b.exp} Pet EXP\n\n`; });
+            BOSS_LIST.forEach(b => { desc += `${b.name} ${ELEMENT_EMOJI[b.element] || ''}\n> Level: **${b.minLevel}+** | HP: **${b.hp.toLocaleString()}** | ATK: ${b.atk} | DEF: ${b.def}\n> Reward: 🪙 ${b.reward[0].toLocaleString()}-${b.reward[1].toLocaleString()} + ${b.exp} Pet EXP\n\n`; });
             const embed = new EmbedBuilder().setTitle('👹 Boss List').setColor('#E74C3C').setDescription(desc);
             const backRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`pet_boss_${userId}`).setLabel('👹 Boss Menu').setStyle(ButtonStyle.Danger),
@@ -1016,7 +1020,7 @@ async function handlePetSelectMenu(interaction) {
                 bossSelectMenu.addOptions(new StringSelectMenuOptionBuilder()
                     .setLabel(`${b.name} (Lv.${b.minLevel}+)`)
                     .setValue(b.id)
-                    .setDescription(`${canFight ? '✅' : '🔒'} HP: ${b.hp.toLocaleString()} | Reward: 🪙${b.reward[0]}-${b.reward[1]}`));
+                    .setDescription(`${canFight ? '✅' : '🔒'} ${ELEMENT_EMOJI[b.element] || ''} HP: ${b.hp.toLocaleString()} | Reward: 🪙${b.reward[0]}-${b.reward[1]}`));
             });
             const embed = new EmbedBuilder().setTitle('⚔️ Solo Boss').setColor('#E74C3C')
                 .setDescription(`${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level})\nPilih boss untuk dilawan:`);
@@ -1066,7 +1070,7 @@ async function handlePetSelectMenu(interaction) {
         }
         fishCooldowns.set(bossCd, Date.now() + 600000);
         const petDef = PET_DATA.find(p => p.id === pet.petId);
-        const result = simulateBattle(pet, petDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def }]);
+        const result = simulateBattle(pet, petDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def, element: boss.element }]);
 
         let reward = 0, expGain = 0, lootText = '', relicText = '';
         if (result.alive) {

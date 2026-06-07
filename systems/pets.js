@@ -1,7 +1,24 @@
 // systems/pets.js
 const { db } = require('../database');
-const { PET_DATA, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, PET_EVOLUTIONS, PET_SKILLS } = require('../data/pets');
+const { PET_DATA, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, PET_EVOLUTIONS, PET_SKILLS, ELEMENT_ADVANTAGE } = require('../data/pets');
 const { getRandomInt } = require('../utils');
+
+// ============ ELEMENT MATCHUP (PvE & PvP) ============
+const ELEMENT_EMOJI = { fire: '🔥', water: '💧', nature: '🌿', electric: '⚡', dark: '🌑', light: '✨' };
+// Multiplier damage berdasarkan elemen penyerang vs bertahan.
+// Advantage: +25% (atau +50% jika amplified/elemental skill). Disadvantage: -20% (atau -10% jika amplified).
+function elementMultiplier(attackerEl, defenderEl, amplified) {
+    if (!attackerEl || !defenderEl) return 1.0;
+    if (ELEMENT_ADVANTAGE[attackerEl] === defenderEl) return amplified ? 1.5 : 1.25;
+    if (ELEMENT_ADVANTAGE[defenderEl] === attackerEl) return amplified ? 0.9 : 0.8;
+    return 1.0;
+}
+function elementNote(attackerEl, defenderEl) {
+    if (!attackerEl || !defenderEl) return '';
+    if (ELEMENT_ADVANTAGE[attackerEl] === defenderEl) return ' — ⚡ **Super Effective!** (+25%)';
+    if (ELEMENT_ADVANTAGE[defenderEl] === attackerEl) return ' — 🛡️ *Not Very Effective* (-20%)';
+    return '';
+}
 
 function generatePetStats(tier) {
     const ranges = { Common:[60,100,10,25,5,15,5,12,3,8], Uncommon:[80,130,15,30,8,18,7,15,4,10], Rare:[100,160,20,40,10,25,10,20,5,12], Epic:[130,200,30,55,15,35,12,25,7,15], Legendary:[160,250,40,70,20,45,15,30,8,18], Mythic:[200,300,50,85,25,55,18,35,10,20], Secret:[280,400,70,110,35,70,25,45,15,28], God:[400,550,100,150,50,90,35,60,22,38] };
@@ -15,6 +32,7 @@ function simulateBattle(pet, petDef, enemies) {
     const petAtk = pet.atk + (pet.level * 1);
     const petDef2 = pet.def + Math.floor(pet.level * 0.5);
     const petCrit = pet.crit;
+    const petEl = pet.element;
     let log = [], wave = 0, alive = true;
 
     // Load pet skills
@@ -28,7 +46,12 @@ function simulateBattle(pet, petDef, enemies) {
         wave++;
         let enemyHp = enemy.hp;
         let round = 0;
-        log.push(`**━━ Wave ${wave} ━━** (Monster HP: ${enemyHp})`);
+        const enemyEl = enemy.element;
+        const atkMult = elementMultiplier(petEl, enemyEl);          // pet → enemy
+        const atkMultAmp = elementMultiplier(petEl, enemyEl, true);  // elemental skill
+        const defMult = elementMultiplier(enemyEl, petEl);          // enemy → pet
+        const elIcon = enemyEl ? ` ${ELEMENT_EMOJI[enemyEl] || ''}` : '';
+        log.push(`**━━ Wave ${wave} ━━** (Monster HP: ${enemyHp})${elIcon}${elementNote(petEl, enemyEl)}`);
         while (petHp > 0 && enemyHp > 0 && round < 20) {
             round++;
             // Decrement cooldowns
@@ -52,7 +75,8 @@ function simulateBattle(pet, petDef, enemies) {
                     skillUsed = true;
 
                     if (skill.type === 'attack') {
-                        let sDmg = Math.max(1, Math.floor((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier) - Math.floor(enemy.def || 0));
+                        const eMult = skill.id === 'elemental_blast' ? atkMultAmp : atkMult;
+                        let sDmg = Math.max(1, Math.floor(((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier * eMult)) - Math.floor(enemy.def || 0));
                         enemyHp -= sDmg;
                         log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → Monster: -${sDmg} HP`);
                     } else if (skill.type === 'heal') {
@@ -73,7 +97,7 @@ function simulateBattle(pet, petDef, enemies) {
                         buffState.buffDuration = skill.duration;
                         log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → +${skill.atkBonus}% ATK, -${skill.defPenalty}% DEF`);
                     } else if (skill.type === 'drain') {
-                        let sDmg = Math.max(1, Math.floor((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier) - Math.floor(enemy.def || 0));
+                        let sDmg = Math.max(1, Math.floor(((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier * atkMult)) - Math.floor(enemy.def || 0));
                         enemyHp -= sDmg;
                         const healAmt = Math.floor(sDmg * skill.healRatio);
                         petHp = Math.min(maxPetHp, petHp + healAmt);
@@ -89,7 +113,7 @@ function simulateBattle(pet, petDef, enemies) {
 
             // Normal attack if no skill used
             if (!skillUsed) {
-                let dmg = Math.max(1, (petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) - Math.floor(enemy.def || 0));
+                let dmg = Math.max(1, Math.floor(((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) - Math.floor(enemy.def || 0)) * atkMult));
                 const effectiveCrit = petCrit + buffState.critBonus;
                 if (Math.random() * 100 < effectiveCrit) { dmg = Math.floor(dmg * 2); log.push(`> ${petDef.emoji} **CRIT!** → Monster: -${dmg} HP`); }
                 else log.push(`> ${petDef.emoji} ATK → Monster: -${dmg} HP`);
@@ -102,7 +126,7 @@ function simulateBattle(pet, petDef, enemies) {
             if (buffState.immuneDuration > 0) {
                 log.push(`> 👹 Monster ATK → ✝️ IMMUNE! (0 damage)`);
             } else {
-                let eDmg = Math.max(1, enemy.atk - (petDef2 - Math.floor(petDef2 * buffState.defPenalty / 100)));
+                let eDmg = Math.max(1, Math.floor((enemy.atk - (petDef2 - Math.floor(petDef2 * buffState.defPenalty / 100))) * defMult));
                 if (buffState.shieldReduction > 0) eDmg = Math.max(1, Math.floor(eDmg * (1 - buffState.shieldReduction)));
                 petHp -= eDmg;
                 log.push(`> 👹 Monster ATK → ${pet.name}: -${eDmg} HP (${Math.max(0,petHp)} left)`);
@@ -130,6 +154,14 @@ function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
     const def1 = pet1.def + Math.floor(pet1.level*0.5), def2 = pet2.def + Math.floor(pet2.level*0.5);
     let log = [], round = 0;
     const first = pet1.spd >= pet2.spd ? 1 : 2;
+    const el1 = pet1.element, el2 = pet2.element;
+    const mult1 = elementMultiplier(el1, el2);      // pet1 → pet2
+    const mult1Amp = elementMultiplier(el1, el2, true);
+    const mult2 = elementMultiplier(el2, el1);      // pet2 → pet1
+    const mult2Amp = elementMultiplier(el2, el1, true);
+    if (el1 && el2 && (mult1 !== 1.0)) {
+        log.push(`${ELEMENT_EMOJI[el1] || ''} **${pet1.name}** vs ${ELEMENT_EMOJI[el2] || ''} **${pet2.name}**${elementNote(el1, el2)}`);
+    }
 
     // Load skills for both pets
     const skills1 = getPetSkills(pet1);
@@ -153,14 +185,14 @@ function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
                 if (avail.length > 0) {
                     const skill = avail[Math.floor(Math.random() * avail.length)];
                     cd1[skill.id] = skill.cooldown;
-                    let dmg = Math.max(1, Math.floor(atk1 * skill.multiplier) - def2);
+                    let dmg = Math.max(1, Math.floor(atk1 * skill.multiplier * (skill.id === 'elemental_blast' ? mult1Amp : mult1)) - def2);
                     hp2 -= dmg;
                     log.push(`> 🐾 ${pet1.name} uses **${skill.name}**! ${skill.emoji} → ${pet2.name}: -${dmg}`);
                     skillUsed = true;
                 }
             }
             if (!skillUsed) {
-                let dmg = Math.max(1, atk1 - def2);
+                let dmg = Math.max(1, Math.floor((atk1 - def2) * mult1));
                 if (Math.random()*100 < pet1.crit) { dmg *= 2; log.push(`> ${pet1Def.emoji} **CRIT!** → ${pet2.name}: -${dmg}`); } else log.push(`> ${pet1Def.emoji} ATK → ${pet2.name}: -${dmg}`);
                 hp2 -= dmg;
             }
@@ -180,14 +212,14 @@ function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
             if (avail.length > 0) {
                 const skill = avail[Math.floor(Math.random() * avail.length)];
                 cd2[skill.id] = skill.cooldown;
-                let dmg2 = Math.max(1, Math.floor(atk2 * skill.multiplier) - def1);
+                let dmg2 = Math.max(1, Math.floor(atk2 * skill.multiplier * (skill.id === 'elemental_blast' ? mult2Amp : mult2)) - def1);
                 hp1 -= dmg2;
                 log.push(`> 🐾 ${pet2.name} uses **${skill.name}**! ${skill.emoji} → ${pet1.name}: -${dmg2}`);
                 skillUsed2 = true;
             }
         }
         if (!skillUsed2) {
-            let dmg2 = Math.max(1, atk2 - def1);
+            let dmg2 = Math.max(1, Math.floor((atk2 - def1) * mult2));
             if (Math.random()*100 < pet2.crit) { dmg2 *= 2; log.push(`> ${pet2Def.emoji} **CRIT!** → ${pet1.name}: -${dmg2}`); } else log.push(`> ${pet2Def.emoji} ATK → ${pet1.name}: -${dmg2}`);
             hp1 -= dmg2;
         }
@@ -335,4 +367,4 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier };
+module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI };
