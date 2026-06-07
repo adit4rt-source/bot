@@ -81,13 +81,22 @@ const SMELT_RECIPES = [
     { bar: 'bar_adamantite', ore: 'adamantite', oreQty: 5, fuel: 8, exp: 90 },
 ];
 
-// ==================== SMITHING (bars -> existing item) ====================
-// id = item id yang sudah ada di data/items.js (dipakai pet/fishing/awakening)
+// ==================== SMITHING (bars -> item berguna) ====================
+// out: 'item' (default, ke inventory) | 'mine' (ke kantong tambang, mis. perlengkapan)
+// cat: kategori untuk tampilan panel
 const SMITH_RECIPES = [
-    { id: 'refine_stone',     name: 'Refine Stone',     emoji: '🪨', inputs: [{ mat: 'bar_copper', qty: 2 }], exp: 15, desc: 'Upgrade relic pet' },
-    { id: 'rod_part',         name: 'Rod Parts',        emoji: '🔧', inputs: [{ mat: 'bar_iron', qty: 2 }], exp: 25, desc: 'Upgrade joran mancing' },
-    { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', inputs: [{ mat: 'bar_gold', qty: 2 }, { mat: 'bar_titanium', qty: 1 }], exp: 50, desc: 'Cegah relic turun saat refine' },
-    { id: 'mythic_fragment',  name: 'Mythic Fragment',  emoji: '🌟', inputs: [{ mat: 'bar_mithril', qty: 3 }, { mat: 'bar_adamantite', qty: 1 }], exp: 120, desc: 'Material langka Awakening pet' },
+    // -- Material (Pet & Fishing) --
+    { id: 'refine_stone',     name: 'Refine Stone',     emoji: '🪨', cat: 'Material', inputs: [{ mat: 'bar_copper', qty: 2 }], exp: 15, desc: 'Upgrade relic pet' },
+    { id: 'rod_part',         name: 'Rod Parts',        emoji: '🔧', cat: 'Material', inputs: [{ mat: 'bar_iron', qty: 2 }], exp: 25, desc: 'Upgrade joran mancing' },
+    { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', cat: 'Material', inputs: [{ mat: 'bar_gold', qty: 2 }, { mat: 'bar_titanium', qty: 1 }], exp: 50, desc: 'Cegah relic turun saat refine' },
+    { id: 'mythic_fragment',  name: 'Mythic Fragment',  emoji: '🌟', cat: 'Material', inputs: [{ mat: 'bar_mithril', qty: 3 }, { mat: 'bar_adamantite', qty: 1 }], exp: 120, desc: 'Material langka Awakening pet' },
+    // -- Perlengkapan Tambang (anti-hazard, ke kantong tambang) --
+    { id: 'beam',    name: 'Penyangga',  emoji: '🪵', cat: 'Perlengkapan', out: 'mine', inputs: [{ mat: 'bar_iron', qty: 1 }], exp: 8, desc: 'Cegah cave-in (sekali pakai)' },
+    { id: 'gasmask', name: 'Masker Gas', emoji: '😷', cat: 'Perlengkapan', out: 'mine', inputs: [{ mat: 'bar_copper', qty: 2 }], exp: 8, desc: 'Cegah gas beracun (sekali pakai)' },
+    // -- Konsumabel (ke inventory) --
+    { id: 'mystery_box',  name: 'Mystery Box',  emoji: '📦', cat: 'Konsumabel', inputs: [{ mat: 'bar_gold', qty: 1 }], exp: 20, desc: 'Kotak misteri (random 50-2000)' },
+    { id: 'lucky_charm',  name: 'Lucky Charm',  emoji: '🍀', cat: 'Konsumabel', inputs: [{ mat: 'bar_titanium', qty: 2 }], exp: 60, desc: '+15% chance menang game' },
+    { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', cat: 'Konsumabel', inputs: [{ mat: 'bar_titanium', qty: 1 }, { mat: 'bar_gold', qty: 2 }], exp: 70, desc: '+50% money semua sumber (1 jam)' },
 ];
 
 // ==================== GEMS (drop langka, socket ke pickaxe) ====================

@@ -180,19 +180,22 @@ function buildMiningPanel(guildId, userId, username) {
         .setColor(ui.COLORS && ui.COLORS.economy ? ui.COLORS.economy : '#C9A227')
         .setTitle(`⛏️ TAMBANG — ${username}`)
         .setDescription(
-            `${pickaxe.emoji} **${pickaxe.name}** (Tier ${pickaxe.tier})${row.prestige > 0 ? ` • ⭐ Prestige ${row.prestige}` : ''}${row.artifact ? ' • 🏺 Artifact' : ''}\n` +
+            `${pickaxe.emoji} **${pickaxe.name}** · Tier ${pickaxe.tier}${row.prestige > 0 ? ` · ⭐ Prestige ${row.prestige}` : ''}${row.artifact ? ' · 🏺' : ''}\n` +
             (slots > 0 ? `> 💎 Socket: ${socketStr || '—'}\n` : '') +
-            `> ⚒️ Mining Lv.**${row.level}** \`${bar(expPct)}\` ${row.level >= MAX_MINING_LEVEL ? 'MAX' : `${row.exp}/${expNeed}`}\n` +
-            `> ⚡ Stamina: \`${bar(staPct)}\` **${row.stamina}/${max}**${row.stamina < max ? ` (+1 / menit)` : ''}\n` +
+            `\n**⚒️ Mining Lv.${row.level}**  ${row.level >= MAX_MINING_LEVEL ? '🏆 MAX' : ''}\n` +
+            `> \`${bar(expPct)}\` ${row.level >= MAX_MINING_LEVEL ? '' : `${row.exp}/${expNeed} EXP`}\n` +
+            `**⚡ Stamina ${row.stamina}/${max}**\n` +
+            `> \`${bar(staPct)}\` ${row.stamina < max ? `+1/menit` : '🔋 penuh!'}\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📍 Kedalaman: **${row.depth}m** — ${layer.name}\n` +
-            `> 🪨 Ore di sini: ${orePreview}\n` +
-            `> ⛏️ Biaya gali: **${pickaxe.staminaCost}** stamina/swing\n` +
-            (hazardPct > 0 ? `> ☠️ Bahaya: **${hazardPct}%**/swing (cave-in/gas/👹${ELEMENT_EMOJI[layer.mElement] || ''}) — 🪵${beams} 😷${masks}\n` : '') +
-            `> 🕳️ Batas pickaxe: **${pickaxe.maxDepth}m**${atMaxDepth ? ' ⚠️ *(upgrade untuk lebih dalam)*' : ''}\n` +
+            `📍 **Kedalaman ${row.depth}m** — ${layer.name}\n` +
+            `> ⛰️ Ore di sini: ${orePreview}\n` +
+            `> ⛏️ Sekali gali: **${pickaxe.staminaCost}** stamina\n` +
+            (hazardPct > 0 ? `> ☠️ Bahaya: **${hazardPct}%** (🪨/🟢/👹${ELEMENT_EMOJI[layer.mElement] || ''}) · bekal 🪵${beams} 😷${masks}\n` : `> ✅ Aman dari bahaya\n`) +
+            `> 🕳️ Batas pickaxe: **${pickaxe.maxDepth}m**${atMaxDepth ? ' ⚠️ *upgrade dulu*' : ''}\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `> ${ui.money(userData.balance)}`
         )
-        .setFooter({ text: 'Dig pakai stamina • Descend untuk ore lebih langka • Smelt/Smith menyusul!' });
+        .setFooter({ text: '⛏️ Dig = gali (pakai stamina) · ⬇️ Descend = makin dalam, ore makin langka' });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`mine_dig_${userId}`).setLabel('⛏️ Dig').setStyle(ButtonStyle.Success).setDisabled(row.stamina < pickaxe.staminaCost),
@@ -245,7 +248,8 @@ function buildOresPanel(guildId, userId, username) {
     }
     desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 💰 Nilai ore mentah: 🪙 **${oreValue.toLocaleString('id-ID')}** (${oreQty} ore)\n> ℹ️ *Jual hanya menjual ore mentah — bar & perlengkapan aman.*`;
 
-    const embed = new EmbedBuilder().setColor('#C9A227').setTitle('🎒 Kantong Material').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#C9A227').setTitle(`🎒 Kantong Material — ${username}`).setDescription(desc)
+        .setFooter({ text: 'Ore mentah → jual atau lebur jadi bar di 🔥 Smelt' });
     const r = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`mine_sellores_${userId}`).setLabel('💰 Jual Ore Mentah').setStyle(ButtonStyle.Danger).setDisabled(ores.length === 0),
         new ButtonBuilder().setCustomId(`mine_smelt_${userId}`).setLabel('🔥 Smelt').setStyle(ButtonStyle.Primary),
@@ -276,7 +280,8 @@ function buildSmeltPanel(guildId, userId, username) {
             .setValue(r.bar)
             .setDescription(`Lebur semua yang bisa (max 50/klik)`));
     });
-    const embed = new EmbedBuilder().setColor('#E67E22').setTitle('🔥 Tungku Peleburan').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#E67E22').setTitle(`🔥 Tungku Peleburan — ${username}`).setDescription(desc)
+        .setFooter({ text: 'Pilih bar → dilebur sebanyak mungkin sekaligus (max 50/klik)' });
     return { embeds: [embed], components: [
         new ActionRowBuilder().addComponents(menu),
         new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))
@@ -285,36 +290,51 @@ function buildSmeltPanel(guildId, userId, username) {
 
 // ==================== BUILD SMITH (craft items) ====================
 function buildSmithPanel(guildId, userId, username) {
-    let desc = `🔨 Tempa **batangan** jadi material berguna (dipakai Pet & Fishing!).\n\n**Resep:**\n`;
-    SMITH_RECIPES.forEach(rc => {
-        const inputStr = rc.inputs.map(i => `${i.qty}× ${getMaterialDef(i.mat).emoji}`).join(' + ');
-        const canMake = rc.inputs.every(i => getMatCount(guildId, userId, i.mat) >= i.qty);
-        desc += `> ${rc.emoji} **${rc.name}** ⟵ ${inputStr} ${canMake ? '✅' : ''}\n> ┗ *${rc.desc}*\n`;
-    });
+    const DIV = '━━━━━━━━━━━━━━━━━━━━';
+    const cats = [
+        { key: 'Material', title: '⚒️ Material — buat Pet & Fishing' },
+        { key: 'Perlengkapan', title: '🧰 Perlengkapan Tambang' },
+        { key: 'Konsumabel', title: '✨ Konsumabel' },
+    ];
+    let desc = `🔨 Tempa **batangan (bar)** jadi barang berguna.\n*Lebur ore dulu di 🔥 Smelt untuk dapat bar.*\n`;
+
+    for (const c of cats) {
+        const recs = SMITH_RECIPES.filter(r => r.cat === c.key);
+        if (!recs.length) continue;
+        desc += `\n${DIV}\n**${c.title}**\n`;
+        recs.forEach(rc => {
+            const inputStr = rc.inputs.map(i => { const m = getMaterialDef(i.mat); return `${i.qty}× ${m.emoji}`; }).join(' + ');
+            const canMake = rc.inputs.every(i => getMatCount(guildId, userId, i.mat) >= i.qty);
+            desc += `> ${canMake ? '✅' : '▫️'} ${rc.emoji} **${rc.name}**  ⟵  ${inputStr}\n> ┗ *${rc.desc}*\n`;
+        });
+    }
 
     const fragCount = getMatCount(guildId, userId, 'artifact_fragment');
     const showCore = fragCount > 0;
     if (showCore) {
-        desc += `\n**👑 Core Forge** (🔱 Fragment: ${fragCount}):\n`;
+        desc += `\n${DIV}\n**👑 Core Forge** — 🔱 Fragment: **${fragCount}**\n`;
         CORE_RECIPES.forEach(rc => {
             const inputStr = rc.inputs.map(i => `${i.qty}× ${getMaterialDef(i.mat).emoji}`).join(' + ');
             const canMake = rc.inputs.every(i => getMatCount(guildId, userId, i.mat) >= i.qty);
-            desc += `> ${rc.emoji} **${rc.name}** ⟵ ${inputStr} ${canMake ? '✅' : ''}\n> ┗ *${rc.desc}*\n`;
+            desc += `> ${canMake ? '✅' : '▫️'} ${rc.emoji} **${rc.name}**  ⟵  ${inputStr}\n> ┗ *${rc.desc}*\n`;
         });
     }
+    desc += `\n${DIV}\n> ✅ = bahan cukup • ▫️ = bahan kurang`;
 
-    const menu = new StringSelectMenuBuilder().setCustomId(`mine_smith_select_${userId}`).setPlaceholder('🔨 Pilih item untuk ditempa...').setMinValues(1).setMaxValues(1);
+    const menu = new StringSelectMenuBuilder().setCustomId(`mine_smith_select_${userId}`).setPlaceholder('🔨 Pilih barang untuk ditempa...').setMinValues(1).setMaxValues(1);
     SMITH_RECIPES.forEach(rc => {
+        const canMake = rc.inputs.every(i => getMatCount(guildId, userId, i.mat) >= i.qty);
         const inputStr = rc.inputs.map(i => `${i.qty}x ${getMaterialDef(i.mat).name}`).join(' + ');
-        menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${rc.name}`).setValue(rc.id).setDescription(inputStr.slice(0, 90)));
+        menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${rc.name}`).setValue(rc.id).setDescription(`${canMake ? '✅ ' : ''}${inputStr}`.slice(0, 100)));
     });
     if (showCore) {
         CORE_RECIPES.forEach(rc => {
             const inputStr = rc.inputs.map(i => `${i.qty}x ${getMaterialDef(i.mat).name}`).join(' + ');
-            menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`👑 ${rc.name}`).setValue(`core_${rc.id}`).setDescription(inputStr.slice(0, 90)));
+            menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`👑 ${rc.name}`).setValue(`core_${rc.id}`).setDescription(inputStr.slice(0, 100)));
         });
     }
-    const embed = new EmbedBuilder().setColor('#7F8C8D').setTitle('🔨 Pandai Besi').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#95A5A6').setTitle(`🔨 Pandai Besi — ${username}`).setDescription(desc)
+        .setFooter({ text: 'Tempa material untuk upgrade pet/joran tanpa beli mahal di shop!' });
     return { embeds: [embed], components: [
         new ActionRowBuilder().addComponents(menu),
         new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))
@@ -362,7 +382,8 @@ function buildShopPanel(guildId, userId, username) {
     components.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     ));
-    const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🛒 Mine Shop').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#27AE60').setTitle(`🛒 Toko Tambang — ${username}`).setDescription(desc)
+        .setFooter({ text: 'Upgrade pickaxe = stamina lebih hemat, yield lebih banyak, gali lebih dalam' });
     return { embeds: [embed], components };
 }
 
@@ -401,7 +422,8 @@ function buildGemsPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`mine_unsocket_${userId}`).setLabel('🧹 Lepas Semua Gem').setStyle(ButtonStyle.Secondary).setDisabled(socketed.length === 0),
         new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     ));
-    const embed = new EmbedBuilder().setColor('#8E44AD').setTitle('💎 Gem & Socket').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#8E44AD').setTitle(`💎 Gem & Socket — ${username}`).setDescription(desc)
+        .setFooter({ text: 'Socket gem ke pickaxe untuk bonus permanen saat menambang' });
     return { embeds: [embed], components };
 }
 
@@ -794,13 +816,15 @@ async function handleMiningSelectMenu(interaction) {
             return interaction.reply({ content: `❌ Bar kurang! Butuh ${missing.qty}× ${md.emoji} ${md.name} (punya ${getMatCount(guildId, userId, missing.mat)}).`, ephemeral: true });
         }
         for (const i of recipe.inputs) removeMat(guildId, userId, i.mat, i.qty);
-        addItem(guildId, userId, recipe.id, 1);
+        if (recipe.out === 'mine') addOre(guildId, userId, recipe.id, 1);
+        else addItem(guildId, userId, recipe.id, 1);
         const row = getMiningData(guildId, userId);
         const lvl = addMiningExp(row, recipe.exp);
         saveMiningData(guildId, userId, row);
         incrementUserStat(guildId, userId, 'mining_items_smithed');
         const usedStr = recipe.inputs.map(i => `${i.qty}× ${getMaterialDef(i.mat).emoji}`).join(' + ');
-        let d = `🔨 Berhasil menempa **${recipe.emoji} ${recipe.name}**!\n\n> 🔩 Pakai: ${usedStr}\n> 📦 Masuk inventory — *${recipe.desc}*\n> ✨ +${recipe.exp} Mining EXP`;
+        const dest = recipe.out === 'mine' ? '⛏️ Masuk kantong tambang' : '📦 Masuk inventory';
+        let d = `🔨 Berhasil menempa **${recipe.emoji} ${recipe.name}**!\n\n> 🔩 Pakai: ${usedStr}\n> ${dest} — *${recipe.desc}*\n> ✨ +${recipe.exp} Mining EXP`;
         if (lvl.leveledUp) d += `\n> 🎉 **LEVEL UP!** → Lv.${lvl.newLevel}`;
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🔨 Tempa Selesai').setDescription(d);
         const r = new ActionRowBuilder().addComponents(
