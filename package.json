@@ -1,6 +1,6 @@
 {
   "name": "discord-economy-bot",
-  "version": "3.1.0",
+  "version": "3.4.0",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
+    "cors": "^2.8.6",
     "discord.js": "^14.26.4",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "express": "^4.22.2"
   }
 }
