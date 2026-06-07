@@ -10,12 +10,13 @@ const path = require('path');
 function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
 
 // ============ BOT OWNER CONFIG ============
-// Hanya ID ini yang bisa menggunakan SEMUA fitur Money (Add, Take, Set, Add/Remove Banker).
-// Admin server biasa TIDAK bisa menggunakan fitur Money sama sekali.
-const BOT_OWNER_ID = '515920253910253569';
+// Hanya pemilik bot yang bisa pakai SEMUA fitur Money & membuat Voucher.
+// Daftar owner dari env BOT_OWNER_IDS / ADMIN_IDS (koma-pisah), fallback ke ID default.
+const OWNER_IDS = (process.env.BOT_OWNER_IDS || process.env.ADMIN_IDS || '515920253910253569')
+    .split(',').map(s => s.trim()).filter(Boolean);
 
 function isBotOwner(userId) {
-    return userId === BOT_OWNER_ID;
+    return OWNER_IDS.includes(String(userId));
 }
 
 // ============ HELPER: Check admin permission ============
@@ -375,6 +376,7 @@ async function handleAdminButton(interaction) {
 
     // === SHOP: Voucher (Modal) ===
     if (customId === 'admpnl_shop_voucher') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '\u26d4 Voucher hanya bisa dibuat oleh **pemilik bot**.', flags: 1 << 6 });
         const modal = new ModalBuilder().setCustomId('admpnl_modal_voucher').setTitle('\ud83c\udf9f\ufe0f Create Voucher');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('voucher_code').setLabel('Kode Voucher').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: PROMO2024')),
@@ -636,6 +638,7 @@ async function handleAdminModal(interaction) {
 
     // === CREATE VOUCHER ===
     if (customId === 'admpnl_modal_voucher') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '\u26d4 Voucher hanya bisa dibuat oleh **pemilik bot**.', flags: 1 << 6 });
         const code = interaction.fields.getTextInputValue('voucher_code').toUpperCase();
         const reward = parseInt(interaction.fields.getTextInputValue('voucher_reward'));
         const limit = parseInt(interaction.fields.getTextInputValue('voucher_limit'));
