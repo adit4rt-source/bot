@@ -1,6 +1,6 @@
 {
   "name": "discord-economy-bot",
-  "version": "3.1.0",
+  "version": "3.4.0",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
