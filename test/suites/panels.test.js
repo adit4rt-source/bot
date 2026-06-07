@@ -72,4 +72,50 @@ module.exports = function register() {
   h('profile:inventory', botRequire('systems/profilePanel.js'), 'handleProfileButton', `profpnl_inventory_${U}`);
   h('casino:coinflip', casino, 'handleCasinoButton', `casino_coinflip_${U}`);
   h('casino:slot', casino, 'handleCasinoButton', `casino_slot_${U}`);
+
+  // ===== SELF ROLES =====
+  const selfRoles = botRequire('systems/selfRoles.js');
+  const srPanel = botRequire('systems/selfRolePanel.js');
+
+  panel('selfRolePanel.buildAdminPanel', () => srPanel.buildAdminPanel(G, U, { name: 'TestGuild' }));
+
+  test('selfrole: create menu + add option + public message', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'Notif Roles', description: 'pilih', type: 'multi' });
+    const add = selfRoles.addOption(menuId, { roleId: 'role_news', label: 'News', emoji: '📰', description: 'berita' });
+    if (!add.ok) throw new Error('option not added');
+    const dup = selfRoles.addOption(menuId, { roleId: 'role_news' });
+    if (dup.ok) throw new Error('duplicate role should be rejected');
+    const menu = selfRoles.getMenu(G, menuId);
+    const msg = selfRoles.buildPublicMessage(menu, selfRoles.getOptions(menuId), { roles: { cache: new Map() } });
+    if (!msg.embeds[0].data.title) throw new Error('public message missing title');
+    if (!msg.components.length) throw new Error('public message missing select component');
+    if (msg.components[0].components[0].data.custom_id !== `srpick_${menuId}`) throw new Error('wrong select customId');
+  });
+
+  test('selfrole: normalizeEmoji rejects multi-grapheme, keeps single + custom', () => {
+    if (selfRoles.normalizeEmoji('📰') !== '📰') throw new Error('single emoji should pass');
+    if (selfRoles.normalizeEmoji('<:foo:123>') !== '<:foo:123>') throw new Error('custom emoji should pass');
+    if (selfRoles.normalizeEmoji('ab') !== null) throw new Error('multi-char should be null');
+  });
+
+  test('selfrole: public pick toggles role (acknowledges)', () => {
+    const menuId = selfRoles.createMenu(G, { title: 'Pick', type: 'multi' });
+    selfRoles.addOption(menuId, { roleId: 'role_abc' });
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srpick_${menuId}`, values: ['role_abc'] });
+    return Promise.resolve(selfRoles.handleSelfRolePick(it)).then(() => {
+      if (!it._cap.reply) throw new Error('did not acknowledge');
+    });
+  });
+
+  test('selfrole: create modal submit creates a menu (acknowledges)', () => {
+    const before = selfRoles.getMenus(G).length;
+    const it = mockInteraction({ userId: U, guildId: G, customId: `srmod_create_${U}`, fields: { sr_title: 'From Modal', sr_desc: '', sr_type: 'unique' } });
+    it.isModalSubmit = () => true;
+    return Promise.resolve(srPanel.handleSelfRoleModal(it)).then(() => {
+      if (!it._cap.reply) throw new Error('did not acknowledge');
+      if (selfRoles.getMenus(G).length !== before + 1) throw new Error('menu not created');
+    });
+  });
+
+  h('selfrole: addrole button shows role select', srPanel, 'handleSelfRoleButton', `sradm_addrole_1_${U}`);
 };

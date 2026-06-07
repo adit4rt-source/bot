@@ -32,6 +32,8 @@ const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('.
 const { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton } = require('../systems/leaderboard');
 const { handleInviteCommand, handleInviteButton, isInvitePanelButton } = require('../systems/invitePanel');
 const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton } = require('../systems/welcomerPanel');
+const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handleSelfRoleRoleSelect, handleSelfRoleChannelSelect, handleSelfRoleModal, isSelfRolePanelButton, isSelfRolePanelSelect, isSelfRoleRoleSelect, isSelfRoleChannelSelect, isSelfRolePanelModal } = require('../systems/selfRolePanel');
+const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
@@ -638,6 +640,11 @@ async function routeInteraction(interaction) {
             return handleWelcomerCommand(interaction);
         }
 
+        // ================= SELF-ROLES PANEL =================
+        if (command === 'selfrole') {
+            return handleSelfRoleCommand(interaction);
+        }
+
         // ================= TEMPVOICE PANEL =================
         if (command === 'tempvoice') {
             return handleTempvoiceCommand(interaction);
@@ -711,8 +718,34 @@ async function routeInteraction(interaction) {
         return; // no other user-select menus yet
     }
 
+    // ================= ROLE SELECT MENU HANDLERS =================
+    if (interaction.isRoleSelectMenu && interaction.isRoleSelectMenu()) {
+        if (isSelfRoleRoleSelect(interaction.customId)) {
+            return handleSelfRoleRoleSelect(interaction);
+        }
+        return;
+    }
+
+    // ================= CHANNEL SELECT MENU HANDLERS =================
+    if (interaction.isChannelSelectMenu && interaction.isChannelSelectMenu()) {
+        if (isSelfRoleChannelSelect(interaction.customId)) {
+            return handleSelfRoleChannelSelect(interaction);
+        }
+        return;
+    }
+
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
+        // --- SELF-ROLES: public role picker (any member) ---
+        if (isSelfRolePublicPick(interaction.customId)) {
+            return handleSelfRolePick(interaction);
+        }
+
+        // --- SELF-ROLES: admin panel selects ---
+        if (isSelfRolePanelSelect(interaction.customId)) {
+            return handleSelfRoleSelect(interaction);
+        }
+
         // --- FISHING PANEL SELECT MENUS ---
         if (isFishingPanelSelectMenu(interaction.customId)) {
             return handleFishingSelectMenu(interaction);
@@ -1051,6 +1084,11 @@ async function routeInteraction(interaction) {
             return handleWelcomerButton(interaction);
         }
 
+        // --- SELF-ROLES PANEL BUTTONS ---
+        if (isSelfRolePanelButton(interaction.customId)) {
+            return handleSelfRoleButton(interaction);
+        }
+
         // --- TEMPVOICE PANEL BUTTONS ---
         if (isTempvoicePanelButton(interaction.customId)) {
             return handleTempvoiceButton(interaction);
@@ -1371,6 +1409,11 @@ async function routeInteraction(interaction) {
         // --- GLOBAL MARKET MODAL ---
         if (isGlobalMarketModal(interaction.customId)) {
             return handleGlobalMarketModal(interaction);
+        }
+
+        // --- SELF-ROLES PANEL MODALS ---
+        if (isSelfRolePanelModal(interaction.customId)) {
+            return handleSelfRoleModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }

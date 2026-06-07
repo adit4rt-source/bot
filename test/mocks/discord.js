@@ -46,6 +46,21 @@ class UserSelectMenuBuilder {
   setMinValues(n){ this.data.min = n; return this; }
   setMaxValues(n){ this.data.max = n; return this; }
 }
+class RoleSelectMenuBuilder {
+  constructor(){ this.data = {}; }
+  setCustomId(id){ this.data.custom_id = id; return this; }
+  setPlaceholder(p){ this.data.placeholder = p; return this; }
+  setMinValues(n){ this.data.min = n; return this; }
+  setMaxValues(n){ this.data.max = n; return this; }
+}
+class ChannelSelectMenuBuilder {
+  constructor(){ this.data = {}; }
+  setCustomId(id){ this.data.custom_id = id; return this; }
+  setPlaceholder(p){ this.data.placeholder = p; return this; }
+  setChannelTypes(...t){ this.data.channel_types = t.flat(); return this; }
+  setMinValues(n){ this.data.min = n; return this; }
+  setMaxValues(n){ this.data.max = n; return this; }
+}
 class StringSelectMenuOptionBuilder {
   constructor(){ this.data = {}; }
   setLabel(l){ this.data.label = l; return this; }
@@ -64,6 +79,7 @@ class Collection extends Map {}
 module.exports = {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder,
   StringSelectMenuBuilder, UserSelectMenuBuilder, StringSelectMenuOptionBuilder,
+  RoleSelectMenuBuilder, ChannelSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle,
   ButtonStyle, ChannelType, PermissionsBitField, Collection,
 };

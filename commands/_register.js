@@ -54,6 +54,10 @@ const commands = [
         .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
     new SlashCommandBuilder().setName('tempvoice').setDescription('🎙️ Tempvoice Panel — Buat & kelola private voice channel'),
+    new SlashCommandBuilder()
+        .setName('selfrole')
+        .setDescription('🎭 Self-Roles Panel — Buat menu pilih role sendiri (dropdown)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
