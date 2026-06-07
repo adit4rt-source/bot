@@ -3,6 +3,8 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { db } = require('../database');
 const { generateCard } = require('./welcomeCard');
+const { generateRpgCard } = require('./welcomeCardRpg');
+const { generateGlitchCard } = require('./welcomeCardGlitch');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
@@ -25,9 +27,9 @@ function getAllWelcomerSettings(guildId) {
         'welcome_embed_title', 'welcome_embed_thumbnail', 'welcome_embed_image',
         'welcome_dm_enabled', 'welcome_dm_message',
         'welcome_autorole', 'welcome_autorole_delay',
-        'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text',
+        'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text', 'welcome_banner_style',
         'goodbye_enabled', 'goodbye_channel', 'goodbye_message', 'goodbye_embed_color',
-        'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text',
+        'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text', 'goodbye_banner_style',
     ];
     const defaults = {
         welcome_enabled: '0',
@@ -44,6 +46,7 @@ function getAllWelcomerSettings(guildId) {
         welcome_banner_enabled: '0',
         welcome_banner_bg: '',
         welcome_banner_text: 'WELCOME',
+        welcome_banner_style: 'glitch',
         goodbye_enabled: '0',
         goodbye_channel: '',
         goodbye_message: '👋 **{user.name}** telah meninggalkan server. (Member: **{server.memberCount}**)',
@@ -51,6 +54,7 @@ function getAllWelcomerSettings(guildId) {
         goodbye_banner_enabled: '0',
         goodbye_banner_bg: '',
         goodbye_banner_text: 'GOODBYE',
+        goodbye_banner_style: 'glitch',
     };
     const settings = {};
     for (const key of keys) {
@@ -86,24 +90,66 @@ async function buildBannerAttachment(member, type) {
 
     try {
         const bgURL = getWelcomerSetting(guildId, `${prefix}_banner_bg`, '');
-        const headline = getWelcomerSetting(guildId, `${prefix}_banner_text`, type === 'goodbye' ? 'GOODBYE' : 'WELCOME');
+        const style = getWelcomerSetting(guildId, `${prefix}_banner_style`, 'glitch');
         const accent = getWelcomerSetting(guildId, `${prefix}_embed_color`, type === 'goodbye' ? '#FF6B6B' : '#5865F2');
         const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
-
-        // Subtitle line under the username (server context).
         const memberCount = member.guild.memberCount;
-        const subtitle = type === 'goodbye'
-            ? `Sekarang ada ${memberCount} anggota • ${member.guild.name}`
-            : `Anggota ke-${memberCount} • ${member.guild.name}`;
+        const username = member.displayName || member.user.username;
 
-        const buffer = await generateCard({
-            headline: replaceVariables(headline, member),
-            username: member.displayName || member.user.username,
-            subtitle,
-            avatarURL,
-            bgURL,
-            accent,
-        });
+        let buffer;
+        if (style === 'glitch') {
+            // Webcore / glitch directory card.
+            const tagline = getWelcomerSetting(guildId, `${prefix}_banner_text`, type === 'goodbye' ? 'until next time' : 'take my whole life too');
+            buffer = await generateGlitchCard({
+                label: type === 'goodbye' ? '. co / goodbye' : '. co / welcome',
+                username,
+                line2: type === 'goodbye' ? `member left` : `member #${memberCount}`,
+                line3: type === 'goodbye' ? 'just left' : 'just joined',
+                acLabel: 'SERVER',
+                acText: member.guild.name,
+                caution: type === 'goodbye'
+                    ? 'Take care out there. The door is always open.'
+                    : 'Please read the rules and be kind to everyone here.',
+                tagline: replaceVariables(tagline, member),
+                button: type === 'goodbye' ? 'FAREWELL' : 'GO TO MAIN',
+                avatarURL,
+                bgURL,
+                accent,
+            });
+        } else if (style === 'rpg') {
+            // RPG adventurer profile card.
+            const defaultHead = type === 'goodbye' ? 'FAREWELL ADVENTURER' : 'NEW ADVENTURER';
+            const headline = getWelcomerSetting(guildId, `${prefix}_banner_text`, defaultHead);
+            buffer = await generateRpgCard({
+                headline: replaceVariables(headline, member),
+                username,
+                className: type === 'goodbye' ? 'Telah Pergi' : 'Petualang Baru',
+                subtitle: type === 'goodbye'
+                    ? `Party • ${memberCount} petualang tersisa • ${member.guild.name}`
+                    : `Party • Petualang ke-${memberCount} • ${member.guild.name}`,
+                level: type === 'goodbye' ? '—' : 1,
+                hpPct: type === 'goodbye' ? 0 : 1,
+                mpPct: type === 'goodbye' ? 0 : 1,
+                expPct: type === 'goodbye' ? 1 : 0.08,
+                avatarURL,
+                bgURL,
+                accent,
+            });
+        } else {
+            // Classic polished banner.
+            const headline = getWelcomerSetting(guildId, `${prefix}_banner_text`, type === 'goodbye' ? 'GOODBYE' : 'WELCOME');
+            const subtitle = type === 'goodbye'
+                ? `Sekarang ada ${memberCount} anggota • ${member.guild.name}`
+                : `Anggota ke-${memberCount} • ${member.guild.name}`;
+            buffer = await generateCard({
+                headline: replaceVariables(headline, member),
+                username,
+                subtitle,
+                avatarURL,
+                bgURL,
+                accent,
+            });
+        }
         return new AttachmentBuilder(buffer, { name: `${prefix}.png` });
     } catch (e) {
         console.error(`[welcomer] Gagal generate ${prefix} banner:`, e.message);
