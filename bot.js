@@ -285,6 +285,7 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) => {
+    log('INFO', `[event] GuildMemberAdd: ${member.user.tag} bergabung ke ${member.guild?.name} (${member.guild?.id})`);
     await handleInviteJoin(member);
     await handleWelcome(member);
 }));

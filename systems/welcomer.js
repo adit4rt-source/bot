@@ -3,6 +3,8 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { db } = require('../database');
 const { generateCard } = require('./welcomeCard');
+let log;
+try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
 // ==================== DATABASE SETUP ====================
 db.exec(`CREATE TABLE IF NOT EXISTS welcomer_settings (guildId TEXT, key TEXT, value TEXT, PRIMARY KEY(guildId, key))`);
@@ -115,7 +117,10 @@ async function handleWelcome(member) {
     const guildId = member.guild.id;
 
     const enabled = getWelcomerSetting(guildId, 'welcome_enabled', '0');
-    if (enabled !== '1') return;
+    if (enabled !== '1') {
+        log('INFO', `[welcomer] Join ${member.user.tag} di ${guildId} diabaikan: welcome_enabled != 1 (nilai="${enabled}"). Aktifkan via Dashboard/DB.`);
+        return;
+    }
 
     // Send welcome message to channel
     const channelId = getWelcomerSetting(guildId, 'welcome_channel', '');
@@ -139,13 +144,18 @@ async function handleWelcome(member) {
 
             // Banner image (generated) takes priority for the embed image when enabled
             const banner = await buildBannerAttachment(member, 'welcome');
+            const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
             if (banner) {
                 embed.setImage('attachment://welcome.png');
-                channel.send({ content: `<@${member.id}>`, embeds: [embed], files: [banner] }).catch(() => {});
+                channel.send({ content: `<@${member.id}>`, embeds: [embed], files: [banner] }).catch(onErr);
             } else {
-                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(() => {});
+                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
             }
+        } else {
+            log('WARN', `[welcomer] welcome_channel="${channelId}" tidak ditemukan di guild ${guildId} (channel dihapus / bot tidak melihatnya).`);
         }
+    } else {
+        log('WARN', `[welcomer] welcome aktif tapi welcome_channel belum diset di guild ${guildId}.`);
     }
 
     // Send DM if enabled
