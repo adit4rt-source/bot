@@ -10,6 +10,7 @@
     "node": "20.x || 22.x"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.0",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "discord.js": "^14.26.4",
