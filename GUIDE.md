@@ -4,6 +4,18 @@
 
 ---
 
+## 📚 PANDUAN DETAIL PER FITUR
+
+Panduan mendalam untuk fitur kompleks ada di file terpisah:
+
+| Fitur | File | Isi |
+|---|---|---|
+| 🐾 **Pet System** | [GUIDE-PET.md](GUIDE-PET.md) | Bonus pasif, battle, element, dungeon, expedition, fusion, evolution, abilities, awakening |
+
+> Dokumen di bawah ini adalah ringkasan umum semua fitur.
+
+---
+
 ## 📋 DAFTAR ISI
 
 1. [Ekonomi & Money](#-ekonomi--money)
