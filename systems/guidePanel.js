@@ -96,6 +96,7 @@ const SECTIONS = {
             `> Common 3rb/90% · Uncommon 10rb/75% · Rare 30rb/60%\n` +
             `> Epic 80rb/45% · Legendary 200rb/30%\n` +
             `> ⚠️ Gagal = kehilangan 1 pet acak (biaya tetap kepotong).\n\n` +
+            `${DIV}\n**♻️ Release Pet** — lepas pet non-aktif dari 📦 Collection → dapat refund money sesuai tier (wajib konfirmasi; pet aktif/hunting/ekspedisi tidak bisa dilepas).\n\n` +
             `${DIV}\n**📿 Relic & Refine** — relic (Weapon/Armor/Accessory) drop dari Dungeon/Boss, kasih +stats.\n` +
             `> Upgrade pakai 🪨 Refine Stone; 🛡️ Protection Stone cegah turun level saat gagal.\n\n` +
             `${DIV}\n**💎 Abilities** (pasif, 3 slot, swap CD 24 jam)\n` +

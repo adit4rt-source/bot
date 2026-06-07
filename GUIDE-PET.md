@@ -215,6 +215,23 @@ Gabung **2 pet tier sama** (harus non-aktif) → 1 pet **tier lebih tinggi**:
 
 ---
 
+## 12b. Release Pet ♻️
+
+Lepas pet yang nggak dipakai dari **📦 Collection → ♻️ Release** → dapat **refund money** sesuai tier:
+
+| Tier | Refund | Tier | Refund |
+|---|---|---|---|
+| ⚪ Common | 100 | 🟡 Legendary | 25.000 |
+| 🟢 Uncommon | 500 | 🔴 Mythic | 50.000 |
+| 🔵 Rare | 2.500 | 🟪 Secret | 125.000 |
+| 🟣 Epic | 10.000 | 👑 GOD | 250.000 |
+
+- ❌ Pet **aktif / hunting / ekspedisi** tidak bisa dilepas (swap dulu).
+- ✅ Wajib **konfirmasi**; tier Legendary ke atas ada peringatan ekstra 🚨.
+- ⚠️ Pet yang dilepas **hilang permanen**.
+
+---
+
 ## 13. Relic & Refine
 
 Relic (Weapon / Armor / Accessory) drop dari Dungeon/Boss, kasih +ATK/DEF/SPD/CRIT. **Refine** pakai 🪨 Refine Stone untuk upgrade (+1). Setelah +10 rate turun; 🛡️ Protection Stone mencegah turun level saat gagal.

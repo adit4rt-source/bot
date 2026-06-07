@@ -14,6 +14,22 @@ const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
 const ui = require('./ui');
 
+// ============ Release Pet: refund per tier (money) ============
+const PET_RELEASE_REFUND = { Common: 100, Uncommon: 500, Rare: 2500, Epic: 10000, Legendary: 25000, Mythic: 50000, Secret: 125000, God: 250000 };
+const RARE_RELEASE_TIERS = ['Legendary', 'Mythic', 'Secret', 'God'];
+// Cek apakah pet boleh dilepas (tidak aktif, tidak hunting, tidak ekspedisi). Return {ok, reason}.
+function canReleasePet(guildId, userId, pet) {
+    if (!pet) return { ok: false, reason: '❌ Pet tidak ditemukan!' };
+    if (pet.active === 1) return { ok: false, reason: '❌ Tidak bisa lepas pet **aktif**! Swap ke pet lain dulu.' };
+    if (pet.hunting_until && pet.hunting_until > Date.now()) return { ok: false, reason: '❌ Pet sedang **Hunting**! Tunggu selesai dulu.' };
+    try {
+        const { getActiveExpedition } = require('./expedition');
+        const exp = getActiveExpedition(guildId, userId);
+        if (exp && exp.petId === pet.id) return { ok: false, reason: '❌ Pet sedang **Ekspedisi**! Tunggu selesai dulu.' };
+    } catch (e) {}
+    return { ok: true };
+}
+
 // ============ HELPER: Reward & loot for dungeon/boss ============
 // Scaling reward per level pet: reward * (1 + level/200) → Lv50 ×1.25, Lv100 ×1.5, Lv150 ×1.75
 function applyLevelScaling(reward, level) {
@@ -498,6 +514,7 @@ async function handlePetButton(interaction) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_swap_${userId}`).setLabel('🔄 Swap Pet').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`pet_dex_Common_${userId}`).setLabel('📖 Pet Dex').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_release_${userId}`).setLabel('♻️ Release').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
@@ -568,6 +585,59 @@ async function handlePetButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row1, row2, row3] });
     }
 
+
+    // === RELEASE (pilih pet untuk dilepas) ===
+    if (action === 'release') {
+        const allPets = getAllPets(guildId, userId);
+        const releasable = allPets.filter(p => p.active !== 1);
+        if (releasable.length === 0) return interaction.reply({ content: '❌ Tidak ada pet yang bisa dilepas! Pet **aktif** tidak bisa dilepas — swap ke pet lain dulu.', ephemeral: true });
+        const tierRank = { God: 0, Secret: 1, Mythic: 2, Legendary: 3, Epic: 4, Rare: 5, Uncommon: 6, Common: 7 };
+        const sorted = releasable.sort((a, b) => (tierRank[PET_DATA.find(p => p.id === b.petId)?.tier] ?? 9) - (tierRank[PET_DATA.find(p => p.id === a.petId)?.tier] ?? 9));
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_release_select_${userId}`)
+            .setPlaceholder('♻️ Pilih pet untuk dilepas...')
+            .setMinValues(1).setMaxValues(1);
+        sorted.slice(0, 25).forEach(pet => {
+            const def = PET_DATA.find(p => p.id === pet.petId);
+            const tier = def ? def.tier : 'Common';
+            const refund = PET_RELEASE_REFUND[tier] || 0;
+            menu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`#${pet.id} ${pet.name} (Lv.${pet.level}) — ${tier}`)
+                .setValue(pet.id.toString())
+                .setDescription(`Refund 🪙${refund.toLocaleString('id-ID')}`));
+        });
+        const embed = new EmbedBuilder().setTitle('♻️ Release Pet').setColor('#E74C3C')
+            .setDescription('Pilih pet yang mau dilepas — kamu dapat **refund** sesuai tier.\n\n> ⚠️ Pet yang dilepas **HILANG PERMANEN**!\n> ⭐ Pet aktif tidak muncul di sini (swap dulu kalau mau dilepas).');
+        const row1 = new ActionRowBuilder().addComponents(menu);
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+    }
+
+    // === RELEASE CONFIRM (eksekusi setelah konfirmasi) ===
+    if (action === 'relconf') {
+        const petId = parseInt(parts[2]);
+        const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petId, guildId, userId);
+        const check = canReleasePet(guildId, userId, pet);
+        if (!check.ok) return interaction.reply({ content: check.reason, ephemeral: true });
+        const def = PET_DATA.find(p => p.id === pet.petId);
+        const tier = def ? def.tier : 'Common';
+        const refund = PET_RELEASE_REFUND[tier] || 0;
+        db.prepare('DELETE FROM pets WHERE id = ? AND guildId = ? AND userId = ?').run(petId, guildId, userId);
+        if (refund > 0) {
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(refund, guildId, userId);
+            addIncome(guildId, userId, 'release', refund);
+        }
+        const fresh = getOrCreateUser(guildId, userId);
+        const embed = new EmbedBuilder().setColor('#95A5A6').setTitle('♻️ Pet Dilepas')
+            .setDescription(`${def ? def.emoji : '🐾'} **${pet.name}** (${tier}) telah dilepas ke alam bebas. 👋\n\n> 🪙 Refund: **+${refund.toLocaleString('id-ID')}**\n> 💳 Saldo: **${fresh.balance.toLocaleString('id-ID')}**`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('📦 Collection').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
 
     // === SWAP (select menu of owned pets) ===
     if (action === 'swap') {
@@ -925,6 +995,28 @@ async function handlePetSelectMenu(interaction) {
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali ke Panel').setStyle(ButtonStyle.Success)
         );
         return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // === RELEASE SELECT (konfirmasi sebelum lepas) ===
+    if (customId.startsWith('pet_release_select_')) {
+        const petDbId = parseInt(interaction.values[0]);
+        const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(petDbId, guildId, userId);
+        const check = canReleasePet(guildId, userId, pet);
+        if (!check.ok) return interaction.reply({ content: check.reason, ephemeral: true });
+        const def = PET_DATA.find(p => p.id === pet.petId);
+        const tier = def ? def.tier : 'Common';
+        const refund = PET_RELEASE_REFUND[tier] || 0;
+        const isRare = RARE_RELEASE_TIERS.includes(tier);
+        let desc = `${def ? def.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) — *${tier}*\n\n` +
+            `> 🪙 Refund: **+${refund.toLocaleString('id-ID')}**\n` +
+            `> ⚠️ Pet ini akan **HILANG PERMANEN** dan tidak bisa dikembalikan!`;
+        if (isRare) desc = `🚨 **PERHATIAN — PET LANGKA!** 🚨\n\n` + desc + `\n\n> ‼️ Yakin lepas pet **${tier}** ini? Tindakan ini tidak bisa di-undo!`;
+        const embed = new EmbedBuilder().setColor(isRare ? '#FF0000' : '#E74C3C').setTitle('♻️ Konfirmasi Release').setDescription(desc);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_relconf_${pet.id}_${userId}`).setLabel(isRare ? '🚨 YA, LEPAS PET LANGKA' : '♻️ Ya, Lepas').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('❌ Batal').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === DUNGEON SELECT ===
