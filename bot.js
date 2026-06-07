@@ -55,11 +55,68 @@ const { log, wrapHandler } = require('./systems/logger');
             fs.copyFileSync(DB_PATH, path.join(ROOT, safety));
             log('WARN', `[AUTO-RESTORE] Backup kondisi DB sekarang -> ${safety}`);
         }
+        // PENTING: hapus sidecar WAL/SHM lama sebelum menimpa DB. Kalau tidak, SQLite
+        // akan menerapkan WAL basi (dari DB lama) ke DB baru -> "disk image is malformed".
+        for (const ext of ['-wal', '-shm', '-journal']) {
+            try { if (fs.existsSync(DB_PATH + ext)) fs.unlinkSync(DB_PATH + ext); } catch (e) {}
+        }
         fs.copyFileSync(src, DB_PATH);
+        // Pastikan sidecar dari file backup (jika ikut) juga bersih.
+        for (const ext of ['-wal', '-shm', '-journal']) {
+            try { if (fs.existsSync(DB_PATH + ext)) fs.unlinkSync(DB_PATH + ext); } catch (e) {}
+        }
         log('INFO', `[AUTO-RESTORE] economy.sqlite dipulihkan dari: ${path.relative(ROOT, src)}`);
         log('WARN', `[AUTO-RESTORE] KOSONGKAN env RESTORE_BACKUP sekarang agar tidak restore lagi tiap restart!`);
     } catch (e) {
         log('ERROR', `[AUTO-RESTORE] Gagal: ${e.message}. Start normal tanpa restore.`);
+    }
+})();
+
+// ================= AUTO-RECOVERY (DB korup -> pakai backup sehat terbaru) =================
+// Cek integritas economy.sqlite. Kalau "malformed"/korup, cari backup economy_* yang
+// LULUS PRAGMA integrity_check (terbaru dulu) lalu pakai itu. Sidecar WAL/SHM dibersihkan.
+(function autoRecoverCorruptDb() {
+    const fs = require('fs');
+    const path = require('path');
+    const ROOT = __dirname;
+    const DB_PATH = path.join(ROOT, 'economy.sqlite');
+    const Database = require('better-sqlite3');
+
+    function isHealthy(file) {
+        let d;
+        try {
+            d = new Database(file, { readonly: true });
+            const r = d.pragma('integrity_check', { simple: true });
+            d.close();
+            return r === 'ok';
+        } catch (e) { try { if (d) d.close(); } catch (_) {} return false; }
+    }
+
+    function cleanSidecar(p) { for (const ext of ['-wal', '-shm', '-journal']) { try { if (fs.existsSync(p + ext)) fs.unlinkSync(p + ext); } catch (e) {} } }
+
+    try {
+        if (!fs.existsSync(DB_PATH)) return;
+        if (isHealthy(DB_PATH)) return; // DB sehat, tidak perlu recovery
+
+        log('ERROR', '[AUTO-RECOVERY] economy.sqlite KORUP! Mencari backup sehat...');
+        // Kumpulkan kandidat backup (terbaru -> terlama)
+        const cands = [];
+        const bdir = path.join(ROOT, 'backups');
+        try { if (fs.existsSync(bdir)) for (const f of fs.readdirSync(bdir)) if (f.startsWith('economy_') && f.endsWith('.sqlite')) cands.push({ p: path.join(bdir, f), m: fs.statSync(path.join(bdir, f)).mtimeMs, rel: `backups/${f}` }); } catch (e) {}
+        try { for (const f of fs.readdirSync(ROOT)) if (f.startsWith('economy.backup-') && f.endsWith('.sqlite')) cands.push({ p: path.join(ROOT, f), m: fs.statSync(path.join(ROOT, f)).mtimeMs, rel: f }); } catch (e) {}
+        cands.sort((a, b) => b.m - a.m);
+
+        const healthy = cands.find(c => isHealthy(c.p));
+        if (!healthy) { log('ERROR', '[AUTO-RECOVERY] Tidak ada backup sehat ditemukan! Bot mungkin gagal start.'); return; }
+
+        // Simpan DB korup untuk forensik, lalu pulihkan dari backup sehat
+        try { fs.copyFileSync(DB_PATH, path.join(ROOT, `economy.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`)); } catch (e) {}
+        cleanSidecar(DB_PATH);
+        fs.copyFileSync(healthy.p, DB_PATH);
+        cleanSidecar(DB_PATH);
+        log('INFO', `[AUTO-RECOVERY] ✅ Dipulihkan dari backup sehat: ${healthy.rel} (${new Date(healthy.m).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB)`);
+    } catch (e) {
+        log('ERROR', `[AUTO-RECOVERY] Gagal: ${e.message}`);
     }
 })();
 
