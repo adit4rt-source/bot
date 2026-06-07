@@ -26,6 +26,7 @@ const commands = [
     new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
     new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
     new SlashCommandBuilder().setName('globalmarket').setDescription('🌍 Global Market — Jual beli item lintas server'),
+    new SlashCommandBuilder().setName('globaltrade').setDescription('🔄 Global Trade — Barter item lintas server'),
     new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
     new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
     new SlashCommandBuilder().setName('blackjack').setDescription('🃏 Blackjack — Main kartu 21')

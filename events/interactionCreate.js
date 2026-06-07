@@ -11,6 +11,7 @@ const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, 
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const ui = require('../systems/ui');
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
+const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
@@ -120,7 +121,7 @@ async function routeInteraction(interaction) {
         if (command === 'help') {
             const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor(ui.COLORS.info).setDescription('Selamat datang! 👋 Hampir semua fitur pakai **panel interaktif** — cukup jalankan command, lalu klik tombolnya. Gampang banget!\n\n💡 Baru pertama kali? Mulai dari `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
-                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli\n> \`/globalmarket\` — 🌍 Market lintas server`, inline: false },
+                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli\n> \`/globalmarket\` — 🌍 Market lintas server\n> \`/globaltrade\` — 🔄 Barter item lintas server`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
                 { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel lengkap\n> 13 Rod tier | 12 Bait | 8+ Lokasi | Giant Fish | Sea Monsters`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING & PETERNAKAN** (`/farm`)', inline: false },
@@ -512,6 +513,12 @@ async function routeInteraction(interaction) {
             return interaction.reply(panel);
         }
 
+        // ================= GLOBAL TRADE =================
+        if (command === 'globaltrade') {
+            const panel = buildGlobalTradePanel(guildId, interaction.user.id, interaction.user.username);
+            return interaction.reply(panel);
+        }
+
         // ================= EXPEDITION =================
         if (command === 'expedition') {
             const { buildExpeditionPanel } = require('../systems/expedition');
@@ -730,6 +737,11 @@ async function routeInteraction(interaction) {
         // --- GLOBAL MARKET SELECT MENUS ---
         if (isGlobalMarketSelectMenu(interaction.customId)) {
             return handleGlobalMarketSelectMenu(interaction);
+        }
+
+        // --- GLOBAL TRADE SELECT MENUS ---
+        if (isGlobalTradeSelect(interaction.customId)) {
+            return handleGlobalTradeSelect(interaction);
         }
 
         // --- TRADE PANEL SELECT MENUS ---
@@ -982,6 +994,11 @@ async function routeInteraction(interaction) {
         // --- GLOBAL MARKET BUTTONS ---
         if (isGlobalMarketButton(interaction.customId)) {
             return handleGlobalMarketButton(interaction);
+        }
+
+        // --- GLOBAL TRADE PANEL BUTTONS ---
+        if (isGlobalTradeButton(interaction.customId)) {
+            return handleGlobalTradeButton(interaction);
         }
 
         // --- STATS PANEL BUTTONS ---
