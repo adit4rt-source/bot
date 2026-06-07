@@ -9,8 +9,9 @@
 //   1. Env: MAINTENANCE_MODE=1  (set di Pterodactyl Startup, lalu restart)
 //   2. File penanda: buat file kosong bernama `.maintenance` di folder bot
 //
-// Cara mematikan: hapus env MAINTENANCE_MODE (atau set 0) / hapus file .maintenance,
-// lalu restart bot. Tidak ada kode fitur yang dihapus — semua balik normal.
+// Cara mematikan: set env MAINTENANCE_MODE=0 (paling gampang, override file penanda)
+// ATAU hapus file .maintenance, lalu restart bot. Tidak ada kode fitur yang dihapus —
+// semua balik normal.
 
 const fs = require('fs');
 const path = require('path');
@@ -22,7 +23,9 @@ const OWNER_IDS = (process.env.BOT_OWNER_IDS || process.env.ADMIN_IDS || '515920
     .split(',').map(s => s.trim()).filter(Boolean);
 
 function isMaintenance() {
-    if (String(process.env.MAINTENANCE_MODE || '').trim() === '1') return true;
+    const env = String(process.env.MAINTENANCE_MODE || '').trim();
+    if (env === '0' || env.toLowerCase() === 'false' || env.toLowerCase() === 'off') return false; // force OFF (override file)
+    if (env === '1') return true;
     try { if (fs.existsSync(FLAG_FILE)) return true; } catch (e) { /* ignore */ }
     return false;
 }
