@@ -831,6 +831,11 @@ async function handlePetSelectMenu(interaction) {
         const pClass = PET_CLASSES[Math.floor(Math.random() * PET_CLASSES.length)];
         const pElement = PET_ELEMENTS[Math.floor(Math.random() * PET_ELEMENTS.length)];
         db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt, class, element, hp, atk, def, spd, crit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, wonPet.id, wonPet.name, isFirst, Date.now(), pClass, pElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit);
+        // Achievement: pet obtained (tier firsts + distinct-collection milestones)
+        try {
+            const distinctPets = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+            await checkAchievements(interaction.guild, userId, { type: 'pet_obtain', tier: selectedTier, distinctPets });
+        } catch (e) { /* achievements must never block hatching */ }
         const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B', Secret: '#8B00FF', God: '#FF0000' };
         let title = '🥚 Egg Hatched!';
         if (selectedTier === 'God') title = '👑🌠 G O D   P E T !!!! 🌠👑';

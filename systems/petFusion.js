@@ -431,7 +431,11 @@ async function handleFusionButton(interaction) {
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
         );
 
-        checkAchievements(interaction.guild, userId, {});
+        // Achievement: pet obtained via fusion (tier firsts + collection milestones)
+        try {
+            const distinctPets = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+            await checkAchievements(interaction.guild, userId, { type: 'pet_obtain', tier: result.resultTier, distinctPets });
+        } catch (e) { /* never block fusion */ }
         return interaction.update({ embeds: [embed], components: [row] });
     }
 }

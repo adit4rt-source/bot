@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 102, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 110, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -131,6 +131,16 @@ const ACHIEVEMENTS = [
     { id: 'pvp_100', name: 'Warlord', emoji: '⚡', desc: 'Menang PvP 100 kali', category: 'Battle', reward: 5000 },
     { id: 'refine_10', name: 'Blacksmith', emoji: '🔨', desc: 'Refine relic 10 kali (sukses)', category: 'Battle', reward: 500 },
     { id: 'refine_max', name: 'Master Refiner', emoji: '✨', desc: 'Refine relic ke +20 (MAX)', category: 'Battle', reward: 5000 },
+    // --- PET COLLECTION ---
+    { id: 'pet_first', name: 'Pet Owner', emoji: '🐾', desc: 'Adopsi/tetaskan pet pertama', category: 'Pet', reward: 100 },
+    { id: 'pet_collect_10', name: 'Pet Collector', emoji: '🧺', desc: 'Kumpulkan 10 jenis pet berbeda', category: 'Pet', reward: 1000 },
+    { id: 'pet_collect_25', name: 'Pet Hoarder', emoji: '📦', desc: 'Kumpulkan 25 jenis pet berbeda', category: 'Pet', reward: 3000 },
+    { id: 'pet_collect_50', name: 'Beast Master', emoji: '🏅', desc: 'Kumpulkan 50 jenis pet berbeda', category: 'Pet', reward: 10000 },
+    { id: 'pet_legendary', name: 'Legendary Tamer', emoji: '🟡', desc: 'Dapatkan pet Legendary pertama', category: 'Pet', reward: 2000 },
+    { id: 'pet_mythic', name: 'Mythic Tamer', emoji: '🔴', desc: 'Dapatkan pet Mythic pertama', category: 'Pet', reward: 8000 },
+    { id: 'pet_secret', name: 'Secret Keeper', emoji: '🟪', desc: 'Dapatkan pet Secret pertama', category: 'Pet', reward: 25000 },
+    { id: 'pet_god', name: 'Divine Tamer', emoji: '👑', desc: 'Dapatkan pet GOD tier pertama', category: 'Pet', reward: 100000 },
+
 ];
 
 function hasAchievement(guildId, userId, achievementId) {
@@ -221,7 +231,7 @@ const ACHIEVEMENT_ROLES = [
     { minBadges: 30, name: '💎 Veteran', color: '#9B59B6' },
     { minBadges: 50, name: '🔥 Elite', color: '#E74C3C' },
     { minBadges: 70, name: '👑 Master', color: '#F1C40F' },
-    { minBadges: 102, name: '🏆 Completionist', color: '#FFFFFF' },
+    { minBadges: 110, name: '🏆 Completionist', color: '#FFFFFF' },
 ];
 
 async function updateAchievementRole(guild, userId, badgeCount) {
@@ -325,6 +335,18 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'boss_kill') { const c = getUserStat(guildId, userId, 'boss_kills'); if (c >= 1) checks.push('boss_first'); if (c >= 10) checks.push('boss_10'); if (c >= 50) checks.push('boss_50'); }
     if (context.type === 'pvp_win') { const c = getUserStat(guildId, userId, 'pvp_wins'); if (c >= 1) checks.push('pvp_first'); if (c >= 10) checks.push('pvp_10'); if (c >= 50) checks.push('pvp_50'); if (c >= 100) checks.push('pvp_100'); }
     if (context.type === 'refine_success') { const c = getUserStat(guildId, userId, 'refine_successes'); if (c >= 10) checks.push('refine_10'); if (context.maxRefine) checks.push('refine_max'); }
+    if (context.type === 'pet_obtain') {
+        // distinctPets = number of distinct petId owned (passed in by caller to avoid a query here)
+        const distinct = context.distinctPets || 0;
+        checks.push('pet_first');
+        if (distinct >= 10) checks.push('pet_collect_10');
+        if (distinct >= 25) checks.push('pet_collect_25');
+        if (distinct >= 50) checks.push('pet_collect_50');
+        if (context.tier === 'Legendary') checks.push('pet_legendary');
+        if (context.tier === 'Mythic') checks.push('pet_mythic');
+        if (context.tier === 'Secret') checks.push('pet_secret');
+        if (context.tier === 'God') checks.push('pet_god');
+    }
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 

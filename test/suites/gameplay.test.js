@@ -112,6 +112,34 @@ module.exports = function register() {
   const season = botRequire('systems/season.js');
   test('season: leaderboard + info do not throw', () => { season.getSeasonalLeaderboard(10); season.getSeasonInfo(); });
 
+  // ---- Pet collection achievements ----
+  const ach = botRequire('systems/achievements.js');
+  assert('ach: pet collection/tier achievements defined',
+    ['pet_first','pet_collect_10','pet_collect_50','pet_legendary','pet_mythic','pet_secret','pet_god']
+      .every(id => ach.ACHIEVEMENTS.some(a => a.id === id)));
+  assert('ach: Completionist milestone matches total achievement count',
+    ach.ACHIEVEMENT_MILESTONES.some(m => m.count === ach.ACHIEVEMENTS.length));
+  test('ach: obtaining a Secret pet grants pet_secret + pet_first', () => {
+    const U2 = '300000000000000009';
+    db.getOrCreateUser(G, U2);
+    db.db.prepare('DELETE FROM achievements WHERE userId = ?').run(U2);
+    const guild = { id: G, name: 'G', members: { fetch: async()=>null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() } };
+    return ach.checkAchievements(guild, U2, { type: 'pet_obtain', tier: 'Secret', distinctPets: 1 }).then(() => {
+      if (!ach.hasAchievement(G, U2, 'pet_first')) throw new Error('pet_first not granted');
+      if (!ach.hasAchievement(G, U2, 'pet_secret')) throw new Error('pet_secret not granted');
+    });
+  });
+  test('ach: obtaining 50 distinct pets grants pet_collect_50', () => {
+    const U3 = '300000000000000010';
+    db.getOrCreateUser(G, U3);
+    db.db.prepare('DELETE FROM achievements WHERE userId = ?').run(U3);
+    const guild = { id: G, name: 'G', members: { fetch: async()=>null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() } };
+    return ach.checkAchievements(guild, U3, { type: 'pet_obtain', tier: 'God', distinctPets: 50 }).then(() => {
+      if (!ach.hasAchievement(G, U3, 'pet_collect_50')) throw new Error('pet_collect_50 not granted');
+      if (!ach.hasAchievement(G, U3, 'pet_god')) throw new Error('pet_god not granted');
+    });
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {
