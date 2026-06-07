@@ -5,7 +5,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addItem, addIncome } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getPetData, addPetExp } = require('./pets');
+const { getPetData, addPetExp, ELEMENT_EMOJI } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
 
@@ -16,6 +16,7 @@ const EXPEDITION_ZONES = [
         name: '🌲 Jalan Hutan',
         emoji: '🌲',
         description: 'Jalur hutan yang tenang. Cocok untuk pemula.',
+        favoredElement: 'nature',
         minPetLevel: 1,
         duration: 2 * 60, // 2 jam (menit)
         rewards: {
@@ -33,6 +34,7 @@ const EXPEDITION_ZONES = [
         name: '🏔️ Gua Gunung',
         emoji: '🏔️',
         description: 'Gua gelap penuh mineral berharga.',
+        favoredElement: 'electric',
         minPetLevel: 10,
         duration: 3 * 60, // 3 jam
         rewards: {
@@ -51,6 +53,7 @@ const EXPEDITION_ZONES = [
         name: '🏛️ Reruntuhan Kuno',
         emoji: '🏛️',
         description: 'Bekas peradaban lama. Banyak artifact tersembunyi.',
+        favoredElement: 'light',
         minPetLevel: 25,
         duration: 4 * 60, // 4 jam
         rewards: {
@@ -70,6 +73,7 @@ const EXPEDITION_ZONES = [
         name: '🌊 Lautan Dalam',
         emoji: '🌊',
         description: 'Kedalaman laut yang misterius dan berbahaya.',
+        favoredElement: 'water',
         minPetLevel: 40,
         duration: 5 * 60, // 5 jam
         rewards: {
@@ -90,6 +94,7 @@ const EXPEDITION_ZONES = [
         name: '🌑 Shadow Realm',
         emoji: '🌑',
         description: 'Dimensi gelap. Hanya pet kuat yang bisa bertahan.',
+        favoredElement: 'dark',
         minPetLevel: 60,
         duration: 6 * 60, // 6 jam
         rewards: {
@@ -110,6 +115,7 @@ const EXPEDITION_ZONES = [
         name: '🗼 Menara Langit',
         emoji: '🗼',
         description: 'Puncak dunia. Reward luar biasa bagi yang berani.',
+        favoredElement: 'fire',
         minPetLevel: 100,
         duration: 8 * 60, // 8 jam
         rewards: {
@@ -151,6 +157,14 @@ function calculatePetBonus(pet) {
     const levelBonus = Math.floor(pet.level / 10) * 5; // +5% per 10 levels
     const luckBonus = Math.min(30, Math.floor(pet.level / 5)); // +1% luck per 5 levels (max 30%)
     return { levelBonus, luckBonus };
+}
+
+// ==================== HELPER: Zone element synergy ====================
+// Expedition identity: bawa pet yang SE-ELEMEN dengan tema zona untuk bonus pasif
+// (kebalikan dungeon yang butuh COUNTER elemen musuh).
+const SYNERGY_BONUS = { money: 0.25, drop: 15, exp: 0.20 };
+function hasZoneSynergy(pet, zone) {
+    return !!(pet && zone && zone.favoredElement && pet.element === zone.favoredElement);
 }
 
 // ==================== BUILD: Expedition Panel ====================
@@ -208,8 +222,11 @@ function buildExpeditionPanel(guildId, userId, username) {
 
     // No active expedition - show zone selection
     const { levelBonus, luckBonus } = calculatePetBonus(pet);
-    let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level})\n`;
+    const petEl = pet.element;
+    let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) ${petEl ? (ELEMENT_EMOJI[petEl] || '') : ''}\n`;
+    desc += `> 💤 *Misi AFK panjang — fokus **EXP & perbekalan**, tanpa risiko.*\n`;
     desc += `> 💪 Bonus Money: +**${levelBonus}%** | 🍀 Bonus Drop: +**${luckBonus}%**\n`;
+    desc += `> 🎯 Bawa pet **se-elemen** zona untuk **Synergy** (+25% money, +20% EXP, +15% drop)\n`;
     desc += `> 📊 Total Expeditions: **${totalExpeditions}**\n\n`;
     desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
     desc += `**📍 Pilih Zona Ekspedisi:**\n\n`;
@@ -218,7 +235,9 @@ function buildExpeditionPanel(guildId, userId, username) {
         const canEnter = pet.level >= zone.minPetLevel;
         const lock = canEnter ? '✅' : '🔒';
         const hours = Math.floor(zone.duration / 60);
-        desc += `${lock} ${zone.emoji} **${zone.name}** (Lv.${zone.minPetLevel}+)\n`;
+        const synTag = hasZoneSynergy(pet, zone) ? ' 🎯**SYNERGY!**' : '';
+        const zoneEl = zone.favoredElement ? (ELEMENT_EMOJI[zone.favoredElement] || '') : '';
+        desc += `${lock} ${zone.emoji} **${zone.name}** (Lv.${zone.minPetLevel}+) ${zoneEl}${synTag}\n`;
         desc += `> ⏱️ ${hours}j | 🪙 ${zone.rewards.moneyRange[0].toLocaleString('id-ID')}-${zone.rewards.moneyRange[1].toLocaleString('id-ID')} | ✨ ${zone.rewards.expRange[0]}-${zone.rewards.expRange[1]} EXP\n`;
     });
 
@@ -237,10 +256,11 @@ function buildExpeditionPanel(guildId, userId, username) {
     EXPEDITION_ZONES.forEach(zone => {
         const canEnter = pet.level >= zone.minPetLevel;
         const hours = Math.floor(zone.duration / 60);
+        const synTag = hasZoneSynergy(pet, zone) ? '🎯 SYNERGY! ' : '';
         zoneMenu.addOptions(new StringSelectMenuOptionBuilder()
             .setLabel(`${zone.name} (${hours}jam, Lv.${zone.minPetLevel}+)`)
             .setValue(zone.id)
-            .setDescription(canEnter ? `🪙${zone.rewards.moneyRange[0]}-${zone.rewards.moneyRange[1]} | ${zone.rewards.drops.length} possible drops` : `🔒 Butuh Pet Lv.${zone.minPetLevel}`)
+            .setDescription(canEnter ? `${synTag}🪙${zone.rewards.moneyRange[0]}-${zone.rewards.moneyRange[1]} | ${zone.rewards.drops.length} drops` : `🔒 Butuh Pet Lv.${zone.minPetLevel}`)
             .setEmoji(zone.emoji));
     });
 
@@ -301,18 +321,22 @@ function claimExpeditionRewards(guildId, userId) {
     if (!zone) return { success: false, message: '❌ Zona tidak valid!' };
 
     const { levelBonus, luckBonus } = calculatePetBonus(pet);
+    const synergy = hasZoneSynergy(pet, zone);
 
     // Calculate money reward
     let money = getRandomInt(zone.rewards.moneyRange[0], zone.rewards.moneyRange[1]);
     money = Math.floor(money * (1 + levelBonus / 100)); // Apply pet level bonus
+    if (synergy) money = Math.floor(money * (1 + SYNERGY_BONUS.money)); // Element synergy bonus
 
     // Calculate EXP reward
-    const exp = getRandomInt(zone.rewards.expRange[0], zone.rewards.expRange[1]);
+    let exp = getRandomInt(zone.rewards.expRange[0], zone.rewards.expRange[1]);
+    if (synergy) exp = Math.floor(exp * (1 + SYNERGY_BONUS.exp));
 
     // Calculate item drops
     const drops = [];
+    const synergyDrop = synergy ? SYNERGY_BONUS.drop : 0;
     for (const drop of zone.rewards.drops) {
-        const adjustedChance = Math.min(95, drop.chance + luckBonus);
+        const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop);
         if (Math.random() * 100 < adjustedChance) {
             drops.push(drop);
         }
@@ -341,7 +365,7 @@ function claimExpeditionRewards(guildId, userId) {
     incrementUserStat(guildId, userId, 'expedition_money_earned', money);
 
     // Mark expedition as complete
-    const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney });
+    const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney, synergy });
     db.prepare('UPDATE expeditions SET status = ?, rewards = ? WHERE id = ?').run('completed', rewardsData, activeExp.id);
 
     return {
@@ -350,6 +374,7 @@ function claimExpeditionRewards(guildId, userId) {
         exp,
         drops,
         doubleMoney,
+        synergy,
         expResult,
         zone,
         pet
@@ -406,6 +431,9 @@ async function handleExpeditionButton(interaction) {
         desc += `**🎁 REWARD:**\n\n`;
         desc += `> 🪙 Money: **+${result.money.toLocaleString('id-ID')}**${result.doubleMoney ? ' (**2x LUCKY!** 🍀)' : ''}\n`;
         desc += `> ✨ Pet EXP: **+${result.exp}**\n`;
+        if (result.synergy) {
+            desc += `> ${ELEMENT_EMOJI[result.zone.favoredElement] || '✨'} **ELEMENT SYNERGY!** +25% money, +20% EXP, +15% drop 🎯\n`;
+        }
 
         if (result.drops.length > 0) {
             desc += `\n**📦 Item Drops:**\n`;
@@ -533,18 +561,26 @@ async function handleExpeditionSelectMenu(interaction) {
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         const hours = Math.floor(zone.duration / 60);
         const { levelBonus, luckBonus } = calculatePetBonus(pet);
+        const synergy = hasZoneSynergy(pet, zone);
+        const zoneEl = zone.favoredElement ? (ELEMENT_EMOJI[zone.favoredElement] || '') : '';
+        const petEl = pet.element ? (ELEMENT_EMOJI[pet.element] || '') : '';
 
-        let dropList = zone.rewards.drops.map(d => `> ${d.emoji} ${d.name} (${Math.min(95, d.chance + luckBonus)}%)`).join('\n');
+        let dropList = zone.rewards.drops.map(d => `> ${d.emoji} ${d.name} (${Math.min(95, d.chance + luckBonus + (synergy ? SYNERGY_BONUS.drop : 0))}%)`).join('\n');
+
+        const synergyLine = synergy
+            ? `\n> 🎯 **ELEMENT SYNERGY AKTIF!** ${petEl}=${zoneEl} → +25% money, +20% EXP, +15% drop\n`
+            : `\n> ${zoneEl} Tema zona: **${zone.favoredElement || '-'}** — bawa pet se-elemen untuk **Synergy** bonus (pet kamu: ${petEl || '-'})\n`;
 
         const embed = new EmbedBuilder()
             .setTitle(`📍 Konfirmasi Ekspedisi`)
-            .setColor('#F39C12')
+            .setColor(synergy ? '#2ECC71' : '#F39C12')
             .setDescription(
-                `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) → ${zone.emoji} **${zone.name}**\n\n` +
-                `> ⏱️ Durasi: **${hours} jam**\n` +
+                `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}) → ${zone.emoji} **${zone.name}**\n` +
+                synergyLine +
+                `\n> ⏱️ Durasi: **${hours} jam**\n` +
                 `> 🪙 Money: **${zone.rewards.moneyRange[0].toLocaleString('id-ID')}** - **${zone.rewards.moneyRange[1].toLocaleString('id-ID')}** (+${levelBonus}% bonus)\n` +
                 `> ✨ Pet EXP: **${zone.rewards.expRange[0]}** - **${zone.rewards.expRange[1]}**\n\n` +
-                `**📦 Possible Drops** (🍀+${luckBonus}% luck):\n${dropList}\n\n` +
+                `**📦 Possible Drops** (🍀+${luckBonus}% luck${synergy ? ` +${SYNERGY_BONUS.drop}% synergy` : ''}):\n${dropList}\n\n` +
                 `⚠️ **Pet tidak bisa digunakan** selama ekspedisi!\n` +
                 `(Hunt, Battle, Dungeon, Boss akan disabled)`
             );

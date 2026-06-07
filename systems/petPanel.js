@@ -715,7 +715,7 @@ async function handlePetButton(interaction) {
                 .setDescription(`${canEnter ? '✅' : '🔒'} ${ELEMENT_EMOJI[d.element] || ''} Reward: 🪙${d.reward[0]}-${d.reward[1]} | ${d.exp} EXP`));
         });
         const embed = new EmbedBuilder().setTitle('🏰 Dungeon').setColor('#9B59B6')
-            .setDescription(`${PET_DATA.find(p => p.id === pet.petId)?.emoji || '🐾'} **${pet.name}** (Lv.${pet.level})\n\nPilih dungeon untuk masuk:`);
+            .setDescription(`${PET_DATA.find(p => p.id === pet.petId)?.emoji || '🐾'} **${pet.name}** (Lv.${pet.level})\n\n> ⚔️ *Combat cepat — **COUNTER** elemen musuh untuk +25% dmg. Sumber utama **relic & material gear** (ada risiko kalah).*\n\nPilih dungeon untuk masuk:`);
         const row1 = new ActionRowBuilder().addComponents(dungeonMenu);
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
