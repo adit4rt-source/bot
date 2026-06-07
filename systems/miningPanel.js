@@ -14,7 +14,7 @@ const {
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
-    STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
+    STAMINA_REGEN_MS, STAMINA_REFILL_COST_PER, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, staminaRegenPerMin, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
 
@@ -346,49 +346,63 @@ function buildSmithPanel(guildId, userId, username) {
     ] };
 }
 
-// ==================== BUILD PICKAXE SHOP ====================
+// ==================== BUILD SHOP (pickaxe + perlengkapan + stamina) ====================
 function buildShopPanel(guildId, userId, username) {
     const userData = getOrCreateUser(guildId, userId);
     const data = getMiningData(guildId, userId);
     const current = getPickaxe(data.pickaxe);
+    const max = maxStamina(data.level);
+    const missing = max - data.stamina;
+    const refillCost = missing * STAMINA_REFILL_COST_PER;
+    const DIV = '━━━━━━━━━━━━━━━━━━━━';
 
-    let desc = `${current.emoji} Pickaxe sekarang: **${current.name}** (Tier ${current.tier})\n> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n**Daftar Pickaxe:**\n`;
-    PICKAXE_TYPES.filter(p => !p.craftOnly).forEach(p => {
-        const owned = p.tier <= current.tier;
-        const tag = p.tier === current.tier ? ' ✅ dipakai' : owned ? ' (terlewati)' : '';
-        desc += `> ${p.emoji} **${p.name}** (T${p.tier}) — ${p.price === 0 ? 'gratis' : `🪙 ${p.price.toLocaleString('id-ID')}`}${tag}\n`;
-        desc += `> ┗ Stamina/swing: ${p.staminaCost} • Yield +${p.yieldBonus} • Max ${p.maxDepth}m\n`;
-    });
+    let desc = `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n`;
+    desc += `⛏️ Pickaxe: ${current.emoji} **${current.name}** (Tier ${current.tier})\n`;
+    desc += `⚡ Stamina: **${data.stamina}/${max}**\n`;
 
+    // --- Pickaxe ---
+    desc += `\n${DIV}\n**⛏️ Upgrade Pickaxe**\n`;
     const buyable = PICKAXE_TYPES.filter(p => p.tier > current.tier && !p.craftOnly);
-    const components = [];
-    if (buyable.length > 0) {
-        const menu = new StringSelectMenuBuilder().setCustomId(`mine_shop_select_${userId}`).setPlaceholder('🛒 Beli pickaxe...').setMinValues(1).setMaxValues(1);
+    if (buyable.length === 0) {
+        desc += `> 🏆 Sudah pickaxe tertinggi yang bisa dibeli!\n`;
+    } else {
         buyable.forEach(p => {
-            menu.addOptions(new StringSelectMenuOptionBuilder()
-                .setLabel(`${p.name} (T${p.tier}) — 🪙${p.price.toLocaleString('id-ID')}`)
-                .setValue(p.id)
-                .setDescription(`Stamina ${p.staminaCost} | Yield +${p.yieldBonus} | Max ${p.maxDepth}m`));
+            const afford = userData.balance >= p.price ? '✅' : '▫️';
+            desc += `> ${afford} ${p.emoji} **${p.name}** (T${p.tier}) — 🪙 ${p.price.toLocaleString('id-ID')}\n`;
+            desc += `> ┗ Stamina/gali: ${p.staminaCost} • Yield +${p.yieldBonus} • Max ${p.maxDepth}m\n`;
         });
-        components.push(new ActionRowBuilder().addComponents(menu));
     }
 
-    // Safety supplies (anti-hazard)
-    desc += `\n**🧰 Perlengkapan Keselamatan:**\n`;
+    // --- Perlengkapan ---
+    desc += `\n${DIV}\n**🧰 Perlengkapan (anti-bahaya)**\n`;
     SUPPLIES.forEach(s => {
         const owned = getMatCount(guildId, userId, s.id);
-        desc += `> ${s.emoji} **${s.name}** — 🪙 ${s.price} *(punya: ${owned})* — ${s.desc}\n`;
+        desc += `> ${s.emoji} **${s.name}** — 🪙 ${s.price} · punya: **${owned}**\n> ┗ *${s.desc}*\n`;
     });
-    const supRow = new ActionRowBuilder().addComponents(
-        ...SUPPLIES.map(s => new ButtonBuilder().setCustomId(`mine_buy${s.id}_${userId}`).setLabel(`${s.emoji} Beli ${s.name} (🪙${s.price})`).setStyle(ButtonStyle.Primary))
-    );
-    components.push(supRow);
 
+    // --- Stamina ---
+    desc += `\n${DIV}\n**⚡ Isi Ulang Stamina**\n`;
+    if (missing <= 0) desc += `> 🔋 Stamina sudah penuh!\n`;
+    else desc += `> Isi penuh **+${missing}** stamina → 🪙 **${refillCost.toLocaleString('id-ID')}** (🪙${STAMINA_REFILL_COST_PER}/poin)\n`;
+
+    const components = [];
+    if (buyable.length > 0) {
+        const menu = new StringSelectMenuBuilder().setCustomId(`mine_shop_select_${userId}`).setPlaceholder('⛏️ Beli pickaxe...').setMinValues(1).setMaxValues(1);
+        buyable.forEach(p => menu.addOptions(new StringSelectMenuOptionBuilder()
+            .setLabel(`${p.name} (T${p.tier}) — 🪙${p.price.toLocaleString('id-ID')}`)
+            .setValue(p.id)
+            .setDescription(`Stamina ${p.staminaCost} | Yield +${p.yieldBonus} | Max ${p.maxDepth}m`)));
+        components.push(new ActionRowBuilder().addComponents(menu));
+    }
     components.push(new ActionRowBuilder().addComponents(
+        ...SUPPLIES.map(s => new ButtonBuilder().setCustomId(`mine_buy${s.id}_${userId}`).setLabel(`${s.emoji} ${s.name} (🪙${s.price})`).setStyle(ButtonStyle.Primary))
+    ));
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`mine_refill_${userId}`).setLabel(missing <= 0 ? '🔋 Stamina Penuh' : `⚡ Isi Stamina (🪙${refillCost.toLocaleString('id-ID')})`).setStyle(ButtonStyle.Success).setDisabled(missing <= 0 || userData.balance < refillCost),
         new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     ));
     const embed = new EmbedBuilder().setColor('#27AE60').setTitle(`🛒 Toko Tambang — ${username}`).setDescription(desc)
-        .setFooter({ text: 'Upgrade pickaxe = stamina lebih hemat, yield lebih banyak, gali lebih dalam' });
+        .setFooter({ text: '✅ = saldo cukup • Upgrade pickaxe untuk hemat stamina & gali lebih dalam' });
     return { embeds: [embed], components };
 }
 
@@ -479,6 +493,21 @@ async function handleMiningButton(interaction) {
     }
 
     if (action === 'shop') {
+        return interaction.update(buildShopPanel(guildId, userId, interaction.user.username));
+    }
+
+    if (action === 'refill') {
+        const row = getMiningData(guildId, userId);
+        const max = maxStamina(row.level);
+        const missing = max - row.stamina;
+        if (missing <= 0) return interaction.reply({ content: '🔋 Stamina kamu sudah penuh!', ephemeral: true });
+        const cost = missing * STAMINA_REFILL_COST_PER;
+        const userData = getOrCreateUser(guildId, userId);
+        if (userData.balance < cost) return interaction.reply({ content: `❌ Saldo kurang! Isi penuh stamina butuh 🪙 **${cost.toLocaleString('id-ID')}**`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(cost, guildId, userId);
+        row.stamina = max;
+        row.staminaTs = Date.now();
+        saveMiningData(guildId, userId, row);
         return interaction.update(buildShopPanel(guildId, userId, interaction.user.username));
     }
 
