@@ -1,7 +1,8 @@
 // systems/welcomer.js — Welcome & Goodbye Message System
 // Sends customizable embed messages when members join/leave.
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { db } = require('../database');
+const { generateCard } = require('./welcomeCard');
 
 // ==================== DATABASE SETUP ====================
 db.exec(`CREATE TABLE IF NOT EXISTS welcomer_settings (guildId TEXT, key TEXT, value TEXT, PRIMARY KEY(guildId, key))`);
@@ -22,7 +23,9 @@ function getAllWelcomerSettings(guildId) {
         'welcome_embed_title', 'welcome_embed_thumbnail', 'welcome_embed_image',
         'welcome_dm_enabled', 'welcome_dm_message',
         'welcome_autorole', 'welcome_autorole_delay',
+        'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text',
         'goodbye_enabled', 'goodbye_channel', 'goodbye_message', 'goodbye_embed_color',
+        'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text',
     ];
     const defaults = {
         welcome_enabled: '0',
@@ -36,10 +39,16 @@ function getAllWelcomerSettings(guildId) {
         welcome_dm_message: 'Hai {user.name}! Selamat datang di **{server.name}**. Enjoy your stay! 🎉',
         welcome_autorole: '',
         welcome_autorole_delay: '0',
+        welcome_banner_enabled: '0',
+        welcome_banner_bg: '',
+        welcome_banner_text: 'WELCOME',
         goodbye_enabled: '0',
         goodbye_channel: '',
         goodbye_message: '👋 **{user.name}** telah meninggalkan server. (Member: **{server.memberCount}**)',
         goodbye_embed_color: '#FF6B6B',
+        goodbye_banner_enabled: '0',
+        goodbye_banner_bg: '',
+        goodbye_banner_text: 'GOODBYE',
     };
     const settings = {};
     for (const key of keys) {
@@ -62,6 +71,35 @@ function replaceVariables(text, member) {
         .replace(/{server\.name}/g, guild.name)
         .replace(/{server\.memberCount}/g, String(guild.memberCount))
         .replace(/{server\.icon}/g, guild.iconURL({ size: 256 }) || '');
+}
+
+// ==================== BANNER HELPER ====================
+// Generate a banner attachment for welcome/goodbye if enabled. Returns null on
+// failure or when disabled, so callers can safely fall back to the plain embed.
+async function buildBannerAttachment(member, type) {
+    const guildId = member.guild.id;
+    const prefix = type === 'goodbye' ? 'goodbye' : 'welcome';
+
+    if (getWelcomerSetting(guildId, `${prefix}_banner_enabled`, '0') !== '1') return null;
+
+    try {
+        const bgURL = getWelcomerSetting(guildId, `${prefix}_banner_bg`, '');
+        const headline = getWelcomerSetting(guildId, `${prefix}_banner_text`, type === 'goodbye' ? 'GOODBYE' : 'WELCOME');
+        const accent = getWelcomerSetting(guildId, `${prefix}_embed_color`, type === 'goodbye' ? '#FF6B6B' : '#5865F2');
+        const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+
+        const buffer = await generateCard({
+            headline: replaceVariables(headline, member),
+            username: member.displayName || member.user.username,
+            avatarURL,
+            bgURL,
+            accent,
+        });
+        return new AttachmentBuilder(buffer, { name: `${prefix}.png` });
+    } catch (e) {
+        console.error(`[welcomer] Gagal generate ${prefix} banner:`, e.message);
+        return null;
+    }
 }
 
 // ==================== WELCOME HANDLER ====================
@@ -92,7 +130,14 @@ async function handleWelcome(member) {
             if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
             if (image && image.startsWith('http')) embed.setImage(image);
 
-            channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(() => {});
+            // Banner image (generated) takes priority for the embed image when enabled
+            const banner = await buildBannerAttachment(member, 'welcome');
+            if (banner) {
+                embed.setImage('attachment://welcome.png');
+                channel.send({ content: `<@${member.id}>`, embeds: [embed], files: [banner] }).catch(() => {});
+            } else {
+                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(() => {});
+            }
         }
     }
 
@@ -148,7 +193,13 @@ async function handleGoodbye(member) {
         .setDescription(message)
         .setTimestamp();
 
-    channel.send({ embeds: [embed] }).catch(() => {});
+    const banner = await buildBannerAttachment(member, 'goodbye');
+    if (banner) {
+        embed.setImage('attachment://goodbye.png');
+        channel.send({ embeds: [embed], files: [banner] }).catch(() => {});
+    } else {
+        channel.send({ embeds: [embed] }).catch(() => {});
+    }
 }
 
 // ==================== TEST FUNCTION (for dashboard) ====================
@@ -175,13 +226,20 @@ async function testWelcomer(member) {
 
     if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
 
-    await channel.send({ embeds: [embed] });
+    const banner = await buildBannerAttachment(member, 'welcome');
+    if (banner) {
+        embed.setImage('attachment://welcome.png');
+        await channel.send({ embeds: [embed], files: [banner] });
+    } else {
+        await channel.send({ embeds: [embed] });
+    }
 }
 
 module.exports = {
     handleWelcome,
     handleGoodbye,
     testWelcomer,
+    buildBannerAttachment,
     getAllWelcomerSettings,
     getWelcomerSetting,
     setWelcomerSetting,

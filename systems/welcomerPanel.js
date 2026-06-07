@@ -1,7 +1,7 @@
 // systems/welcomerPanel.js - Welcomer Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db } = require('../database');
-const { getAllWelcomerSettings, getWelcomerSetting } = require('./welcomer');
+const { getAllWelcomerSettings, getWelcomerSetting, buildBannerAttachment } = require('./welcomer');
 const ui = require('./ui');
 
 // ============ BUILD: Main Welcomer Panel ============
@@ -11,6 +11,8 @@ function buildWelcomerPanel(guildId, userId, guild) {
     const welcomeStatus = settings.welcome_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif';
     const goodbyeStatus = settings.goodbye_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif';
     const dmStatus = settings.welcome_dm_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif';
+    const bannerW = settings.welcome_banner_enabled === '1' ? '🟢' : '🔴';
+    const bannerG = settings.goodbye_banner_enabled === '1' ? '🟢' : '🔴';
     const autoroles = settings.welcome_autorole ? settings.welcome_autorole.split(',').filter(Boolean) : [];
 
     const embed = new EmbedBuilder()
@@ -20,6 +22,7 @@ function buildWelcomerPanel(guildId, userId, guild) {
             ui.statBlock([
                 `👋 Welcome: ${welcomeStatus}  •  📩 DM: ${dmStatus}`,
                 `👋 Goodbye: ${goodbyeStatus}`,
+                `🖼️ Banner: Welcome ${bannerW}  •  Goodbye ${bannerG}`,
                 `🎭 Auto-Roles: ${autoroles.length > 0 ? autoroles.map(r => `<@&${r}>`).join(', ') : '*Tidak ada*'}`,
                 `📍 Welcome ch: ${settings.welcome_channel ? `<#${settings.welcome_channel}>` : '*Belum diset*'}`,
                 `📍 Goodbye ch: ${settings.goodbye_channel ? `<#${settings.goodbye_channel}>` : '*Belum diset*'}`,
@@ -167,6 +170,9 @@ async function handleWelcomerButton(interaction) {
                 `**👋 Goodbye:**\n` +
                 `> Enabled: ${settings.goodbye_enabled === '1' ? '✅' : '❌'}\n` +
                 `> Channel: ${settings.goodbye_channel ? `<#${settings.goodbye_channel}>` : '❌ Belum diset'}\n\n` +
+                `**🖼️ Banner (gambar):**\n` +
+                `> Welcome: ${settings.welcome_banner_enabled === '1' ? '✅' : '❌'}${settings.welcome_banner_bg ? ' (custom bg)' : ''}\n` +
+                `> Goodbye: ${settings.goodbye_banner_enabled === '1' ? '✅' : '❌'}${settings.goodbye_banner_bg ? ' (custom bg)' : ''}\n\n` +
                 `💡 *Gunakan Dashboard untuk mengubah semua pengaturan.*`
             );
 
@@ -212,7 +218,13 @@ async function handleWelcomerButton(interaction) {
         const thumbnail = (settings.welcome_embed_thumbnail || '').replace(/{user\.avatar}/g, member.user.displayAvatarURL({ size: 256 }));
         if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
 
-        await channel.send({ embeds: [embed] }).catch(() => {});
+        const banner = await buildBannerAttachment(member, 'welcome');
+        if (banner) {
+            embed.setImage('attachment://welcome.png');
+            await channel.send({ embeds: [embed], files: [banner] }).catch(() => {});
+        } else {
+            await channel.send({ embeds: [embed] }).catch(() => {});
+        }
         return interaction.reply({ content: `✅ Test message sent to <#${settings.welcome_channel}>!`, ephemeral: true });
     }
 }
