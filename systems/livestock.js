@@ -1,7 +1,7 @@
 // systems/livestock.js — Livestock Logic (Kandang Ayam, Sapi, Domba)
-const { db, getOrCreateUser, getItemCount, addItem, removeItem } = require('../database');
-const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, getQualityChance, PRODUCT_QUALITY, LIVESTOCK_DISEASES, LIVESTOCK_PESTS } = require('../data/livestock');
-const { getSeasonProductionMultiplier, getSeasonSickChance, getSeasonPestChance, getSeasonFeedMultiplier, getSeasonWabahChance } = require('./farmSeason');
+const { db, getOrCreateUser, getItemCount, removeItem } = require('../database');
+const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, getQualityChance, PRODUCT_QUALITY, LIVESTOCK_PESTS } = require('../data/livestock');
+const { getSeasonProductionMultiplier, getSeasonSickChance, getSeasonPestChance, getSeasonFeedMultiplier } = require('./farmSeason');
 
 // ==================== DATABASE SETUP ====================
 db.exec(`CREATE TABLE IF NOT EXISTS livestock (
@@ -244,20 +244,6 @@ function collectProducts(userId, animalType) {
     return { success: true, totalCollected, totalExp, products };
 }
 
-function sellProducts(userId, productId, quality, quantity) {
-    const existing = db.prepare('SELECT * FROM livestock_products WHERE userId = ? AND productId = ? AND quality = ?').get(userId, productId, quality);
-    if (!existing || existing.quantity < quantity) return { error: 'Stok tidak cukup!' };
-
-    const qualityData = PRODUCT_QUALITY[productId]?.find(q => q.quality === quality);
-    if (!qualityData) return { error: 'Invalid product quality' };
-
-    const totalPrice = qualityData.price * quantity;
-    db.prepare('UPDATE livestock_products SET quantity = quantity - ? WHERE userId = ? AND productId = ? AND quality = ?').run(quantity, userId, productId, quality);
-    db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
-
-    return { success: true, productId, quality, quantity, totalPrice };
-}
-
 function sellAllProducts(userId) {
     const products = db.prepare('SELECT * FROM livestock_products WHERE userId = ? AND quantity > 0').all(userId);
     if (products.length === 0) return { error: 'Tidak ada produk untuk dijual!' };
@@ -295,15 +281,6 @@ function getHungerPercent(animal) {
 }
 
 // Fungsi untuk kubur hewan mati (hapus dari DB, bebaskan slot)
-function buryAnimal(userId, animalId) {
-    const animal = db.prepare('SELECT * FROM livestock WHERE id = ? AND userId = ?').get(animalId, userId);
-    if (!animal) return { error: 'Hewan tidak ditemukan!' };
-    if (animal.status !== 'dead') return { error: 'Hewan ini belum mati!' };
-    const name = animal.name || ANIMALS[animal.animalType]?.name || 'Hewan';
-    db.prepare('DELETE FROM livestock WHERE id = ?').run(animalId);
-    return { success: true, name, level: animal.level };
-}
-
 function buryAllDead(userId) {
     const dead = db.prepare("SELECT * FROM livestock WHERE userId = ? AND status = 'dead'").all(userId);
     if (dead.length === 0) return { error: 'Tidak ada hewan mati!' };
@@ -333,21 +310,6 @@ function feedAnimals(userId, animalType) {
 }
 
 // ==================== HEALING ====================
-function healAnimal(userId, animalId) {
-    const animal = db.prepare('SELECT * FROM livestock WHERE id = ? AND userId = ?').get(animalId, userId);
-    if (!animal) return { error: 'Hewan tidak ditemukan!' };
-    if (animal.status !== 'sick') return { error: 'Hewan ini tidak sakit!' };
-
-    const animalDef = ANIMALS[animal.animalType];
-    const medCount = getItemCount(null, userId, animalDef.medicineItem);
-    if (medCount < 1) return { error: `Butuh ${animalDef.medicineName}! Beli di shop.` };
-
-    removeItem(null, userId, animalDef.medicineItem, 1);
-    db.prepare('UPDATE livestock SET status = ?, sickSince = NULL WHERE id = ?').run('healthy', animalId);
-
-    return { success: true, animalId, healed: true };
-}
-
 function healAll(userId, animalType) {
     const sickAnimals = getAnimals(userId, animalType).filter(a => a.status === 'sick');
     if (sickAnimals.length === 0) return { error: 'Tidak ada hewan yang sakit!' };
@@ -458,9 +420,9 @@ module.exports = {
     getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots,
     getAnimals, getAllAnimals, buyAnimal,
     upgradeCoopLevel, upgradeBarnLevel,
-    collectProducts, sellProducts, sellAllProducts,
-    feedAnimals, getHungerPercent, healAnimal, healAll,
+    collectProducts, sellAllProducts,
+    feedAnimals, getHungerPercent, healAll,
     evolveAnimal, processDailyLivestock,
     getProductInventory, getProductCount,
-    buryAnimal, buryAllDead,
+    buryAllDead,
 };
