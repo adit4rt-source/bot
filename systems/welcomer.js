@@ -27,7 +27,7 @@ function getAllWelcomerSettings(guildId) {
         'welcome_embed_title', 'welcome_embed_thumbnail', 'welcome_embed_image',
         'welcome_dm_enabled', 'welcome_dm_message',
         'welcome_autorole', 'welcome_autorole_delay',
-        'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text', 'welcome_banner_style',
+        'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text', 'welcome_banner_style', 'welcome_ghost_ping',
         'goodbye_enabled', 'goodbye_channel', 'goodbye_message', 'goodbye_embed_color',
         'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text', 'goodbye_banner_style',
     ];
@@ -47,6 +47,7 @@ function getAllWelcomerSettings(guildId) {
         welcome_banner_bg: '',
         welcome_banner_text: 'WELCOME',
         welcome_banner_style: 'glitch',
+        welcome_ghost_ping: '1',
         goodbye_enabled: '0',
         goodbye_channel: '',
         goodbye_message: '👋 **{user.name}** telah meninggalkan server. (Member: **{server.memberCount}**)',
@@ -77,6 +78,18 @@ function replaceVariables(text, member) {
         .replace(/{server\.name}/g, guild.name)
         .replace(/{server\.memberCount}/g, String(guild.memberCount))
         .replace(/{server\.icon}/g, guild.iconURL({ size: 256 }) || '');
+}
+
+// ==================== GHOST PING HELPER ====================
+// Briefly mention the user so they get a notification, then delete the message
+// so no visible text remains (used for the full-image welcome).
+async function ghostPing(channel, userId, delayMs = 1500) {
+    try {
+        const msg = await channel.send({ content: `<@${userId}>`, allowedMentions: { users: [userId] } });
+        setTimeout(() => { msg.delete().catch(() => {}); }, delayMs);
+    } catch (e) {
+        log('WARN', `[welcomer] Ghost ping gagal: ${e.message}`);
+    }
 }
 
 // ==================== BANNER HELPER ====================
@@ -192,8 +205,12 @@ async function handleWelcome(member) {
             const banner = await buildBannerAttachment(member, 'welcome');
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
             if (banner) {
-                embed.setImage('attachment://welcome.png');
-                channel.send({ content: `<@${member.id}>`, embeds: [embed], files: [banner] }).catch(onErr);
+                // Ghost ping: notify the user, then delete the mention (no visible text).
+                if (getWelcomerSetting(guildId, 'welcome_ghost_ping', '1') === '1') {
+                    ghostPing(channel, member.id);
+                }
+                // Full-image welcome — no embed, no visible text.
+                channel.send({ files: [banner], allowedMentions: { parse: [] } }).catch(onErr);
             } else {
                 channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
             }
@@ -258,8 +275,8 @@ async function handleGoodbye(member) {
 
     const banner = await buildBannerAttachment(member, 'goodbye');
     if (banner) {
-        embed.setImage('attachment://goodbye.png');
-        channel.send({ embeds: [embed], files: [banner] }).catch(() => {});
+        // Full-image goodbye — no embed text.
+        channel.send({ files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
     } else {
         channel.send({ embeds: [embed] }).catch(() => {});
     }
@@ -291,8 +308,8 @@ async function testWelcomer(member) {
 
     const banner = await buildBannerAttachment(member, 'welcome');
     if (banner) {
-        embed.setImage('attachment://welcome.png');
-        await channel.send({ embeds: [embed], files: [banner] });
+        // Image-only preview (matches real welcome output).
+        await channel.send({ content: '🧪 [TEST]', files: [banner], allowedMentions: { parse: [] } });
     } else {
         await channel.send({ embeds: [embed] });
     }

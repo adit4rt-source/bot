@@ -17,8 +17,9 @@ try {
 const HEAD = FONTS_OK ? 'PoppinsBold' : 'sans-serif';
 const SUB = FONTS_OK ? 'PoppinsSemiBold' : 'sans-serif';
 
-const W = 1024;
-const H = 450;
+const SCALE = 2;   // render resolution multiplier (crisper + appears larger in Discord)
+const W = 1200;    // logical width (wider than before)
+const H = 470;     // logical height (a bit taller)
 
 function roundRectPath(ctx, x, y, w, h, r) {
     const rr = Math.min(r, w / 2, h / 2);
@@ -140,8 +141,9 @@ async function generateGlitchCard(o) {
         avatarURL, bgURL, accent = '#c9b8a8',
     } = o || {};
 
-    const canvas = createCanvas(W, H);
+    const canvas = createCanvas(W * SCALE, H * SCALE);
     const ctx = canvas.getContext('2d');
+    ctx.scale(SCALE, SCALE); // draw in logical coords, output at higher resolution
 
     // ---- background ----
     ctx.fillStyle = '#0b0c0f';
@@ -190,7 +192,8 @@ async function generateGlitchCard(o) {
         for (const gy of [portY + portH * 0.25, portY + portH * 0.55, portY + portH * 0.78]) {
             const sh = 10 + Math.random() * 14;
             const off = (Math.random() * 18 - 9);
-            ctx.drawImage(canvas, portX, gy, portW, sh, portX + off, gy, portW, sh);
+            // source coords are in physical pixels (canvas is scaled), dest in logical
+            ctx.drawImage(canvas, portX * SCALE, gy * SCALE, portW * SCALE, sh * SCALE, portX + off, gy, portW, sh);
         }
     } else {
         const g = ctx.createLinearGradient(portX, portY, portX, portY + portH);
