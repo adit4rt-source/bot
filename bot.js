@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.3.0';
-const BUILD_DATE = '2026-06-06';
+const BOT_VERSION = '3.4.0';
+const BUILD_DATE = '2026-06-07';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -137,68 +137,61 @@ client.once(Events.ClientReady, async c => {
             .setTitle(`📦 Update — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `🐔🐄 **FARMING & PETERNAKAN — MAJOR UPDATE!**\n` +
+                `⛏️ **MINING / TAMBANG — MAJOR UPDATE!**\n` +
+                `Pilar gathering ke-4, lengkap dari awal sampai endgame!\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#FFA500')
-            .setTitle('🐔 Kandang Ayam — NEW!')
+            .setColor('#C9A227')
+            .setTitle('⛏️ Sistem Tambang — NEW! (`/mine`)')
             .setDescription(
-                `> • Beli ayam (🪙 3,000/ekor)\n` +
-                `> • Collect telur otomatis (3-10 menit per cycle)\n` +
-                `> • Quality telur: Normal → Premium → Superior → Excellent → Perfect\n` +
-                `> • Evolution tier 0-10 (setiap 10 level)\n` +
-                `> • Semakin tinggi tier = produksi cepat + quality bagus\n` +
-                `> • Hunger system (turun 10%/jam, feed untuk reset)\n` +
-                `> • Hewan punya umur rahasia 2-20 hari\n` +
-                `> • Kandang level 1-7 (3-25 slot)\n\n` +
-                `**Harga Jual Telur:**\n` +
-                `> ⚪ Normal: 50 | 🟡 Premium: 100 | 🟠 Superior: 500\n` +
-                `> 🔴 Excellent: 2,000 | 💎 Perfect: 10,000`
+                `> 🪏 **Dig** — gali ore pakai sistem **Stamina** (regen otomatis tiap menit)\n` +
+                `> ⬇️ **Kedalaman** — makin dalam, ore makin langka (Permukaan → The Void)\n` +
+                `> ⛏️ **7 Pickaxe** — upgrade buat hemat stamina, yield lebih, gali lebih dalam\n` +
+                `> 🔥 **Smelt** — lebur ore jadi batangan (bar)\n` +
+                `> 🔨 **Smith** — tempa bar jadi item: Refine Stone, Rod Parts, Protection Stone, Mythic Fragment, Penyangga, Masker Gas, Mystery Box, Lucky Charm, Money Magnet!\n` +
+                `> ☠️ **Bahaya bawah tanah** — cave-in, gas beracun, & MONSTER (lawan pakai pet + element!)\n` +
+                `> ⚡ **Beli Stamina** di Toko Tambang (langsung penuh)`
             ),
 
         new ChangelogEmbed()
-            .setColor('#8B4513')
-            .setTitle('🐄🐑 Peternakan — NEW!')
+            .setColor('#8E44AD')
+            .setTitle('💎👑 Endgame Tambang')
             .setDescription(
-                `> • Sapi (🪙 10,000) → produce susu | Domba (🪙 8,000) → produce bulu\n` +
-                `> • Sistem sama dengan ayam (evolution, hunger, quality)\n` +
-                `> • 🎾 Play button — ajak hewan bermain (boost produksi 5 menit)\n` +
-                `> • Shop pakai input jumlah (beli berapa saja)\n` +
-                `> • Semua produk masuk Storage Hub\n\n` +
-                `**Harga Susu:** Normal: 70 | Premium: 150 | Superior: 700 | Excellent: 3,000 | Perfect: 15,000\n` +
-                `**Harga Bulu:** Normal: 60 | Premium: 120 | Superior: 600 | Excellent: 2,500 | Perfect: 12,000`
+                `> 💎 **Gem & Socket** — pasang gem ke pickaxe buat bonus permanen (+ Fusion!)\n` +
+                `> 👑 **THE CORE** — boss endgame di 1500m+, drop Artifact Fragment\n` +
+                `> 🌀 **Legendary Drill** & 🏺 **Miner's Artifact** — craft endgame\n` +
+                `> ⭐ **Prestige Mining** — reset level buat bonus permanen, ulang makin kuat\n` +
+                `> 🏆 **Top Miners** leaderboard\n\n` +
+                `**🐾 Integrasi:**\n` +
+                `> • 3 Pet Ability baru (Ore Finder, Tough Miner, Gem Hunter)\n` +
+                `> • 9 Achievement Mining baru\n` +
+                `> • Quest baru: gali ore & lebur bar (daily/weekly)`
             ),
 
         new ChangelogEmbed()
-            .setColor('#2ECC71')
-            .setTitle('🌦️ Season System + Farm Hub')
+            .setColor('#E74C3C')
+            .setTitle('🛠️ Perbaikan & Balancing')
             .setDescription(
-                `> • Season berubah **setiap hari** (Spring → Summer → Autumn → Winter)\n` +
-                `> • Efek ke tanaman: grow speed, yield, death chance\n` +
-                `> • Efek ke hewan: produksi rate, sickness, feed consumption\n` +
-                `> • Farm Hub baru: [Tanaman] [Kandang Ayam] [Peternakan] [Crafting] [Storage]\n` +
-                `> • Storage Hub gabungkan semua item (panen + produk ternak)\n` +
-                `> • Crafting ada di hub (36 resep tanaman)`
+                `> 🐛 Fix: item langka kebeli GRATIS di /shop\n` +
+                `> 🐛 Fix: Voucher redeem sekarang berfungsi!\n` +
+                `> 🎟️ Voucher cuma bisa diredeem di server **ID Community** (anti-exploit multi-akun)\n` +
+                `> 🐛 Fix: panel Fusion & Peternakan error\n` +
+                `> ⚖️ Regen stamina mining skala level\n` +
+                `> 🎨 UI panel mining dipercantik`
             ),
 
         new ChangelogEmbed()
-            .setColor('#43B581')
-            .setTitle('📨👋🎙️ Fitur Server Baru')
+            .setColor('#F1C40F')
+            .setTitle('🎁 KODE REDEEM SPESIAL!')
             .setDescription(
-                `**📨 Invite Tracker** (/invite)\n` +
-                `> • Track siapa invite siapa, leaderboard, fake detection\n\n` +
-                `**👋 Welcomer** (/welcomer - Admin)\n` +
-                `> • Welcome/Goodbye message, DM, Auto-role\n\n` +
-                `**🎙️ Tempvoice** (/tempvoice)\n` +
-                `> • Buat private voice channel, lock/hide/kick/block\n\n` +
-                `**🔧 Lainnya:**\n` +
-                `> • Voice quest fix (progress terupdate tiap 5 menit)\n` +
-                `> • Streak/Level notif auto-delete 15 detik\n` +
-                `> • Dashboard: semua ID diganti dropdown selector\n` +
-                `> • Admin Panel: 11 tab super powerful`
+                `Buruan klaim hadiahnya! 🤑\n\n` +
+                `> 🎟️ Kode: **\`MANTAP\`**\n` +
+                `> 📍 Cara klaim: ketik \`/wallet\` → klik **🎟️ Redeem** → masukkan kode\n` +
+                `> ⚠️ Cuma bisa diredeem di server **ID Community** & 1x per orang!\n\n` +
+                `💡 Ketik \`/mine\` buat mulai menambang & \`/guide\` buat panduan lengkap!`
             )
             .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()
