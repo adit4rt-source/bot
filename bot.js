@@ -222,6 +222,13 @@ client.once(Events.ClientReady, async c => {
     startVoiceTickInterval();
     console.log('🎙️ Voice tick: quest progress setiap 1 menit');
 
+    // Start giveaway scheduler (auto-ends & announces winners when timers expire)
+    try {
+        const { startGiveawayScheduler } = require('./systems/giveaway');
+        startGiveawayScheduler(client);
+        console.log('🎉 Giveaway scheduler: cek setiap 30 detik');
+    } catch (e) { console.error('Giveaway scheduler error:', e); }
+
     // Initialize seasonal leaderboard (snapshots baselines + handles monthly rollover)
     try {
         const { ensureSeason, getSeasonInfo } = require('./systems/season');

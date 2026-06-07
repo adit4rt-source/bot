@@ -156,4 +156,66 @@ module.exports = function register() {
       if (selfRoles.getMenu(G, menuId).color !== '#57F287') throw new Error('color not updated');
     });
   });
+
+  // ===== GIVEAWAY =====
+  const giveaway = botRequire('systems/giveaway.js');
+  const gwPanel = botRequire('systems/giveawayPanel.js');
+
+  panel('giveawayPanel.buildAdminPanel', () => gwPanel.buildAdminPanel(G, U, { name: 'TestGuild' }));
+
+  test('giveaway: parseDuration handles units + bare minutes', () => {
+    if (giveaway.parseDuration('2h') !== 7200000) throw new Error('2h wrong');
+    if (giveaway.parseDuration('30m') !== 1800000) throw new Error('30m wrong');
+    if (giveaway.parseDuration('1d') !== 86400000) throw new Error('1d wrong');
+    if (giveaway.parseDuration('5') !== 300000) throw new Error('bare minutes wrong');
+    if (giveaway.parseDuration('xyz') !== null) throw new Error('invalid should be null');
+  });
+
+  test('giveaway: pickWinners returns N and respects exclude', () => {
+    const w = giveaway.pickWinners(['a', 'b', 'c', 'd'], 2);
+    if (w.length !== 2) throw new Error('should pick 2');
+    const w2 = giveaway.pickWinners(['a', 'b'], 5, ['a']);
+    if (w2.includes('a') || w2[0] !== 'b') throw new Error('exclude failed');
+  });
+
+  test('giveaway: create + join + public message', () => {
+    const id = giveaway.createGiveaway(G, { prize: 'Nitro', winners: 1, hostId: U, durationMs: 60000 });
+    giveaway.addEntry(id, 'a'); giveaway.addEntry(id, 'b'); giveaway.addEntry(id, 'a'); // dup ignored
+    if (giveaway.countEntries(id) !== 2) throw new Error('entry count wrong');
+    const msg = giveaway.buildGiveawayMessage(giveaway.getGiveaway(id), giveaway.countEntries(id));
+    if (!msg.embeds[0].data.title) throw new Error('missing title');
+    if (msg.components[0].components[0].data.custom_id !== `gwjoin_${id}`) throw new Error('wrong join button id');
+  });
+
+  test('giveaway: join button toggles entry (acknowledges)', () => {
+    const id = giveaway.createGiveaway(G, { prize: 'Toggle', winners: 1, hostId: U, durationMs: 60000 });
+    const it = mockInteraction({ userId: 'joiner1', guildId: G, customId: `gwjoin_${id}` });
+    it.message = { edit: async () => {} };
+    return Promise.resolve(giveaway.handleGiveawayJoin(it)).then(() => {
+      if (!it._cap.reply) throw new Error('did not acknowledge');
+      if (!giveaway.hasEntry(id, 'joiner1')) throw new Error('entry not added');
+    });
+  });
+
+  test('giveaway: create modal creates a giveaway + asks channel', () => {
+    const it = mockInteraction({ userId: U, guildId: G, customId: `gwmod_create_${U}`, fields: { gw_prize: 'ModalPrize', gw_duration: '1h', gw_winners: '2' } });
+    it.isModalSubmit = () => true;
+    return Promise.resolve(gwPanel.handleGiveawayModal(it)).then(() => {
+      if (!it._cap.reply) throw new Error('did not acknowledge');
+      if (!giveaway.getGuildGiveaways(G).some(g => g.prize === 'ModalPrize')) throw new Error('giveaway not created');
+    });
+  });
+
+  test('giveaway: endGiveaway picks winners + marks ended', () => {
+    const id = giveaway.createGiveaway(G, { prize: 'End', winners: 1, hostId: U, durationMs: 1000 });
+    giveaway.addEntry(id, 'wA'); giveaway.addEntry(id, 'wB');
+    giveaway.updateGiveaway(id, { channelId: 'c1', messageId: 'm1' });
+    const fakeMsg = { edit: async () => {} };
+    const fakeChannel = { messages: { fetch: async () => fakeMsg }, send: async () => ({}) };
+    const client = { channels: { cache: new Map([['c1', fakeChannel]]) } };
+    return Promise.resolve(giveaway.endGiveaway(client, giveaway.getGiveaway(id))).then((winners) => {
+      if (!winners.length) throw new Error('no winners picked');
+      if (giveaway.getGiveaway(id).ended !== 1) throw new Error('not marked ended');
+    });
+  });
 };

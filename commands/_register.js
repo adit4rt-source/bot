@@ -58,6 +58,10 @@ const commands = [
         .setName('selfrole')
         .setDescription('🎭 Self-Roles Panel — Buat menu pilih role sendiri (dropdown)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('giveaway')
+        .setDescription('🎉 Giveaway Panel — Buat & kelola giveaway')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
