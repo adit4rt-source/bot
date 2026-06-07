@@ -65,9 +65,11 @@ jadi SQLite menerapkan WAL basi (dari DB lama) ke DB baru → korup.
 
 ### Script operasional (dry-run dulu, lalu `--execute`):
 - `restore-full.js` — rollback total DB ke backup tertentu
-- `clawback-mining-income.js` — tarik uang dari `income_mining` (warisan insiden)
-- `cleanup-mining-db.js` — drop tabel `mining_data`/`ore_inventory` + stat `mining_*`
-- `audit-mining-income.js` — laporan read-only uang hasil mining
+
+> Script `audit-mining-income.js`, `clawback-mining-income.js`, dan
+> `cleanup-mining-db.js` sudah **dihapus** — usang setelah rollback (DB
+> sehat sudah tidak punya tabel/stat mining lagi). Riwayatnya tetap ada di
+> git bila sewaktu-waktu dibutuhkan kembali.
 
 > Catatan: env auto-restore via Pterodactyl — `LIST_BACKUPS=1` (lihat daftar),
 > `RESTORE_BACKUP=<file>` (pulihkan). **Kosongkan lagi** setelah dipakai.
