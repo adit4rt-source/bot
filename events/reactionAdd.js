@@ -6,6 +6,8 @@ const state = require('../state');
 
 module.exports = async function handleReactionAdd(reaction, user) {
     if (user.bot || !reaction.message.guild) return;
+    const { isMaintenance } = require('../systems/maintenance');
+    if (isMaintenance()) return; // fitur reaction reward dimatikan sementara
     if (reaction.partial) await reaction.fetch().catch(() => {});
     const guildId = reaction.message.guild.id;
     const awardSetting = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'reaction_award_to');

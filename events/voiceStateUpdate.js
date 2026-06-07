@@ -7,6 +7,8 @@ const state = require('../state');
 
 async function handleVoiceStateUpdate(oldState, newState) {
     if (newState.member.user.bot) return;
+    const { isMaintenance } = require('../systems/maintenance');
+    if (isMaintenance()) return; // voice XP/reward & tempvoice dimatikan sementara
     const guildId = newState.guild.id;
 
     // Temp voice cleanup

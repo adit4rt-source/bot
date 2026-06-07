@@ -54,6 +54,20 @@ async function routeInteraction(interaction) {
     if (!interaction.guild) return interaction.reply({content: 'Hanya di Server!', ephemeral: true});
     const guildId = interaction.guild.id;
 
+    // === MAINTENANCE MODE === semua fitur dimatikan sementara (kecuali Streak via chat).
+    // Owner tetap boleh pakai untuk administrasi.
+    const { isMaintenance, isOwner } = require('../systems/maintenance');
+    if (isMaintenance() && !isOwner(interaction.user.id)) {
+        const msg = '🛠️ **Bot sedang dalam perbaikan sementara.**\nSemua fitur dimatikan dulu — **kecuali Streak** (cukup chat seperti biasa untuk jaga streak 🔥).\nNantikan update ya! 🙏';
+        try {
+            if (interaction.isChatInputCommand && interaction.isChatInputCommand()) return interaction.reply({ content: msg, ephemeral: true });
+            if (interaction.isButton?.() || interaction.isAnySelectMenu?.() || interaction.isStringSelectMenu?.() || interaction.isModalSubmit?.()) {
+                return interaction.reply({ content: msg, ephemeral: true });
+            }
+        } catch (e) { /* ignore */ }
+        return;
+    }
+
     // Block command usage in restricted channels
     const blockedChannels = ['1347190409402650736'];
     if (interaction.isChatInputCommand() && blockedChannels.includes(interaction.channelId)) {

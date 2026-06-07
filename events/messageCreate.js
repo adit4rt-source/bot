@@ -25,6 +25,14 @@ module.exports = async function handleMessageCreate(message) {
     if (verifyCaptchaMessage(message)) return; // consumed as captcha answer, don't process further
     const guildId = message.guild.id;
 
+    // === MAINTENANCE MODE === hanya Streak yang jalan; fitur chat lain dimatikan sementara.
+    const { isMaintenance } = require('../systems/maintenance');
+    if (isMaintenance()) {
+        const streakActivated = await checkAndUpdateStreak(message);
+        if (streakActivated) message.reply({ content: `🔥 **Berhasil!** Kamu telah mengaktifkan streak api hari ini!\n*(Bot sedang perbaikan — fitur lain sementara nonaktif)*` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 6000); }).catch(() => {});
+        return;
+    }
+
     // Mini-event answer handling
     if (state.activeMiniEvents.has(guildId)) {
         const game = state.activeMiniEvents.get(guildId);
