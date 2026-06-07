@@ -1,5 +1,7 @@
 // systems/welcomeCard.js — Generate welcome/goodbye banner images (background + avatar + text)
 // Uses @napi-rs/canvas (prebuilt binary, no system deps). Bundled fonts in assets/fonts/.
+// Kythia-inspired polish: large avatar, glow ring, blurred background, vignette,
+// rounded corners, accent bar, letter-spaced headline and a subtitle line.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
@@ -18,32 +20,81 @@ const SUB_FONT = FONTS_OK ? 'PoppinsSemiBold' : 'sans-serif';
 
 const W = 1024;
 const H = 450;
+const CORNER_RADIUS = 32;
+
+// ---- Small geometry helpers ----
+function roundRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+
+// Convert a hex color to an rgba() string with the given alpha.
+function hexToRgba(hex, alpha) {
+    let h = String(hex || '').replace('#', '').trim();
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(255,255,255,${alpha})`;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
 
 // Draw image to fully cover the canvas (preserve aspect, center-crop).
-function drawCover(ctx, img, w, h) {
+// `overscan` slightly enlarges the draw so a blur filter doesn't reveal edges.
+function drawCover(ctx, img, w, h, overscan = 1) {
     const ir = img.width / img.height;
     const cr = w / h;
-    let dw, dh, dx, dy;
+    let dw, dh;
     if (ir > cr) {
-        dh = h; dw = h * ir; dx = (w - dw) / 2; dy = 0;
+        dh = h; dw = h * ir;
     } else {
-        dw = w; dh = w / ir; dx = 0; dy = (h - dh) / 2;
+        dw = w; dh = w / ir;
     }
+    dw *= overscan; dh *= overscan;
+    const dx = (w - dw) / 2;
+    const dy = (h - dh) / 2;
     ctx.drawImage(img, dx, dy, dw, dh);
 }
 
 // Shrink font until text fits maxWidth; truncate with ellipsis as last resort.
-function fitText(ctx, text, baseFont, basePx, maxWidth, minPx = 20) {
+// Accounts for optional letter spacing applied between characters.
+function fitText(ctx, text, baseFont, basePx, maxWidth, minPx = 20, spacing = 0) {
+    const measure = (str) => {
+        const base = ctx.measureText(str).width;
+        return base + (spacing > 0 ? Math.max(0, [...str].length - 1) * spacing : 0);
+    };
     let px = basePx;
     while (px > minPx) {
         ctx.font = `${px}px ${baseFont}`;
-        if (ctx.measureText(text).width <= maxWidth) return px;
+        if (measure(text) <= maxWidth) return { px, text };
         px -= 2;
     }
     ctx.font = `${minPx}px ${baseFont}`;
     let t = text;
-    while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+    while (t.length > 1 && measure(t + '…') > maxWidth) t = t.slice(0, -1);
     return { px: minPx, text: t + '…' };
+}
+
+// Draw horizontally-centered text with manual letter spacing.
+function drawSpacedText(ctx, text, cx, y, spacing) {
+    const chars = [...text];
+    if (!spacing) { ctx.fillText(text, cx, y); return; }
+    let total = -spacing;
+    for (const ch of chars) total += ctx.measureText(ch).width + spacing;
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = 'left';
+    let x = cx - total / 2;
+    for (const ch of chars) {
+        ctx.fillText(ch, x, y);
+        x += ctx.measureText(ch).width + spacing;
+    }
+    ctx.textAlign = prevAlign;
 }
 
 /**
@@ -51,21 +102,29 @@ function fitText(ctx, text, baseFont, basePx, maxWidth, minPx = 20) {
  * @param {Object} opts
  * @param {string} opts.headline  e.g. "WELCOME" / "GOODBYE"
  * @param {string} opts.username  display text under headline
+ * @param {string} [opts.subtitle] small line under the username (optional)
  * @param {string} [opts.avatarURL] PNG avatar URL (optional)
  * @param {string} [opts.bgURL]   background image URL (optional; falls back to gradient)
  * @param {string} [opts.accent]  hex accent color for ring + username (default #FFFFFF)
  * @returns {Promise<Buffer>} PNG buffer
  */
-async function generateCard({ headline, username, avatarURL, bgURL, accent = '#FFFFFF' }) {
+async function generateCard({ headline, username, subtitle, avatarURL, bgURL, accent = '#FFFFFF' }) {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // ---- Background ----
+    // ---- Rounded-corner clip for the whole card ----
+    roundRectPath(ctx, 0, 0, W, H, CORNER_RADIUS);
+    ctx.clip();
+
+    // ---- Background (blurred) ----
     let drewBg = false;
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
             const bg = await loadImage(bgURL);
-            drawCover(ctx, bg, W, H);
+            ctx.save();
+            try { ctx.filter = 'blur(9px)'; } catch (_) { /* filter unsupported */ }
+            drawCover(ctx, bg, W, H, 1.12); // overscan hides blurred edges
+            ctx.restore();
             drewBg = true;
         } catch (e) {
             // ignore -> fallback gradient
@@ -73,25 +132,64 @@ async function generateCard({ headline, username, avatarURL, bgURL, accent = '#F
     }
     if (!drewBg) {
         const g = ctx.createLinearGradient(0, 0, W, H);
-        g.addColorStop(0, '#1e2030');
-        g.addColorStop(1, '#0f1018');
+        g.addColorStop(0, '#252a40');
+        g.addColorStop(0.55, '#1a1c2b');
+        g.addColorStop(1, '#0e0f18');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
     }
 
     // ---- Dark overlay for text readability ----
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.fillRect(0, 0, W, H);
 
-    // ---- Avatar (circle) with accent ring ----
-    const size = 168;
-    const cx = W / 2;
-    const cy = 145;
+    // ---- Vignette (darken edges, focus center) ----
+    const vg = ctx.createRadialGradient(W / 2, H * 0.46, H * 0.18, W / 2, H * 0.5, W * 0.62);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.72)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    // ---- Subtle inner border for the rounded card ----
     ctx.save();
+    roundRectPath(ctx, 4, 4, W - 8, H - 8, CORNER_RADIUS - 4);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.stroke();
+    ctx.restore();
+
+    // ---- Avatar (large, centered) with glow ring ----
+    const size = 210;            // bigger avatar (Kythia style)
+    const radius = size / 2;
+    const cx = W / 2;
+    const cy = 140;
+
+    // Glow halo behind the avatar
+    ctx.save();
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 40;
     ctx.beginPath();
-    ctx.arc(cx, cy, size / 2 + 6, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius + 7, 0, Math.PI * 2);
     ctx.closePath();
     ctx.fillStyle = accent;
+    ctx.fill();
+    ctx.restore();
+
+    // Accent ring base (solid, under the avatar)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 7, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = accent;
+    ctx.fill();
+    ctx.restore();
+
+    // Thin dark gap between ring and avatar for definition
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 3, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fill();
     ctx.restore();
 
@@ -99,44 +197,66 @@ async function generateCard({ headline, username, avatarURL, bgURL, accent = '#F
     if (avatarURL) {
         try { avatar = await loadImage(avatarURL); } catch (e) { /* skip avatar */ }
     }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
     if (avatar) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(avatar, cx - size / 2, cy - size / 2, size, size);
-        ctx.restore();
+        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
     } else {
-        // placeholder circle
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-        ctx.closePath();
         ctx.fillStyle = '#2b2d31';
-        ctx.fill();
-        ctx.restore();
+        ctx.fillRect(cx - radius, cy - radius, size, size);
     }
+    ctx.restore();
 
-    // ---- Text ----
+    // ---- Text block ----
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0,0,0,0.65)';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 3;
 
-    // Headline
+    // Headline (letter-spaced)
     const head = String(headline || '').toUpperCase();
-    const headFit = fitText(ctx, head, HEAD_FONT, 78, W - 100);
-    ctx.font = `${typeof headFit === 'object' ? headFit.px : headFit}px ${HEAD_FONT}`;
+    const HEAD_SPACING = 8;
+    const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
+    ctx.font = `${headFit.px}px ${HEAD_FONT}`;
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(typeof headFit === 'object' ? headFit.text : head, cx, 318);
+    const headY = 312;
+    drawSpacedText(ctx, headFit.text, cx, headY, HEAD_SPACING);
+
+    // Accent bar under the headline
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    const barW = 92;
+    const barH = 6;
+    const barY = headY + 16;
+    ctx.save();
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 14;
+    roundRectPath(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+    ctx.restore();
 
     // Username
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
     const name = String(username || '');
-    const nameFit = fitText(ctx, name, SUB_FONT, 40, W - 120);
-    ctx.font = `${typeof nameFit === 'object' ? nameFit.px : nameFit}px ${SUB_FONT}`;
+    const nameFit = fitText(ctx, name, SUB_FONT, 38, W - 160, 18);
+    ctx.font = `${nameFit.px}px ${SUB_FONT}`;
     ctx.fillStyle = accent;
-    ctx.fillText(typeof nameFit === 'object' ? nameFit.text : name, cx, 372);
+    ctx.fillText(nameFit.text, cx, barY + 56);
+
+    // Subtitle line (optional)
+    const sub = String(subtitle || '').trim();
+    if (sub) {
+        const subFit = fitText(ctx, sub, SUB_FONT, 24, W - 200, 14);
+        ctx.font = `${subFit.px}px ${SUB_FONT}`;
+        ctx.fillStyle = 'rgba(235,238,245,0.82)';
+        ctx.fillText(subFit.text, cx, barY + 92);
+    }
 
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;

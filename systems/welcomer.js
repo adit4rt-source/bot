@@ -88,9 +88,16 @@ async function buildBannerAttachment(member, type) {
         const accent = getWelcomerSetting(guildId, `${prefix}_embed_color`, type === 'goodbye' ? '#FF6B6B' : '#5865F2');
         const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
 
+        // Subtitle line under the username (server context).
+        const memberCount = member.guild.memberCount;
+        const subtitle = type === 'goodbye'
+            ? `Sekarang ada ${memberCount} anggota • ${member.guild.name}`
+            : `Anggota ke-${memberCount} • ${member.guild.name}`;
+
         const buffer = await generateCard({
             headline: replaceVariables(headline, member),
             username: member.displayName || member.user.username,
+            subtitle,
             avatarURL,
             bgURL,
             accent,
