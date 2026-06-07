@@ -4,8 +4,11 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, incrementUserStat, getUserStat, addIncome, addItem } = require('../database');
 const { getRandomInt } = require('../utils');
 const ui = require('./ui');
+const { getPetData, simulateBattle, ELEMENT_EMOJI } = require('./pets');
+const { PET_DATA } = require('../data/pets');
 const {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
+    SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
@@ -85,6 +88,7 @@ function removeMat(guildId, userId, id, qty) {
 }
 
 const ORE_IDS = new Set(ORE_TIERS.map(o => o.id));
+const BAR_IDS = new Set(BARS.map(b => b.id));
 
 function pickOre(layer) {
     const total = layer.ores.reduce((s, o) => s + o.w, 0);
@@ -135,6 +139,9 @@ function buildMiningPanel(guildId, userId, username) {
 
     const orePreview = layer.ores.map(o => getOreDef(o.ore).emoji).join(' ');
     const atMaxDepth = row.depth + DESCEND_STEP > pickaxe.maxDepth;
+    const hazardPct = Math.round((layer.hazard || 0) * 100);
+    const beams = getMatCount(guildId, userId, 'beam');
+    const masks = getMatCount(guildId, userId, 'gasmask');
 
     const embed = new EmbedBuilder()
         .setColor(ui.COLORS && ui.COLORS.economy ? ui.COLORS.economy : '#C9A227')
@@ -147,6 +154,7 @@ function buildMiningPanel(guildId, userId, username) {
             `📍 Kedalaman: **${row.depth}m** — ${layer.name}\n` +
             `> 🪨 Ore di sini: ${orePreview}\n` +
             `> ⛏️ Biaya gali: **${pickaxe.staminaCost}** stamina/swing\n` +
+            (hazardPct > 0 ? `> ☠️ Bahaya: **${hazardPct}%**/swing (cave-in/gas/👹${ELEMENT_EMOJI[layer.mElement] || ''}) — 🪵${beams} 😷${masks}\n` : '') +
             `> 🕳️ Batas pickaxe: **${pickaxe.maxDepth}m**${atMaxDepth ? ' ⚠️ *(upgrade untuk lebih dalam)*' : ''}\n` +
             `> ${ui.money(userData.balance)}`
         )
@@ -171,7 +179,8 @@ function buildMiningPanel(guildId, userId, username) {
 function buildOresPanel(guildId, userId, username) {
     const all = getOres(guildId, userId);
     const ores = all.filter(o => ORE_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
-    const bars = all.filter(o => !ORE_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
+    const bars = all.filter(o => BAR_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
+    const supplies = all.filter(o => !ORE_IDS.has(o.oreId) && !BAR_IDS.has(o.oreId));
     let oreValue = 0, oreQty = 0;
     let desc = '**🪨 Ore Mentah:**\n';
     if (ores.length === 0) desc += '> *kosong — gali dulu!*\n';
@@ -187,7 +196,14 @@ function buildOresPanel(guildId, userId, username) {
         const def = getMaterialDef(b.oreId);
         desc += `> ${def.emoji} **${def.name}** ×${b.quantity}\n`;
     });
-    desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 💰 Nilai ore mentah: 🪙 **${oreValue.toLocaleString('id-ID')}** (${oreQty} ore)\n> ℹ️ *Jual hanya menjual ore mentah — bar aman untuk Smith.*`;
+    if (supplies.length > 0) {
+        desc += `\n**🧰 Perlengkapan:**\n`;
+        supplies.forEach(s => {
+            const def = getMaterialDef(s.oreId);
+            desc += `> ${def.emoji} **${def.name}** ×${s.quantity}\n`;
+        });
+    }
+    desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n> 💰 Nilai ore mentah: 🪙 **${oreValue.toLocaleString('id-ID')}** (${oreQty} ore)\n> ℹ️ *Jual hanya menjual ore mentah — bar & perlengkapan aman.*`;
 
     const embed = new EmbedBuilder().setColor('#C9A227').setTitle('🎒 Kantong Material').setDescription(desc);
     const r = new ActionRowBuilder().addComponents(
@@ -277,10 +293,22 @@ function buildShopPanel(guildId, userId, username) {
         });
         components.push(new ActionRowBuilder().addComponents(menu));
     }
+
+    // Safety supplies (anti-hazard)
+    desc += `\n**🧰 Perlengkapan Keselamatan:**\n`;
+    SUPPLIES.forEach(s => {
+        const owned = getMatCount(guildId, userId, s.id);
+        desc += `> ${s.emoji} **${s.name}** — 🪙 ${s.price} *(punya: ${owned})* — ${s.desc}\n`;
+    });
+    const supRow = new ActionRowBuilder().addComponents(
+        ...SUPPLIES.map(s => new ButtonBuilder().setCustomId(`mine_buy${s.id}_${userId}`).setLabel(`${s.emoji} Beli ${s.name} (🪙${s.price})`).setStyle(ButtonStyle.Primary))
+    );
+    components.push(supRow);
+
     components.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     ));
-    const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🛒 Pickaxe Shop').setDescription(desc);
+    const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🛒 Mine Shop').setDescription(desc);
     return { embeds: [embed], components };
 }
 
@@ -321,6 +349,17 @@ async function handleMiningButton(interaction) {
         return interaction.update(buildShopPanel(guildId, userId, interaction.user.username));
     }
 
+    if (action.startsWith('buy')) {
+        const supId = action.slice(3);
+        const sup = SUPPLIES.find(s => s.id === supId);
+        if (!sup) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
+        const userData = getOrCreateUser(guildId, userId);
+        if (userData.balance < sup.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${sup.price}**`, ephemeral: true });
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(sup.price, guildId, userId);
+        addOre(guildId, userId, sup.id, 1);
+        return interaction.update(buildShopPanel(guildId, userId, interaction.user.username));
+    }
+
     if (action === 'dig') {
         const row = getMiningData(guildId, userId);
         const pickaxe = getPickaxe(row.pickaxe);
@@ -332,35 +371,118 @@ async function handleMiningButton(interaction) {
         if (row.staminaTs === 0 || row.stamina === maxStamina(row.level) - pickaxe.staminaCost) row.staminaTs = Date.now();
 
         const layer = getLayerForDepth(row.depth);
-        const yieldCount = 1 + getRandomInt(0, pickaxe.yieldBonus) + Math.floor(row.level / 25);
-        const gained = {};
-        let expGain = 0;
-        for (let i = 0; i < yieldCount; i++) {
-            const oreId = pickOre(layer);
-            gained[oreId] = (gained[oreId] || 0) + 1;
-            expGain += getOreDef(oreId).exp;
-        }
-        for (const [oreId, qty] of Object.entries(gained)) addOre(guildId, userId, oreId, qty);
-
-        const lvl = addMiningExp(row, expGain);
-        row.totalDigs++;
-        saveMiningData(guildId, userId, row);
-        incrementUserStat(guildId, userId, 'mining_digs');
-
         const max = maxStamina(row.level);
-        const gainedText = Object.entries(gained)
-            .sort((a, b) => getOreDef(b[0]).value - getOreDef(a[0]).value)
-            .map(([id, q]) => `> ${getOreDef(id).emoji} **${getOreDef(id).name}** ×${q}`).join('\n');
-        let resultDesc = `${pickaxe.emoji} *Crack!* Kamu menggali di **${row.depth}m** (${layer.name})\n\n${gainedText}\n\n> ✨ +${expGain} Mining EXP\n> ⚡ Stamina: **${row.stamina}/${max}**`;
-        if (lvl.leveledUp) resultDesc += `\n> 🎉 **MINING LEVEL UP!** → Lv.${lvl.newLevel} (max stamina naik!)`;
-
-        const embed = new EmbedBuilder().setColor('#C9A227').setTitle('⛏️ Hasil Galian').setDescription(resultDesc);
-        const r = new ActionRowBuilder().addComponents(
+        const digRow = () => new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`mine_dig_${userId}`).setLabel('⛏️ Dig Lagi').setStyle(ButtonStyle.Success).setDisabled(row.stamina < pickaxe.staminaCost),
             new ButtonBuilder().setCustomId(`mine_ores_${userId}`).setLabel('🎒 Ores').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [r] });
+        const doMine = () => {
+            const yieldCount = 1 + getRandomInt(0, pickaxe.yieldBonus) + Math.floor(row.level / 25);
+            const gained = {}; let expGain = 0;
+            for (let i = 0; i < yieldCount; i++) { const o = pickOre(layer); gained[o] = (gained[o] || 0) + 1; expGain += getOreDef(o).exp; }
+            for (const [o, q] of Object.entries(gained)) addOre(guildId, userId, o, q);
+            return { gained, expGain };
+        };
+        const gainedText = (gained) => Object.entries(gained).sort((a, b) => getOreDef(b[0]).value - getOreDef(a[0]).value).map(([id, q]) => `> ${getOreDef(id).emoji} **${getOreDef(id).name}** ×${q}`).join('\n');
+
+        // Roll hazard
+        let hazardType = null;
+        if (layer.hazard > 0 && Math.random() < layer.hazard) {
+            const tot = HAZARD_WEIGHTS.cavein + HAZARD_WEIGHTS.gas + HAZARD_WEIGHTS.monster;
+            let rr = Math.random() * tot;
+            hazardType = (rr -= HAZARD_WEIGHTS.cavein) < 0 ? 'cavein' : (rr -= HAZARD_WEIGHTS.gas) < 0 ? 'gas' : 'monster';
+        }
+
+        // No hazard -> normal dig
+        if (!hazardType) {
+            const { gained, expGain } = doMine();
+            const lvl = addMiningExp(row, expGain);
+            row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
+            let d = `${pickaxe.emoji} *Crack!* Gali di **${row.depth}m** (${layer.name})\n\n${gainedText(gained)}\n\n> ✨ +${expGain} Mining EXP\n> ⚡ Stamina: **${row.stamina}/${max}**`;
+            if (lvl.leveledUp) d += `\n> 🎉 **MINING LEVEL UP!** → Lv.${lvl.newLevel} (max stamina naik!)`;
+            return interaction.update({ embeds: [new EmbedBuilder().setColor('#C9A227').setTitle('⛏️ Hasil Galian').setDescription(d)], components: [digRow()] });
+        }
+
+        // CAVE-IN
+        if (hazardType === 'cavein') {
+            if (getMatCount(guildId, userId, 'beam') > 0) {
+                removeMat(guildId, userId, 'beam', 1);
+                const { gained, expGain } = doMine();
+                const lvl = addMiningExp(row, expGain);
+                row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
+                let d = `🪨 **CAVE-IN!** Tapi 🪵 Penyangga menyelamatkanmu — galian aman!\n\n${gainedText(gained)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 🪵 Penyangga −1`;
+                if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
+                return interaction.update({ embeds: [new EmbedBuilder().setColor('#E67E22').setTitle('🪨 Cave-In Dicegah').setDescription(d)], components: [digRow()] });
+            }
+            const lostSta = Math.min(row.stamina, 15);
+            row.stamina -= lostSta;
+            row.depth = Math.max(0, row.depth - DESCEND_STEP * 2);
+            saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_hazards');
+            const d = `🪨 **CAVE-IN!** Terowongan runtuh! Kamu terlempar ke atas.\n\n> ❌ Tidak dapat ore\n> ⚡ Stamina −${lostSta} (${row.stamina}/${max})\n> ⬆️ Kedalaman → **${row.depth}m**\n\n> 💡 Beli 🪵 **Penyangga** di Shop biar aman.`;
+            return interaction.update({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('🪨 CAVE-IN!').setDescription(d)], components: [digRow()] });
+        }
+
+        // GAS
+        if (hazardType === 'gas') {
+            if (getMatCount(guildId, userId, 'gasmask') > 0) {
+                removeMat(guildId, userId, 'gasmask', 1);
+                const { gained, expGain } = doMine();
+                const lvl = addMiningExp(row, expGain);
+                row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
+                let d = `🟢 **GAS BERACUN!** Tapi 😷 Masker Gas melindungimu — galian lanjut!\n\n${gainedText(gained)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 😷 Masker −1`;
+                if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
+                return interaction.update({ embeds: [new EmbedBuilder().setColor('#27AE60').setTitle('🟢 Gas Dicegah').setDescription(d)], components: [digRow()] });
+            }
+            const lostSta = Math.min(row.stamina, 8);
+            row.stamina -= lostSta;
+            saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_hazards');
+            const d = `🟢 **GAS BERACUN!** Kamu mundur tergesa-gesa.\n\n> ❌ Tidak dapat ore\n> ⚡ Stamina −${lostSta} (${row.stamina}/${max})\n\n> 💡 Beli 😷 **Masker Gas** di Shop.`;
+            return interaction.update({ embeds: [new EmbedBuilder().setColor('#27AE60').setTitle('🟢 GAS POCKET!').setDescription(d)], components: [digRow()] });
+        }
+
+        // MONSTER (battle pakai pet)
+        if (hazardType === 'monster') {
+            incrementUserStat(guildId, userId, 'mining_hazards');
+            const pet = getPetData(guildId, userId);
+            const elIcon = ELEMENT_EMOJI[layer.mElement] || '';
+            if (!pet) {
+                const lostSta = Math.min(row.stamina, 10);
+                row.stamina -= lostSta; saveMiningData(guildId, userId, row);
+                const d = `👹 **MONSTER BAWAH TANAH!** Kamu nggak punya pet aktif buat melawan — kabur!\n\n> ❌ Tidak dapat ore\n> ⚡ Stamina −${lostSta} (${row.stamina}/${max})\n\n> 💡 Aktifkan pet (\`/pet\`) biar bisa lawan & dapat loot!`;
+                return interaction.update({ embeds: [new EmbedBuilder().setColor('#8E44AD').setTitle('👹 Monster!').setDescription(d)], components: [digRow()] });
+            }
+            const petDef = PET_DATA.find(p => p.id === pet.petId);
+            const ms = getMonsterStats(row.depth);
+            const result = simulateBattle(pet, petDef, [{ hp: ms.hp, atk: ms.atk, def: ms.def, element: layer.mElement }]);
+            if (result.alive) {
+                const { gained, expGain } = doMine();
+                const rare = layer.ores.map(o => o.ore).sort((a, b) => getOreDef(b).value - getOreDef(a).value)[0];
+                const bonus = getRandomInt(2, 4);
+                addOre(guildId, userId, rare, bonus); gained[rare] = (gained[rare] || 0) + bonus;
+                const lvl = addMiningExp(row, expGain + 20);
+                row.totalDigs++; saveMiningData(guildId, userId, row);
+                incrementUserStat(guildId, userId, 'mining_monsters_defeated');
+                let d = `👹${elIcon} **Monster dikalahkan ${petDef ? petDef.emoji : '🐾'} ${pet.name}!** Loot + bonus diamankan!\n\n${gainedText(gained)}\n\n> ✨ +${expGain + 20} EXP • ⚡ ${row.stamina}/${max}\n> ❤️ HP pet sisa: ${result.remainingHp}`;
+                if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
+                return interaction.update({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('👹 Monster Dikalahkan!').setDescription(d)], components: [digRow()] });
+            } else {
+                const lostSta = Math.min(row.stamina, 15);
+                row.stamina -= lostSta;
+                const ownedOres = getOres(guildId, userId).filter(o => ORE_IDS.has(o.oreId));
+                let dropMsg = 'tidak ada ore hilang';
+                if (ownedOres.length) {
+                    const victim = ownedOres[Math.floor(Math.random() * ownedOres.length)];
+                    const dropQty = Math.min(victim.quantity, getRandomInt(1, 3));
+                    removeMat(guildId, userId, victim.oreId, dropQty);
+                    dropMsg = `${getOreDef(victim.oreId).emoji} −${dropQty} ${getOreDef(victim.oreId).name}`;
+                }
+                db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 10) WHERE id = ?').run(pet.id);
+                saveMiningData(guildId, userId, row);
+                const d = `👹${elIcon} **${pet.name} kalah lawan monster!**\n\n> ❌ Loot lenyap: ${dropMsg}\n> ⚡ Stamina −${lostSta} (${row.stamina}/${max})\n> 💔 Happiness pet −10\n\n> 💡 Level-up pet / bawa pet yang **counter** elemen ${elIcon} ${layer.mElement}.`;
+                return interaction.update({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('👹 Kalah!').setDescription(d)], components: [digRow()] });
+            }
+        }
     }
 
     if (action === 'descend') {

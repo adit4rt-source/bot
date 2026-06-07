@@ -27,20 +27,37 @@ const ORE_TIERS = [
 ];
 
 // ==================== MINE LAYERS (depth zones) ====================
-// reqTier: pickaxe tier minimum agar bisa turun ke layer ini
-// ores: weighted pool (w = bobot kemunculan)
+// reqTier: pickaxe tier minimum | hazard: peluang bahaya per swing | mElement: elemen monster
 const MINE_LAYERS = [
-    { id: 'surface', name: '🌱 Permukaan',   min: 0,    max: 50,    reqTier: 0,
+    { id: 'surface', name: '🌱 Permukaan',   min: 0,    max: 50,    reqTier: 0, hazard: 0,    mElement: 'nature',
       ores: [ { ore: 'stone', w: 40 }, { ore: 'copper', w: 45 }, { ore: 'iron', w: 15 } ] },
-    { id: 'shallow', name: '🪨 Gua Dangkal', min: 50,   max: 200,   reqTier: 2,
+    { id: 'shallow', name: '🪨 Gua Dangkal', min: 50,   max: 200,   reqTier: 2, hazard: 0.06, mElement: 'nature',
       ores: [ { ore: 'stone', w: 20 }, { ore: 'copper', w: 30 }, { ore: 'iron', w: 35 }, { ore: 'gold', w: 15 } ] },
-    { id: 'magma',   name: '🔥 Zona Magma',  min: 200,  max: 500,   reqTier: 4,
+    { id: 'magma',   name: '🔥 Zona Magma',  min: 200,  max: 500,   reqTier: 4, hazard: 0.14, mElement: 'fire',
       ores: [ { ore: 'iron', w: 20 }, { ore: 'gold', w: 35 }, { ore: 'titanium', w: 35 }, { ore: 'mithril', w: 10 } ] },
-    { id: 'frozen',  name: '❄️ Gua Beku',    min: 500,  max: 1000,  reqTier: 5,
+    { id: 'frozen',  name: '❄️ Gua Beku',    min: 500,  max: 1000,  reqTier: 5, hazard: 0.20, mElement: 'water',
       ores: [ { ore: 'gold', w: 12 }, { ore: 'titanium', w: 30 }, { ore: 'mithril', w: 38 }, { ore: 'adamantite', w: 20 } ] },
-    { id: 'void',    name: '🌌 The Void',    min: 1000, max: 99999, reqTier: 6,
+    { id: 'void',    name: '🌌 The Void',    min: 1000, max: 99999, reqTier: 6, hazard: 0.28, mElement: 'dark',
       ores: [ { ore: 'mithril', w: 22 }, { ore: 'adamantite', w: 48 }, { ore: 'void_crystal', w: 30 } ] },
 ];
+
+// ==================== SUPPLIES (safety gear, anti-hazard) ====================
+const SUPPLIES = [
+    { id: 'beam',    name: 'Penyangga',  emoji: '🪵', price: 200, desc: 'Cegah cave-in (sekali pakai)' },
+    { id: 'gasmask', name: 'Masker Gas', emoji: '😷', price: 300, desc: 'Cegah gas beracun (sekali pakai)' },
+];
+
+// Bobot jenis hazard saat bahaya terpicu
+const HAZARD_WEIGHTS = { cavein: 35, gas: 30, monster: 35 };
+
+// Stats monster bawah tanah, skala dengan kedalaman
+function getMonsterStats(depth) {
+    return {
+        hp: Math.floor(80 + depth * 1.4),
+        atk: Math.floor(10 + depth * 0.06),
+        def: Math.floor(depth * 0.02),
+    };
+}
 
 // ==================== BARS (hasil smelting) ====================
 const BARS = [
@@ -94,17 +111,20 @@ function getOreDef(id) {
     return ORE_TIERS.find(o => o.id === id) || ORE_TIERS[0];
 }
 
-// Material = ore ATAU bar. Return { id, name, emoji, value, kind }.
+// Material = ore ATAU bar ATAU supply. Return { id, name, emoji, value, kind }.
 function getMaterialDef(id) {
     const ore = ORE_TIERS.find(o => o.id === id);
     if (ore) return { ...ore, kind: 'ore' };
     const bar = BARS.find(b => b.id === id);
     if (bar) return { ...bar, kind: 'bar' };
+    const sup = SUPPLIES.find(s => s.id === id);
+    if (sup) return { ...sup, value: 0, kind: 'supply' };
     return { id, name: id, emoji: '📦', value: 0, kind: 'unknown' };
 }
 
 module.exports = {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
+    SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
