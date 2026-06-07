@@ -1,8 +1,13 @@
 // systems/adminPanel.js - Admin Panel UI System (Button-based admin controls)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
-const { db, getOrCreateUser, getSetting } = require('../database');
+const { db, getOrCreateUser, getSetting, checkGlobalMode } = require('../database');
 const fs = require('fs');
 const path = require('path');
+
+// Voucher scope: bot berjalan GLOBAL (ekonomi lintas server), jadi voucher juga
+// harus global agar kode yang dibuat admin bisa diredeem semua player di semua server.
+// Pakai key konstan saat global mode; tetap per-guild kalau mode lama.
+function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
 
 // ============ BOT OWNER CONFIG ============
 // Hanya ID ini yang bisa menggunakan SEMUA fitur Money (Add, Take, Set, Add/Remove Banker).
@@ -635,7 +640,7 @@ async function handleAdminModal(interaction) {
         const reward = parseInt(interaction.fields.getTextInputValue('voucher_reward'));
         const limit = parseInt(interaction.fields.getTextInputValue('voucher_limit'));
         if (isNaN(reward) || isNaN(limit)) return interaction.reply({ content: '\u274c Angka tidak valid!', flags: 1 << 6 });
-        db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(guildId, code, reward, limit);
+        db.prepare('INSERT OR REPLACE INTO vouchers (guildId, code, reward, max_uses, current_uses) VALUES (?, ?, ?, ?, 0)').run(voucherScope(guildId), code, reward, limit);
         return interaction.reply({ content: `\u2705 Voucher **${code}** dibuat! Reward: \ud83e\ude99 **${reward.toLocaleString('id-ID')}** | Limit: **${limit}x**` });
     }
 

@@ -1,8 +1,10 @@
 // systems/economyPanel.js - Economy Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, checkGlobalMode } = require('../database');
 const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
+// Voucher scope harus konsisten dengan adminPanel: GLOBAL saat ekonomi global.
+function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
 const ui = require('./ui');
 
 // Gift cooldown (per sender): 10 seconds
@@ -245,13 +247,14 @@ async function handleEconomyModal(interaction) {
     // === REDEEM MODAL ===
     if (parts[2] === 'redeem') {
         const code = interaction.fields.getTextInputValue('voucher_code').toUpperCase().trim();
-        const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(guildId, code);
+        const vScope = voucherScope(guildId);
+        const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(vScope, code);
         if (!voucher) return interaction.reply({ content: '\u274c Kode tidak valid!', ephemeral: true });
         if (voucher.current_uses >= voucher.max_uses) return interaction.reply({ content: '\u274c Voucher sudah habis!', ephemeral: true });
-        const alreadyClaimed = db.prepare('SELECT * FROM voucher_claims WHERE guildId = ? AND code = ? AND userId = ?').get(guildId, code, userId);
+        const alreadyClaimed = db.prepare('SELECT * FROM voucher_claims WHERE guildId = ? AND code = ? AND userId = ?').get(vScope, code, userId);
         if (alreadyClaimed) return interaction.reply({ content: '\u274c Kamu sudah klaim voucher ini!', ephemeral: true });
-        db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(guildId, code);
-        db.prepare('INSERT INTO voucher_claims (guildId, code, userId) VALUES (?, ?, ?)').run(guildId, code, userId);
+        db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(vScope, code);
+        db.prepare('INSERT INTO voucher_claims (guildId, code, userId) VALUES (?, ?, ?)').run(vScope, code, userId);
         const userData = getOrCreateUser(guildId, userId);
         userData.balance += voucher.reward;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
