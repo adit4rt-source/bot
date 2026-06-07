@@ -5,6 +5,9 @@ const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
 // Voucher scope harus konsisten dengan adminPanel: GLOBAL saat ekonomi global.
 function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
+// Redeem voucher HANYA boleh di server utama (anti-exploit multi-akun: bikin akun
+// di server lain lalu trade ke akun utama). Override via env REDEEM_GUILD_ID.
+const REDEEM_GUILD_ID = process.env.REDEEM_GUILD_ID || '1056412836433240074';
 const ui = require('./ui');
 
 // Gift cooldown (per sender): 10 seconds
@@ -149,6 +152,9 @@ async function handleEconomyButton(interaction) {
 
     // === REDEEM (modal) ===
     if (action === 'redeem') {
+        if (guildId !== REDEEM_GUILD_ID) {
+            return interaction.reply({ content: `\u274c Redeem voucher hanya bisa dilakukan di server **ID Community**.\n> Saldo kamu global, jadi tetap kepakai di server mana pun. Cukup redeem di sana ya. \ud83d\ude0a`, ephemeral: true });
+        }
         const modal = new ModalBuilder().setCustomId(`ecopnl_modal_redeem_${userId}`).setTitle('\ud83c\udf9f\ufe0f Redeem Voucher');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('voucher_code').setLabel('Kode Voucher').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Masukkan kode'))
@@ -246,6 +252,7 @@ async function handleEconomyModal(interaction) {
 
     // === REDEEM MODAL ===
     if (parts[2] === 'redeem') {
+        if (guildId !== REDEEM_GUILD_ID) return interaction.reply({ content: '\u274c Redeem voucher hanya bisa di server **ID Community**.', ephemeral: true });
         const code = interaction.fields.getTextInputValue('voucher_code').toUpperCase().trim();
         const vScope = voucherScope(guildId);
         const voucher = db.prepare('SELECT * FROM vouchers WHERE guildId = ? AND code = ?').get(vScope, code);
