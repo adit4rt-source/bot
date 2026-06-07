@@ -10,6 +10,7 @@ const {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
+    CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
@@ -32,6 +33,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS ore_inventory (
 )`);
 // Migrasi kolom baru (aman untuk DB lama)
 try { db.exec(`ALTER TABLE mining_data ADD COLUMN sockets TEXT DEFAULT '[]'`); } catch (e) {}
+try { db.exec(`ALTER TABLE mining_data ADD COLUMN artifact INTEGER DEFAULT 0`); } catch (e) {}
 
 // ==================== HELPERS ====================
 function maxStamina(level) { return STAMINA_BASE + (level - 1) * STAMINA_PER_LEVEL; }
@@ -178,7 +180,7 @@ function buildMiningPanel(guildId, userId, username) {
         .setColor(ui.COLORS && ui.COLORS.economy ? ui.COLORS.economy : '#C9A227')
         .setTitle(`⛏️ TAMBANG — ${username}`)
         .setDescription(
-            `${pickaxe.emoji} **${pickaxe.name}** (Tier ${pickaxe.tier})${row.prestige > 0 ? ` • ⭐ Prestige ${row.prestige}` : ''}\n` +
+            `${pickaxe.emoji} **${pickaxe.name}** (Tier ${pickaxe.tier})${row.prestige > 0 ? ` • ⭐ Prestige ${row.prestige}` : ''}${row.artifact ? ' • 🏺 Artifact' : ''}\n` +
             (slots > 0 ? `> 💎 Socket: ${socketStr || '—'}\n` : '') +
             `> ⚒️ Mining Lv.**${row.level}** \`${bar(expPct)}\` ${row.level >= MAX_MINING_LEVEL ? 'MAX' : `${row.exp}/${expNeed}`}\n` +
             `> ⚡ Stamina: \`${bar(staPct)}\` **${row.stamina}/${max}**${row.stamina < max ? ` (+1 / menit)` : ''}\n` +
@@ -205,7 +207,12 @@ function buildMiningPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`mine_gems_${userId}`).setLabel('💎 Gems').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`mine_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`mine_leaderboard_${userId}`).setLabel('🏆 Top Miners').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mine_core_${userId}`).setLabel('👑 The Core').setStyle(ButtonStyle.Danger).setDisabled(row.depth < CORE_DEPTH || row.stamina < CORE_STAMINA),
+        new ButtonBuilder().setCustomId(`mine_prestige_${userId}`).setLabel('⭐ Prestige').setStyle(ButtonStyle.Success).setDisabled(row.level < MAX_MINING_LEVEL)
+    );
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ==================== BUILD ORES (inventory) ====================
@@ -213,7 +220,7 @@ function buildOresPanel(guildId, userId, username) {
     const all = getOres(guildId, userId);
     const ores = all.filter(o => ORE_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
     const bars = all.filter(o => BAR_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
-    const supplies = all.filter(o => !ORE_IDS.has(o.oreId) && !BAR_IDS.has(o.oreId));
+    const supplies = all.filter(o => !ORE_IDS.has(o.oreId) && !BAR_IDS.has(o.oreId) && !GEM_IDS.has(o.oreId));
     let oreValue = 0, oreQty = 0;
     let desc = '**🪨 Ore Mentah:**\n';
     if (ores.length === 0) desc += '> *kosong — gali dulu!*\n';
@@ -285,14 +292,28 @@ function buildSmithPanel(guildId, userId, username) {
         desc += `> ${rc.emoji} **${rc.name}** ⟵ ${inputStr} ${canMake ? '✅' : ''}\n> ┗ *${rc.desc}*\n`;
     });
 
+    const fragCount = getMatCount(guildId, userId, 'artifact_fragment');
+    const showCore = fragCount > 0;
+    if (showCore) {
+        desc += `\n**👑 Core Forge** (🔱 Fragment: ${fragCount}):\n`;
+        CORE_RECIPES.forEach(rc => {
+            const inputStr = rc.inputs.map(i => `${i.qty}× ${getMaterialDef(i.mat).emoji}`).join(' + ');
+            const canMake = rc.inputs.every(i => getMatCount(guildId, userId, i.mat) >= i.qty);
+            desc += `> ${rc.emoji} **${rc.name}** ⟵ ${inputStr} ${canMake ? '✅' : ''}\n> ┗ *${rc.desc}*\n`;
+        });
+    }
+
     const menu = new StringSelectMenuBuilder().setCustomId(`mine_smith_select_${userId}`).setPlaceholder('🔨 Pilih item untuk ditempa...').setMinValues(1).setMaxValues(1);
     SMITH_RECIPES.forEach(rc => {
         const inputStr = rc.inputs.map(i => `${i.qty}x ${getMaterialDef(i.mat).name}`).join(' + ');
-        menu.addOptions(new StringSelectMenuOptionBuilder()
-            .setLabel(`${rc.name}`)
-            .setValue(rc.id)
-            .setDescription(inputStr.slice(0, 90)));
+        menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${rc.name}`).setValue(rc.id).setDescription(inputStr.slice(0, 90)));
     });
+    if (showCore) {
+        CORE_RECIPES.forEach(rc => {
+            const inputStr = rc.inputs.map(i => `${i.qty}x ${getMaterialDef(i.mat).name}`).join(' + ');
+            menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`👑 ${rc.name}`).setValue(`core_${rc.id}`).setDescription(inputStr.slice(0, 90)));
+        });
+    }
     const embed = new EmbedBuilder().setColor('#7F8C8D').setTitle('🔨 Pandai Besi').setDescription(desc);
     return { embeds: [embed], components: [
         new ActionRowBuilder().addComponents(menu),
@@ -307,14 +328,14 @@ function buildShopPanel(guildId, userId, username) {
     const current = getPickaxe(data.pickaxe);
 
     let desc = `${current.emoji} Pickaxe sekarang: **${current.name}** (Tier ${current.tier})\n> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n**Daftar Pickaxe:**\n`;
-    PICKAXE_TYPES.forEach(p => {
+    PICKAXE_TYPES.filter(p => !p.craftOnly).forEach(p => {
         const owned = p.tier <= current.tier;
         const tag = p.tier === current.tier ? ' ✅ dipakai' : owned ? ' (terlewati)' : '';
         desc += `> ${p.emoji} **${p.name}** (T${p.tier}) — ${p.price === 0 ? 'gratis' : `🪙 ${p.price.toLocaleString('id-ID')}`}${tag}\n`;
         desc += `> ┗ Stamina/swing: ${p.staminaCost} • Yield +${p.yieldBonus} • Max ${p.maxDepth}m\n`;
     });
 
-    const buyable = PICKAXE_TYPES.filter(p => p.tier > current.tier);
+    const buyable = PICKAXE_TYPES.filter(p => p.tier > current.tier && !p.craftOnly);
     const components = [];
     if (buyable.length > 0) {
         const menu = new StringSelectMenuBuilder().setCustomId(`mine_shop_select_${userId}`).setPlaceholder('🛒 Beli pickaxe...').setMinValues(1).setMaxValues(1);
@@ -607,6 +628,75 @@ async function handleMiningButton(interaction) {
         return interaction.update(buildMiningPanel(guildId, userId, interaction.user.username));
     }
 
+    if (action === 'core') {
+        const row = getMiningData(guildId, userId);
+        if (row.depth < CORE_DEPTH) return interaction.reply({ content: `❌ Harus di kedalaman **${CORE_DEPTH}m+** untuk akses The Core!`, ephemeral: true });
+        if (row.stamina < CORE_STAMINA) { const eta = staminaETA(row); return interaction.reply({ content: `❌ Butuh **${CORE_STAMINA}** stamina untuk lawan Core! Punya ${row.stamina}.${eta ? ` (+1/${eta}s)` : ''}`, ephemeral: true }); }
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Butuh pet aktif untuk masuk The Core! (`/pet`)', ephemeral: true });
+        row.stamina -= CORE_STAMINA;
+        if (row.staminaTs === 0) row.staminaTs = Date.now();
+        const petDef = PET_DATA.find(p => p.id === pet.petId);
+        const boss = getCoreBoss(row.prestige || 0);
+        const result = simulateBattle(pet, petDef, [{ hp: boss.hp, atk: boss.atk, def: boss.def, element: boss.element }]);
+        incrementUserStat(guildId, userId, 'mining_core_runs');
+        const coreRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`mine_core_${userId}`).setLabel('👑 Lawan Lagi').setStyle(ButtonStyle.Danger).setDisabled(row.stamina < CORE_STAMINA),
+            new ButtonBuilder().setCustomId(`mine_smith_${userId}`).setLabel('🔨 Smith').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
+        );
+        if (result.alive) {
+            const frags = getRandomInt(1, 2);
+            addOre(guildId, userId, 'artifact_fragment', frags);
+            addOre(guildId, userId, 'void_crystal', getRandomInt(2, 3));
+            const lvl = addMiningExp(row, 200); saveMiningData(guildId, userId, row);
+            incrementUserStat(guildId, userId, 'mining_core_clears');
+            let d = `👑🌑 **THE CORE DITAKLUKKAN!** ${petDef ? petDef.emoji : '🐾'} ${pet.name} menang!\n\n> 🔱 **Artifact Fragment** ×${frags}\n> 💠 Void Crystal ×2-3\n> ✨ +200 Mining EXP\n> ❤️ HP pet sisa: ${result.remainingHp}`;
+            if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
+            d += `\n\n> 🔨 Kumpulkan Fragment → tempa **Legendary Drill** / **Miner's Artifact** di Smith!`;
+            return interaction.update({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('👑 THE CORE').setDescription(d)], components: [coreRow] });
+        } else {
+            db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 15) WHERE id = ?').run(pet.id);
+            saveMiningData(guildId, userId, row);
+            const d = `👑🌑 **${pet.name} kalah di The Core...**\n\n> ❌ Gagal dapat Artifact Fragment\n> ⚡ Stamina −${CORE_STAMINA}\n> 💔 Happiness pet −15\n\n> 💡 Awaken & level-up pet, bawa elemen counter 🌑 dark (✨ light).`;
+            return interaction.update({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('👑 The Core — Kalah').setDescription(d)], components: [coreRow] });
+        }
+    }
+
+    if (action === 'prestige') {
+        const row = getMiningData(guildId, userId);
+        if (row.level < MAX_MINING_LEVEL) return interaction.reply({ content: `❌ Harus Mining Lv.${MAX_MINING_LEVEL} dulu untuk Prestige!`, ephemeral: true });
+        const nextPct = Math.round((row.prestige + 1) * PRESTIGE_BONUS * 100);
+        const embed = new EmbedBuilder().setColor('#F1C40F').setTitle('⭐ Prestige Mining')
+            .setDescription(`Prestige **reset Mining Level ke 1 & kedalaman ke 0**, tapi dapat **bonus PERMANEN +${PRESTIGE_BONUS * 100}% nilai jual ore**.\n\n> Prestige: **${row.prestige}** → **${row.prestige + 1}** (total +${nextPct}% jual ore)\n> ✅ Pickaxe, gem, bar, fragment, artifact **TETAP**\n> ⚠️ Level & EXP mining ulang dari 0\n\nLanjut?`);
+        const r = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`mine_prestigeyes_${userId}`).setLabel('⭐ Ya, Prestige!').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('❌ Batal').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [r] });
+    }
+
+    if (action === 'prestigeyes') {
+        const row = getMiningData(guildId, userId);
+        if (row.level < MAX_MINING_LEVEL) return interaction.reply({ content: '❌ Belum Level maksimal.', ephemeral: true });
+        row.level = 1; row.exp = 0; row.depth = 0; row.prestige = (row.prestige || 0) + 1;
+        saveMiningData(guildId, userId, row);
+        incrementUserStat(guildId, userId, 'mining_prestige');
+        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('⭐ PRESTIGE!')
+            .setDescription(`Kamu sekarang **Prestige ${row.prestige}**! 🎉\n\n> 📈 Mining Level reset ke 1\n> 💰 Bonus permanen: **+${Math.round(row.prestige * PRESTIGE_BONUS * 100)}%** nilai jual ore\n> ⛏️ Grind ulang, tapi cuan ore makin gede tiap prestige!`);
+        const r = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [r] });
+    }
+
+    if (action === 'leaderboard') {
+        const top = db.prepare('SELECT userId, level, prestige, totalDigs FROM mining_data ORDER BY prestige DESC, level DESC, totalDigs DESC LIMIT 10').all();
+        let d = top.length ? '' : '*Belum ada penambang. Jadilah yang pertama!*';
+        top.forEach((t, i) => { const medal = ['🥇', '🥈', '🥉'][i] || `**${i + 1}.**`; d += `${medal} <@${t.userId}> — ${t.prestige > 0 ? `⭐${t.prestige} ` : ''}Lv.${t.level} (${t.totalDigs || 0} digs)\n`; });
+        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🏆 Top Miners').setDescription(d);
+        const r = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [r] });
+    }
+
     if (action === 'sellores') {
         const ores = getOres(guildId, userId).filter(o => ORE_IDS.has(o.oreId));
         if (ores.length === 0) return interaction.reply({ content: '❌ Tidak ada ore mentah untuk dijual!', ephemeral: true });
@@ -615,6 +705,9 @@ async function handleMiningButton(interaction) {
         const mineRow = getMiningData(guildId, userId);
         const moneyBonus = socketBonus(getSockets(mineRow), 'money');
         if (moneyBonus > 0) total = Math.floor(total * (1 + moneyBonus / 100));
+        // Multiplier endgame: prestige + Miner's Artifact
+        const endMult = 1 + (mineRow.prestige || 0) * PRESTIGE_BONUS + (mineRow.artifact ? ARTIFACT_BONUS : 0);
+        if (endMult > 1) total = Math.floor(total * endMult);
         db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(total, guildId, userId);
         // Hapus hanya ore mentah (bar/gem/perlengkapan tetap aman)
         for (const o of ores) db.prepare('DELETE FROM ore_inventory WHERE guildId = ? AND userId = ? AND oreId = ?').run(guildId, userId, o.oreId);
@@ -671,7 +764,28 @@ async function handleMiningSelectMenu(interaction) {
     }
 
     if (interaction.customId.startsWith('mine_smith_select_')) {
-        const itemId = interaction.values[0];
+        const val = interaction.values[0];
+        // === Core Forge (Legendary Drill / Artifact) ===
+        if (val.startsWith('core_')) {
+            const recipe = CORE_RECIPES.find(r => r.id === val.slice(5));
+            if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+            const miss = recipe.inputs.find(i => getMatCount(guildId, userId, i.mat) < i.qty);
+            if (miss) { const md = getMaterialDef(miss.mat); return interaction.reply({ content: `❌ Bahan kurang! Butuh ${miss.qty}× ${md.emoji} ${md.name} (punya ${getMatCount(guildId, userId, miss.mat)}).`, ephemeral: true }); }
+            const data = getMiningData(guildId, userId);
+            if (recipe.type === 'pickaxe' && data.pickaxe === recipe.id) return interaction.reply({ content: '❌ Kamu sudah punya pickaxe itu!', ephemeral: true });
+            if (recipe.type === 'artifact' && data.artifact) return interaction.reply({ content: "❌ Kamu sudah punya Miner's Artifact!", ephemeral: true });
+            for (const i of recipe.inputs) removeMat(guildId, userId, i.mat, i.qty);
+            let extra = '';
+            if (recipe.type === 'pickaxe') { data.pickaxe = recipe.id; extra = '> ⛏️ Pickaxe pamungkas siap dipakai!'; }
+            else if (recipe.type === 'artifact') { db.prepare('UPDATE mining_data SET artifact = 1 WHERE guildId = ? AND userId = ?').run(guildId, userId); extra = `> 🏺 Bonus permanen +${ARTIFACT_BONUS * 100}% nilai jual ore AKTIF!`; }
+            addMiningExp(data, recipe.exp); saveMiningData(guildId, userId, data);
+            incrementUserStat(guildId, userId, 'mining_core_crafts');
+            const embed = new EmbedBuilder().setColor('#FFD700').setTitle(`👑 ${recipe.name} Ditempa!`)
+                .setDescription(`${recipe.emoji} **${recipe.name}** berhasil dibuat!\n\n${extra}\n> ✨ +${recipe.exp} Mining EXP`);
+            const r = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary));
+            return interaction.update({ embeds: [embed], components: [r] });
+        }
+        const itemId = val;
         const recipe = SMITH_RECIPES.find(r => r.id === itemId);
         if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
         const missing = recipe.inputs.find(i => getMatCount(guildId, userId, i.mat) < i.qty);

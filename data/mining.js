@@ -11,6 +11,7 @@ const PICKAXE_TYPES = [
     { id: 'gold',       name: 'Beliung Emas',      emoji: '⚒️', tier: 4, price: 70000,  staminaCost: 3, yieldBonus: 5,  maxDepth: 700 },
     { id: 'mithril',    name: 'Bor Mithril',       emoji: '🛠️', tier: 5, price: 150000, staminaCost: 3, yieldBonus: 8,  maxDepth: 1000 },
     { id: 'adamantite', name: 'Bor Adamantite',    emoji: '🛠️', tier: 6, price: 400000, staminaCost: 2, yieldBonus: 12, maxDepth: 1500 },
+    { id: 'legendary_drill', name: 'Legendary Drill', emoji: '🌀', tier: 7, price: 0, staminaCost: 1, yieldBonus: 20, maxDepth: 99999, craftOnly: true },
 ];
 
 // ==================== ORE TIERS ====================
@@ -113,6 +114,33 @@ function socketSlots(tier) {
     return 3;
 }
 
+// ==================== ENDGAME (Phase 5) ====================
+const CORE_DEPTH = 1500;        // kedalaman untuk akses The Core
+const CORE_STAMINA = 40;        // biaya stamina lawan Core boss
+const ARTIFACT_BONUS = 0.25;    // +25% nilai jual ore (permanen) jika punya Miner's Artifact
+const PRESTIGE_BONUS = 0.10;    // +10% nilai jual ore per prestige
+
+// Boss The Core — skala dengan prestige
+function getCoreBoss(prestige) {
+    return {
+        hp: 8000 + prestige * 4000,
+        atk: 200 + prestige * 60,
+        def: 60 + prestige * 15,
+        element: 'dark',
+    };
+}
+
+// Resep endgame (ditempa di Smith, butuh Artifact Fragment dari The Core)
+// type: 'pickaxe' (set pickaxe) | 'artifact' (buff permanen)
+const CORE_RECIPES = [
+    { id: 'legendary_drill', type: 'pickaxe', name: 'Legendary Drill', emoji: '🌀',
+      inputs: [{ mat: 'bar_adamantite', qty: 10 }, { mat: 'artifact_fragment', qty: 8 }], exp: 500,
+      desc: 'Bor pamungkas: stamina 1, yield +20, kedalaman tak terbatas' },
+    { id: 'artifact', type: 'artifact', name: "Miner's Artifact", emoji: '🏺',
+      inputs: [{ mat: 'artifact_fragment', qty: 15 }], exp: 1000,
+      desc: '+25% nilai jual ore permanen (akun)' },
+];
+
 const STAMINA_REGEN_MS = 60000;   // +1 stamina / menit
 const STAMINA_BASE = 100;         // max = STAMINA_BASE + level * STAMINA_PER_LEVEL
 const STAMINA_PER_LEVEL = 5;
@@ -145,6 +173,7 @@ function getMaterialDef(id) {
     if (sup) return { ...sup, value: 0, kind: 'supply' };
     const gem = GEMS.find(g => g.id === id);
     if (gem) return { ...gem, value: gem.sell, kind: 'gem' };
+    if (id === 'artifact_fragment') return { id, name: 'Artifact Fragment', emoji: '🔱', value: 0, kind: 'misc' };
     return { id, name: id, emoji: '📦', value: 0, kind: 'unknown' };
 }
 
@@ -152,6 +181,7 @@ module.exports = {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
     GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
+    CORE_DEPTH, CORE_STAMINA, ARTIFACT_BONUS, PRESTIGE_BONUS, getCoreBoss, CORE_RECIPES,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
