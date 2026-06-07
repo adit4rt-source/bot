@@ -9,6 +9,7 @@ const { PET_DATA } = require('../data/pets');
 const {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
+    GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 } = require('../data/mining');
@@ -29,6 +30,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS ore_inventory (
     guildId TEXT, userId TEXT, oreId TEXT, quantity INTEGER DEFAULT 0,
     PRIMARY KEY(guildId, userId, oreId)
 )`);
+// Migrasi kolom baru (aman untuk DB lama)
+try { db.exec(`ALTER TABLE mining_data ADD COLUMN sockets TEXT DEFAULT '[]'`); } catch (e) {}
 
 // ==================== HELPERS ====================
 function maxStamina(level) { return STAMINA_BASE + (level - 1) * STAMINA_PER_LEVEL; }
@@ -89,6 +92,31 @@ function removeMat(guildId, userId, id, qty) {
 
 const ORE_IDS = new Set(ORE_TIERS.map(o => o.id));
 const BAR_IDS = new Set(BARS.map(b => b.id));
+const GEM_IDS = new Set(GEMS.map(g => g.id));
+
+function getSockets(row) {
+    try { return JSON.parse(row.sockets || '[]'); } catch (e) { return []; }
+}
+function saveSockets(guildId, userId, arr) {
+    db.prepare('UPDATE mining_data SET sockets = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(arr), guildId, userId);
+}
+// Total bonus dari gem ter-socket untuk stat tertentu (Star Gem 'all' ikut menyumbang)
+function socketBonus(sockets, stat) {
+    let total = 0;
+    for (const id of sockets) {
+        const g = GEMS.find(x => x.id === id);
+        if (!g) continue;
+        if (g.stat === stat) total += g.power;
+        else if (g.stat === 'all') total += (STAR_CONTRIB[stat] || 0);
+    }
+    return total;
+}
+function pickGem() {
+    const total = Object.values(GEM_WEIGHTS).reduce((s, w) => s + w, 0);
+    let r = Math.random() * total;
+    for (const [id, w] of Object.entries(GEM_WEIGHTS)) { if ((r -= w) < 0) return id; }
+    return 'gem_ruby';
+}
 
 function pickOre(layer) {
     const total = layer.ores.reduce((s, o) => s + o.w, 0);
@@ -142,12 +170,16 @@ function buildMiningPanel(guildId, userId, username) {
     const hazardPct = Math.round((layer.hazard || 0) * 100);
     const beams = getMatCount(guildId, userId, 'beam');
     const masks = getMatCount(guildId, userId, 'gasmask');
+    const slots = socketSlots(pickaxe.tier);
+    const socketed = getSockets(row);
+    const socketStr = slots > 0 ? socketed.map(id => (GEMS.find(g => g.id === id) || {}).emoji || '◻️').concat(Array(Math.max(0, slots - socketed.length)).fill('▫️')).join('') : '';
 
     const embed = new EmbedBuilder()
         .setColor(ui.COLORS && ui.COLORS.economy ? ui.COLORS.economy : '#C9A227')
         .setTitle(`⛏️ TAMBANG — ${username}`)
         .setDescription(
             `${pickaxe.emoji} **${pickaxe.name}** (Tier ${pickaxe.tier})${row.prestige > 0 ? ` • ⭐ Prestige ${row.prestige}` : ''}\n` +
+            (slots > 0 ? `> 💎 Socket: ${socketStr || '—'}\n` : '') +
             `> ⚒️ Mining Lv.**${row.level}** \`${bar(expPct)}\` ${row.level >= MAX_MINING_LEVEL ? 'MAX' : `${row.exp}/${expNeed}`}\n` +
             `> ⚡ Stamina: \`${bar(staPct)}\` **${row.stamina}/${max}**${row.stamina < max ? ` (+1 / menit)` : ''}\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -170,7 +202,8 @@ function buildMiningPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`mine_ores_${userId}`).setLabel('🎒 Ores').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`mine_smelt_${userId}`).setLabel('🔥 Smelt').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`mine_smith_${userId}`).setLabel('🔨 Smith').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`mine_shop_${userId}`).setLabel('🛒 Pickaxe').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`mine_gems_${userId}`).setLabel('💎 Gems').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mine_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success)
     );
     return { embeds: [embed], components: [row1, row2] };
 }
@@ -312,6 +345,45 @@ function buildShopPanel(guildId, userId, username) {
     return { embeds: [embed], components };
 }
 
+// ==================== BUILD GEMS & SOCKET ====================
+function buildGemsPanel(guildId, userId, username) {
+    const data = getMiningData(guildId, userId);
+    const pickaxe = getPickaxe(data.pickaxe);
+    const slots = socketSlots(pickaxe.tier);
+    const socketed = getSockets(data);
+    const ownedGems = getOres(guildId, userId).filter(o => GEM_IDS.has(o.oreId)).sort((a, b) => getMaterialDef(b.oreId).value - getMaterialDef(a.oreId).value);
+
+    let desc = `${pickaxe.emoji} **${pickaxe.name}** — Socket terpakai: **${socketed.length}/${slots}**\n`;
+    desc += `> ${socketed.length ? socketed.map(id => { const g = GEMS.find(x => x.id === id); return g ? `${g.emoji} ${g.name}` : id; }).join(', ') : '*kosong*'}\n\n`;
+    desc += `**💎 Efek Gem (saat di-socket):**\n`;
+    desc += `> 🔺 Ruby +1 ore/dig • 🔹 Sapphire −1 stamina • 🔶 Topaz +20% EXP\n`;
+    desc += `> 🟩 Emerald +luck (ore langka & gem) • 💎 Diamond +15% jual • 🌟 Star all-in-one\n\n`;
+    desc += `**Gem kamu:**\n`;
+    if (ownedGems.length === 0) desc += '> *belum punya — gem drop langka saat ⛏️ Dig (makin dalam makin sering)*\n';
+    else ownedGems.forEach(g => { const d = getMaterialDef(g.oreId); desc += `> ${d.emoji} **${d.name}** ×${g.quantity}\n`; });
+    desc += `\n> 🔮 Fusion: 3× gem sama → 1× 🌟 Star Gem`;
+    if (slots === 0) desc += `\n> ⚠️ Pickaxe ini belum punya slot socket — upgrade dulu!`;
+
+    const components = [];
+    if (slots > 0 && socketed.length < slots && ownedGems.length > 0) {
+        const m = new StringSelectMenuBuilder().setCustomId(`mine_socket_select_${userId}`).setPlaceholder('💎 Socket gem ke pickaxe...').setMinValues(1).setMaxValues(1);
+        ownedGems.forEach(g => { const d = getMaterialDef(g.oreId); m.addOptions(new StringSelectMenuOptionBuilder().setLabel(`Socket ${d.name} (punya ${g.quantity})`).setValue(g.oreId).setDescription(`${d.name}`)); });
+        components.push(new ActionRowBuilder().addComponents(m));
+    }
+    const fusable = ownedGems.filter(g => g.quantity >= 3 && g.oreId !== 'gem_star');
+    if (fusable.length > 0) {
+        const fm = new StringSelectMenuBuilder().setCustomId(`mine_fuse_select_${userId}`).setPlaceholder('🔮 Fusion 3 gem → 1 Star Gem...').setMinValues(1).setMaxValues(1);
+        fusable.forEach(g => { const d = getMaterialDef(g.oreId); fm.addOptions(new StringSelectMenuOptionBuilder().setLabel(`3× ${d.name} → 🌟 Star Gem`).setValue(g.oreId).setDescription(`Punya ${g.quantity}`)); });
+        components.push(new ActionRowBuilder().addComponents(fm));
+    }
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`mine_unsocket_${userId}`).setLabel('🧹 Lepas Semua Gem').setStyle(ButtonStyle.Secondary).setDisabled(socketed.length === 0),
+        new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    ));
+    const embed = new EmbedBuilder().setColor('#8E44AD').setTitle('💎 Gem & Socket').setDescription(desc);
+    return { embeds: [embed], components };
+}
+
 // ==================== COMMAND ====================
 async function handleMiningCommand(interaction) {
     const guildId = interaction.guild.id;
@@ -345,6 +417,19 @@ async function handleMiningButton(interaction) {
         return interaction.update(buildSmithPanel(guildId, userId, interaction.user.username));
     }
 
+    if (action === 'gems') {
+        return interaction.update(buildGemsPanel(guildId, userId, interaction.user.username));
+    }
+
+    if (action === 'unsocket') {
+        const data = getMiningData(guildId, userId);
+        const socketed = getSockets(data);
+        if (socketed.length === 0) return interaction.reply({ content: '❌ Tidak ada gem ter-socket.', ephemeral: true });
+        for (const id of socketed) addOre(guildId, userId, id, 1);
+        saveSockets(guildId, userId, []);
+        return interaction.update(buildGemsPanel(guildId, userId, interaction.user.username));
+    }
+
     if (action === 'shop') {
         return interaction.update(buildShopPanel(guildId, userId, interaction.user.username));
     }
@@ -363,28 +448,46 @@ async function handleMiningButton(interaction) {
     if (action === 'dig') {
         const row = getMiningData(guildId, userId);
         const pickaxe = getPickaxe(row.pickaxe);
-        if (row.stamina < pickaxe.staminaCost) {
+        const sockets = getSockets(row);
+        const staCost = Math.max(1, pickaxe.staminaCost - socketBonus(sockets, 'stamina'));
+        if (row.stamina < staCost) {
             const eta = staminaETA(row);
-            return interaction.reply({ content: `❌ Stamina kurang! Butuh **${pickaxe.staminaCost}**, punya **${row.stamina}**.${eta ? ` (+1 dalam ${eta}s)` : ''}`, ephemeral: true });
+            return interaction.reply({ content: `❌ Stamina kurang! Butuh **${staCost}**, punya **${row.stamina}**.${eta ? ` (+1 dalam ${eta}s)` : ''}`, ephemeral: true });
         }
-        row.stamina -= pickaxe.staminaCost;
-        if (row.staminaTs === 0 || row.stamina === maxStamina(row.level) - pickaxe.staminaCost) row.staminaTs = Date.now();
+        row.stamina -= staCost;
+        if (row.staminaTs === 0 || row.stamina === maxStamina(row.level) - staCost) row.staminaTs = Date.now();
 
         const layer = getLayerForDepth(row.depth);
         const max = maxStamina(row.level);
+        const bYield = socketBonus(sockets, 'yield');
+        const bExp = socketBonus(sockets, 'exp');
+        const bLuck = socketBonus(sockets, 'luck');
+        const rareOreId = layer.ores.map(o => o.ore).sort((a, b) => getOreDef(b).value - getOreDef(a).value)[0];
         const digRow = () => new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`mine_dig_${userId}`).setLabel('⛏️ Dig Lagi').setStyle(ButtonStyle.Success).setDisabled(row.stamina < pickaxe.staminaCost),
+            new ButtonBuilder().setCustomId(`mine_dig_${userId}`).setLabel('⛏️ Dig Lagi').setStyle(ButtonStyle.Success).setDisabled(row.stamina < staCost),
             new ButtonBuilder().setCustomId(`mine_ores_${userId}`).setLabel('🎒 Ores').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
         );
         const doMine = () => {
-            const yieldCount = 1 + getRandomInt(0, pickaxe.yieldBonus) + Math.floor(row.level / 25);
+            const yieldCount = 1 + getRandomInt(0, pickaxe.yieldBonus) + bYield + Math.floor(row.level / 25);
             const gained = {}; let expGain = 0;
-            for (let i = 0; i < yieldCount; i++) { const o = pickOre(layer); gained[o] = (gained[o] || 0) + 1; expGain += getOreDef(o).exp; }
+            for (let i = 0; i < yieldCount; i++) {
+                const o = (bLuck > 0 && Math.random() < bLuck * 0.08) ? rareOreId : pickOre(layer);
+                gained[o] = (gained[o] || 0) + 1; expGain += getOreDef(o).exp;
+            }
             for (const [o, q] of Object.entries(gained)) addOre(guildId, userId, o, q);
-            return { gained, expGain };
+            expGain = Math.floor(expGain * (1 + bExp / 100));
+            // Gem drop (langka)
+            let gemId = null;
+            const gemChance = GEM_DROP_BASE + row.depth * 0.00005 + bLuck * 0.01;
+            if (Math.random() < gemChance) { gemId = pickGem(); addOre(guildId, userId, gemId, 1); }
+            return { gained, expGain, gemId };
         };
-        const gainedText = (gained) => Object.entries(gained).sort((a, b) => getOreDef(b[0]).value - getOreDef(a[0]).value).map(([id, q]) => `> ${getOreDef(id).emoji} **${getOreDef(id).name}** ×${q}`).join('\n');
+        const gainedText = (gained, gemId) => {
+            let t = Object.entries(gained).sort((a, b) => getOreDef(b[0]).value - getOreDef(a[0]).value).map(([id, q]) => `> ${getOreDef(id).emoji} **${getOreDef(id).name}** ×${q}`).join('\n');
+            if (gemId) { const g = getMaterialDef(gemId); t += `\n> ${g.emoji} **${g.name}** ×1 💎 *(langka!)*`; }
+            return t;
+        };
 
         // Roll hazard
         let hazardType = null;
@@ -396,10 +499,10 @@ async function handleMiningButton(interaction) {
 
         // No hazard -> normal dig
         if (!hazardType) {
-            const { gained, expGain } = doMine();
+            const { gained, expGain, gemId } = doMine();
             const lvl = addMiningExp(row, expGain);
             row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
-            let d = `${pickaxe.emoji} *Crack!* Gali di **${row.depth}m** (${layer.name})\n\n${gainedText(gained)}\n\n> ✨ +${expGain} Mining EXP\n> ⚡ Stamina: **${row.stamina}/${max}**`;
+            let d = `${pickaxe.emoji} *Crack!* Gali di **${row.depth}m** (${layer.name})\n\n${gainedText(gained, gemId)}\n\n> ✨ +${expGain} Mining EXP\n> ⚡ Stamina: **${row.stamina}/${max}**`;
             if (lvl.leveledUp) d += `\n> 🎉 **MINING LEVEL UP!** → Lv.${lvl.newLevel} (max stamina naik!)`;
             return interaction.update({ embeds: [new EmbedBuilder().setColor('#C9A227').setTitle('⛏️ Hasil Galian').setDescription(d)], components: [digRow()] });
         }
@@ -408,10 +511,10 @@ async function handleMiningButton(interaction) {
         if (hazardType === 'cavein') {
             if (getMatCount(guildId, userId, 'beam') > 0) {
                 removeMat(guildId, userId, 'beam', 1);
-                const { gained, expGain } = doMine();
+                const { gained, expGain, gemId } = doMine();
                 const lvl = addMiningExp(row, expGain);
                 row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
-                let d = `🪨 **CAVE-IN!** Tapi 🪵 Penyangga menyelamatkanmu — galian aman!\n\n${gainedText(gained)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 🪵 Penyangga −1`;
+                let d = `🪨 **CAVE-IN!** Tapi 🪵 Penyangga menyelamatkanmu — galian aman!\n\n${gainedText(gained, gemId)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 🪵 Penyangga −1`;
                 if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
                 return interaction.update({ embeds: [new EmbedBuilder().setColor('#E67E22').setTitle('🪨 Cave-In Dicegah').setDescription(d)], components: [digRow()] });
             }
@@ -427,10 +530,10 @@ async function handleMiningButton(interaction) {
         if (hazardType === 'gas') {
             if (getMatCount(guildId, userId, 'gasmask') > 0) {
                 removeMat(guildId, userId, 'gasmask', 1);
-                const { gained, expGain } = doMine();
+                const { gained, expGain, gemId } = doMine();
                 const lvl = addMiningExp(row, expGain);
                 row.totalDigs++; saveMiningData(guildId, userId, row); incrementUserStat(guildId, userId, 'mining_digs');
-                let d = `🟢 **GAS BERACUN!** Tapi 😷 Masker Gas melindungimu — galian lanjut!\n\n${gainedText(gained)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 😷 Masker −1`;
+                let d = `🟢 **GAS BERACUN!** Tapi 😷 Masker Gas melindungimu — galian lanjut!\n\n${gainedText(gained, gemId)}\n\n> ✨ +${expGain} EXP • ⚡ ${row.stamina}/${max}\n> 😷 Masker −1`;
                 if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
                 return interaction.update({ embeds: [new EmbedBuilder().setColor('#27AE60').setTitle('🟢 Gas Dicegah').setDescription(d)], components: [digRow()] });
             }
@@ -456,14 +559,14 @@ async function handleMiningButton(interaction) {
             const ms = getMonsterStats(row.depth);
             const result = simulateBattle(pet, petDef, [{ hp: ms.hp, atk: ms.atk, def: ms.def, element: layer.mElement }]);
             if (result.alive) {
-                const { gained, expGain } = doMine();
+                const { gained, expGain, gemId } = doMine();
                 const rare = layer.ores.map(o => o.ore).sort((a, b) => getOreDef(b).value - getOreDef(a).value)[0];
                 const bonus = getRandomInt(2, 4);
                 addOre(guildId, userId, rare, bonus); gained[rare] = (gained[rare] || 0) + bonus;
                 const lvl = addMiningExp(row, expGain + 20);
                 row.totalDigs++; saveMiningData(guildId, userId, row);
                 incrementUserStat(guildId, userId, 'mining_monsters_defeated');
-                let d = `👹${elIcon} **Monster dikalahkan ${petDef ? petDef.emoji : '🐾'} ${pet.name}!** Loot + bonus diamankan!\n\n${gainedText(gained)}\n\n> ✨ +${expGain + 20} EXP • ⚡ ${row.stamina}/${max}\n> ❤️ HP pet sisa: ${result.remainingHp}`;
+                let d = `👹${elIcon} **Monster dikalahkan ${petDef ? petDef.emoji : '🐾'} ${pet.name}!** Loot + bonus diamankan!\n\n${gainedText(gained, gemId)}\n\n> ✨ +${expGain + 20} EXP • ⚡ ${row.stamina}/${max}\n> ❤️ HP pet sisa: ${result.remainingHp}`;
                 if (lvl.leveledUp) d += `\n> 🎉 LEVEL UP! → Lv.${lvl.newLevel}`;
                 return interaction.update({ embeds: [new EmbedBuilder().setColor('#2ECC71').setTitle('👹 Monster Dikalahkan!').setDescription(d)], components: [digRow()] });
             } else {
@@ -509,14 +612,17 @@ async function handleMiningButton(interaction) {
         if (ores.length === 0) return interaction.reply({ content: '❌ Tidak ada ore mentah untuk dijual!', ephemeral: true });
         let total = 0, count = 0;
         ores.forEach(o => { total += getMaterialDef(o.oreId).value * o.quantity; count += o.quantity; });
+        const mineRow = getMiningData(guildId, userId);
+        const moneyBonus = socketBonus(getSockets(mineRow), 'money');
+        if (moneyBonus > 0) total = Math.floor(total * (1 + moneyBonus / 100));
         db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(total, guildId, userId);
-        // Hapus hanya ore mentah (bar tetap aman untuk Smith)
+        // Hapus hanya ore mentah (bar/gem/perlengkapan tetap aman)
         for (const o of ores) db.prepare('DELETE FROM ore_inventory WHERE guildId = ? AND userId = ? AND oreId = ?').run(guildId, userId, o.oreId);
         addIncome(guildId, userId, 'mining', total);
         incrementUserStat(guildId, userId, 'mining_ore_sold', count);
         const fresh = getOrCreateUser(guildId, userId);
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('💰 Ore Terjual!')
-            .setDescription(`Menjual **${count}** ore mentah → 🪙 **${total.toLocaleString('id-ID')}**\n\n> 💳 Saldo: 🪙 **${fresh.balance.toLocaleString('id-ID')}**\n> 🔩 Bar kamu tetap aman.`);
+            .setDescription(`Menjual **${count}** ore mentah → 🪙 **${total.toLocaleString('id-ID')}**${moneyBonus > 0 ? ` (💎 +${moneyBonus}% gem)` : ''}\n\n> 💳 Saldo: 🪙 **${fresh.balance.toLocaleString('id-ID')}**\n> 🔩 Bar & gem kamu tetap aman.`);
         const r = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
         );
@@ -585,6 +691,37 @@ async function handleMiningSelectMenu(interaction) {
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🔨 Tempa Selesai').setDescription(d);
         const r = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`mine_smith_${userId}`).setLabel('🔨 Tempa Lagi').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [r] });
+    }
+
+    if (interaction.customId.startsWith('mine_socket_select_')) {
+        const gemId = interaction.values[0];
+        const data = getMiningData(guildId, userId);
+        const pickaxe = getPickaxe(data.pickaxe);
+        const slots = socketSlots(pickaxe.tier);
+        const socketed = getSockets(data);
+        if (slots === 0) return interaction.reply({ content: '❌ Pickaxe ini belum punya slot socket! Upgrade dulu.', ephemeral: true });
+        if (socketed.length >= slots) return interaction.reply({ content: `❌ Socket penuh (${slots}/${slots})! Lepas gem dulu.`, ephemeral: true });
+        if (getMatCount(guildId, userId, gemId) < 1) return interaction.reply({ content: '❌ Kamu tidak punya gem itu!', ephemeral: true });
+        removeMat(guildId, userId, gemId, 1);
+        socketed.push(gemId);
+        saveSockets(guildId, userId, socketed);
+        return interaction.update(buildGemsPanel(guildId, userId, interaction.user.username));
+    }
+
+    if (interaction.customId.startsWith('mine_fuse_select_')) {
+        const gemId = interaction.values[0];
+        if (getMatCount(guildId, userId, gemId) < 3) return interaction.reply({ content: '❌ Butuh minimal 3 gem sama untuk fusion!', ephemeral: true });
+        removeMat(guildId, userId, gemId, 3);
+        addOre(guildId, userId, 'gem_star', 1);
+        incrementUserStat(guildId, userId, 'mining_gems_fused');
+        const gd = getMaterialDef(gemId);
+        const embed = new EmbedBuilder().setColor('#F1C40F').setTitle('🔮 Fusion Berhasil!')
+            .setDescription(`3× ${gd.emoji} ${gd.name} → 1× 🌟 **Star Gem**!\n\n> Star Gem memberi bonus **semua stat** saat di-socket.`);
+        const r = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`mine_gems_${userId}`).setLabel('💎 Gems').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`mine_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [r] });

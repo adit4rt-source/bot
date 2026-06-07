@@ -89,6 +89,30 @@ const SMITH_RECIPES = [
     { id: 'mythic_fragment',  name: 'Mythic Fragment',  emoji: '🌟', inputs: [{ mat: 'bar_mithril', qty: 3 }, { mat: 'bar_adamantite', qty: 1 }], exp: 120, desc: 'Material langka Awakening pet' },
 ];
 
+// ==================== GEMS (drop langka, socket ke pickaxe) ====================
+// stat: bonus saat di-socket | power: besar bonus | sell: harga jual
+const GEMS = [
+    { id: 'gem_ruby',     name: 'Ruby',     emoji: '🔺', stat: 'yield',   power: 1,  sell: 800 },
+    { id: 'gem_sapphire', name: 'Sapphire', emoji: '🔹', stat: 'stamina', power: 1,  sell: 800 },
+    { id: 'gem_topaz',    name: 'Topaz',    emoji: '🔶', stat: 'exp',     power: 20, sell: 800 },
+    { id: 'gem_emerald',  name: 'Emerald',  emoji: '🟩', stat: 'luck',    power: 1,  sell: 800 },
+    { id: 'gem_diamond',  name: 'Diamond',  emoji: '💎', stat: 'money',   power: 15, sell: 2500 },
+    { id: 'gem_star',     name: 'Star Gem', emoji: '🌟', stat: 'all',     power: 1,  sell: 8000 },
+];
+// Bobot drop gem (star sangat langka)
+const GEM_WEIGHTS = { gem_ruby: 25, gem_sapphire: 25, gem_topaz: 20, gem_emerald: 20, gem_diamond: 8, gem_star: 2 };
+const GEM_DROP_BASE = 0.03; // 3% per dig + scaling kedalaman
+// Kontribusi Star Gem (stat 'all') ke tiap stat
+const STAR_CONTRIB = { yield: 1, stamina: 1, exp: 15, money: 10, luck: 1 };
+
+// Jumlah slot socket berdasarkan tier pickaxe
+function socketSlots(tier) {
+    if (tier <= 0) return 0;
+    if (tier <= 2) return 1;
+    if (tier <= 4) return 2;
+    return 3;
+}
+
 const STAMINA_REGEN_MS = 60000;   // +1 stamina / menit
 const STAMINA_BASE = 100;         // max = STAMINA_BASE + level * STAMINA_PER_LEVEL
 const STAMINA_PER_LEVEL = 5;
@@ -119,12 +143,15 @@ function getMaterialDef(id) {
     if (bar) return { ...bar, kind: 'bar' };
     const sup = SUPPLIES.find(s => s.id === id);
     if (sup) return { ...sup, value: 0, kind: 'supply' };
+    const gem = GEMS.find(g => g.id === id);
+    if (gem) return { ...gem, value: gem.sell, kind: 'gem' };
     return { id, name: id, emoji: '📦', value: 0, kind: 'unknown' };
 }
 
 module.exports = {
     PICKAXE_TYPES, ORE_TIERS, MINE_LAYERS, BARS, SMELT_RECIPES, SMITH_RECIPES, FUEL_ORE,
     SUPPLIES, HAZARD_WEIGHTS, getMonsterStats,
+    GEMS, GEM_WEIGHTS, GEM_DROP_BASE, STAR_CONTRIB, socketSlots,
     STAMINA_REGEN_MS, STAMINA_BASE, STAMINA_PER_LEVEL, DESCEND_STEP, MAX_MINING_LEVEL,
     getMiningExpNeeded, getLayerForDepth, getPickaxe, getOreDef, getMaterialDef,
 };
