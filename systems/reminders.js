@@ -321,9 +321,15 @@ async function runWorldBossReminderCheck(client) {
 async function runAbilityTickAll(client) {
     try {
         const { runAbilityTick } = require('./petAbilities');
-        // Get all users with active pets that have abilities equipped
-        const users = db.prepare("SELECT DISTINCT guildId, userId FROM pet_abilities WHERE slot1 IS NOT NULL OR slot2 IS NOT NULL OR slot3 IS NOT NULL").all();
-        for (const { guildId, userId } of users) {
+        // Pets, balance and XP are GLOBAL (one active pet per user across all
+        // servers). pet_abilities keeps a per-guild row, so a user who equipped
+        // abilities in multiple servers would otherwise be ticked once PER guild
+        // -> duplicate passive income/XP. Dedupe to ONE tick per userId.
+        const rows = db.prepare("SELECT guildId, userId FROM pet_abilities WHERE slot1 IS NOT NULL OR slot2 IS NOT NULL OR slot3 IS NOT NULL").all();
+        const seen = new Set();
+        for (const { guildId, userId } of rows) {
+            if (seen.has(userId)) continue;
+            seen.add(userId);
             try {
                 runAbilityTick(client, guildId, userId);
             } catch (e) { /* skip individual failures */ }

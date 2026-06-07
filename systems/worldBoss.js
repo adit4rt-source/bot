@@ -202,8 +202,11 @@ function attackWorldBoss(guildId, userId, username) {
 // ==================== CLAIM REWARDS (after boss defeated) ====================
 function claimWorldBossRewards(guildId, userId) {
     const weekId = getWeekId();
-    const boss = getCurrentBoss();
-    
+    // Look up THIS week's boss directly — do NOT call getCurrentBoss(), which
+    // auto-spawns a fresh 'active' boss and would make a just-defeated boss
+    // un-claimable (and could forfeit rewards right after defeat).
+    const boss = db.prepare('SELECT * FROM world_boss WHERE weekId = ?').get(weekId);
+
     if (!boss || boss.status !== 'defeated') {
         return { success: false, error: '❌ Boss belum dikalahkan! Terus serang!' };
     }
@@ -367,7 +370,9 @@ async function handleWorldBossButton(interaction) {
             new ButtonBuilder().setCustomId(`wb_main_${userId}`).setLabel('🔙 Boss Panel').setStyle(ButtonStyle.Secondary)
         );
 
-        await checkAchievements(interaction.guild, userId, {});
+        // Achievements are a side-effect: never let them block acknowledging the
+        // interaction (a throw here previously left it unacknowledged -> "failed").
+        try { await checkAchievements(interaction.guild, userId, {}); } catch (e) { /* non-fatal */ }
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -482,6 +487,7 @@ function isWorldBossButton(customId) {
 module.exports = {
     WORLD_BOSSES,
     getCurrentBoss,
+    claimWorldBossRewards,
     buildWorldBossPanel,
     handleWorldBossButton,
     isWorldBossButton
