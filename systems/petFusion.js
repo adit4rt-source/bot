@@ -174,11 +174,14 @@ function buildFusionSelectPets(guildId, userId, tier) {
         .setMinValues(1).setMaxValues(1);
 
     petsInTier.slice(0, 25).forEach(p => {
-        menu.addOptions(new StringSelectMenuOptionBuilder()
+        const opt = new StringSelectMenuOptionBuilder()
             .setLabel(`#${p.id} ${p.name} (Lv.${p.level})`)
             .setValue(String(p.id))
-            .setDescription(`${p.petDef.name} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}`)
-            .setEmoji(p.petDef.emoji));
+            .setDescription(`${p.petDef.name} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}`);
+        // Hanya set emoji unicode. Emoji custom (<:name:id>) bisa COMPONENT_INVALID_EMOJI
+        // kalau bot tidak punya akses ke emoji guild tsb -> select menu gagal tampil.
+        if (p.petDef.emoji && !/^<a?:\w+:\d+>$/.test(p.petDef.emoji)) opt.setEmoji(p.petDef.emoji);
+        menu.addOptions(opt);
     });
 
     const components = [
@@ -212,11 +215,14 @@ function buildFusionSelectPet2(guildId, userId, tier, pet1Id) {
         .setMinValues(1).setMaxValues(1);
 
     petsInTier.slice(0, 25).forEach(p => {
-        menu.addOptions(new StringSelectMenuOptionBuilder()
+        const opt = new StringSelectMenuOptionBuilder()
             .setLabel(`#${p.id} ${p.name} (Lv.${p.level})`)
             .setValue(String(p.id))
-            .setDescription(`${p.petDef.name} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}`)
-            .setEmoji(p.petDef.emoji));
+            .setDescription(`${p.petDef.name} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}`);
+        // Hanya set emoji unicode. Emoji custom (<:name:id>) bisa COMPONENT_INVALID_EMOJI
+        // kalau bot tidak punya akses ke emoji guild tsb -> select menu gagal tampil.
+        if (p.petDef.emoji && !/^<a?:\w+:\d+>$/.test(p.petDef.emoji)) opt.setEmoji(p.petDef.emoji);
+        menu.addOptions(opt);
     });
 
     const components = [

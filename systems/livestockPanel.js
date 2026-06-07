@@ -211,12 +211,14 @@ function buildBarnPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_barn_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_barn_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_barn_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
-        ...(deadBarnCount > 0 ? [new ButtonBuilder().setCustomId(`farm_barn_bury_${userId}`).setLabel(`⚰️ Kubur (${deadBarnCount})`).setStyle(ButtonStyle.Danger)] : []),
+        ...(deadBarnCount > 0 ? [new ButtonBuilder().setCustomId(`farm_barn_bury_${userId}`).setLabel(`⚰️ Kubur (${deadBarnCount})`).setStyle(ButtonStyle.Danger)] : [])
+    );
+    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_barn_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ============ BUILD: Crafting Panel (simple — just route to farm craft) ============
