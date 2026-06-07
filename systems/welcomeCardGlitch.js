@@ -18,8 +18,8 @@ const HEAD = FONTS_OK ? 'PoppinsBold' : 'sans-serif';
 const SUB = FONTS_OK ? 'PoppinsSemiBold' : 'sans-serif';
 
 const SCALE = 2;   // render resolution multiplier (crisper + appears larger in Discord)
-const W = 1200;    // logical width (wider than before)
-const H = 470;     // logical height (a bit taller)
+const W = 1200;    // logical width
+const H = 540;     // logical height (taller -> renders a bit bigger inside the embed)
 
 function roundRectPath(ctx, x, y, w, h, r) {
     const rr = Math.min(r, w / 2, h / 2);
@@ -245,7 +245,7 @@ async function generateGlitchCard(o) {
     ctx.stroke();
 
     // thumbnail
-    const tSize = 104, tx = lx, ty = 96;
+    const tSize = 116, tx = lx, ty = 112;
     if (avatar) {
         ctx.save();
         roundRectPath(ctx, tx, ty, tSize, tSize, 6);
