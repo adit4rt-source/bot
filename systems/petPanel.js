@@ -161,6 +161,74 @@ function buildRelicPanel(guildId, userId) {
 }
 
 
+// ============ HELPER: Build the Drop Rates info panel ============
+// Data-driven from DUNGEON_TIERS / BOSS_LIST / EXPEDITION_ZONES so it always
+// matches the real loot tables.
+function _rateLine(itemId, chancePct, min, max) {
+    const d = ITEMS.find(i => i.id === itemId);
+    const emoji = d ? (d.menuEmoji || d.emoji) : '📦';
+    const name = d ? d.name : itemId;
+    const qty = (min == null || min === max) ? `${min || 1}` : `${min}-${max}`;
+    return `> ${emoji} ${name} — **${chancePct}%** (x${qty})`;
+}
+
+function buildDropRatesPanel(userId, category = 'dungeon') {
+    let desc = '';
+    let title = '📊 Drop Rates';
+
+    if (category === 'dungeon') {
+        title = '📊 Drop Rates — ⚔️ Dungeon';
+        for (const dg of DUNGEON_TIERS) {
+            desc += `**${dg.name}** (Lv.${dg.minLevel}+)\n`;
+            if (!dg.loot || dg.loot.length === 0) desc += `> *(tidak ada item drop)*\n`;
+            else for (const l of dg.loot) desc += _rateLine(l.item, Math.round(l.chance * 100), l.min, l.max) + '\n';
+            if (dg.relicChance > 0) desc += `> 📿 Relic Equipment — **${Math.round(dg.relicChance * 100)}%**\n`;
+            desc += '\n';
+        }
+    } else if (category === 'boss') {
+        title = '📊 Drop Rates — 👹 Boss (solo)';
+        for (const b of BOSS_LIST) {
+            desc += `**${b.name}** (Lv.${b.minLevel}+)\n`;
+            for (const l of b.loot) desc += _rateLine(l.item, Math.round(l.chance * 100), l.min, l.max) + '\n';
+            desc += `> 📿 Relic — **${Math.round(b.relicChance * 100)}%**${b.relicRareBonus ? ' (rarity tinggi)' : ''}\n\n`;
+        }
+        desc += `-# Boss Party Raid: tiap member dapat 🪨 Refine Stone 1-2 (pasti).`;
+    } else if (category === 'expedition') {
+        title = '📊 Drop Rates — 🌊 Expedition';
+        const { EXPEDITION_ZONES } = require('./expedition');
+        for (const z of EXPEDITION_ZONES) {
+            desc += `**${z.name}** (Lv.${z.minPetLevel}+)\n`;
+            for (const d of z.rewards.drops) desc += _rateLine(d.id, d.chance, d.min, d.max) + '\n';
+            desc += '\n';
+        }
+        desc += `-# Peluang final = base + bonus luck (level pet) + synergy (+15% kalau se-elemen), maks **95%**.`;
+    } else if (category === 'hunt') {
+        title = '📊 Drop Rates — 🏹 Hunt';
+        desc += `Hunt **berhasil 80%** dulu (20% gagal). Jika berhasil, roll loot:\n\n`;
+        desc += _rateLine('refine_stone', 12, 1, 1) + '\n';
+        desc += _rateLine('mystery_box', 8, 1, 1) + '\n';
+        desc += _rateLine('rod_part', 5, 1, 1) + '\n';
+        desc += `\n-# Peluang efektif per hunt (×80% sukses): Refine ~9.6%, Mystery ~6.4%, Rod ~4%.`;
+    }
+
+    const embed = new EmbedBuilder().setTitle(title).setColor('#1ABC9C')
+        .setDescription(desc.slice(0, 4096))
+        .setFooter({ text: 'Relic rarity: normal 70/20/10% (Rare/Epic/Leg) • rareBonus 40/35/25%' });
+
+    const menu = new StringSelectMenuBuilder().setCustomId(`pet_droprates_select_${userId}`).setPlaceholder('📊 Pilih sumber drop...').setMinValues(1).setMaxValues(1)
+        .addOptions(
+            new StringSelectMenuOptionBuilder().setLabel('Dungeon').setValue('dungeon').setEmoji('⚔️').setDefault(category === 'dungeon'),
+            new StringSelectMenuOptionBuilder().setLabel('Boss').setValue('boss').setEmoji('👹').setDefault(category === 'boss'),
+            new StringSelectMenuOptionBuilder().setLabel('Expedition').setValue('expedition').setEmoji('🌊').setDefault(category === 'expedition'),
+            new StringSelectMenuOptionBuilder().setLabel('Hunt').setValue('hunt').setEmoji('🏹').setDefault(category === 'hunt'),
+        );
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), backRow] };
+}
+
+
 // ============ HELPER: Build main pet panel embed + buttons ============
 function buildMainPanel(guildId, userId, username) {
     const pet = getPetData(guildId, userId);
@@ -840,9 +908,12 @@ async function handlePetButton(interaction) {
             new ButtonBuilder().setCustomId(`pet_doevolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success).setDisabled(!evo || pet.level < evo.level),
             new ButtonBuilder().setCustomId(`pet_abilities_${userId}`).setLabel('🧪 Abilities').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`pet_awakening_${userId}`).setLabel('⚡ Awakening').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`pet_droprates_${userId}`).setLabel('📊 Rates').setStyle(ButtonStyle.Secondary)
+        );
+        const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row1] });
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
     // === ABILITIES (redirect to abilities panel) ===
@@ -907,6 +978,11 @@ async function handlePetButton(interaction) {
     // === RELIC MANAGER ===
     if (action === 'relic') {
         return interaction.update(buildRelicPanel(guildId, userId));
+    }
+
+    // === DROP RATES INFO ===
+    if (action === 'droprates') {
+        return interaction.update(buildDropRatesPanel(userId, 'dungeon'));
     }
 
     // === UNEQUIP ALL RELICS ===
@@ -1338,6 +1414,11 @@ async function handlePetSelectMenu(interaction) {
         return interaction.update(buildRelicPanel(guildId, userId));
     }
 
+    // === DROP RATES SELECT (switch category) ===
+    if (customId.startsWith('pet_droprates_select_')) {
+        return interaction.update(buildDropRatesPanel(userId, interaction.values[0]));
+    }
+
     // === RELIC MELT SELECT ===
     if (customId.startsWith('pet_relicmelt_select_')) {
         const ids = interaction.values.map(v => parseInt(v, 10));
@@ -1460,5 +1541,6 @@ module.exports = {
     isPetPanelSelectMenu,
     isPetPanelModal,
     buildMainPanel,
-    buildRelicPanel
+    buildRelicPanel,
+    buildDropRatesPanel
 };
