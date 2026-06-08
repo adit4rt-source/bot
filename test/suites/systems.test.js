@@ -242,4 +242,22 @@ module.exports = function register() {
     const round = lot.getCurrentRound(g);
     if (round.pot < 500000) throw new Error('current round not topped up');
   });
+
+  // ---- Shop balance: Refine Stone is drop-only, no free buyables ----
+  const { ITEMS } = botRequire('data/items.js');
+  test('shop: refine_stone is not buyable (drop-only)', () => {
+    const rs = ITEMS.find(i => i.id === 'refine_stone');
+    if (!rs) throw new Error('refine_stone missing');
+    if (rs.price !== 0) throw new Error('refine_stone should be price 0 (drop-only), got ' + rs.price);
+  });
+  test('shop: buyable list excludes drop-only materials', () => {
+    const buyable = ITEMS.filter(i => i.price > 0).map(i => i.id);
+    for (const dropOnly of ['refine_stone', 'mythic_fragment', 'awakening_crystal']) {
+      if (buyable.includes(dropOnly)) throw new Error(dropOnly + ' must not be buyable');
+    }
+    // Every buyable item must have a sane positive price.
+    for (const it of ITEMS.filter(i => i.price > 0)) {
+      if (!Number.isFinite(it.price) || it.price <= 0) throw new Error('bad price for ' + it.id);
+    }
+  });
 };
