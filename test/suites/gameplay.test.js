@@ -212,7 +212,7 @@ module.exports = function register() {
     if (farming.getFarmToolYieldBonus(g, u) !== 0) throw new Error('level 0 should give 0 bonus');
     db.setUserStat(g, u, 'farm_tool_level', 3);
     const b = farming.getFarmToolYieldBonus(g, u);
-    if (Math.abs(b - 0.30) > 1e-9) throw new Error('level 3 should be +0.30, got ' + b);
+    if (Math.abs(b - 0.24) > 1e-9) throw new Error('level 3 should be +0.24 (0.08*3), got ' + b);
     const crop = { minYield: 2, maxYield: 2, time: 1 };
     const y = farmMut.calculateHarvestYield(crop, { toolBonus: 1.0 }); // base 2 * (1+1.0) = 4
     if (y !== 4) throw new Error('expected yield 4 with +100% tool bonus, got ' + y);

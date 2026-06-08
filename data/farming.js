@@ -114,13 +114,13 @@ const FARM_TOOLS = {
     name: 'Alat Tani',
     emoji: '🛠️',
     maxLevel: 5,
-    yieldPerLevel: 0.10, // +10% harvest yield per level (max +50%)
+    yieldPerLevel: 0.08, // +8% harvest yield per level (max +40%)
     upgrades: [
-        { to: 1, cost: 2000,   items: [{ id: 'gandum', qty: 15 }] },
-        { to: 2, cost: 8000,   items: [{ id: 'jagung', qty: 15 }, { id: 'tomat', qty: 8 }] },
-        { to: 3, cost: 25000,  items: [{ id: 'strawberry', qty: 12 }, { id: 'anggur', qty: 8 }] },
-        { to: 4, cost: 75000,  items: [{ id: 'kopi', qty: 10 }, { id: 'madu', qty: 6 }] },
-        { to: 5, cost: 200000, items: [{ id: 'crystal_flower', qty: 3 }, { id: 'mystic_herb', qty: 2 }] },
+        { to: 1, cost: 20000,   items: [{ id: 'gandum', qty: 40 }, { id: 'wortel', qty: 30 }] },
+        { to: 2, cost: 80000,   items: [{ id: 'jagung', qty: 50 }, { id: 'tomat', qty: 30 }, { id: 'strawberry', qty: 20 }] },
+        { to: 3, cost: 300000,  items: [{ id: 'anggur', qty: 40 }, { id: 'kopi', qty: 30 }, { id: 'madu', qty: 20 }] },
+        { to: 4, cost: 900000,  items: [{ id: 'sakura', qty: 25 }, { id: 'zaitun', qty: 20 }, { id: 'crystal_flower', qty: 8 }] },
+        { to: 5, cost: 2500000, items: [{ id: 'crystal_flower', qty: 20 }, { id: 'mystic_herb', qty: 15 }, { id: 'lotus', qty: 10 }] },
     ],
 };
 
