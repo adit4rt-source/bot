@@ -1115,11 +1115,27 @@ app.post('/api/tempvoice/settings/:guildId', adminCheck, (req, res) => {
 });
 
 // ==================== START SERVER ====================
+const DEFAULT_API_KEY = 'change-this-secret-key';
 function startApiServer() {
     app.listen(API_PORT, '0.0.0.0', () => {
         console.log(`🌐 API Server running on port ${API_PORT}`);
         console.log(`🔑 API Key: ${API_KEY.substring(0, 4)}****`);
         console.log(`👑 Admin IDs: ${ADMIN_IDS.length > 0 ? ADMIN_IDS.join(', ') : 'NONE (set ADMIN_IDS in .env)'}`);
+
+        // Loud warning if the dashboard auth key was never set (or left at default).
+        // Without a real API_KEY, every dashboard request gets 401 and pages show
+        // "Failed to load ... data". This is a DIFFERENT key from AI_API_KEY.
+        if (!process.env.API_KEY || API_KEY === DEFAULT_API_KEY) {
+            console.warn('');
+            console.warn('⚠️ ============================================================');
+            console.warn('⚠️  API_KEY belum diset (pakai default "change-this-secret-key")!');
+            console.warn('⚠️  Dashboard akan kena 401 Unauthorized → "Failed to load data".');
+            console.warn('⚠️  Set API_KEY di .env bot, dan samakan dengan BOT_API_KEY di .env dashboard.');
+            console.warn('⚠️  CATATAN: API_KEY (dashboard) ≠ AI_API_KEY (AI Assistant) — dua hal berbeda!');
+            console.warn('⚠️  Generate kunci: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+            console.warn('⚠️ ============================================================');
+            console.warn('');
+        }
     });
 }
 
