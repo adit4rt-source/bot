@@ -243,6 +243,7 @@ function buildCraftingPanel(guildId, userId, username) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_tool_${userId}`).setLabel('🛠️ Alat Tani').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_seed_${userId}`).setLabel('🌱 Benih').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 

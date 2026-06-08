@@ -226,6 +226,25 @@ module.exports = function register() {
     const yw = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.5, seedLevel: 3, weatherYieldMult: 1.5 });
     if (yw !== 6) throw new Error('expected 6 with weather x1.5 applied outside cap, got ' + yw);
   });
+  test('seed upgrade: seedLevel raises yield (0/+25%/+100%)', () => {
+    const crop = { minYield: 4, maxYield: 4, time: 1 };
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 0 }) !== 4) throw new Error('lvl0 should be 4');
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 1 }) !== 5) throw new Error('lvl1 (+25%) should be 5');
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 3 }) !== 8) throw new Error('lvl3 (+100%) should be 8');
+  });
+  test('prestige crop sells for its sellPrice (regression: used to sell for 🪙0)', () => {
+    const { addStorage } = botRequire('systems/farming.js');
+    const farm = botRequire('systems/farmPanel.js');
+    const g = 'PFG', u = '300000000000000077';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('UPDATE users SET balance = 0 WHERE guildId = ? AND userId = ?').run(g, u);
+    addStorage(g, u, 'time_blossom', 2); // prestige crop, sellPrice 120000 each
+    const it = mockInteraction({ userId: u, guildId: g, customId: `farm_sellall_${u}` });
+    return Promise.resolve(farm.handleFarmButton(it)).then(() => {
+      const bal = db.getOrCreateUser(g, u).balance;
+      if (bal !== 240000) throw new Error('expected 240000 from 2x time_blossom, got ' + bal);
+    });
+  });
 
   // ---- Profile card image ----
   test('profile card: generates a PNG buffer', () => {

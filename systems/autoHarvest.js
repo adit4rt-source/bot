@@ -3,6 +3,7 @@
 // DMs them once when their crops become ready to harvest.
 const { db } = require('../database');
 const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
+const { PRESTIGE_CROPS } = require('./farmMutation');
 const { notifyFarmReady } = require('./notifications');
 
 let log = () => {};
@@ -11,9 +12,14 @@ try { ({ log } = require('./logger')); } catch (e) { /* logger optional */ }
 const CHECK_INTERVAL_MS = 2 * 60 * 1000; // every 2 minutes (feels near-instant without spamming)
 const STARTUP_DELAY_MS = 20 * 1000;       // first check 20s after boot
 
+// Resolve a crop across normal + prestige crops (prestige plots store their plain id).
+function findCrop(id) {
+    return FARM_CROPS.find(c => c.id === id) || PRESTIGE_CROPS.find(c => c.id === id) || null;
+}
+
 // Mirror of the readiness calc used by the farm panel (farmPanel.js).
 function isPlotReady(plot) {
-    const crop = FARM_CROPS.find(c => c.id === plot.cropId);
+    const crop = findCrop(plot.cropId);
     if (!crop) return false;
     const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
     const growTime = crop.time * (1 - fert.speedBonus) * 60000;
@@ -46,7 +52,7 @@ async function runAutoHarvestCheck(client) {
             // Build a short summary of ready crops, e.g. "🌾 Gandum x2, 🍅 Tomat x1".
             const counts = {};
             for (const p of readyPlots) {
-                const crop = FARM_CROPS.find(c => c.id === p.cropId);
+                const crop = findCrop(p.cropId);
                 const label = crop ? `${crop.emoji} ${crop.name}` : p.cropId;
                 counts[label] = (counts[label] || 0) + 1;
             }

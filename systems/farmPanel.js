@@ -16,6 +16,14 @@ const state = require('../state');
 const { fishCooldowns } = state;
 const ui = require('./ui');
 
+// Resolve a crop by id across BOTH normal and prestige crops. Many lookups
+// historically only searched FARM_CROPS, so prestige crops (stored/planted under
+// their plain id) fell through — most critically selling for 0 gold in storage.
+// Use this everywhere a stored/planted crop id needs resolving.
+function findCrop(id) {
+    return FARM_CROPS.find(c => c.id === id) || PRESTIGE_CROPS.find(c => c.id === id) || null;
+}
+
 
 // ============ HELPER: Build main farm panel embed + buttons ============
 function buildFarmPanel(guildId, userId, username) {
@@ -28,7 +36,7 @@ function buildFarmPanel(guildId, userId, username) {
     const storageCount = storage.reduce((sum, s) => sum + s.quantity, 0);
     const weather = getTodayWeather();
     const readyCount = plots.filter(p => {
-        const crop = FARM_CROPS.find(c => c.id === p.cropId);
+        const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
         if (!crop || p.status === 'dead') return false;
         const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
         const growTime = crop.time * (1 - fert.speedBonus) * 60000;
@@ -147,7 +155,7 @@ function buildFarmHub(guildId, userId, username) {
     const farmData = getFarmData(guildId, userId);
     const plots = getPlots(guildId, userId);
     const readyCount = plots.filter(p => {
-        const crop = FARM_CROPS.find(c => c.id === p.cropId);
+        const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
         if (!crop || p.status === 'dead') return false;
         const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
         const growTime = crop.time * (1 - fert.speedBonus) * 60000 / (season.effects?.farmGrow || 1);
@@ -218,6 +226,38 @@ function buildToolPanel(guildId, userId, username) {
     return { embeds: [embed], components: [row] };
 }
 
+// ============ BUILD: Seed Upgrade Panel (permanent +yield & +mutation) ============
+function buildSeedPanel(guildId, userId, username) {
+    const userData = getOrCreateUser(guildId, userId);
+    const level = getUserStat(guildId, userId, 'farm_seed_level') || 0;
+    const maxLevel = SEED_UPGRADES.length - 1;
+    const cur = SEED_UPGRADES[level] || SEED_UPGRADES[0];
+    const isMax = level >= maxLevel;
+    const next = SEED_UPGRADES[level + 1];
+
+    let desc = `🌱 **Benih Unggul** — upgrade permanen: semua bibit yang ditanam memberi hasil panen lebih banyak & peluang mutasi lebih tinggi.\n\n`;
+    desc += `📊 Tingkat: **${cur.emoji} ${cur.name}** (Lv.${level}/${maxLevel})\n`;
+    desc += `🌾 Bonus hasil: **+${Math.round(cur.yieldBonus * 100)}%**\n`;
+    desc += `✨ Bonus mutasi: **+${Math.round(cur.mutationBonus * 100)}%**\n`;
+    desc += `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+    if (isMax) {
+        desc += `✅ **TINGKAT MAKSIMAL!** Semua tanaman memakai ${cur.emoji} ${cur.name}.`;
+    } else if (next) {
+        desc += `⬆️ **Upgrade ke ${next.emoji} ${next.name}** (Lv.${next.level}):\n`;
+        desc += `> 🌾 Hasil jadi **+${Math.round(next.yieldBonus * 100)}%** | ✨ Mutasi **+${Math.round(next.mutationBonus * 100)}%**\n`;
+        desc += `> 🪙 Biaya: **${next.cost.toLocaleString('id-ID')}**\n`;
+        desc += `\n*Catatan: bonus hasil semua sumber (benih + pupuk + alat + pet + rotasi) dibatasi maksimal +100%.*`;
+    }
+
+    const embed = new EmbedBuilder().setTitle(`🌱 BENIH UNGGUL — ${username}`).setColor('#27AE60').setDescription(desc);
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_seedup_${userId}`).setLabel(isMax ? '✅ MAX' : `⬆️ Upgrade (${next.name})`).setStyle(ButtonStyle.Success).setDisabled(isMax),
+        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🔙 Crafting').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [row] };
+}
+
 // ============ HANDLER: /farm command (show HUB panel) ============
 async function handleFarmCommand(interaction) {
     const guildId = interaction.guild.id;
@@ -282,6 +322,23 @@ async function handleFarmButton(interaction) {
         incrementUserStat(guildId, userId, 'farm_tool_level', 1);
         await interaction.update(buildToolPanel(guildId, userId, interaction.user.username));
         return interaction.followUp({ content: `🛠️ **Alat Tani** naik ke **Lv.${next.to}**! Sekarang +${(next.to * FARM_TOOLS.yieldPerLevel * 100).toFixed(0)}% hasil panen.`, ephemeral: true });
+    }
+    // === SEED UPGRADE (permanent: +harvest yield & +mutation chance) ===
+    if (customId === `farm_seed_${userId}`) {
+        return interaction.update(buildSeedPanel(guildId, userId, interaction.user.username));
+    }
+    if (customId === `farm_seedup_${userId}`) {
+        const level = getUserStat(guildId, userId, 'farm_seed_level') || 0;
+        const maxLevel = SEED_UPGRADES.length - 1;
+        if (level >= maxLevel) return interaction.reply({ content: '✅ Benih sudah tingkat MAX!', ephemeral: true });
+        const next = SEED_UPGRADES[level + 1];
+        if (!next) return interaction.reply({ content: '❌ Upgrade tidak tersedia.', ephemeral: true });
+        const ud = getOrCreateUser(guildId, userId);
+        if (ud.balance < next.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${next.cost.toLocaleString('id-ID')}**.`, ephemeral: true });
+        subtractUserBalance(guildId, userId, next.cost);
+        incrementUserStat(guildId, userId, 'farm_seed_level', 1);
+        await interaction.update(buildSeedPanel(guildId, userId, interaction.user.username));
+        return interaction.followUp({ content: `🌱 **Benih** naik ke **${next.emoji} ${next.name}**! Hasil panen +${Math.round(next.yieldBonus * 100)}%, peluang mutasi +${Math.round(next.mutationBonus * 100)}%.`, ephemeral: true });
     }
     if (customId === `farm_allstorage_${userId}`) {
         const { buildStorageHub } = require('./livestockPanel');
@@ -533,6 +590,9 @@ async function handleFarmButton(interaction) {
         let harvested = 0, totalItems = 0, harvestDesc = '', harvestedLegendary = false;
         let mutationCount = 0, mutationDesc = '';
 
+        // Permanent seed upgrade level (boosts yield + mutation chance for all plots).
+        const seedLevel = getUserStat(guildId, userId, 'farm_seed_level') || 0;
+
         for (const plot of plots) {
             let crop = FARM_CROPS.find(c => c.id === plot.cropId);
             if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
@@ -553,21 +613,24 @@ async function handleFarmButton(interaction) {
                 const qty = calculateHarvestYield(crop, {
                     weatherYieldMult,
                     fertYieldBonus: fert.yieldBonus,
-                    seedLevel: 0, // TODO: integrate seed upgrade per-plot
+                    seedLevel,
                     rotationBonus,
                     petFarmBonus,
                     toolBonus: getFarmToolYieldBonus(guildId, userId)
                 });
 
                 // Roll mutation!
-                const mutation = rollMutation(guildId, userId, 0);
+                const mutation = rollMutation(guildId, userId, seedLevel);
                 
                 addStorage(guildId, userId, crop.id, qty);
                 if (crop.tier === 'Legendary') harvestedLegendary = true;
 
                 if (mutation) {
-                    // Mutation success! Add bonus money directly
-                    const mutationMoney = crop.sellPrice * qty * mutation.multiplier;
+                    // Mutation jackpot! The harvested crop ALSO goes to storage (worth
+                    // sellPrice x qty when sold), so we pay the bonus as (multiplier - 1)x
+                    // here. Total value = stored crop (1x) + bonus = multiplier x — keeping
+                    // the advertised multiplier honest instead of double-counting it.
+                    const mutationMoney = crop.sellPrice * qty * (mutation.multiplier - 1);
                     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(mutationMoney, guildId, userId);
                     addIncome(guildId, userId, 'farm_mutation', mutationMoney);
                     logMutation(guildId, userId, crop.id, mutation.id);
@@ -694,7 +757,7 @@ async function handleFarmButton(interaction) {
         const { PRODUCT_QUALITY } = require('../data/livestock');
         let desc = '', totalValue = 0;
         storage.forEach(s => {
-            const crop = FARM_CROPS.find(c => c.id === s.itemId);
+            const crop = findCrop(s.itemId);
             let value = 0;
             if (crop) {
                 value = crop.sellPrice * s.quantity;
@@ -725,7 +788,7 @@ async function handleFarmButton(interaction) {
         const { PRODUCT_QUALITY } = require('../data/livestock');
         let totalMoney = 0, sellDesc = '';
         for (const s of storage) {
-            const crop = FARM_CROPS.find(c => c.id === s.itemId);
+            const crop = findCrop(s.itemId);
             let price = 0;
             if (crop) {
                 price = crop.sellPrice * s.quantity;
@@ -834,7 +897,7 @@ async function handleFarmButton(interaction) {
 
         let plotList = '';
         unfertilized.forEach((p, i) => {
-            const crop = FARM_CROPS.find(c => c.id === p.cropId);
+            const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
             plotList += `> [${plots.indexOf(p) + 1}] ${crop ? crop.emoji + ' ' + crop.name : '?'}\n`;
         });
         const embed = new EmbedBuilder().setTitle('🧫 Pupuk Tanaman').setColor('#F39C12')
@@ -1004,7 +1067,7 @@ async function handleFarmSelectMenu(interaction) {
         if (unfertilized.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman yang bisa dipupuk!', ephemeral: true });
         const plotMenu = new StringSelectMenuBuilder().setCustomId(`farm_pupukplot_${fertId}_${userId}`).setPlaceholder('🌱 Pilih tanaman...').setMinValues(1).setMaxValues(1);
         unfertilized.forEach(p => {
-            const crop = FARM_CROPS.find(c => c.id === p.cropId);
+            const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
             const slotNum = plots.indexOf(p) + 1;
             plotMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`[Slot ${slotNum}] ${crop ? crop.name : '?'}`).setValue(String(p.id)).setDescription(`${crop ? crop.emoji + ' ' + crop.tier : ''}`));
         });

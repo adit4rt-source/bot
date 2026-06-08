@@ -79,6 +79,8 @@ module.exports = function register() {
   h('auction:mine', auction, 'handleAuctionButton', `auc_mine_${U}`);
   const farm2 = botRequire('systems/farmPanel.js');
   h('farm:tool', farm2, 'handleFarmButton', `farm_tool_${U}`);
+  h('farm:seed', farm2, 'handleFarmButton', `farm_seed_${U}`);
+  h('farm:seedup', farm2, 'handleFarmButton', `farm_seedup_${U}`);
   h('level:rank', lvl, 'handleLevelButton', `lvlpnl_rank_${U}`);
   h('level:leaderboard', lvl, 'handleLevelButton', `lvlpnl_leaderboard_${U}`);
   h('level:rewards', lvl, 'handleLevelButton', `lvlpnl_rewards_${U}`);
