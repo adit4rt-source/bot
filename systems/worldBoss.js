@@ -20,13 +20,13 @@ const WORLD_BOSSES = [
 
 // ==================== REWARD TIERS ====================
 const REWARD_TIERS = [
-    { rank: 1, money: 50000, items: [{ id: 'protection_stone', qty: 5 }, { id: 'xp_booster_3x', qty: 3 }], title: '🥇 MVP' },
-    { rank: 2, money: 35000, items: [{ id: 'protection_stone', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], title: '🥈 2nd' },
-    { rank: 3, money: 25000, items: [{ id: 'protection_stone', qty: 2 }, { id: 'xp_booster_2x', qty: 3 }], title: '🥉 3rd' },
-    { rank: 10, money: 15000, items: [{ id: 'refine_stone', qty: 5 }, { id: 'xp_booster_2x', qty: 2 }], title: 'Top 10' },
-    { rank: 25, money: 8000, items: [{ id: 'refine_stone', qty: 3 }, { id: 'mystery_box', qty: 2 }], title: 'Top 25' },
-    { rank: 50, money: 5000, items: [{ id: 'refine_stone', qty: 2 }, { id: 'mystery_box', qty: 1 }], title: 'Top 50' },
-    { rank: 999, money: 2000, items: [{ id: 'mystery_box', qty: 1 }], title: 'Participant' },
+    { rank: 1, money: 200000, items: [{ id: 'protection_stone', qty: 10 }, { id: 'xp_booster_3x', qty: 5 }], title: '🥇 MVP' },
+    { rank: 2, money: 140000, items: [{ id: 'protection_stone', qty: 7 }, { id: 'xp_booster_3x', qty: 4 }], title: '🥈 2nd' },
+    { rank: 3, money: 100000, items: [{ id: 'protection_stone', qty: 5 }, { id: 'xp_booster_2x', qty: 5 }], title: '🥉 3rd' },
+    { rank: 10, money: 60000, items: [{ id: 'refine_stone', qty: 8 }, { id: 'xp_booster_2x', qty: 3 }], title: 'Top 10' },
+    { rank: 25, money: 35000, items: [{ id: 'refine_stone', qty: 5 }, { id: 'mystery_box', qty: 3 }], title: 'Top 25' },
+    { rank: 50, money: 20000, items: [{ id: 'refine_stone', qty: 4 }, { id: 'mystery_box', qty: 2 }], title: 'Top 50' },
+    { rank: 999, money: 10000, items: [{ id: 'mystery_box', qty: 2 }], title: 'Participant' },
 ];
 
 // ==================== DATABASE ====================
@@ -172,7 +172,7 @@ function attackWorldBoss(guildId, userId, username) {
     }
 
     // Give small money reward per attack
-    const attackReward = getRandomInt(50, 200);
+    const attackReward = getRandomInt(200, 600);
     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(attackReward, guildId, userId);
     addIncome(guildId, userId, 'battle', attackReward);
     incrementUserStat(guildId, userId, 'world_boss_attacks');
