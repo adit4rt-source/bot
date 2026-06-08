@@ -51,6 +51,22 @@ function buildProfilePanel(guildId, userId, username, member) {
     const fishCaught = getUserStat(guildId, userId, 'total_fish_caught') || 0;
     const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
     const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
+    const bossKills = getUserStat(guildId, userId, 'boss_kills') || 0;
+    const pvpWins = getUserStat(guildId, userId, 'pvp_wins') || 0;
+    const expeditions = getUserStat(guildId, userId, 'total_expeditions') || 0;
+
+    // Ranked Arena (PvP) — MMR + tier + W/L
+    let arenaLine = '';
+    try {
+        const { getArenaStats } = require('./arena');
+        const a = getArenaStats(guildId, userId);
+        if (a && (a.wins + a.losses) > 0) arenaLine = `\n⚔️ **Arena:** ${a.tier.emoji} ${a.tier.name} \`${a.rating} MMR\` (${a.wins}W/${a.losses}L)`;
+        else if (a) arenaLine = `\n⚔️ **Arena:** ${a.tier.emoji} ${a.tier.name} \`${a.rating} MMR\` — *belum bertanding*`;
+    } catch (_) { /* arena optional */ }
+
+    // Farm tool (craftable gear) level
+    let farmToolLevel = 0;
+    try { farmToolLevel = require('./farming').getFarmToolLevel(guildId, userId); } catch (_) {}
 
     // Get achievement title
     const achievementTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'achievement_title');
@@ -74,9 +90,10 @@ function buildProfilePanel(guildId, userId, username, member) {
                 `🏅 **Level** \`${userData.level}\`  •  ${ui.money(userData.balance)}`,
                 `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}${rankLine}${progressLine}`,
                 `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})`,
-                `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}  •  🐾 **Pet:** ${petInfo}`,
+                `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}  •  🐾 **Pet:** ${petInfo}${arenaLine}`,
             ]) +
-            `\n> 🎣 Ikan ditangkap: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest selesai: **${questsDone}**`
+            `\n> 🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**` +
+            `\n> 👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**  •  🛠️ Alat Tani: **Lv.${farmToolLevel}**`
         )
         .setFooter({ text: ui.footer('Klik tombol di bawah untuk Achievement, Inventory, Rank, & lainnya') })
         .setTimestamp();
