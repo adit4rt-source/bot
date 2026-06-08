@@ -14,6 +14,7 @@ const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMark
 const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
+const { isTikTokButton, handleTikTokButton } = require('../systems/tiktok');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
@@ -1025,6 +1026,11 @@ async function routeInteraction(interaction) {
         // --- WORLD BOSS BUTTONS ---
         if (isWorldBossButton(interaction.customId)) {
             return handleWorldBossButton(interaction);
+        }
+
+        // --- TIKTOK INFO BUTTON ---
+        if (isTikTokButton(interaction.customId)) {
+            return handleTikTokButton(interaction);
         }
 
         // --- BLACKJACK BUTTONS ---
