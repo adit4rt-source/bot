@@ -217,6 +217,15 @@ module.exports = function register() {
     const y = farmMut.calculateHarvestYield(crop, { toolBonus: 1.0 }); // base 2 * (1+1.0) = 4
     if (y !== 4) throw new Error('expected yield 4 with +100% tool bonus, got ' + y);
   });
+  test('farm yield: additive bonuses are capped at +100% (weather stays separate)', () => {
+    const crop = { minYield: 2, maxYield: 2, time: 1 };
+    // bonusSum = fert 0.5 + seedLevel3 (1.0) = 1.5 -> capped to 1.0 -> base 2 * (1+1.0) = 4 (NOT 5)
+    const y = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.5, seedLevel: 3 });
+    if (y !== 4) throw new Error('expected capped yield 4 (bonusSum 1.5 -> 1.0), got ' + y);
+    // weather multiplies OUTSIDE the cap: 4 * 1.5 = 6
+    const yw = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.5, seedLevel: 3, weatherYieldMult: 1.5 });
+    if (yw !== 6) throw new Error('expected 6 with weather x1.5 applied outside cap, got ' + yw);
+  });
 
   // ---- Profile card image ----
   test('profile card: generates a PNG buffer', () => {

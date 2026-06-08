@@ -87,14 +87,13 @@ function calculateHarvestYield(crop, options = {}) {
 
     let baseYield = getRandomInt(crop.minYield, crop.maxYield);
 
-    // Apply bonuses
-    let totalMultiplier = 1;
-    totalMultiplier += fertYieldBonus; // fertilizer
-    totalMultiplier += seedUpgrade.yieldBonus; // seed upgrade
-    totalMultiplier += rotationBonus; // crop rotation
-    totalMultiplier += toolBonus; // farm tool (craftable gear)
-    totalMultiplier += petFarmBonus / 100; // pet farm_yield bonus (comes as percentage)
-    totalMultiplier *= weatherYieldMult; // weather
+    // Apply bonuses. All additive yield bonuses (fertilizer, seed, rotation, tool,
+    // pet) are summed and CAPPED at +100% so stacking everything can't exceed a 2x
+    // multiplier. Weather is kept SEPARATE (outside the cap) as a multiplicative
+    // modifier so rare weather events can still push beyond the cap.
+    const MAX_YIELD_BONUS = 1.0; // +100%
+    const bonusSum = fertYieldBonus + seedUpgrade.yieldBonus + rotationBonus + toolBonus + (petFarmBonus / 100);
+    const totalMultiplier = (1 + Math.min(bonusSum, MAX_YIELD_BONUS)) * weatherYieldMult;
 
     const finalYield = Math.max(1, Math.floor(baseYield * totalMultiplier));
     return finalYield;

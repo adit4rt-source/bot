@@ -93,7 +93,7 @@ const FARM_FERTILIZERS = [
     { id: 'pupuk_biasa', name: 'Pupuk Biasa', emoji: '💩', cost: 50, speedBonus: 0.20, yieldBonus: 0 },
     { id: 'pupuk_premium', name: 'Pupuk Premium', emoji: '✨', cost: 200, speedBonus: 0.40, yieldBonus: 0.20 },
     { id: 'pupuk_ajaib', name: 'Pupuk Ajaib', emoji: '🧪', cost: 500, speedBonus: 0.60, yieldBonus: 0.30 },
-    { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '🌟', cost: 1500, speedBonus: 0.50, yieldBonus: 0.50 }
+    { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '🌟', cost: 3000, speedBonus: 0.65, yieldBonus: 0.50 }
 ];
 
 const FARM_DECORATIONS = [
