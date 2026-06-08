@@ -86,14 +86,18 @@ function buildProfilePanel(guildId, userId, username, member) {
         .setColor(rankTitle.color || ui.COLORS.profile)
         .setThumbnail(member ? member.displayAvatarURL({ dynamic: true, size: 256 }) : null)
         .setDescription(
-            ui.statBlock([
-                `🏅 **Level** \`${userData.level}\`  •  ${ui.money(userData.balance)}`,
-                `${streakEmoji} **Streak** \`${streakCount} Hari\`${titleLine}${rankLine}${progressLine}`,
-                `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})`,
-                `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}  •  🐾 **Pet:** ${petInfo}${arenaLine}`,
-            ]) +
-            `\n> 🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**` +
-            `\n> 👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**  •  🛠️ Alat Tani: **Lv.${farmToolLevel}**`
+            `🏅 **Level ${userData.level}** - ${username}\n` +
+            `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})\n` +
+            `${ui.money(userData.balance)}\n` +
+            `${streakEmoji} **Streak** ${streakCount} Hari\n` +
+            `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}${titleLine}\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `${rankTitle.emoji} **Rank:** ${rankTitle.name}${progressLine}\n` +
+            `━━━━━━━━━━━━━━━━━━━━` +
+            `${arenaLine}\n` +
+            `🐾 **Pet:** ${petInfo}\n\n` +
+            `🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**\n` +
+            `👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**  •  🛠️ Alat Tani: **Lv.${farmToolLevel}**`
         )
         .setFooter({ text: ui.footer('Klik tombol di bawah untuk Achievement, Inventory, Rank, & lainnya') })
         .setTimestamp();
