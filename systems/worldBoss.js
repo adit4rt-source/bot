@@ -8,6 +8,7 @@ const { getRandomInt } = require('../utils');
 const { getPetData, getRelicBonus } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
+const { updateQuestProgress } = require('./quests');
 
 // ==================== WORLD BOSS DATA ====================
 const WORLD_BOSSES = [
@@ -177,6 +178,7 @@ function attackWorldBoss(guildId, userId, username) {
     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(attackReward, guildId, userId);
     addIncome(guildId, userId, 'battle', attackReward);
     incrementUserStat(guildId, userId, 'world_boss_attacks');
+    updateQuestProgress(guildId, userId, 'worldboss', 1);
 
     // Pet XP from attacking
     const { addPetExp } = require('./pets');

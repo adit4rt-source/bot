@@ -4,8 +4,19 @@ const { db, getOrCreateUser, getSetting, getConf, getUserStat, incrementUserStat
 const { checkAchievements } = require('./achievements');
 const { getRandomInt } = require('../utils');
 
-const poolKata = ["kopi hitam", "bot super", "hari ini cerah", "push rank bang", "mabar yuk", "ikan terbang", "nasi padang", "sate madura", "es campur", "bakso urat"];
-const poolTebakan = [{q: "Benda apa yang kalau ditutup jadi tongkat, kalau dibuka jadi tenda?", a: "payung"}, {q: "Hewan apa yang bersaudara?", a: "katak beradik"}];
+const poolKata = ["kopi hitam", "bot super", "hari ini cerah", "push rank bang", "mabar yuk", "ikan terbang", "nasi padang", "sate madura", "es campur", "bakso urat", "selamat pagi", "ngopi dulu", "rajin menabung", "semangat terus", "jangan menyerah", "gas terus bro", "santuy aja", "rebahan dulu", "lapar berat", "ayo gacor", "mancing mania", "panen raya", "naik level", "jackpot besar", "kerja keras"];
+const poolTebakan = [
+    {q: "Benda apa yang kalau ditutup jadi tongkat, kalau dibuka jadi tenda?", a: "payung"},
+    {q: "Hewan apa yang bersaudara?", a: "katak beradik"},
+    {q: "Bola apa yang bisa dimakan?", a: "bakso"},
+    {q: "Ayam apa yang paling besar?", a: "ayam betina"},
+    {q: "Kunci apa yang bisa berenang?", a: "kunci pas"},
+    {q: "Buah apa yang punya mahkota tapi bukan raja?", a: "nanas"},
+    {q: "Apa yang naik tapi tidak pernah turun?", a: "umur"},
+    {q: "Pintu apa yang bisa dimakan?", a: "pintu gerbang"},
+    {q: "Sapi apa yang bisa nempel di dinding?", a: "sapiderman"},
+    {q: "Batu apa yang paling capek?", a: "batuk"},
+];
 
 // ================= QUEST TYPE DEFINITIONS =================
 const QUEST_POOL = [
@@ -26,6 +37,14 @@ const QUEST_POOL = [
     { type: 'coinflip', descFn: (q) => `🪙 Main coinflip ${q.target} kali`, targetRange: { easy: [2,2], medium: [3,4], hard: [4,5] } },
     { type: 'battle', descFn: (q) => `⚔️ Lawan player di PvP ${q.target > 1 ? q.target + ' kali' : ''}`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,2] } },
     { type: 'craft', descFn: (q) => `🧪 Craft ${q.target} produk farming`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
+    // New quest types (v2 — wired to boss/gift/togel/expedition/refine/daily)
+    { type: 'boss', descFn: (q) => `👹 Kalahkan ${q.target} boss`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,3] } },
+    { type: 'gift', descFn: (q) => `🎁 Kirim gift ke player lain ${q.target > 1 ? q.target + ' kali' : ''}`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
+    { type: 'togel', descFn: (q) => `🎟️ Pasang ${q.target} angka togel`, targetRange: { easy: [1,2], medium: [2,3], hard: [3,5] } },
+    { type: 'expedition', descFn: (q) => `🌊 Selesaikan ${q.target} ekspedisi pet`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,3] } },
+    { type: 'refine', descFn: (q) => `🔨 Refine relic ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
+    { type: 'daily', descFn: () => `📅 Klaim Daily Reward hari ini`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
+    { type: 'worldboss', descFn: (q) => `🗺️ Serang World Boss ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,3], hard: [3,5] } },
 ];
 
 // ================= DIFFICULTY TIERS =================
@@ -443,4 +462,4 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     await checkAchievements(member.guild, member.id, { type: 'balance' });
 }
 
-module.exports = { updateQuestProgress, updateWeeklyQuestProgress, generateDailyQuests, generateWeeklyQuests, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, checkAndUpdateStreak, addXpAndMoney, getRandomInt, poolKata, poolTebakan, DIFFICULTY_TIERS };
+module.exports = { updateQuestProgress, updateWeeklyQuestProgress, generateDailyQuests, generateWeeklyQuests, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, checkAndUpdateStreak, addXpAndMoney, getRandomInt, poolKata, poolTebakan, DIFFICULTY_TIERS, QUEST_POOL };

@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder
 const { db, getOrCreateUser, getUserStat, incrementUserStat, checkGlobalMode } = require('../database');
 const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
+const { updateQuestProgress } = require('./quests');
 // Voucher scope harus konsisten dengan adminPanel: GLOBAL saat ekonomi global.
 function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
 // Redeem voucher HANYA boleh di server utama (anti-exploit multi-akun: bikin akun
@@ -327,6 +328,7 @@ async function processGift(interaction, senderId, targetId, amount) {
     addGiftReceivedToday(guildId, targetId, net);
     incrementUserStat(guildId, senderId, 'total_gifts_sent');
     incrementUserStat(guildId, senderId, 'total_gift_amount', amount);
+    updateQuestProgress(guildId, senderId, 'gift', 1);
     await checkAchievements(interaction.guild, senderId, { type: 'gift_send' });
     await checkAchievements(interaction.guild, targetId, { type: 'gift_receive' });
 

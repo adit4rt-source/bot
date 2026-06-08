@@ -8,6 +8,7 @@ const { getRandomInt } = require('../utils');
 const { getPetData, addPetExp, ELEMENT_EMOJI } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
+const { updateQuestProgress } = require('./quests');
 
 // ==================== EXPEDITION ZONES ====================
 const EXPEDITION_ZONES = [
@@ -369,6 +370,7 @@ function claimExpeditionRewards(guildId, userId) {
     // Update stats
     incrementUserStat(guildId, userId, 'total_expeditions');
     incrementUserStat(guildId, userId, 'expedition_money_earned', money);
+    updateQuestProgress(guildId, userId, 'expedition', 1);
 
     // Mark expedition as complete
     const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney, synergy });

@@ -140,6 +140,39 @@ module.exports = function register() {
     });
   });
 
+  // ---- Quest system (new types + progress wiring) ----
+  const quests = botRequire('systems/quests.js');
+  assert('quest: new quest types defined in pool',
+    ['boss','gift','togel','expedition','refine','daily','worldboss']
+      .every(t => quests.QUEST_POOL.some(q => q.type === t)));
+  test('quest: every generated daily quest has desc + valid target/reward', () => {
+    for (let i = 0; i < 50; i++) {
+      const qs = quests.generateDailyQuests();
+      if (qs.length !== 3) throw new Error('expected 3 daily quests');
+      for (const q of qs) {
+        if (typeof q.desc !== 'string' || !q.desc) throw new Error('quest missing desc: ' + q.type);
+        if (!(q.target >= 1) || !(q.reward >= 1)) throw new Error('bad target/reward for ' + q.type);
+      }
+    }
+  });
+  test('quest: weekly quests generate with desc for new types too', () => {
+    for (let i = 0; i < 50; i++) {
+      const qs = quests.generateWeeklyQuests();
+      for (const q of qs) { if (typeof q.desc !== 'string' || !q.desc) throw new Error('weekly quest missing desc: ' + q.type); }
+    }
+  });
+  test('quest: updateQuestProgress advances a new-type (boss) daily quest', () => {
+    const QU = '300000000000000044';
+    db.getOrCreateUser(G, QU);
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const crafted = [{ type: 'boss', target: 2, reward: 500, progress: 0, claimed: false, difficulty: 'medium', desc: '👹 Kalahkan 2 boss' }];
+    db.db.prepare('INSERT OR REPLACE INTO daily_quests (guildId, userId, date, data) VALUES (?, ?, ?, ?)').run(G, QU, today, JSON.stringify(crafted));
+    quests.updateQuestProgress(G, QU, 'boss', 1);
+    const row = db.db.prepare('SELECT data FROM daily_quests WHERE guildId = ? AND userId = ?').get(G, QU);
+    const q = JSON.parse(row.data)[0];
+    if (q.progress !== 1) throw new Error('boss quest progress not advanced: ' + q.progress);
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {

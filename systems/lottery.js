@@ -12,6 +12,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getSetting, addUserBalance, subtractUserBalance, addIncome, addSpending, incrementUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
+const { updateQuestProgress } = require('./quests');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
@@ -147,6 +148,7 @@ function placeBet(guildId, userId, username, number) {
     db.prepare('INSERT INTO lottery_bets (guildId, roundId, userId, username, number, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
         .run(guildId, round.roundId, userId, username, number, Date.now());
     incrementUserStat(guildId, userId, 'togel_bets');
+    updateQuestProgress(guildId, userId, 'togel', 1);
 
     const updated = getRoundRow(guildId, round.roundId);
     return {

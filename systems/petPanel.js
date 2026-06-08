@@ -1349,6 +1349,7 @@ async function handlePetSelectMenu(interaction) {
             addPetExp(guildId, userId, expGain);
             incrementUserStat(guildId, userId, 'boss_kills');
             addIncome(guildId, userId, 'battle', reward);
+            updateQuestProgress(guildId, userId, 'boss', 1);
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
             relicText = rollRelicDrop(guildId, userId, boss.relicChance, boss.relicRareBonus);
             lootText = rollLoot(guildId, userId, boss.loot);
@@ -1467,6 +1468,7 @@ async function handleRefineAction(interaction, guildId, userId, slot, relic) {
     if (success) {
         db.prepare('UPDATE relics SET refine_level = refine_level + 1 WHERE id = ?').run(relic.id);
         incrementUserStat(guildId, userId, 'refine_successes');
+        updateQuestProgress(guildId, userId, 'refine', 1);
         await checkAchievements(interaction.guild, userId, { type: 'refine_success', maxRefine: (lvl + 1) >= 20 });
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✨ Refine Success!')
             .setDescription(`**${relic.name}** berhasil di-upgrade!\n\n> ${slotEmoji} **${relic.name}** +${lvl} → **+${lvl+1}**\n> Stats: +${Math.floor(relic.stat_value * (1 + (lvl+1)*0.05))} ${relic.stat_type}\n> Rate was: ${rate}%`);
