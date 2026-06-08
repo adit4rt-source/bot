@@ -13,7 +13,7 @@
 //
 // Per-guild toggle: server_settings key `tiktok_convert` ('1' = on (default)).
 
-const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getSetting } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
@@ -102,14 +102,9 @@ async function resolveTikTok(url) {
     };
 }
 
-// Discord upload size cap (MB) by server boost tier. We still wrap the upload in
-// try/catch and fall back to a download link if Discord rejects it as too large.
-function uploadLimitMB(guild) {
-    const tier = guild ? (guild.premiumTier || 0) : 0;
-    if (tier >= 3) return 100;
-    if (tier >= 2) return 50;
-    return 25;
-}
+// Discord renders an inline video player when a raw direct .mp4 URL appears in
+// the message content. We post the no-watermark URL directly (no download /
+// re-upload) so the conversion shows up fast.
 
 function authorLine(info) {
     const a = info.author;
@@ -204,35 +199,14 @@ async function maybeHandleTikTok(message) {
 
         if (!info.videoSD && !info.videoHD) return true;
 
-        // Download the lighter SD stream so we can re-upload it (no watermark,
-        // and smaller = faster than the HD file which we keep for the Save button).
-        let buffer = null;
-        const srcUrl = info.videoSD || info.videoHD;
-        try {
-            const vres = await fetch(srcUrl, { headers: { 'User-Agent': UA } });
-            if (vres.ok) buffer = Buffer.from(await vres.arrayBuffer());
-        } catch (e) {
-            log('WARN', `[tiktok] download failed: ${e.message}`);
-        }
-
-        const limitBytes = uploadLimitMB(message.guild) * 1024 * 1024;
-        const components = [buildButtons(info)];
-
-        if (buffer && buffer.length <= limitBytes) {
-            const file = new AttachmentBuilder(buffer, { name: 'tiktok.mp4' });
-            try {
-                const sent = await message.channel.send({ content: buildContent(info), files: [file], components });
-                cacheInfo(sent.id, info);
-                return true;
-            } catch (e) {
-                log('WARN', `[tiktok] upload rejected, sending link: ${e.message}`);
-            }
-        }
-
-        // Fallback: too large (or download failed) → post the card with a link only.
+        // Fast path: post the no-watermark URL directly and let Discord build
+        // the inline video player. No download / re-upload, so it shows up fast.
+        // Use the lighter SD stream for the embedded player (Discord fetches it
+        // quicker); the HD file stays behind the Save button.
+        const playUrl = info.videoSD || info.videoHD;
         const sent = await message.channel.send({
-            content: `${buildContent(info)}\n-# Video terlalu besar untuk diupload — klik **Save** untuk download.`,
-            components,
+            content: `${buildContent(info)}\n${playUrl}`,
+            components: [buildButtons(info)],
         }).catch(() => null);
         if (sent) cacheInfo(sent.id, info);
         return true;
