@@ -37,6 +37,13 @@ module.exports = async function handleMessageCreate(message) {
     const { maybeHandleAiMessage } = require('../systems/aiAssistant');
     if (await maybeHandleAiMessage(message)) return; // handled as an AI query
 
+    // === TIKTOK AUTO-CONVERT (no-watermark) ===
+    // Detect TikTok links in any channel and re-upload the video without the
+    // watermark. Run in the background so normal chat rewards (XP/quests/etc.)
+    // still apply to the same message without waiting on the download.
+    const { maybeHandleTikTok } = require('../systems/tiktok');
+    maybeHandleTikTok(message).catch(() => {});
+
     // Mini-event answer handling
     if (state.activeMiniEvents.has(guildId)) {
         const game = state.activeMiniEvents.get(guildId);

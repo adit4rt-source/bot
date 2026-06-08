@@ -125,4 +125,26 @@ module.exports = function register() {
       if (ai.shouldAnswerInChannel(q)) throw new Error('expected FALSE for: ' + q);
     }
   });
+
+  // ---- TikTok auto-convert: URL detection ----
+  const tk = botRequire('systems/tiktok.js');
+  assert('tiktok: exports extractTikTokUrl', typeof tk.extractTikTokUrl === 'function');
+  test('tiktok: detects tiktok links in a message', () => {
+    const cases = [
+      'check this https://www.tiktok.com/@user/video/7647407680209964296 lol',
+      'https://vm.tiktok.com/ZMabc123/',
+      'eh lihat vt.tiktok.com style? no — https://vt.tiktok.com/ZSabcd/',
+      'https://m.tiktok.com/v/123456.html',
+    ];
+    for (const c of cases) {
+      const u = tk.extractTikTokUrl(c);
+      if (!u || !/tiktok\.com/i.test(u)) throw new Error('failed to extract from: ' + c);
+    }
+  });
+  test('tiktok: ignores messages without a tiktok link', () => {
+    const none = ['hello world', 'https://youtube.com/watch?v=abc', 'just chatting', ''];
+    for (const c of none) {
+      if (tk.extractTikTokUrl(c)) throw new Error('false positive for: ' + c);
+    }
+  });
 };
