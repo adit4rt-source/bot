@@ -173,6 +173,35 @@ module.exports = function register() {
     if (q.progress !== 1) throw new Error('boss quest progress not advanced: ' + q.progress);
   });
 
+  // ---- Leveling formula (XP no longer stuck) ----
+  test('level: XP threshold is (level+1)*100 and grants a level', () => {
+    const LU = '300000000000000061';
+    db.getOrCreateUser(G, LU);
+    const setS = (k, v) => db.db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(G, k, v);
+    setS('msg_xp_min', '1'); setS('msg_xp_max', '1'); setS('levelup_announce_enabled', '0');
+    db.db.prepare('UPDATE users SET level = 0, xp = 99 WHERE guildId = ? AND userId = ?').run(G, LU);
+    const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
+    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+      const u = db.getOrCreateUser(G, LU);
+      if (u.level !== 1) throw new Error('expected level 1, got ' + u.level);
+      if (u.xp !== 0) throw new Error('expected xp 0 after exact level up, got ' + u.xp);
+    });
+  });
+  test('level: over-accumulated XP catches up across multiple levels (unstuck)', () => {
+    const LU = '300000000000000062';
+    db.getOrCreateUser(G, LU);
+    const setS = (k, v) => db.db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(G, k, v);
+    setS('msg_xp_min', '1'); setS('msg_xp_max', '1'); setS('levelup_announce_enabled', '0');
+    db.db.prepare('UPDATE users SET level = 12, xp = 2892 WHERE guildId = ? AND userId = ?').run(G, LU);
+    const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
+    // 2892 + 1 = 2893 -> L13 (-1300 => 1593) -> L14 (-1400 => 193) -> stop (<1500)
+    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+      const u = db.getOrCreateUser(G, LU);
+      if (u.level !== 14) throw new Error('expected level 14 after catch-up, got ' + u.level);
+      if (u.xp !== 193) throw new Error('expected leftover xp 193, got ' + u.xp);
+    });
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {

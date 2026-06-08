@@ -870,7 +870,7 @@ app.get('/api/leveling/leaderboard', async (req, res) => {
         // Calculate XP to next level for each user
         const enriched = await enrichLeaderboard(rows);
         const withXpCalc = enriched.map(r => {
-            const xpToNext = (r.level + 1) * (r.level + 1) * 100; // formula: level^2 * 100
+            const xpToNext = (r.level + 1) * 100; // formula: (level+1) * 100 (matches bot leveling & panels)
             return { ...r, xpToNext };
         });
 

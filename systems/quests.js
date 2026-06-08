@@ -402,12 +402,21 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         return;
     }
 
-    if (user.xp >= (user.level + 1) * (user.level + 1) * 100 * xpMultiplier) {
-        user.level += 1; user.xp = 0;
+    // XP needed to advance from level L to L+1 = (L+1) * 100 — MUST stay in sync
+    // with the formula shown in the level/profile panels. xpMultiplier only boosts
+    // XP GAIN (applied above), never the requirement; otherwise faster gain would be
+    // cancelled out by a higher threshold and progress would look "stuck".
+    let leveledUp = false;
+    let teksHadiah = "";
+    // Loop so a single XP gain can grant multiple levels, and so users whose XP was
+    // accumulated above the old (broken) threshold instantly catch up to their level.
+    while (user.level < maxLevel && user.xp >= (user.level + 1) * 100) {
+        user.xp -= (user.level + 1) * 100;
+        user.level += 1;
+        leveledUp = true;
 
         // Check rewards from old rewards table
         const reward = db.prepare('SELECT * FROM rewards WHERE guildId = ? AND level = ?').get(guildId, user.level);
-        let teksHadiah = "";
         if (reward) {
             let dapatRole = false, dapatUang = false;
             if (reward.roleId) { const role = member.guild.roles.cache.get(reward.roleId); if (role) { await member.roles.add(role).catch(() => {}); teksHadiah += ` Role <@&${reward.roleId}>`; dapatRole = true; } }
@@ -433,9 +442,13 @@ async function addXpAndMoney(member, type, multiplier = 1) {
                 }
             }
         } catch (e) { /* ignore parse errors */ }
+    }
 
-        db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
+    if (user.level >= maxLevel) user.xp = 0;
 
+    db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
+
+    if (leveledUp) {
         // Level-up announcement from dashboard settings
         const announceEnabled = getSetting(guildId, 'levelup_announce_enabled', '1');
         if (announceEnabled !== '0') {
@@ -456,8 +469,6 @@ async function addXpAndMoney(member, type, multiplier = 1) {
             }
         }
         await checkAchievements(member.guild, member.id, { type: 'level' });
-    } else {
-        db.prepare('UPDATE users SET xp = ?, level = ?, balance = ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(user.xp, user.level, user.balance, user.lastDaily, guildId, member.id);
     }
     await checkAchievements(member.guild, member.id, { type: 'balance' });
 }
