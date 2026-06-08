@@ -844,8 +844,8 @@ async function handlePetButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
-    // === EVOLVE (instant action) ===
-    if (action === 'evolve') {
+    // === EVOLVE (instant action) — triggered by the "🧬 Evolve" button (pet_doevolve_) ===
+    if (action === 'doevolve') {
         const pet = getPetData(guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
         const evo = checkPetEvolution(guildId, userId);

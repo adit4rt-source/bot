@@ -308,4 +308,21 @@ module.exports = function register() {
     if (!tank.alive) throw new Error('tank with +5000 DEF relic should survive');
     if (plain.alive) throw new Error('plain pet (no relic) should die — relic bonus not applied in battle!');
   });
+
+  // ---- Achievement pokedex progress ----
+  const ach = botRequire('systems/achievements.js');
+  test('achievement: progress reports current/target for countable badges', () => {
+    const g = 'ACH_PROG', u = 'ACHU_PROG';
+    db.getOrCreateUser(g, u);
+    db.incrementUserStat(g, u, 'total_chats', 150);
+    const p = ach.getAchievementProgress(g, u, 'chat_100');
+    if (!p) throw new Error('expected progress for chat_100');
+    if (p.target !== 100) throw new Error('wrong target');
+    if (p.raw !== 150) throw new Error('wrong raw: ' + p.raw);
+    if (p.current !== 100) throw new Error('current should clamp to target');
+  });
+  test('achievement: binary badges have no progress (null)', () => {
+    if (ach.getAchievementProgress('g', 'u', 'fish_rare') !== null) throw new Error('binary badge should return null');
+    if (ach.getAchievementProgress('g', 'u', 'custom_role') !== null) throw new Error('binary badge should return null');
+  });
 };

@@ -350,4 +350,52 @@ async function checkAchievements(guild, userId, context = {}) {
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
-module.exports = { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES, hasAchievement, grantAchievement, checkAchievements, checkMilestoneRewards };
+// ==================== POKEDEX-STYLE PROGRESS ====================
+// Maps countable achievements to a measurable stat + target so the panel can
+// show "how far you are". Binary/one-shot badges (e.g. "catch first Rare fish")
+// are intentionally omitted — they just show locked/unlocked.
+const ACH_PROGRESS = {
+    first_chat: { stat: 'total_chats', target: 1 }, chat_100: { stat: 'total_chats', target: 100 }, chat_500: { stat: 'total_chats', target: 500 }, chat_1000: { stat: 'total_chats', target: 1000 }, chat_5000: { stat: 'total_chats', target: 5000 },
+    react_50: { stat: 'total_reactions', target: 50 }, react_200: { stat: 'total_reactions', target: 200 },
+    first_buy: { stat: 'total_buys', target: 1 }, buy_10: { stat: 'total_buys', target: 10 },
+    daily_7: { stat: 'total_dailies', target: 7 }, daily_30: { stat: 'total_dailies', target: 30 },
+    coinflip_first: { stat: 'total_coinflips', target: 1 }, coinflip_win_5: { stat: 'coinflip_wins', target: 5 }, coinflip_win_20: { stat: 'coinflip_wins', target: 20 }, coinflip_win_50: { stat: 'coinflip_wins', target: 50 },
+    event_first: { stat: 'event_wins', target: 1 }, event_10: { stat: 'event_wins', target: 10 }, event_50: { stat: 'event_wins', target: 50 },
+    voice_1h: { stat: 'total_voice_mins', target: 60 }, voice_10h: { stat: 'total_voice_mins', target: 600 }, voice_50h: { stat: 'total_voice_mins', target: 3000 }, voice_100h: { stat: 'total_voice_mins', target: 6000 },
+    quest_first: { stat: 'total_quests_done', target: 1 }, quest_10: { stat: 'total_quests_done', target: 10 }, quest_50: { stat: 'total_quests_done', target: 50 }, quest_100: { stat: 'total_quests_done', target: 100 },
+    fish_first: { stat: 'total_fish_caught', target: 1 }, fish_10: { stat: 'total_fish_caught', target: 10 }, fish_50: { stat: 'total_fish_caught', target: 50 }, fish_100: { stat: 'total_fish_caught', target: 100 }, fish_500: { stat: 'total_fish_caught', target: 500 },
+    fish_god_5: { stat: 'fish_caught_god_tier', target: 5 },
+    giant_fish_first: { stat: 'giant_fish_defeated', target: 1 }, giant_fish_5: { stat: 'giant_fish_defeated', target: 5 }, giant_fish_15: { stat: 'giant_fish_defeated', target: 15 },
+    fish_abyss_10: { stat: 'fish_caught_abyss', target: 10 },
+    monster_survive_10: { stat: 'sea_monster_encounters', target: 10 }, monster_survive_50: { stat: 'sea_monster_encounters', target: 50 },
+    fish_sell_10k: { stat: 'total_fish_sold_value', target: 10000 }, fish_sell_100k: { stat: 'total_fish_sold_value', target: 100000 },
+    farm_first: { stat: 'total_harvests', target: 1 }, farm_50: { stat: 'total_harvests', target: 50 }, farm_200: { stat: 'total_harvests', target: 200 }, farm_500: { stat: 'total_harvests', target: 500 },
+    farm_craft_10: { stat: 'total_crafts', target: 10 }, farm_craft_50: { stat: 'total_crafts', target: 50 },
+    slot_win_10: { stat: 'slot_wins', target: 10 }, slot_win_50: { stat: 'slot_wins', target: 50 }, slot_total_100k: { stat: 'slot_total_winnings', target: 100000 },
+    gift_first: { stat: 'total_gifts_sent', target: 1 }, gift_10: { stat: 'total_gifts_sent', target: 10 }, gift_50: { stat: 'total_gifts_sent', target: 50 }, gift_total_50k: { stat: 'total_gift_amount', target: 50000 },
+    dungeon_first: { stat: 'dungeon_clears', target: 1 }, dungeon_10: { stat: 'dungeon_clears', target: 10 }, dungeon_50: { stat: 'dungeon_clears', target: 50 }, dungeon_100: { stat: 'dungeon_clears', target: 100 },
+    boss_first: { stat: 'boss_kills', target: 1 }, boss_10: { stat: 'boss_kills', target: 10 }, boss_50: { stat: 'boss_kills', target: 50 },
+    pvp_first: { stat: 'pvp_wins', target: 1 }, pvp_10: { stat: 'pvp_wins', target: 10 }, pvp_50: { stat: 'pvp_wins', target: 50 }, pvp_100: { stat: 'pvp_wins', target: 100 },
+    refine_10: { stat: 'refine_successes', target: 10 },
+    balance_10k: { special: 'balance', target: 10000 }, balance_100k: { special: 'balance', target: 100000 }, balance_1m: { special: 'balance', target: 1000000 },
+    level_5: { special: 'level', target: 5 }, level_10: { special: 'level', target: 10 }, level_25: { special: 'level', target: 25 }, level_50: { special: 'level', target: 50 }, level_100: { special: 'level', target: 100 },
+    streak_7: { special: 'streak', target: 7 }, streak_14: { special: 'streak', target: 14 }, streak_30: { special: 'streak', target: 30 }, streak_60: { special: 'streak', target: 60 }, streak_100: { special: 'streak', target: 100 },
+    pet_collect_10: { special: 'distinctPets', target: 10 }, pet_collect_25: { special: 'distinctPets', target: 25 }, pet_collect_50: { special: 'distinctPets', target: 50 },
+};
+
+// Returns { raw, current, target } for a countable achievement, or null.
+function getAchievementProgress(guildId, userId, achId) {
+    const p = ACH_PROGRESS[achId];
+    if (!p) return null;
+    let current = 0;
+    try {
+        if (p.special === 'balance') current = getOrCreateUser(guildId, userId).balance;
+        else if (p.special === 'level') current = getOrCreateUser(guildId, userId).level;
+        else if (p.special === 'streak') { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); current = s ? s.count : 0; }
+        else if (p.special === 'distinctPets') { const r = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE userId = ?').get(userId); current = r ? r.c : 0; }
+        else current = getUserStat(guildId, userId, p.stat) || 0;
+    } catch (_) { current = 0; }
+    return { raw: current, current: Math.min(current, p.target), target: p.target };
+}
+
+module.exports = { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES, hasAchievement, grantAchievement, checkAchievements, checkMilestoneRewards, getAchievementProgress };
