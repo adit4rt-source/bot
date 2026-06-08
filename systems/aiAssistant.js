@@ -1,15 +1,18 @@
 // systems/aiAssistant.js — AI Help Assistant (OpenAI-compatible API)
 //
 // A support chatbot that ONLY answers questions about THIS bot's features.
-// Its knowledge is learned from the repo's own documentation (GUIDE.md,
-// GUIDE-PET.md) + the live slash-command list — i.e. the same files that live
-// on GitHub, read locally so it always matches the deployed code.
+// Its knowledge is learned from the whole repo — the docs (GUIDE.md,
+// GUIDE-PET.md, ...), every feature module, the live slash-command list, and
+// the in-game data catalogs (pets, fish, items, ...). To keep answers detailed
+// without huge token cost, we index everything into sections and send only the
+// slices most relevant to each question (lightweight retrieval).
 //
 // Config (.env):
-//   AI_API_KEY    -> your API key (required)
-//   AI_BASE_URL   -> OpenAI-compatible base url (default https://ai.sumopod.com/v1)
-//   AI_MODEL      -> model id (default gpt-4o-mini)
-//   AI_MAX_TOKENS -> max answer tokens (default 500)
+//   AI_API_KEY      -> your API key (required)
+//   AI_BASE_URL     -> OpenAI-compatible base url (default https://ai.sumopod.com/v1)
+//   AI_MODEL        -> model id (default gpt-4o-mini)
+//   AI_MAX_TOKENS   -> max answer tokens (default 800)
+//   AI_CONTEXT_CHARS-> max knowledge chars per request (default 22000)
 //
 // Per-guild config (ai_settings table): enable + dedicated channel.
 
@@ -36,60 +39,166 @@ function getConfig() {
         apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
         baseURL: (process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1').replace(/\/$/, ''),
         model: process.env.AI_MODEL || 'gpt-4o-mini',
-        maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
+        maxTokens: parseInt(process.env.AI_MAX_TOKENS || '800', 10),
+        contextChars: parseInt(process.env.AI_CONTEXT_CHARS || '22000', 10),
     };
 }
 function isConfigured() { return !!getConfig().apiKey; }
 
-// ==================== KNOWLEDGE (learned from the repo docs) ====================
-const KNOWLEDGE_CAP = 16000; // keep token usage sane
-let _knowledge = null;
+// ==================== KNOWLEDGE (learned from the whole repo) ====================
+let _sections = null;   // [{ title, body }]
+let _commandList = null;
+let _moduleIndex = null;
 
 function readDoc(rel) {
     try { return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'); }
     catch (_) { return ''; }
 }
+function listFiles(dir) {
+    try { return fs.readdirSync(path.join(__dirname, '..', dir)); }
+    catch (_) { return []; }
+}
 
+// Parse the slash-command registry so the AI always knows the real commands.
 function readCommandList() {
-    // Parse the slash-command registry so the AI always knows the real commands.
+    if (_commandList) return _commandList;
     const src = readDoc('commands/_register.js');
-    if (!src) return '';
     const cmds = [];
-    const re = /setName\(['"]([\w-]+)['"]\)\s*\.setDescription\(['"]([^'"]+)['"]\)/g;
-    let m;
-    while ((m = re.exec(src)) !== null) cmds.push(`- /${m[1]} — ${m[2]}`);
-    return cmds.length ? `== DAFTAR SLASH COMMAND ==\n${cmds.join('\n')}\n` : '';
+    if (src) {
+        const re = /setName\(['"]([\w-]+)['"]\)\s*\.setDescription\(['"]([^'"]+)['"]\)/g;
+        let m;
+        while ((m = re.exec(src)) !== null) cmds.push(`- /${m[1]} — ${m[2]}`);
+    }
+    _commandList = cmds.join('\n');
+    return _commandList;
 }
 
+// One-line description of every feature module (from each file's header comment).
+function buildModuleIndex() {
+    if (_moduleIndex) return _moduleIndex;
+    const lines = [];
+    for (const f of listFiles('systems').filter(x => x.endsWith('.js'))) {
+        const head = readDoc(`systems/${f}`).split('\n').slice(0, 3).join(' ');
+        const m = head.match(/\/\/\s*systems\/[\w.]+\s*[—-]\s*(.+)/);
+        const desc = m ? m[1].trim().replace(/\s+/g, ' ').slice(0, 110) : '';
+        if (desc) lines.push(`- ${f.replace('.js', '')}: ${desc}`);
+    }
+    _moduleIndex = lines.join('\n');
+    return _moduleIndex;
+}
+
+// Split a markdown doc into sections by headings.
+function splitMarkdown(text, source) {
+    const sections = [];
+    let cur = { title: source, body: [] };
+    for (const line of text.split('\n')) {
+        const h = line.match(/^#{1,4}\s+(.*)/);
+        if (h) {
+            if (cur.body.join('').trim()) sections.push({ title: `${source} › ${cur.title}`, body: cur.body.join('\n').trim() });
+            cur = { title: h[1].trim(), body: [] };
+        } else cur.body.push(line);
+    }
+    if (cur.body.join('').trim()) sections.push({ title: `${source} › ${cur.title}`, body: cur.body.join('\n').trim() });
+    return sections;
+}
+
+// Catalogs of in-game content (pets, fish, items, crops, ...) from data/*.js.
+function buildDataCatalogs() {
+    const out = [];
+    for (const f of listFiles('data').filter(x => x.endsWith('.js'))) {
+        let mod;
+        try { mod = require(path.join(__dirname, '..', 'data', f)); } catch (_) { continue; }
+        for (const [key, val] of Object.entries(mod)) {
+            if (Array.isArray(val) && val.length) {
+                const names = val.map(x => x && (x.name || x.id)).filter(Boolean);
+                if (names.length) out.push({ title: `Katalog data ${f.replace('.js', '')} — ${key}`, body: `(${names.length} item) ${names.join(', ')}` });
+            }
+        }
+    }
+    return out;
+}
+
+function buildSections(force = false) {
+    if (_sections && !force) return _sections;
+    const secs = [];
+    for (const doc of ['GUIDE.md', 'GUIDE-PET.md', 'POSTMORTEM-MINING.md', 'README.md']) {
+        const t = readDoc(doc);
+        if (t) secs.push(...splitMarkdown(t, doc));
+    }
+    secs.push(...buildDataCatalogs());
+    _sections = secs.filter(s => s.body && s.body.length > 5);
+    return _sections;
+}
+
+// Full knowledge dump (used by tests + the "refresh" preview).
 function buildKnowledge(force = false) {
-    if (_knowledge && !force) return _knowledge;
-    const guide = readDoc('GUIDE.md');
-    const pet = readDoc('GUIDE-PET.md');
-    const readme = readDoc('README.md');
-    let combined = '';
-    if (guide) combined += `== PANDUAN UMUM (GUIDE.md) ==\n${guide}\n\n`;
-    if (pet) combined += `== PANDUAN PET (GUIDE-PET.md) ==\n${pet}\n\n`;
-    if (readme) combined += `== README ==\n${readme.slice(0, 2000)}\n\n`;
-    combined += readCommandList();
-    if (combined.length > KNOWLEDGE_CAP) combined = combined.slice(0, KNOWLEDGE_CAP) + '\n...(dokumentasi dipotong)';
-    _knowledge = combined.trim() || 'Dokumentasi tidak tersedia.';
-    return _knowledge;
+    const base = `== DAFTAR SLASH COMMAND ==\n${readCommandList()}\n\n== INDEKS MODUL FITUR ==\n${buildModuleIndex()}\n`;
+    const body = buildSections(force).map(s => `## ${s.title}\n${s.body}`).join('\n\n');
+    return `${base}\n${body}`.trim() || 'Dokumentasi tidak tersedia.';
 }
-function refreshKnowledge() { return buildKnowledge(true); }
 
-function buildSystemPrompt() {
+function refreshKnowledge() {
+    _sections = null; _commandList = null; _moduleIndex = null;
+    return buildKnowledge(true);
+}
+
+// Lightweight keyword retrieval: pin the command list + module index, then add
+// the doc/catalog sections most relevant to the question until the budget fills.
+function retrieveContext(question, budget) {
+    budget = budget || getConfig().contextChars;
+    const base = `== DAFTAR SLASH COMMAND ==\n${readCommandList()}\n\n== INDEKS MODUL FITUR ==\n${buildModuleIndex()}\n`;
+    const secs = buildSections();
+    const words = [...new Set((String(question).toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => w.length > 2))];
+
+    const scored = secs.map(s => {
+        const title = s.title.toLowerCase();
+        const hay = (s.title + ' ' + s.body).toLowerCase();
+        let score = 0;
+        for (const w of words) {
+            if (title.includes(w)) score += 4;
+            const c = hay.split(w).length - 1;
+            score += Math.min(c, 6);
+        }
+        return { s, score };
+    }).sort((a, b) => b.score - a.score);
+
+    let ctx = base;
+    for (const { s, score } of scored) {
+        if (score <= 0) break;
+        const block = `\n## ${s.title}\n${s.body}\n`;
+        if (ctx.length + block.length > budget) continue;
+        ctx += block;
+    }
+    // Fallback: nothing matched -> include the first few doc sections as overview.
+    if (ctx.length === base.length) {
+        for (const s of secs.slice(0, 5)) {
+            const block = `\n## ${s.title}\n${s.body}\n`;
+            if (ctx.length + block.length > budget) break;
+            ctx += block;
+        }
+    }
+    return ctx;
+}
+
+function buildSystemPrompt(question = '') {
     return [
-        'Kamu adalah "ID Bot Assistant" — asisten bantuan KHUSUS untuk sebuah bot Discord.',
+        'Kamu adalah "ID Bot Assistant" — asisten bantuan resmi untuk sebuah bot Discord Indonesia.',
         '',
-        'ATURAN WAJIB:',
-        '1. Jawab HANYA pertanyaan seputar FITUR & CARA PAKAI bot ini, berdasarkan PENGETAHUAN di bawah.',
-        '2. Jika pertanyaan di luar topik bot (mis. coding umum, kehidupan, berita), TOLAK dengan sopan: "Maaf, aku cuma bisa bantu soal fitur bot ini ya 🙂".',
-        '3. JANGAN mengarang fitur atau command yang tidak ada di pengetahuan. Kalau tidak tahu, katakan tidak tahu dan sarankan /help.',
-        '4. Jawab dalam Bahasa Indonesia, singkat, ramah, pakai emoji secukupnya.',
-        '5. Kalau relevan, sebutkan slash command yang tepat (mis. `/fishing`, `/daily`).',
+        'TUGAS: Jelaskan fitur & cara pakai bot ini selengkap dan sejelas mungkin, berdasarkan PENGETAHUAN di bawah (diambil dari kode & dokumentasi repo bot).',
         '',
-        '== PENGETAHUAN (dari dokumentasi repo bot) ==',
-        buildKnowledge(),
+        'CARA MENJAWAB (biar pintar & membantu):',
+        '- Jawab Bahasa Indonesia yang santai tapi jelas.',
+        '- Beri penjelasan LENGKAP & runtut: kalau soal "cara", buat langkah bernomor; kalau soal daftar, pakai poin-poin.',
+        '- Sebutkan slash command / tombol / panel yang tepat (mis. `/fishing`, `/daily`, tombol di panel).',
+        '- Beri contoh konkret bila membantu. Boleh rangkum info dari beberapa bagian pengetahuan.',
+        '- Kalau pertanyaan ambigu, jawab kemungkinan paling relevan + tawarkan detail lanjutan.',
+        '',
+        'ATURAN:',
+        '- Fokus HANYA pada bot ini. Kalau pertanyaan jelas di luar topik bot (coding umum, kehidupan, berita), tolak sopan: "Maaf, aku cuma bisa bantu soal fitur bot ini ya 🙂".',
+        '- JANGAN mengarang command/fitur yang tidak ada di pengetahuan. Kalau detailnya tak ada, katakan dengan jujur dan arahkan ke `/help` atau `/menu`.',
+        '',
+        '== PENGETAHUAN (relevan dengan pertanyaan) ==',
+        retrieveContext(question),
     ].join('\n');
 }
 
@@ -100,7 +209,7 @@ async function askAI(question, { history = [] } = {}) {
     if (!question || !question.trim()) return { error: 'Pertanyaannya kosong.' };
 
     const messages = [
-        { role: 'system', content: buildSystemPrompt() },
+        { role: 'system', content: buildSystemPrompt(question) },
         ...history,
         { role: 'user', content: question.trim().slice(0, 1000) },
     ];
@@ -181,6 +290,6 @@ function chunkText(text, size = 1900) {
 
 module.exports = {
     getAiSetting, setAiSetting, getConfig, isConfigured,
-    buildKnowledge, refreshKnowledge, buildSystemPrompt,
+    buildKnowledge, refreshKnowledge, buildSystemPrompt, retrieveContext, buildSections,
     askAI, maybeHandleAiMessage, chunkText,
 };
