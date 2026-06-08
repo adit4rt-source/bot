@@ -360,12 +360,13 @@ async function handleFishingButton(interaction) {
         );
 
         await interaction.update({ embeds: [embed], components: [afterCatchRow] });
-        await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight, fishId: result.fish.id });
 
-        // Track God tier catches
+        // Track God tier catches BEFORE checking achievements so fish_god_5 (count-based) is accurate
         if (result.tier.tier === 'God') {
             incrementUserStat(guildId, userId, 'fish_caught_god_tier');
         }
+
+        await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight, fishId: result.fish.id });
 
         // Abyss-specific achievements
         if (currentLocation.id === 'abyss') {

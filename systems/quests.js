@@ -21,7 +21,7 @@ const poolTebakan = [
 // ================= QUEST TYPE DEFINITIONS =================
 const QUEST_POOL = [
     // Original types
-    { type: 'tag', descFn: () => '🏷️ Tag/Mention seseorang di channel chat', targetRange: { easy: [1,1], medium: [2,3], hard: [4,5] } },
+    { type: 'tag', descFn: (q) => `🏷️ Tag/Mention seseorang di chat${q.target > 1 ? ` ${q.target} kali` : ''}`, targetRange: { easy: [1,1], medium: [2,3], hard: [4,5] } },
     { type: 'typing', descFn: (q) => `⌨️ Ketik kalimat ini di chat: **"${q.text}"**`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
     { type: 'voice', descFn: (q) => `🎙️ Join voice channel selama ${q.target} menit`, targetRange: { easy: [3,5], medium: [5,10], hard: [10,15] } },
     { type: 'reaction', descFn: (q) => `👍 Berikan ${q.target} reaction ke pesan orang`, targetRange: { easy: [3,5], medium: [5,8], hard: [8,12] } },
@@ -35,15 +35,15 @@ const QUEST_POOL = [
     { type: 'spend_money', descFn: (q) => `🛒 Belanjakan ${q.target} money di shop`, targetRange: { easy: [200,300], medium: [400,600], hard: [700,1000] } },
     { type: 'trade', descFn: () => `🔄 Trade dengan player lain`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
     { type: 'coinflip', descFn: (q) => `🪙 Main coinflip ${q.target} kali`, targetRange: { easy: [2,2], medium: [3,4], hard: [4,5] } },
-    { type: 'battle', descFn: (q) => `⚔️ Lawan player di PvP ${q.target > 1 ? q.target + ' kali' : ''}`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,2] } },
+    { type: 'battle', descFn: (q) => `⚔️ Lawan player di PvP ${q.target} kali`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,2] } },
     { type: 'craft', descFn: (q) => `🧪 Craft ${q.target} produk farming`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
     // New quest types (v2 — wired to boss/gift/togel/expedition/refine/daily)
     { type: 'boss', descFn: (q) => `👹 Kalahkan ${q.target} boss`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,3] } },
-    { type: 'gift', descFn: (q) => `🎁 Kirim gift ke player lain ${q.target > 1 ? q.target + ' kali' : ''}`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
+    { type: 'gift', descFn: (q) => `🎁 Kirim gift ke player lain ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
     { type: 'togel', descFn: (q) => `🎟️ Pasang ${q.target} angka togel`, targetRange: { easy: [1,2], medium: [2,3], hard: [3,5] } },
     { type: 'expedition', descFn: (q) => `🌊 Selesaikan ${q.target} ekspedisi pet`, targetRange: { easy: [1,1], medium: [1,2], hard: [2,3] } },
     { type: 'refine', descFn: (q) => `🔨 Refine relic ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
-    { type: 'daily', descFn: () => `📅 Klaim Daily Reward hari ini`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
+    { type: 'daily', descFn: (q) => q.target > 1 ? `📅 Klaim Daily Reward ${q.target} kali` : `📅 Klaim Daily Reward hari ini`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
     { type: 'worldboss', descFn: (q) => `🗺️ Serang World Boss ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,3], hard: [3,5] } },
 ];
 
@@ -192,8 +192,8 @@ function updateWeeklyQuestProgress(guildId, userId, questType, amount = 1, paylo
     for (let q of quests) {
         if (q.type === questType && q.progress < q.target && !q.claimed) {
             let valid = true;
-            if (questType === 'typing' && (!payload || !payload.toLowerCase().includes(q.text || ''))) valid = false;
-            if (questType === 'tebak' && (!payload || !payload.toLowerCase().includes(q.answer || ''))) valid = false;
+            if (questType === 'typing' && (!payload || !payload.toLowerCase().includes((q.text || '').toLowerCase()))) valid = false;
+            if (questType === 'tebak' && (!payload || !payload.toLowerCase().includes((q.answer || '').toLowerCase()))) valid = false;
             if (valid) { q.progress += amount; if (q.progress > q.target) q.progress = q.target; updated = true; }
         }
     }
