@@ -148,75 +148,76 @@ module.exports = function register() {
     }
   });
 
-  // ---- Lottery / Togel ----
+  // ---- Lottery / Togel (number betting 1-100) ----
   const lot = botRequire('systems/lottery.js');
-  const TP = lot.TICKET_PRICE;
+  const BP = lot.BET_PRICE;
 
-  test('lottery: buying tickets charges money and grows jackpot 70%', () => {
-    const g = 'LOT_BUY', u = 'LOTU_BUY';
+  test('lottery: placing a bet charges 5k and adds to the pot', () => {
+    const g = 'LOT_BET', u = 'LOTU_BET';
     db.getOrCreateUser(g, u);
     db.updateUserBalance(g, u, 100000);
-    const r = lot.buyTickets(g, u, 'Buyer', 10);
-    if (!r.success) throw new Error('buy failed: ' + r.error);
-    if (r.cost !== 10 * TP) throw new Error('wrong cost ' + r.cost);
-    if (r.ownedTickets !== 10) throw new Error('wrong owned ' + r.ownedTickets);
-    // jackpot = SEED(5000) + floor(cost*0.70)
-    const expected = lot.SEED_JACKPOT + Math.floor(10 * TP * lot.JACKPOT_CONTRIB);
-    if (r.jackpot !== expected) throw new Error(`jackpot ${r.jackpot} != ${expected}`);
-    if (db.getOrCreateUser(g, u).balance !== 100000 - 10 * TP) throw new Error('balance not deducted');
+    const r0 = lot.getCurrentRound(g);
+    const potBefore = r0.pot;
+    const r = lot.placeBet(g, u, 'Better', 19);
+    if (!r.success) throw new Error('bet failed: ' + r.error);
+    if (r.cost !== BP) throw new Error('wrong cost ' + r.cost);
+    if (r.number !== 19) throw new Error('wrong number');
+    if (r.pot !== potBefore + BP) throw new Error(`pot ${r.pot} != ${potBefore + BP}`);
+    if (db.getOrCreateUser(g, u).balance !== 100000 - BP) throw new Error('balance not deducted');
   });
 
-  test('lottery: rejects exceeding max tickets per user', () => {
-    const g = 'LOT_CAP', u = 'LOTU_CAP';
+  test('lottery: rejects invalid numbers and duplicates, caps at 2 per round', () => {
+    const g = 'LOT_RULES', u = 'LOTU_RULES';
     db.getOrCreateUser(g, u);
-    db.updateUserBalance(g, u, 10_000_000);
-    const ok = lot.buyTickets(g, u, 'Cap', lot.MAX_TICKETS_PER_USER);
-    if (!ok.success) throw new Error('should reach cap');
-    const over = lot.buyTickets(g, u, 'Cap', 1);
-    if (over.success) throw new Error('should reject over cap');
+    db.updateUserBalance(g, u, 1_000_000);
+    if (lot.placeBet(g, u, 'X', 0).success) throw new Error('should reject 0');
+    if (lot.placeBet(g, u, 'X', 101).success) throw new Error('should reject 101');
+    if (!lot.placeBet(g, u, 'X', 7).success) throw new Error('7 should work');
+    if (lot.placeBet(g, u, 'X', 7).success) throw new Error('duplicate 7 should reject');
+    if (!lot.placeBet(g, u, 'X', 8).success) throw new Error('8 should work (2nd)');
+    if (lot.placeBet(g, u, 'X', 9).success) throw new Error('3rd number should reject (cap 2)');
   });
 
-  test('lottery: rejects when balance is insufficient', () => {
-    const g = 'LOT_POOR', u = 'LOTU_POOR';
+  test('lottery: rejects bet when balance is insufficient', () => {
+    const g = 'LOT_POOR2', u = 'LOTU_POOR2';
     db.getOrCreateUser(g, u);
     db.updateUserBalance(g, u, 100);
-    const r = lot.buyTickets(g, u, 'Poor', 1);
-    if (r.success) throw new Error('should reject (insufficient)');
+    if (lot.placeBet(g, u, 'Poor', 50).success) throw new Error('should reject (insufficient)');
   });
 
-  test('lottery: draw picks a winner and pays the jackpot', () => {
-    const g = 'LOT_DRAW', u = 'LOTU_DRAW';
+  test('lottery: draw pays winners who matched the drawn number', () => {
+    const g = 'LOT_WIN', u = 'LOTU_WIN';
     db.getOrCreateUser(g, u);
     db.updateUserBalance(g, u, 100000);
-    const buy = lot.buyTickets(g, u, 'Winner', 4);
-    const balAfterBuy = db.getOrCreateUser(g, u).balance;
-    const res = lot.drawRound(g);
-    if (!res.success || !res.winner) throw new Error('draw produced no winner');
-    if (res.winner.userId !== u) throw new Error('wrong winner');
-    if (res.payout !== buy.jackpot) throw new Error('payout != jackpot');
-    if (db.getOrCreateUser(g, u).balance !== balAfterBuy + res.payout) throw new Error('jackpot not credited');
-    const again = lot.drawRound(g);
-    if (again.success) throw new Error('round should not be drawable twice');
+    const bet = lot.placeBet(g, u, 'Winner', 42);
+    const balAfter = db.getOrCreateUser(g, u).balance;
+    const res = lot.drawRound(g, bet.roundId, 42); // force draw 42
+    if (!res.success) throw new Error('draw failed');
+    if (res.winnersCount !== 1) throw new Error('expected 1 winner');
+    if (res.payoutEach !== res.pot) throw new Error('single winner should take whole pot');
+    if (db.getOrCreateUser(g, u).balance !== balAfter + res.payoutEach) throw new Error('payout not credited');
+    if (lot.drawRound(g, bet.roundId, 42).success) throw new Error('round should not draw twice');
   });
 
-  test('lottery: weighted winner pick stays within participants', () => {
-    const entries = [{ userId: 'a', tickets: 1 }, { userId: 'b', tickets: 50 }, { userId: 'c', tickets: 3 }];
-    for (let i = 0; i < 50; i++) {
-      const w = lot.pickWeightedWinner(entries);
-      if (!entries.includes(w)) throw new Error('winner not among entries');
-    }
-    if (lot.pickWeightedWinner([]) !== null) throw new Error('empty should be null');
+  test('lottery: pot carries over when nobody matches', () => {
+    const g = 'LOT_CARRY2', u = 'LOTU_CARRY2';
+    db.getOrCreateUser(g, u);
+    db.updateUserBalance(g, u, 100000);
+    const bet = lot.placeBet(g, u, 'NoLuck', 5);
+    const potNow = lot.getRoundRow(g, bet.roundId).pot;
+    const res = lot.drawRound(g, bet.roundId, 77); // 5 != 77 => no winner
+    if (res.winnersCount !== 0) throw new Error('expected no winner');
+    if (res.nextPot !== potNow) throw new Error(`carryover pot ${res.nextPot} != ${potNow}`);
+    const next = lot.getCurrentRound(g);
+    if (next.carriedOver !== potNow) throw new Error('next round carriedOver mismatch');
   });
 
-  test('lottery: unclaimed jackpot carries over to a new round', () => {
-    const g = 'LOT_CARRY';
-    const wk = lot.getWeekId();
-    // Simulate a previous week that was drawn with no winner and a leftover jackpot.
-    db.db.prepare("INSERT OR REPLACE INTO lottery_rounds (guildId, weekId, jackpot, status, winnerId, createdAt) VALUES (?, ?, ?, 'drawn', NULL, ?)")
-      .run(g, '2000-W01', 9999, Date.now());
+  test('lottery: admin setPot seeds the pot', () => {
+    const g = 'LOT_SEED';
+    const r = lot.setPot(g, 500000);
+    if (r.pot < 500000) throw new Error('pot not seeded');
+    if (lot.getSeed(g) !== 500000) throw new Error('seed not stored');
     const round = lot.getCurrentRound(g);
-    if (round.weekId !== wk) throw new Error('current round week mismatch');
-    if (round.carriedOver !== 9999) throw new Error('carryover not applied: ' + round.carriedOver);
-    if (round.jackpot !== lot.SEED_JACKPOT + 9999) throw new Error('jackpot seed+carry wrong: ' + round.jackpot);
+    if (round.pot < 500000) throw new Error('current round not topped up');
   });
 };

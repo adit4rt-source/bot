@@ -14,7 +14,7 @@ const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMark
 const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
-const { isLotteryButton, handleLotteryButton, buildLotteryPanel } = require('../systems/lottery');
+const { isLotteryButton, handleLotteryButton, buildLotteryPanel, placeBet, setPot, BET_PRICE } = require('../systems/lottery');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
@@ -564,6 +564,23 @@ async function routeInteraction(interaction) {
 
         // ================= TOGEL / LOTTERY =================
         if (command === 'togel') {
+            const setpotVal = interaction.options.getInteger('setpot');
+            if (setpotVal !== null) {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
+                    return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa set pot togel.', ephemeral: true });
+                }
+                const r = setPot(guildId, setpotVal);
+                return interaction.reply({ content: `✅ Pot togel di-set ke 🪙 **${r.pot.toLocaleString('id-ID')}** (seed per ronde: 🪙 **${r.amount.toLocaleString('id-ID')}**). Ronde aktif: **#${r.roundId}**.` });
+            }
+            const angka = interaction.options.getInteger('angka');
+            if (angka !== null) {
+                const result = placeBet(guildId, interaction.user.id, interaction.user.username, angka);
+                if (!result.success) return interaction.reply({ content: result.error, ephemeral: true });
+                return interaction.reply({
+                    content: `🎟️ Kamu pasang angka **${result.number}** seharga 🪙 **${result.cost.toLocaleString('id-ID')}**!\n> 🔢 Angkamu ronde ini: **${result.myNumbers.join(', ')}**\n> 🎰 Pot sekarang: 🪙 **${result.pot.toLocaleString('id-ID')}**\n> 🪙 Saldo: **${result.newBalance.toLocaleString('id-ID')}**\n> ⏰ Diundi <t:${Math.floor(result.drawAt / 1000)}:R>`,
+                    ephemeral: true,
+                });
+            }
             return interaction.reply(buildLotteryPanel(guildId));
         }
 

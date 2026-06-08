@@ -29,7 +29,9 @@ const commands = [
     new SlashCommandBuilder().setName('globaltrade').setDescription('🔄 Global Trade — Barter item lintas server'),
     new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
     new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
-    new SlashCommandBuilder().setName('togel').setDescription('🎟️ Togel Mingguan — Beli tiket, menangkan jackpot tiap Senin'),
+    new SlashCommandBuilder().setName('togel').setDescription('🎟️ Togel — Pasang angka 1-100 (5.000/angka), diundi tiap 1 jam')
+        .addIntegerOption(opt => opt.setName('angka').setDescription('Pasang angka 1-100 (bayar 5.000)').setRequired(false).setMinValue(1).setMaxValue(100))
+        .addIntegerOption(opt => opt.setName('setpot').setDescription('[Admin] Set pot awal / seed per ronde').setRequired(false).setMinValue(0)),
     new SlashCommandBuilder().setName('blackjack').setDescription('🃏 Blackjack — Main kartu 21')
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (100-5000)').setRequired(true).setMinValue(100).setMaxValue(5000)),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),

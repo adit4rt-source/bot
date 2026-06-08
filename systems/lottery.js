@@ -1,280 +1,266 @@
-// systems/lottery.js — Weekly Lottery / Togel
+// systems/lottery.js — Togel (Number Betting 1-100)
 //
-// Players buy tickets with money. A share of every purchase feeds a weekly
-// jackpot (the rest is burned — a healthy money sink). Every Monday 00:00 WIB
-// the round is drawn: one winner is picked, weighted by how many tickets they
-// hold, and takes the whole jackpot. If nobody bought tickets, the jackpot
-// rolls over into next week.
+// Players bet on a number 1-100 with `/togel angka:<n>` for a fixed price.
+// Every bet adds to the round's pot. Every hour a random number 1-100 is drawn;
+// everyone who picked it splits the whole pot equally. If nobody picked it, the
+// pot rolls over to the next round (so it can grow into a big jackpot).
 //
-// Per-guild rounds (own jackpot/draw per server). Balances are global.
+// Admins seed the starting pot with `/togel setpot:<amount>` (also becomes the
+// per-round base seed). Per-guild rounds. Balances are global.
 // Optional announcement channel: server_settings key `togel_channel`.
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getSetting, addUserBalance, subtractUserBalance, addIncome, addSpending, incrementUserStat } = require('../database');
+const { getRandomInt } = require('../utils');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
 // ==================== CONFIG ====================
-const TICKET_PRICE = 500;            // money per ticket
-const JACKPOT_CONTRIB = 0.70;        // 70% of each sale feeds the jackpot; 30% burned (sink)
-const SEED_JACKPOT = 5000;           // base jackpot each fresh week
-const MAX_TICKETS_PER_USER = 100;    // cap per user per week (anti-whale)
+const BET_PRICE = 5000;               // money per number bet
+const NUMBER_MIN = 1;
+const NUMBER_MAX = 100;
+const MAX_NUMBERS_PER_USER = 2;       // numbers a player can bet per round
+const DRAW_INTERVAL_MS = 60 * 60 * 1000; // draw every 1 hour
+const DEFAULT_SEED = 0;               // base pot each round (admin configurable)
 
 // ==================== DATABASE ====================
+// Migrate away from the earlier weekly-lottery schema (weekId-keyed) if present.
+// This feature is unreleased, so dropping the old throwaway tables is safe.
+try {
+    const old = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='lottery_rounds'").get();
+    if (old && old.sql && old.sql.includes('weekId')) {
+        db.exec('DROP TABLE IF EXISTS lottery_rounds');
+        db.exec('DROP TABLE IF EXISTS lottery_tickets');
+        db.exec('DROP TABLE IF EXISTS lottery_bets');
+    }
+} catch (_) { /* fresh DB — nothing to migrate */ }
+
 db.exec(`CREATE TABLE IF NOT EXISTS lottery_rounds (
     guildId TEXT,
-    weekId TEXT,
-    jackpot INTEGER DEFAULT 0,
-    ticketsSold INTEGER DEFAULT 0,
+    roundId INTEGER,
+    pot INTEGER DEFAULT 0,
     status TEXT DEFAULT 'open',
-    winnerId TEXT DEFAULT NULL,
-    winnerName TEXT DEFAULT NULL,
-    winnerTickets INTEGER DEFAULT 0,
-    totalTickets INTEGER DEFAULT 0,
-    participants INTEGER DEFAULT 0,
+    drawAt INTEGER,
+    drawnNumber INTEGER DEFAULT NULL,
+    totalBets INTEGER DEFAULT 0,
+    winnersCount INTEGER DEFAULT 0,
+    payoutEach INTEGER DEFAULT 0,
     carriedOver INTEGER DEFAULT 0,
     createdAt INTEGER,
     drawnAt INTEGER DEFAULT NULL,
-    PRIMARY KEY (guildId, weekId)
+    PRIMARY KEY (guildId, roundId)
 )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS lottery_tickets (
+db.exec(`CREATE TABLE IF NOT EXISTS lottery_bets (
     guildId TEXT,
-    weekId TEXT,
+    roundId INTEGER,
     userId TEXT,
     username TEXT,
-    tickets INTEGER DEFAULT 0,
-    spent INTEGER DEFAULT 0,
-    PRIMARY KEY (guildId, weekId, userId)
+    number INTEGER,
+    createdAt INTEGER,
+    PRIMARY KEY (guildId, roundId, userId, number)
 )`);
 
-// ==================== TIME HELPERS ====================
-// Weekly key (WIB, Monday reset) — same scheme as World Boss / quests.
-function getWeekId(date = new Date()) {
-    const wib = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const year = wib.getFullYear();
-    const startOfYear = new Date(year, 0, 1);
-    const days = Math.floor((wib - startOfYear) / 86400000);
-    const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-    return `${year}-W${String(weekNum).padStart(2, '0')}`;
+// ==================== CONFIG HELPERS ====================
+function getSeed(guildId) {
+    const v = getSetting(guildId, 'togel_seed', null);
+    const n = v === null ? DEFAULT_SEED : parseInt(v, 10);
+    return Number.isFinite(n) && n >= 0 ? n : DEFAULT_SEED;
 }
-
-// Unix seconds of the next Monday 00:00 WIB (used for the countdown display).
-function nextDrawUnix() {
-    const now = new Date();
-    const wib = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const day = wib.getDay(); // 0=Sun..6=Sat
-    const daysUntilMonday = ((8 - day) % 7) || 7; // always next Monday (>=1)
-    const next = new Date(wib);
-    next.setDate(wib.getDate() + daysUntilMonday);
-    next.setHours(0, 0, 0, 0);
-    // Convert WIB wall-clock back to a real instant: WIB = UTC+7.
-    const utcMs = next.getTime() - (7 * 3600 * 1000) - (next.getTimezoneOffset() * 60000) * 0;
-    // Simpler & robust: compute offset between the parsed-WIB clock and real now.
-    const driftMs = now.getTime() - wib.getTime();
-    return Math.floor((next.getTime() + driftMs) / 1000);
+function setSeed(guildId, amount) {
+    amount = Math.max(0, Math.floor(Number(amount) || 0));
+    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'togel_seed', String(amount));
+    return amount;
 }
 
 // ==================== ROUND LIFECYCLE ====================
-function getRoundRow(guildId, weekId) {
-    return db.prepare('SELECT * FROM lottery_rounds WHERE guildId = ? AND weekId = ?').get(guildId, weekId);
+function getOpenRound(guildId) {
+    return db.prepare("SELECT * FROM lottery_rounds WHERE guildId = ? AND status = 'open' ORDER BY roundId DESC LIMIT 1").get(guildId);
+}
+function getRoundRow(guildId, roundId) {
+    return db.prepare('SELECT * FROM lottery_rounds WHERE guildId = ? AND roundId = ?').get(guildId, roundId);
+}
+function nextRoundId(guildId) {
+    const row = db.prepare('SELECT MAX(roundId) AS m FROM lottery_rounds WHERE guildId = ?').get(guildId);
+    return (row && row.m ? row.m : 0) + 1;
 }
 
-// Get (or lazily create) the current open round for a guild.
+function createRound(guildId, pot, carriedOver = 0) {
+    const roundId = nextRoundId(guildId);
+    const drawAt = Date.now() + DRAW_INTERVAL_MS;
+    db.prepare('INSERT INTO lottery_rounds (guildId, roundId, pot, status, drawAt, carriedOver, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(guildId, roundId, Math.max(0, Math.floor(pot)), 'open', drawAt, Math.max(0, Math.floor(carriedOver)), Date.now());
+    return getRoundRow(guildId, roundId);
+}
+
+// Get (or lazily create) the current open round.
 function getCurrentRound(guildId) {
-    const weekId = getWeekId();
-    let round = getRoundRow(guildId, weekId);
-    if (round) return round;
+    let round = getOpenRound(guildId);
+    if (!round) round = createRound(guildId, getSeed(guildId), 0);
+    return round;
+}
 
-    // Roll over any undrawn-with-no-winner jackpot from a previous week.
-    let carry = 0;
-    const prevCarry = db.prepare(
-        "SELECT weekId, jackpot FROM lottery_rounds WHERE guildId = ? AND status = 'drawn' AND winnerId IS NULL AND jackpot > 0 ORDER BY weekId DESC LIMIT 1"
-    ).get(guildId);
-    if (prevCarry) {
-        carry = prevCarry.jackpot;
-        // Zero it out so it can't be carried twice.
-        db.prepare('UPDATE lottery_rounds SET jackpot = 0 WHERE guildId = ? AND weekId = ?').run(guildId, prevCarry.weekId);
+function getUserBets(guildId, roundId, userId) {
+    return db.prepare('SELECT * FROM lottery_bets WHERE guildId = ? AND roundId = ? AND userId = ?').all(guildId, roundId, userId);
+}
+function getRoundBets(guildId, roundId) {
+    return db.prepare('SELECT * FROM lottery_bets WHERE guildId = ? AND roundId = ?').all(guildId, roundId);
+}
+
+// ==================== ADMIN: SET POT ====================
+// Sets the per-round base seed AND tops the current round up to that pot.
+function setPot(guildId, amount) {
+    amount = Math.max(0, Math.floor(Number(amount) || 0));
+    setSeed(guildId, amount);
+    const round = getCurrentRound(guildId);
+    if (round.pot < amount) {
+        db.prepare('UPDATE lottery_rounds SET pot = ? WHERE guildId = ? AND roundId = ?').run(amount, guildId, round.roundId);
     }
-
-    db.prepare(
-        'INSERT OR IGNORE INTO lottery_rounds (guildId, weekId, jackpot, status, carriedOver, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(guildId, weekId, SEED_JACKPOT + carry, 'open', carry, Date.now());
-
-    return getRoundRow(guildId, weekId);
+    return { amount, roundId: round.roundId, pot: Math.max(round.pot, amount) };
 }
 
-function getUserTicket(guildId, weekId, userId) {
-    return db.prepare('SELECT * FROM lottery_tickets WHERE guildId = ? AND weekId = ? AND userId = ?').get(guildId, weekId, userId);
-}
-
-function getRoundTickets(guildId, weekId) {
-    return db.prepare('SELECT * FROM lottery_tickets WHERE guildId = ? AND weekId = ? AND tickets > 0 ORDER BY tickets DESC').all(guildId, weekId);
-}
-
-// ==================== BUY TICKETS ====================
-function buyTickets(guildId, userId, username, qty) {
-    qty = Math.floor(Number(qty) || 0);
-    if (qty <= 0) return { success: false, error: '❌ Jumlah tiket tidak valid.' };
+// ==================== PLACE BET ====================
+function placeBet(guildId, userId, username, number) {
+    number = Math.floor(Number(number));
+    if (!Number.isFinite(number) || number < NUMBER_MIN || number > NUMBER_MAX) {
+        return { success: false, error: `❌ Angka harus antara **${NUMBER_MIN}-${NUMBER_MAX}**.` };
+    }
 
     const round = getCurrentRound(guildId);
-    if (round.status !== 'open') return { success: false, error: '❌ Undian minggu ini sudah ditutup. Tunggu minggu baru ya!' };
-    const existing = getUserTicket(guildId, round.weekId, userId);
-    const owned = existing ? existing.tickets : 0;
-    if (owned + qty > MAX_TICKETS_PER_USER) {
-        return { success: false, error: `❌ Maksimal **${MAX_TICKETS_PER_USER} tiket** per minggu. Kamu sudah punya **${owned}**.` };
+    const mine = getUserBets(guildId, round.roundId, userId);
+    if (mine.some(b => b.number === number)) {
+        return { success: false, error: `❌ Kamu sudah pasang angka **${number}** ronde ini.` };
+    }
+    if (mine.length >= MAX_NUMBERS_PER_USER) {
+        return { success: false, error: `❌ Maksimal **${MAX_NUMBERS_PER_USER} angka** per ronde. Kamu sudah pasang: ${mine.map(b => b.number).join(', ')}.` };
     }
 
-    const cost = qty * TICKET_PRICE;
     const user = getOrCreateUser(guildId, userId);
-    if (user.balance < cost) {
-        return { success: false, error: `❌ Saldo kurang! Butuh 🪙 **${cost.toLocaleString('id-ID')}**, saldomu 🪙 **${user.balance.toLocaleString('id-ID')}**.` };
+    if (user.balance < BET_PRICE) {
+        return { success: false, error: `❌ Saldo kurang! Pasang angka butuh 🪙 **${BET_PRICE.toLocaleString('id-ID')}**, saldomu 🪙 **${user.balance.toLocaleString('id-ID')}**.` };
     }
 
-    // Charge the player.
-    subtractUserBalance(guildId, userId, cost);
-    addSpending(guildId, userId, 'lottery', cost);
+    subtractUserBalance(guildId, userId, BET_PRICE);
+    addSpending(guildId, userId, 'lottery', BET_PRICE);
+    db.prepare('UPDATE lottery_rounds SET pot = pot + ?, totalBets = totalBets + 1 WHERE guildId = ? AND roundId = ?')
+        .run(BET_PRICE, guildId, round.roundId);
+    db.prepare('INSERT INTO lottery_bets (guildId, roundId, userId, username, number, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(guildId, round.roundId, userId, username, number, Date.now());
+    incrementUserStat(guildId, userId, 'togel_bets');
 
-    // Feed the jackpot (70%); the remaining 30% is burned (money sink).
-    const contrib = Math.floor(cost * JACKPOT_CONTRIB);
-    db.prepare('UPDATE lottery_rounds SET jackpot = jackpot + ?, ticketsSold = ticketsSold + ? WHERE guildId = ? AND weekId = ?')
-        .run(contrib, qty, guildId, round.weekId);
-
-    // Record the player's tickets.
-    if (existing) {
-        db.prepare('UPDATE lottery_tickets SET tickets = tickets + ?, spent = spent + ?, username = ? WHERE guildId = ? AND weekId = ? AND userId = ?')
-            .run(qty, cost, username, guildId, round.weekId, userId);
-    } else {
-        db.prepare('INSERT INTO lottery_tickets (guildId, weekId, userId, username, tickets, spent) VALUES (?, ?, ?, ?, ?, ?)')
-            .run(guildId, round.weekId, userId, username, qty, cost);
-    }
-
-    incrementUserStat(guildId, userId, 'lottery_tickets_bought', qty);
-
-    const updated = getRoundRow(guildId, round.weekId);
+    const updated = getRoundRow(guildId, round.roundId);
     return {
         success: true,
-        qty,
-        cost,
-        contrib,
-        ownedTickets: owned + qty,
-        jackpot: updated.jackpot,
-        ticketsSold: updated.ticketsSold,
-        newBalance: user.balance - cost,
-        weekId: round.weekId,
+        number,
+        cost: BET_PRICE,
+        pot: updated.pot,
+        myNumbers: [...mine.map(b => b.number), number],
+        newBalance: user.balance - BET_PRICE,
+        drawAt: round.drawAt,
+        roundId: round.roundId,
     };
 }
 
 // ==================== DRAW ====================
-function pickWeightedWinner(tickets) {
-    const total = tickets.reduce((s, t) => s + t.tickets, 0);
-    if (total <= 0) return null;
-    let r = Math.floor(Math.random() * total);
-    for (const t of tickets) {
-        r -= t.tickets;
-        if (r < 0) return t;
-    }
-    return tickets[tickets.length - 1];
-}
-
-// Draw a specific round (defaults to the current week's). Idempotent: a round
-// can only be drawn once.
-function drawRound(guildId, weekId = getWeekId()) {
-    const round = getRoundRow(guildId, weekId);
+// forceNumber is only used by tests; production passes nothing (random).
+function drawRound(guildId, roundId, forceNumber = null) {
+    const round = getRoundRow(guildId, roundId);
     if (!round) return { success: false, error: 'no_round' };
     if (round.status === 'drawn') return { success: false, error: 'already_drawn' };
 
-    const tickets = getRoundTickets(guildId, weekId);
-    const totalTickets = tickets.reduce((s, t) => s + t.tickets, 0);
-    const participants = tickets.length;
+    const drawnNumber = forceNumber != null ? forceNumber : getRandomInt(NUMBER_MIN, NUMBER_MAX);
+    const bets = getRoundBets(guildId, roundId);
+    const totalBets = bets.length;
 
-    if (participants === 0) {
-        // No buyers — keep the jackpot so getCurrentRound() rolls it over.
-        db.prepare("UPDATE lottery_rounds SET status = 'drawn', drawnAt = ?, totalTickets = 0, participants = 0 WHERE guildId = ? AND weekId = ?")
-            .run(Date.now(), guildId, weekId);
-        return { success: true, winner: null, jackpot: round.jackpot, totalTickets: 0, participants: 0, weekId };
+    // Distinct winners (a user can only bet a number once, so this is unique).
+    const winners = bets.filter(b => b.number === drawnNumber);
+    const pot = round.pot;
+
+    let payoutEach = 0;
+    if (winners.length > 0) {
+        payoutEach = Math.floor(pot / winners.length);
+        for (const w of winners) {
+            addUserBalance(guildId, w.userId, payoutEach);
+            addIncome(guildId, w.userId, 'event', payoutEach);
+            incrementUserStat(guildId, w.userId, 'togel_wins');
+            incrementUserStat(guildId, w.userId, 'togel_won_total', payoutEach);
+        }
     }
 
-    const winner = pickWeightedWinner(tickets);
-    const payout = round.jackpot;
+    db.prepare("UPDATE lottery_rounds SET status = 'drawn', drawnAt = ?, drawnNumber = ?, totalBets = ?, winnersCount = ?, payoutEach = ? WHERE guildId = ? AND roundId = ?")
+        .run(Date.now(), drawnNumber, totalBets, winners.length, payoutEach, guildId, roundId);
 
-    addUserBalance(guildId, winner.userId, payout);
-    addIncome(guildId, winner.userId, 'event', payout);
-    incrementUserStat(guildId, winner.userId, 'lottery_wins');
-    incrementUserStat(guildId, winner.userId, 'lottery_won_total', payout);
-
-    db.prepare("UPDATE lottery_rounds SET status = 'drawn', drawnAt = ?, winnerId = ?, winnerName = ?, winnerTickets = ?, totalTickets = ?, participants = ? WHERE guildId = ? AND weekId = ?")
-        .run(Date.now(), winner.userId, winner.username, winner.tickets, totalTickets, participants, guildId, weekId);
+    // Open the next round: fresh seed if someone won, otherwise carry the pot.
+    const seed = getSeed(guildId);
+    const nextPot = winners.length > 0 ? seed : pot;
+    const carried = winners.length > 0 ? 0 : pot;
+    const next = createRound(guildId, nextPot, carried);
 
     return {
         success: true,
-        winner,
-        payout,
-        jackpot: payout,
-        totalTickets,
-        participants,
-        odds: ((winner.tickets / totalTickets) * 100),
-        weekId,
+        drawnNumber,
+        pot,
+        totalBets,
+        winners: winners.map(w => ({ userId: w.userId, username: w.username })),
+        winnersCount: winners.length,
+        payoutEach,
+        nextRoundId: next.roundId,
+        nextPot: next.pot,
+        roundId,
     };
 }
 
 function getLastDrawn(guildId) {
-    return db.prepare("SELECT * FROM lottery_rounds WHERE guildId = ? AND status = 'drawn' AND winnerId IS NOT NULL ORDER BY drawnAt DESC LIMIT 1").get(guildId);
+    return db.prepare("SELECT * FROM lottery_rounds WHERE guildId = ? AND status = 'drawn' ORDER BY drawnAt DESC LIMIT 1").get(guildId);
 }
 
 // ==================== PANEL UI ====================
 function buildLotteryPanel(guildId) {
     const round = getCurrentRound(guildId);
-    const tickets = getRoundTickets(guildId, round.weekId);
-    const totalTickets = tickets.reduce((s, t) => s + t.tickets, 0);
+    const bets = getRoundBets(guildId, round.roundId);
+    const uniqueNumbers = new Set(bets.map(b => b.number)).size;
+    const players = new Set(bets.map(b => b.userId)).size;
     const last = getLastDrawn(guildId);
 
     let desc = '━━━━━━━━━━━━━━━━━━━━━━\n';
-    desc += `🎰 **JACKPOT MINGGU INI**\n`;
-    desc += `# 🪙 ${round.jackpot.toLocaleString('id-ID')}\n`;
-    if (round.carriedOver > 0) desc += `-# ↪️ termasuk carry-over 🪙 ${round.carriedOver.toLocaleString('id-ID')} dari minggu lalu\n`;
+    desc += `🎰 **POT RONDE #${round.roundId}**\n`;
+    desc += `# 🪙 ${round.pot.toLocaleString('id-ID')}\n`;
+    if (round.carriedOver > 0) desc += `-# ↪️ termasuk carry-over 🪙 ${round.carriedOver.toLocaleString('id-ID')} dari ronde sebelumnya\n`;
     desc += '\n';
-    desc += `> 🎟️ Harga tiket: **${TICKET_PRICE.toLocaleString('id-ID')}** /tiket\n`;
-    desc += `> 📦 Tiket terjual: **${totalTickets.toLocaleString('id-ID')}** (${tickets.length} peserta)\n`;
-    desc += `> ⏰ Undian: <t:${nextDrawUnix()}:R> (Senin 00:00 WIB)\n`;
-    desc += `> 🧢 Maks **${MAX_TICKETS_PER_USER}** tiket/orang\n\n`;
+    desc += `> 🎟️ **Harga pasang angka: 🪙 ${BET_PRICE.toLocaleString('id-ID')}**\n`;
+    desc += `> 🔢 Pilih angka **${NUMBER_MIN}-${NUMBER_MAX}** (maks **${MAX_NUMBERS_PER_USER}** angka/ronde)\n`;
+    desc += `> ⏰ Diundi: <t:${Math.floor(round.drawAt / 1000)}:R> (tiap 1 jam)\n`;
+    desc += `> 📦 Taruhan ronde ini: **${bets.length}** dari **${players}** pemain (${uniqueNumbers} angka)\n\n`;
 
-    if (tickets.length > 0) {
-        desc += `**🏆 Pembeli Teratas:**\n`;
-        tickets.slice(0, 5).forEach((t, i) => {
-            const medal = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i] || `${i + 1}.`;
-            const pct = totalTickets ? ((t.tickets / totalTickets) * 100).toFixed(1) : '0';
-            desc += `> ${medal} **${t.username || 'Unknown'}** — ${t.tickets} tiket (${pct}%)\n`;
-        });
-        desc += '\n';
-    }
+    desc += `**📌 Cara pasang:**\n`;
+    desc += `> Ketik \`/togel angka:19\` untuk pasang angka 19 (bayar 🪙 ${BET_PRICE.toLocaleString('id-ID')}).\n\n`;
 
-    if (last && last.winnerId) {
+    if (last) {
         desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
-        desc += `**🎉 Pemenang Minggu Lalu (${last.weekId}):**\n`;
-        desc += `> 👑 <@${last.winnerId}> menang 🪙 **${last.jackpot.toLocaleString('id-ID')}**!\n`;
+        desc += `**🎲 Hasil Ronde Lalu (#${last.roundId}):**\n`;
+        desc += `> 🔢 Angka keluar: **${last.drawnNumber}**\n`;
+        if (last.winnersCount > 0) {
+            desc += `> 🏆 **${last.winnersCount} pemenang** — masing-masing 🪙 **${last.payoutEach.toLocaleString('id-ID')}**\n`;
+        } else {
+            desc += `> 😶 Tidak ada pemenang — pot di-carry over!\n`;
+        }
     }
     desc += `━━━━━━━━━━━━━━━━━━━━━━`;
 
     const embed = new EmbedBuilder()
-        .setTitle('🎟️ TOGEL MINGGUAN — Weekly Lottery')
+        .setTitle('🎟️ TOGEL — Pasang Angka 1-100')
         .setColor('#F1C40F')
         .setDescription(desc)
-        .setFooter({ text: 'Beli tiket → makin banyak tiket, makin besar peluang menang!' })
+        .setFooter({ text: `Harga pasang: ${BET_PRICE.toLocaleString('id-ID')} /angka • Undian tiap 1 jam` })
         .setTimestamp();
 
-    const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('lottery_buy_1').setLabel(`Beli 1 (${TICKET_PRICE.toLocaleString('id-ID')})`).setEmoji('🎟️').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('lottery_buy_5').setLabel(`Beli 5`).setEmoji('🎟️').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('lottery_buy_10').setLabel(`Beli 10`).setEmoji('🎟️').setStyle(ButtonStyle.Success),
-    );
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('lottery_mytickets').setLabel('Tiket Saya').setEmoji('🧾').setStyle(ButtonStyle.Secondary),
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('lottery_mybets').setLabel('Angka Saya').setEmoji('🧾').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('lottery_refresh').setLabel('Refresh').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('lottery_info').setLabel('Cara Main').setEmoji('❓').setStyle(ButtonStyle.Secondary),
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row] };
 }
 
 // ==================== BUTTON HANDLER ====================
@@ -285,43 +271,25 @@ function isLotteryButton(customId) {
 async function handleLotteryButton(interaction) {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const username = interaction.user.username;
     const id = interaction.customId;
-
-    // Buy buttons.
-    if (id === 'lottery_buy_1' || id === 'lottery_buy_5' || id === 'lottery_buy_10') {
-        const qty = parseInt(id.split('_')[2], 10);
-        const result = buyTickets(guildId, userId, username, qty);
-        if (!result.success) {
-            return interaction.reply({ content: result.error, ephemeral: true });
-        }
-        // Refresh the shared panel for everyone, plus a private confirmation.
-        await interaction.update(buildLotteryPanel(guildId)).catch(() => {});
-        return interaction.followUp({
-            content: `✅ Kamu beli **${result.qty} tiket** seharga 🪙 **${result.cost.toLocaleString('id-ID')}**!\n> 🎟️ Total tiketmu: **${result.ownedTickets}**\n> 🪙 Saldo: **${result.newBalance.toLocaleString('id-ID')}**\n> 🎰 Jackpot sekarang: **${result.jackpot.toLocaleString('id-ID')}**`,
-            ephemeral: true,
-        }).catch(() => {});
-    }
 
     if (id === 'lottery_refresh') {
         return interaction.update(buildLotteryPanel(guildId)).catch(() => {});
     }
 
-    if (id === 'lottery_mytickets') {
+    if (id === 'lottery_mybets') {
         const round = getCurrentRound(guildId);
-        const t = getUserTicket(guildId, round.weekId, userId);
-        const owned = t ? t.tickets : 0;
-        const allTickets = getRoundTickets(guildId, round.weekId);
-        const totalTickets = allTickets.reduce((s, x) => s + x.tickets, 0);
-        const odds = totalTickets ? ((owned / totalTickets) * 100).toFixed(2) : '0';
+        const mine = getUserBets(guildId, round.roundId, userId);
+        const nums = mine.map(b => b.number);
         const embed = new EmbedBuilder()
             .setColor('#F1C40F')
-            .setTitle('🧾 Tiket Saya')
+            .setTitle('🧾 Angka Saya — Ronde #' + round.roundId)
             .setDescription(
-                `> 🎟️ Tiket minggu ini: **${owned}** / ${MAX_TICKETS_PER_USER}\n` +
-                `> 💸 Total dibelanjakan: 🪙 **${(t ? t.spent : 0).toLocaleString('id-ID')}**\n` +
-                `> 🎯 Peluang menang: **${odds}%** (dari ${totalTickets} tiket)\n` +
-                `> 🎰 Jackpot: 🪙 **${round.jackpot.toLocaleString('id-ID')}**`
+                (nums.length ? `> 🔢 Angka kamu: **${nums.join(', ')}**\n` : `> 🔢 Kamu belum pasang angka ronde ini.\n`) +
+                `> 🎟️ Sisa slot: **${MAX_NUMBERS_PER_USER - nums.length}** / ${MAX_NUMBERS_PER_USER}\n` +
+                `> 💸 Total taruhan: 🪙 **${(nums.length * BET_PRICE).toLocaleString('id-ID')}**\n` +
+                `> 🎰 Pot: 🪙 **${round.pot.toLocaleString('id-ID')}**\n\n` +
+                `Pasang lagi: \`/togel angka:<${NUMBER_MIN}-${NUMBER_MAX}>\``
             );
         return interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -329,61 +297,54 @@ async function handleLotteryButton(interaction) {
     if (id === 'lottery_info') {
         const embed = new EmbedBuilder()
             .setColor('#F1C40F')
-            .setTitle('❓ Cara Main Togel Mingguan')
+            .setTitle('❓ Cara Main Togel (Pasang Angka)')
             .setDescription(
-                `> 🎟️ Beli tiket seharga **${TICKET_PRICE.toLocaleString('id-ID')}** /tiket (maks **${MAX_TICKETS_PER_USER}**/minggu).\n` +
-                `> 🎰 **${Math.round(JACKPOT_CONTRIB * 100)}%** dari tiap pembelian masuk ke **jackpot**.\n` +
-                `> 👑 Setiap **Senin 00:00 WIB**, 1 pemenang diundi — makin banyak tiket, makin besar peluang.\n` +
-                `> 💰 Pemenang membawa pulang **seluruh jackpot**.\n` +
-                `> ↪️ Kalau minggu itu tidak ada yang beli, jackpot **carry-over** ke minggu depan.`
+                `> 🔢 Pilih angka **${NUMBER_MIN}-${NUMBER_MAX}** dengan \`/togel angka:<n>\`.\n` +
+                `> 🎟️ Tiap pasang angka bayar 🪙 **${BET_PRICE.toLocaleString('id-ID')}** (langsung masuk pot).\n` +
+                `> 🧢 Maks **${MAX_NUMBERS_PER_USER} angka** per ronde per orang.\n` +
+                `> ⏰ Tiap **1 jam** 1 angka diundi acak.\n` +
+                `> 🏆 Semua yang pasang angka itu **bagi rata pot**.\n` +
+                `> ↪️ Kalau tidak ada yang tembus, pot **carry-over** ke ronde berikutnya.`
             );
         return interaction.reply({ embeds: [embed], ephemeral: true });
     }
-
-    // Admin: set this channel as the weekly winner announcement channel.
-    if (id === 'lottery_setchannel') {
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
-            return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa mengatur channel pengumuman.', ephemeral: true });
-        }
-        db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'togel_channel', interaction.channelId);
-        return interaction.reply({ content: `✅ Pengumuman pemenang togel akan dikirim ke <#${interaction.channelId}>.`, ephemeral: true });
-    }
 }
 
-// ==================== SCHEDULER (auto weekly draw) ====================
+// ==================== SCHEDULER (auto hourly draw) ====================
 async function announceDraw(client, guildId, result) {
     const channelId = getSetting(guildId, 'togel_channel', null);
     if (!channelId) return;
     const channel = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
 
-    if (!result.winner) {
+    if (result.winnersCount === 0) {
         await channel.send({
-            embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle('🎟️ Togel Mingguan — Tidak Ada Pemenang')
-                .setDescription(`Minggu **${result.weekId}** tidak ada yang beli tiket.\n🎰 Jackpot 🪙 **${result.jackpot.toLocaleString('id-ID')}** di-**carry over** ke minggu depan!`)],
+            embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle(`🎲 Togel Ronde #${result.roundId} — Angka ${result.drawnNumber}`)
+                .setDescription(`Tidak ada yang tembus angka **${result.drawnNumber}**.\n🎰 Pot 🪙 **${result.pot.toLocaleString('id-ID')}** di-**carry over** ke ronde #${result.nextRoundId}!`)],
         }).catch(() => {});
         return;
     }
 
+    const winnerMentions = result.winners.map(w => `<@${w.userId}>`).join(', ');
     await channel.send({
-        content: `🎉 Selamat <@${result.winner.userId}>!`,
-        embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle('🎟️🎉 PEMENANG TOGEL MINGGUAN!')
+        content: `🎉 Selamat ${winnerMentions}!`,
+        embeds: [new EmbedBuilder().setColor('#F1C40F').setTitle(`🎲🎉 TOGEL RONDE #${result.roundId} — ANGKA ${result.drawnNumber}!`)
             .setDescription(
-                `👑 <@${result.winner.userId}> memenangkan jackpot!\n\n` +
-                `> 🪙 Hadiah: **${result.payout.toLocaleString('id-ID')}**\n` +
-                `> 🎟️ Tiket: **${result.winner.tickets}** / ${result.totalTickets} (${result.odds.toFixed(1)}% peluang)\n` +
-                `> 👥 Peserta: **${result.participants}**\n` +
-                `> 📅 Minggu: **${result.weekId}**\n\n` +
-                `*Togel minggu baru sudah dibuka — beli tiketmu dengan \`/togel\`!*`
+                `🏆 **${result.winnersCount} pemenang** tembus angka **${result.drawnNumber}**!\n\n` +
+                `> 🪙 Masing-masing dapat: **${result.payoutEach.toLocaleString('id-ID')}**\n` +
+                `> 🎰 Total pot: **${result.pot.toLocaleString('id-ID')}**\n` +
+                `> 📦 Total taruhan: **${result.totalBets}**\n\n` +
+                `*Ronde #${result.nextRoundId} sudah dibuka — pasang angkamu dengan \`/togel angka:<n>\`!*`
             ).setTimestamp()],
-        allowedMentions: { users: [result.winner.userId] },
+        allowedMentions: { users: result.winners.map(w => w.userId) },
     }).catch(() => {});
 
-    // Best-effort DM to the winner.
-    try {
-        const u = await client.users.fetch(result.winner.userId).catch(() => null);
-        if (u) await u.send(`🎉 Selamat! Kamu memenangkan Togel Mingguan: 🪙 **${result.payout.toLocaleString('id-ID')}**!`).catch(() => {});
-    } catch (_) { /* DMs closed */ }
+    for (const w of result.winners) {
+        try {
+            const u = await client.users.fetch(w.userId).catch(() => null);
+            if (u) await u.send(`🎉 Selamat! Angka **${result.drawnNumber}** tembus — kamu dapat 🪙 **${result.payoutEach.toLocaleString('id-ID')}** dari Togel!`).catch(() => {});
+        } catch (_) { /* DMs closed */ }
+    }
 }
 
 let _schedulerStarted = false;
@@ -391,28 +352,26 @@ function startLotteryScheduler(client, intervalMs = 60000) {
     if (_schedulerStarted) return;
     _schedulerStarted = true;
     const tick = async () => {
-        const currentWeek = getWeekId();
-        // Any open round from a past week is due to be drawn.
-        const due = db.prepare("SELECT guildId, weekId FROM lottery_rounds WHERE status = 'open' AND weekId != ?").all(currentWeek);
+        const now = Date.now();
+        const due = db.prepare("SELECT guildId, roundId FROM lottery_rounds WHERE status = 'open' AND drawAt <= ?").all(now);
         for (const r of due) {
             try {
-                const result = drawRound(r.guildId, r.weekId);
+                const result = drawRound(r.guildId, r.roundId);
                 if (result.success) await announceDraw(client, r.guildId, result);
             } catch (e) {
-                log('WARN', `[lottery] draw failed for ${r.guildId}/${r.weekId}: ${e.message}`);
+                log('WARN', `[lottery] draw failed for ${r.guildId}/#${r.roundId}: ${e.message}`);
             }
         }
     };
-    // Run shortly after startup, then on an interval.
     setTimeout(() => { tick().catch(() => {}); }, 10000);
     setInterval(() => { tick().catch(() => {}); }, intervalMs);
 }
 
 module.exports = {
-    TICKET_PRICE, JACKPOT_CONTRIB, SEED_JACKPOT, MAX_TICKETS_PER_USER,
-    getWeekId, nextDrawUnix,
-    getCurrentRound, getRoundRow, getUserTicket, getRoundTickets, getLastDrawn,
-    buyTickets, drawRound, pickWeightedWinner,
+    BET_PRICE, NUMBER_MIN, NUMBER_MAX, MAX_NUMBERS_PER_USER, DRAW_INTERVAL_MS, DEFAULT_SEED,
+    getSeed, setSeed, setPot,
+    getCurrentRound, getRoundRow, getOpenRound, getUserBets, getRoundBets, getLastDrawn,
+    placeBet, drawRound,
     buildLotteryPanel, isLotteryButton, handleLotteryButton,
     startLotteryScheduler, announceDraw,
 };
