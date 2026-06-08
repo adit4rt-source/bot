@@ -90,6 +90,7 @@ function meltRelic(guildId, userId, relicId) {
     db.prepare('DELETE FROM relics WHERE id = ?').run(relicId);
     const { addItem } = require('../database');
     addItem(guildId, userId, 'refine_stone', stones);
+    try { require('../database').incrementUserStat(guildId, userId, 'relic_melts', 1); } catch (_) { /* stat tracking must never block melt */ }
     return { success: true, relic, stones };
 }
 

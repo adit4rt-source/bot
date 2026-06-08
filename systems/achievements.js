@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 110, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 119, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -140,6 +140,19 @@ const ACHIEVEMENTS = [
     { id: 'pet_mythic', name: 'Mythic Tamer', emoji: '🔴', desc: 'Dapatkan pet Mythic pertama', category: 'Pet', reward: 8000 },
     { id: 'pet_secret', name: 'Secret Keeper', emoji: '🟪', desc: 'Dapatkan pet Secret pertama', category: 'Pet', reward: 25000 },
     { id: 'pet_god', name: 'Divine Tamer', emoji: '👑', desc: 'Dapatkan pet GOD tier pertama', category: 'Pet', reward: 100000 },
+    // --- LOTTERY / TOGEL ---
+    { id: 'togel_first', name: 'Pemain Togel', emoji: '🎟️', desc: 'Pasang angka togel pertama kali', category: 'Gambling', reward: 100 },
+    { id: 'togel_win_first', name: 'Hoki Pertama', emoji: '🍀', desc: 'Menang togel pertama kali', category: 'Gambling', reward: 500 },
+    { id: 'togel_win_10', name: 'Raja Togel', emoji: '🎱', desc: 'Menang togel 10 kali', category: 'Gambling', reward: 2500 },
+    { id: 'togel_won_500k', name: 'Jackpot Hunter', emoji: '💰', desc: 'Total menang togel 500.000', category: 'Gambling', reward: 3000 },
+    // --- WORLD BOSS ---
+    { id: 'world_boss_first', name: 'Penantang Boss', emoji: '🗡️', desc: 'Serang World Boss pertama kali', category: 'Battle', reward: 300 },
+    { id: 'world_boss_slayer', name: 'World Boss Slayer', emoji: '🐉', desc: 'Pukulan terakhir mengalahkan World Boss', category: 'Battle', reward: 10000 },
+    // --- RELIC MELT ---
+    { id: 'relic_melt_first', name: 'Relic Smelter', emoji: '🔥', desc: 'Lebur relic pertama kali jadi Refine Stone', category: 'Battle', reward: 200 },
+    // --- EXPEDITION ---
+    { id: 'expedition_first', name: 'Penjelajah', emoji: '🧭', desc: 'Selesaikan ekspedisi pertama', category: 'Pet', reward: 150 },
+    { id: 'expedition_25', name: 'Master Ekspedisi', emoji: '🗺️', desc: 'Selesaikan 25 ekspedisi', category: 'Pet', reward: 2000 },
 
 ];
 
@@ -231,7 +244,7 @@ const ACHIEVEMENT_ROLES = [
     { minBadges: 30, name: '💎 Veteran', color: '#9B59B6' },
     { minBadges: 50, name: '🔥 Elite', color: '#E74C3C' },
     { minBadges: 70, name: '👑 Master', color: '#F1C40F' },
-    { minBadges: 110, name: '🏆 Completionist', color: '#FFFFFF' },
+    { minBadges: 119, name: '🏆 Completionist', color: '#FFFFFF' },
 ];
 
 async function updateAchievementRole(guild, userId, badgeCount) {
@@ -347,6 +360,15 @@ async function checkAchievements(guild, userId, context = {}) {
         if (context.tier === 'Secret') checks.push('pet_secret');
         if (context.tier === 'God') checks.push('pet_god');
     }
+    // --- LOTTERY / TOGEL ---
+    if (context.type === 'togel_bet') { const c = getUserStat(guildId, userId, 'togel_bets'); if (c >= 1) checks.push('togel_first'); }
+    if (context.type === 'togel_win') { const w = getUserStat(guildId, userId, 'togel_wins'); const t = getUserStat(guildId, userId, 'togel_won_total'); if (w >= 1) checks.push('togel_win_first'); if (w >= 10) checks.push('togel_win_10'); if (t >= 500000) checks.push('togel_won_500k'); }
+    // --- WORLD BOSS ---
+    if (context.type === 'world_boss') { const a = getUserStat(guildId, userId, 'world_boss_attacks'); const l = getUserStat(guildId, userId, 'world_boss_last_hit'); if (a >= 1) checks.push('world_boss_first'); if (l >= 1) checks.push('world_boss_slayer'); }
+    // --- RELIC MELT ---
+    if (context.type === 'relic_melt') { const c = getUserStat(guildId, userId, 'relic_melts'); if (c >= 1) checks.push('relic_melt_first'); }
+    // --- EXPEDITION ---
+    if (context.type === 'expedition') { const c = getUserStat(guildId, userId, 'total_expeditions'); if (c >= 1) checks.push('expedition_first'); if (c >= 25) checks.push('expedition_25'); }
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
@@ -381,6 +403,10 @@ const ACH_PROGRESS = {
     level_5: { special: 'level', target: 5 }, level_10: { special: 'level', target: 10 }, level_25: { special: 'level', target: 25 }, level_50: { special: 'level', target: 50 }, level_100: { special: 'level', target: 100 },
     streak_7: { special: 'streak', target: 7 }, streak_14: { special: 'streak', target: 14 }, streak_30: { special: 'streak', target: 30 }, streak_60: { special: 'streak', target: 60 }, streak_100: { special: 'streak', target: 100 },
     pet_collect_10: { special: 'distinctPets', target: 10 }, pet_collect_25: { special: 'distinctPets', target: 25 }, pet_collect_50: { special: 'distinctPets', target: 50 },
+    togel_first: { stat: 'togel_bets', target: 1 }, togel_win_first: { stat: 'togel_wins', target: 1 }, togel_win_10: { stat: 'togel_wins', target: 10 }, togel_won_500k: { stat: 'togel_won_total', target: 500000 },
+    world_boss_first: { stat: 'world_boss_attacks', target: 1 }, world_boss_slayer: { stat: 'world_boss_last_hit', target: 1 },
+    relic_melt_first: { stat: 'relic_melts', target: 1 },
+    expedition_first: { stat: 'total_expeditions', target: 1 }, expedition_25: { stat: 'total_expeditions', target: 25 },
 };
 
 // Returns { raw, current, target } for a countable achievement, or null.
@@ -398,4 +424,26 @@ function getAchievementProgress(guildId, userId, achId) {
     return { raw: current, current: Math.min(current, p.target), target: p.target };
 }
 
-module.exports = { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES, hasAchievement, grantAchievement, checkAchievements, checkMilestoneRewards, getAchievementProgress };
+// ==================== SELF-HEALING SYNC ====================
+// Grants any threshold/countable badge whose condition is ALREADY satisfied but
+// never got awarded — e.g. the stat was incremented before the badge existed, or
+// a checkAchievements() call was missed somewhere. This fixes "stuck" badges that
+// show progress like 601/1 but stay locked. Only badges listed in ACH_PROGRESS
+// (i.e. with a measurable stat/special) participate; binary one-shot badges are
+// left untouched because there is no stat to verify them against.
+// Returns the number of badges newly granted.
+async function syncAchievements(guild, userId) {
+    const guildId = guild.id;
+    let granted = 0;
+    for (const achId of Object.keys(ACH_PROGRESS)) {
+        if (hasAchievement(guildId, userId, achId)) continue;
+        const prog = getAchievementProgress(guildId, userId, achId);
+        if (prog && prog.raw >= prog.target) {
+            const ok = await grantAchievement(guild, userId, achId);
+            if (ok) granted++;
+        }
+    }
+    return granted;
+}
+
+module.exports = { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES, hasAchievement, grantAchievement, checkAchievements, checkMilestoneRewards, getAchievementProgress, syncAchievements };

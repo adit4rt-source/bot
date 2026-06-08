@@ -352,6 +352,35 @@ module.exports = function register() {
     if (ach.getAchievementProgress('g', 'u', 'fish_rare') !== null) throw new Error('binary badge should return null');
     if (ach.getAchievementProgress('g', 'u', 'custom_role') !== null) throw new Error('binary badge should return null');
   });
+  test('achievement: syncAchievements self-heals stuck threshold badges', () => {
+    const g = 'ACH_SYNC', u = 'ACHU_SYNC';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM achievements WHERE userId = ?').run(u);
+    db.incrementUserStat(g, u, 'total_buys', 601); // far past first_buy(1) & buy_10(10) but never granted
+    if (ach.hasAchievement(g, u, 'buy_10')) throw new Error('precondition: buy_10 should still be locked');
+    const guild = { id: g, name: 'G', members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() } };
+    return ach.syncAchievements(guild, u).then(() => {
+      if (!ach.hasAchievement(g, u, 'first_buy')) throw new Error('first_buy not self-healed');
+      if (!ach.hasAchievement(g, u, 'buy_10')) throw new Error('buy_10 not self-healed');
+    });
+  });
+  test('achievement: new feature badges exist + sync grants them when condition met', () => {
+    const ids = ['togel_first', 'togel_win_first', 'togel_win_10', 'togel_won_500k', 'world_boss_first', 'world_boss_slayer', 'relic_melt_first', 'expedition_first', 'expedition_25'];
+    for (const id of ids) if (!ach.ACHIEVEMENTS.some(a => a.id === id)) throw new Error('missing new badge: ' + id);
+    const g = 'ACH_NEW', u = 'ACHU_NEW';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM achievements WHERE userId = ?').run(u);
+    db.incrementUserStat(g, u, 'togel_bets', 3);
+    db.incrementUserStat(g, u, 'total_expeditions', 25);
+    db.incrementUserStat(g, u, 'relic_melts', 1);
+    const guild = { id: g, name: 'G', members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() } };
+    return ach.syncAchievements(guild, u).then(() => {
+      if (!ach.hasAchievement(g, u, 'togel_first')) throw new Error('togel_first not granted by sync');
+      if (!ach.hasAchievement(g, u, 'relic_melt_first')) throw new Error('relic_melt_first not granted by sync');
+      if (!ach.hasAchievement(g, u, 'expedition_first')) throw new Error('expedition_first not granted by sync');
+      if (!ach.hasAchievement(g, u, 'expedition_25')) throw new Error('expedition_25 not granted by sync');
+    });
+  });
 
   // ---- DM notification consent (opt-in) ----
   const notif = botRequire('systems/notifications.js');

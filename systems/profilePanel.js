@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, getSetting, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { ACHIEVEMENTS } = require('./achievements');
+const { ACHIEVEMENTS, syncAchievements } = require('./achievements');
 const { getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
@@ -123,6 +123,9 @@ async function handleProfileButton(interaction) {
 
     // === ACHIEVEMENT SUMMARY ===
     if (action === 'achievement') {
+        // Self-heal any "stuck" badges before showing the summary (e.g. stats that
+        // crossed the threshold before the badge existed). Never let it break the panel.
+        try { await syncAchievements(interaction.guild, userId); } catch (_) { /* ignore */ }
         const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
         const unlockedIds = userAchs.map(a => a.achievementId);
         const categories = [...new Set(ACHIEVEMENTS.map(a => a.category))];
@@ -133,7 +136,7 @@ async function handleProfileButton(interaction) {
         for (const cat of categories) {
             const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f' }[cat] || '\ud83d\udcc1';
+            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e' }[cat] || '\ud83d\udcc1';
             desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
         }
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n*...dan lainnya*';
@@ -150,7 +153,7 @@ async function handleProfileButton(interaction) {
         for (const cat of categories) {
             const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f' }[cat] || '\ud83d\udcc1';
+            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e' }[cat] || '\ud83d\udcc1';
             catMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(`${cat} (${catUnlocked}/${catAchs.length})`.slice(0, 100))
                 .setValue(cat)
