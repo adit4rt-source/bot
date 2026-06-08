@@ -26,7 +26,48 @@ function generatePetStats(tier) {
     return { hp: getRandomInt(r[0],r[1]), atk: getRandomInt(r[2],r[3]), def: getRandomInt(r[4],r[5]), spd: getRandomInt(r[6],r[7]), crit: getRandomInt(r[8],r[9]) };
 }
 
+// ============ RELIC BONUS ============
+// Relics boost a pet's stats. We use the BEST relic per stat type owned by the
+// user (no separate equip step), and refining scales its power:
+//   effective bonus = stat_value * (1 + refine_level * 0.05)
+// So a +20 refine roughly doubles that relic's contribution.
+function getRelicBonus(userId) {
+    const best = { atk: 0, def: 0, spd: 0, crit: 0 };
+    if (!userId) return best;
+    let rows;
+    try { rows = db.prepare('SELECT stat_type, stat_value, refine_level FROM relics WHERE userId = ?').all(userId); }
+    catch (_) { return best; }
+    for (const r of rows) {
+        if (!(r.stat_type in best)) continue;
+        const eff = Math.floor((r.stat_value || 0) * (1 + (r.refine_level || 0) * 0.05));
+        if (eff > best[r.stat_type]) best[r.stat_type] = eff;
+    }
+    return best;
+}
+
+// Base pet stats + relic bonuses (used for display and battle).
+function getEffectiveStats(pet) {
+    const b = getRelicBonus(pet && pet.userId);
+    return {
+        hp: pet.hp,
+        atk: pet.atk + b.atk,
+        def: pet.def + b.def,
+        spd: pet.spd + b.spd,
+        crit: pet.crit + b.crit,
+        bonus: b,
+    };
+}
+
+// Returns a shallow copy of the pet row with relic bonuses folded into the
+// stat fields, leaving the caller's object untouched.
+function withRelics(pet) {
+    if (!pet) return pet;
+    const b = getRelicBonus(pet.userId);
+    return { ...pet, atk: (pet.atk || 0) + b.atk, def: (pet.def || 0) + b.def, spd: (pet.spd || 0) + b.spd, crit: (pet.crit || 0) + b.crit };
+}
+
 function simulateBattle(pet, petDef, enemies) {
+    pet = withRelics(pet); // fold equipped/owned relic bonuses into stats
     let petHp = pet.hp + (pet.level * 3);
     const maxPetHp = petHp;
     const petAtk = pet.atk + (pet.level * 1);
@@ -148,6 +189,7 @@ function simulateBattle(pet, petDef, enemies) {
 }
 
 function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
+    pet1 = withRelics(pet1); pet2 = withRelics(pet2); // fold relic bonuses into both
     let hp1 = pet1.hp + (pet1.level * 3), hp2 = pet2.hp + (pet2.level * 3);
     const maxHp1 = hp1, maxHp2 = hp2;
     const atk1 = pet1.atk + pet1.level, atk2 = pet2.atk + pet2.level;
@@ -367,4 +409,4 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI };
+module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats };

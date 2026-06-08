@@ -252,12 +252,47 @@ module.exports = function register() {
   });
   test('shop: buyable list excludes drop-only materials', () => {
     const buyable = ITEMS.filter(i => i.price > 0).map(i => i.id);
-    for (const dropOnly of ['refine_stone', 'mythic_fragment', 'awakening_crystal']) {
+    for (const dropOnly of ['refine_stone', 'protection_stone', 'rod_part', 'mythic_fragment', 'awakening_crystal']) {
       if (buyable.includes(dropOnly)) throw new Error(dropOnly + ' must not be buyable');
     }
-    // Every buyable item must have a sane positive price.
     for (const it of ITEMS.filter(i => i.price > 0)) {
       if (!Number.isFinite(it.price) || it.price <= 0) throw new Error('bad price for ' + it.id);
     }
+  });
+  test('shop: golden_rod_ticket craft recipe is removed', () => {
+    const { CRAFT_RECIPES } = botRequire('data/items.js');
+    if (CRAFT_RECIPES.some(r => r.id === 'golden_rod_ticket')) throw new Error('golden_rod_ticket should be removed');
+    // No remaining recipe should consume refine_stone (now drop-only material).
+    for (const r of CRAFT_RECIPES) {
+      if ((r.ingredients || []).some(i => i.id === 'refine_stone')) throw new Error('recipe still uses refine_stone: ' + r.id);
+    }
+  });
+
+  // ---- Relic bonus / Refine actually affects stats ----
+  const pets = botRequire('systems/pets.js');
+  test('relic: getRelicBonus picks best per stat with refine scaling', () => {
+    const uid = 'RELIC_BEST';
+    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)');
+    ins.run('g', uid, 'W1', 'weapon', 'Rare', 'atk', 20, 0);   // eff 20
+    ins.run('g', uid, 'W2', 'weapon', 'Epic', 'atk', 30, 10);  // eff floor(30*1.5)=45 (best)
+    ins.run('g', uid, 'A1', 'armor', 'Rare', 'def', 10, 20);   // eff floor(10*2)=20
+    const b = pets.getRelicBonus(uid);
+    if (b.atk !== 45) throw new Error('atk best should be 45, got ' + b.atk);
+    if (b.def !== 20) throw new Error('def should be 20, got ' + b.def);
+    if (b.spd !== 0 || b.crit !== 0) throw new Error('spd/crit should be 0');
+  });
+  test('relic: getEffectiveStats adds relic bonus to base pet stats', () => {
+    const uid = 'RELIC_EFF';
+    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)')
+      .run('g', uid, 'Sword', 'weapon', 'Legendary', 'atk', 50, 0); // +50 atk
+    const pet = { userId: uid, hp: 200, atk: 80, def: 40, spd: 20, crit: 10 };
+    const eff = pets.getEffectiveStats(pet);
+    if (eff.atk !== 130) throw new Error('effective atk should be 130, got ' + eff.atk);
+    if (eff.def !== 40) throw new Error('def unchanged should be 40');
+    if (eff.bonus.atk !== 50) throw new Error('bonus.atk should be 50');
+  });
+  test('relic: no relics means zero bonus', () => {
+    const b = pets.getRelicBonus('RELIC_NONE_USER');
+    if (b.atk || b.def || b.spd || b.crit) throw new Error('expected zero bonus');
   });
 };

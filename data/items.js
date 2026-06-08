@@ -10,9 +10,11 @@ const ITEMS = [
     { id: 'mystery_box', name: 'Mystery Box', emoji: '<:MysteryBox:1510785713984110657>', menuEmoji: '📦', desc: 'Random 50-2000 money', price: 2000, category: 'Special' },
     // Refine Stone is NOT buyable (price 0) — drop-only: dungeon/boss (loot) & expedition/hunt (random).
     { id: 'refine_stone', name: 'Refine Stone', emoji: '<:RefineStone:1510785817688412170>', menuEmoji: '🪨', desc: 'Material upgrade relic (+1) — HANYA dari dungeon/boss/expedition/hunt', price: 0, category: 'Battle' },
-    { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', menuEmoji: '🛡️', desc: 'Refine gagal tidak turun level', price: 25000, category: 'Battle' },
+    // Protection Stone is NOT buyable (price 0) — drop-only: dungeon/boss & expedition.
+    { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', menuEmoji: '🛡️', desc: 'Refine gagal tidak turun level — HANYA dari dungeon/boss/expedition', price: 0, category: 'Battle' },
     { id: 'auto_harvest_pass', name: 'Auto-Harvest Pass', emoji: '<:AutoHarvestPass:1510785815889055775>', menuEmoji: '🔔', desc: 'Aktifkan notifikasi panen otomatis (permanen)', price: 15000, category: 'Special' },
-    { id: 'rod_part', name: 'Rod Parts', emoji: '<:RodParts:1510785813741441126>', menuEmoji: '🔧', desc: 'Material upgrade joran (dari mancing/shop)', price: 10000, category: 'Fishing' },
+    // Rod Parts is NOT buyable (price 0) — drop-only: mancing/monster/combo, expedition & pet hunt.
+    { id: 'rod_part', name: 'Rod Parts', emoji: '<:RodParts:1510785813741441126>', menuEmoji: '🔧', desc: 'Material upgrade joran — HANYA dari mancing/expedition/hunt', price: 0, category: 'Fishing' },
     // Anti-Monster Items (Fishing)
     { id: 'monster_repellent', name: 'Monster Repellent', emoji: '🧪', menuEmoji: '🧪', desc: 'Kurangi monster chance -50% selama 5 cast', price: 20000, category: 'Fishing' },
     { id: 'shield_charm', name: 'Shield Charm', emoji: '🛡️✨', menuEmoji: '🛡️', desc: 'Block 1 serangan monster (otomatis, habis pakai)', price: 12000, category: 'Fishing' },
@@ -28,7 +30,6 @@ const ITEMS = [
 const CRAFT_RECIPES = [
     { id: 'super_bait', name: 'Super Bait', emoji: '🎣', ingredients: [{id: 'mystery_box', qty: 2}], result: {type: 'bait', id: 'mythic_bait', qty: 5}, desc: '2 Mystery Box → 5 Umpan Mitik' },
     { id: 'mega_booster', name: 'Mega Booster', emoji: '<:XPBooster3x:1510785750134816878>', ingredients: [{id: 'xp_booster_2x', qty: 3}], result: {type: 'item', id: 'xp_booster_3x', qty: 1}, desc: '3 XP Booster 2x → 1 XP Booster 3x' },
-    { id: 'golden_rod_ticket', name: 'Golden Rod Upgrade', emoji: '<:RodParts:1510785813741441126>', ingredients: [{id: 'refine_stone', qty: 10}], result: {type: 'money', amount: 25000}, desc: '10 Refine Stone → 🪙 25,000' },
     { id: 'protection_bundle', name: 'Protection Bundle', emoji: '🛡️', ingredients: [{id: 'protection_stone', qty: 2}, {id: 'streak_shield', qty: 1}], result: {type: 'item', id: 'protection_stone', qty: 5}, desc: '2 Protection + 1 Shield → 5 Protection Stone' },
     { id: 'lucky_potion', name: 'Lucky Potion', emoji: '<:LuckyCharm:1510785822713184376>', ingredients: [{id: 'lucky_charm', qty: 2}, {id: 'mystery_box', qty: 1}], result: {type: 'item', id: 'lucky_spin_token', qty: 3}, desc: '2 Lucky Charm + 1 Mystery → 3 Lucky Spin' },
 ];

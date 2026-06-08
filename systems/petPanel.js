@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS } = require('../data/items');
@@ -125,6 +125,10 @@ function buildMainPanel(guildId, userId, username) {
         else evoInfo = `\n🧬 Evolution: Lv.${evo.level} → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
     }
 
+    // Effective stats including equipped/owned relic bonuses (from Refine).
+    const eff = getEffectiveStats(pet);
+    const statFmt = (base, bonus) => bonus > 0 ? `**${base + bonus}** (+${bonus})` : `**${base}**`;
+    const hasRelic = eff.bonus.atk || eff.bonus.def || eff.bonus.spd || eff.bonus.crit;
 
     const embed = new EmbedBuilder()
         .setTitle(ui.title('🐾', 'PET', `${pet.name} (Lv.${pet.level})`))
@@ -134,8 +138,9 @@ function buildMainPanel(guildId, userId, username) {
             `❤️ Senang: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
             `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
             `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
-            `⚔️ ATK: **${pet.atk}** | 🛡️ DEF: **${pet.def}** | 💨 SPD: **${pet.spd}**\n` +
-            `❤️ HP: **${pet.hp}** | 🎯 CRIT: **${pet.crit}%**\n` +
+            `⚔️ ATK: ${statFmt(pet.atk, eff.bonus.atk)} | 🛡️ DEF: ${statFmt(pet.def, eff.bonus.def)} | 💨 SPD: ${statFmt(pet.spd, eff.bonus.spd)}\n` +
+            `❤️ HP: **${pet.hp}** | 🎯 CRIT: ${eff.bonus.crit > 0 ? `**${pet.crit + eff.bonus.crit}%** (+${eff.bonus.crit})` : `**${pet.crit}%**`}\n` +
+            (hasRelic ? `📿 *Bonus relic aktif (Refine) — naikkan dengan 📿 Refine!*\n` : '') +
             `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` +
             huntInfo + evoInfo
         )
