@@ -235,12 +235,14 @@ function buildCraftingPanel(guildId, userId, username) {
             `> 🌾 Tanaman: 36 resep\n` +
             `> 🐔🐄 Livestock: 15 resep baru\n\n` +
             `Klik **🧪 Craft** untuk membuka menu resep.\n` +
-            `Bahan diambil dari **Storage** (panen + produk ternak).`
+            `Bahan diambil dari **Storage** (panen + produk ternak).\n\n` +
+            `🛠️ **Alat Tani:** craft gear permanen penambah hasil panen!`
         )
         .setFooter({ text: 'Produk ternak (telur/susu/bulu) otomatis masuk Storage saat collect' });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_tool_${userId}`).setLabel('🛠️ Alat Tani').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 

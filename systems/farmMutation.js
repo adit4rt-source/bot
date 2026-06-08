@@ -82,7 +82,7 @@ function rollMutation(guildId, userId, seedLevel = 0) {
 
 // ==================== CALCULATE YIELD WITH BONUSES ====================
 function calculateHarvestYield(crop, options = {}) {
-    const { weatherYieldMult = 1, fertYieldBonus = 0, seedLevel = 0, rotationBonus = 0, petFarmBonus = 0 } = options;
+    const { weatherYieldMult = 1, fertYieldBonus = 0, seedLevel = 0, rotationBonus = 0, petFarmBonus = 0, toolBonus = 0 } = options;
     const seedUpgrade = SEED_UPGRADES[seedLevel] || SEED_UPGRADES[0];
 
     let baseYield = getRandomInt(crop.minYield, crop.maxYield);
@@ -92,6 +92,7 @@ function calculateHarvestYield(crop, options = {}) {
     totalMultiplier += fertYieldBonus; // fertilizer
     totalMultiplier += seedUpgrade.yieldBonus; // seed upgrade
     totalMultiplier += rotationBonus; // crop rotation
+    totalMultiplier += toolBonus; // farm tool (craftable gear)
     totalMultiplier += petFarmBonus / 100; // pet farm_yield bonus (comes as percentage)
     totalMultiplier *= weatherYieldMult; // weather
 

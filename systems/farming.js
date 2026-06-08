@@ -40,4 +40,16 @@ function getStorageQty(guildId, userId, itemId) {
     return r ? r.quantity : 0;
 }
 
-module.exports = { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty };
+// ==================== FARM TOOL (craftable gear) ====================
+function getFarmToolLevel(guildId, userId) {
+    const { getUserStat } = require('../database');
+    return getUserStat(guildId, userId, 'farm_tool_level') || 0;
+}
+
+// Harvest-yield multiplier bonus from the farm tool (e.g. level 3 => +0.30).
+function getFarmToolYieldBonus(guildId, userId) {
+    const { FARM_TOOLS } = require('../data/farming');
+    return getFarmToolLevel(guildId, userId) * FARM_TOOLS.yieldPerLevel;
+}
+
+module.exports = { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolLevel, getFarmToolYieldBonus };

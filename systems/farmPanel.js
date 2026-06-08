@@ -2,12 +2,12 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, addUserBalance, subtractUserBalance, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('./farming');
+const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolYieldBonus } = require('./farming');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
 const { addPetExp } = require('../systems/pets');
-const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
+const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS, FARM_TOOLS } = require('../data/farming');
 const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, getWeatherDeathChance, isAutoWaterWeather, formatWeatherEmbed } = require('./farmWeather');
 const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
 const { getPetData } = require('./pets');
@@ -183,6 +183,41 @@ function buildFarmHub(guildId, userId, username) {
     return { embeds: [embed], components: [row] };
 }
 
+// ============ BUILD: Farm Tool (craftable gear) Panel ============
+function buildToolPanel(guildId, userId, username) {
+    const userData = getOrCreateUser(guildId, userId);
+    const level = getUserStat(guildId, userId, 'farm_tool_level') || 0;
+    const bonusNow = (level * FARM_TOOLS.yieldPerLevel * 100).toFixed(0);
+    const isMax = level >= FARM_TOOLS.maxLevel;
+    const next = FARM_TOOLS.upgrades.find(u => u.to === level + 1);
+
+    let desc = `${FARM_TOOLS.emoji} **${FARM_TOOLS.name}** — alat permanen penambah hasil panen.\n\n`;
+    desc += `📊 Level: **${level}/${FARM_TOOLS.maxLevel}**\n`;
+    desc += `🌾 Bonus panen saat ini: **+${bonusNow}%**\n`;
+    desc += `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+    if (isMax) {
+        desc += `✅ **LEVEL MAKSIMAL!** Hasil panen +${bonusNow}% permanen.`;
+    } else if (next) {
+        const nextBonus = (next.to * FARM_TOOLS.yieldPerLevel * 100).toFixed(0);
+        desc += `⬆️ **Upgrade ke Lv.${next.to}** (panen jadi +${nextBonus}%):\n`;
+        desc += `> 🪙 Biaya: **${next.cost.toLocaleString('id-ID')}**\n`;
+        for (const it of next.items) {
+            const c = FARM_CROPS.find(cr => cr.id === it.id);
+            const have = getStorageQty(guildId, userId, it.id);
+            desc += `> ${c ? c.emoji : '📦'} ${c ? c.name : it.id}: **${have}/${it.qty}**\n`;
+        }
+        desc += `\n*Bahan diambil dari Storage hasil panen.*`;
+    }
+
+    const embed = new EmbedBuilder().setTitle(`🛠️ ALAT TANI — ${username}`).setColor('#16A085').setDescription(desc);
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_toolup_${userId}`).setLabel(isMax ? '✅ MAX' : `⬆️ Upgrade (Lv.${level + 1})`).setStyle(ButtonStyle.Success).setDisabled(isMax),
+        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🔙 Crafting').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [row] };
+}
+
 // ============ HANDLER: /farm command (show HUB panel) ============
 async function handleFarmCommand(interaction) {
     const guildId = interaction.guild.id;
@@ -219,6 +254,34 @@ async function handleFarmButton(interaction) {
     if (customId === `farm_allcraft_${userId}`) {
         const { buildCraftingPanel } = require('./livestockPanel');
         return interaction.update(buildCraftingPanel(guildId, userId, interaction.user.username));
+    }
+    // === FARM TOOL (craftable gear: permanent +harvest yield) ===
+    if (customId === `farm_tool_${userId}`) {
+        return interaction.update(buildToolPanel(guildId, userId, interaction.user.username));
+    }
+    if (customId === `farm_toolup_${userId}`) {
+        const level = getUserStat(guildId, userId, 'farm_tool_level') || 0;
+        if (level >= FARM_TOOLS.maxLevel) return interaction.reply({ content: '✅ Alat Tani sudah level MAX!', ephemeral: true });
+        const next = FARM_TOOLS.upgrades.find(u => u.to === level + 1);
+        if (!next) return interaction.reply({ content: '❌ Upgrade tidak tersedia.', ephemeral: true });
+        const ud = getOrCreateUser(guildId, userId);
+        if (ud.balance < next.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${next.cost.toLocaleString('id-ID')}**.`, ephemeral: true });
+        // Check ingredients in storage
+        const missing = [];
+        for (const it of next.items) {
+            const have = getStorageQty(guildId, userId, it.id);
+            if (have < it.qty) {
+                const c = FARM_CROPS.find(cr => cr.id === it.id);
+                missing.push(`${c ? c.emoji : '📦'} ${c ? c.name : it.id}: ${have}/${it.qty}`);
+            }
+        }
+        if (missing.length > 0) return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Bahan Kurang').setDescription(`Untuk upgrade ke Lv.${next.to}, kamu kurang:\n${missing.join('\n')}`)], ephemeral: true });
+        // Consume cost + items, bump level
+        for (const it of next.items) removeStorage(guildId, userId, it.id, it.qty);
+        subtractUserBalance(guildId, userId, next.cost);
+        incrementUserStat(guildId, userId, 'farm_tool_level', 1);
+        await interaction.update(buildToolPanel(guildId, userId, interaction.user.username));
+        return interaction.followUp({ content: `🛠️ **Alat Tani** naik ke **Lv.${next.to}**! Sekarang +${(next.to * FARM_TOOLS.yieldPerLevel * 100).toFixed(0)}% hasil panen.`, ephemeral: true });
     }
     if (customId === `farm_allstorage_${userId}`) {
         const { buildStorageHub } = require('./livestockPanel');
@@ -492,7 +555,8 @@ async function handleFarmButton(interaction) {
                     fertYieldBonus: fert.yieldBonus,
                     seedLevel: 0, // TODO: integrate seed upgrade per-plot
                     rotationBonus,
-                    petFarmBonus
+                    petFarmBonus,
+                    toolBonus: getFarmToolYieldBonus(guildId, userId)
                 });
 
                 // Roll mutation!

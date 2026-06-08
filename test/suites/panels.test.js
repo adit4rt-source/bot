@@ -62,6 +62,8 @@ module.exports = function register() {
   h('quest:daily', quest, 'handleQuestButton', `quest_daily_${U}`);
   h('quest:weekly', quest, 'handleQuestButton', `quest_weekly_${U}`);
   h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
+  const farm2 = botRequire('systems/farmPanel.js');
+  h('farm:tool', farm2, 'handleFarmButton', `farm_tool_${U}`);
   h('level:rank', lvl, 'handleLevelButton', `lvlpnl_rank_${U}`);
   h('level:leaderboard', lvl, 'handleLevelButton', `lvlpnl_leaderboard_${U}`);
   h('level:rewards', lvl, 'handleLevelButton', `lvlpnl_rewards_${U}`);

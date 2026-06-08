@@ -107,4 +107,21 @@ const FARM_DECORATIONS = [
     { id: 'golden_statue', name: 'Patung Emas', emoji: '🗽', price: 100000, desc: 'Simbol kemewahan!' },
 ];
 
-module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS };
+// ==================== FARM TOOLS (craftable gear) ====================
+// One upgradeable tool (🛠️ Alat Tani). Each level adds a permanent harvest-yield
+// bonus. Upgrades are crafted from crops in Storage + money (like a craft recipe).
+const FARM_TOOLS = {
+    name: 'Alat Tani',
+    emoji: '🛠️',
+    maxLevel: 5,
+    yieldPerLevel: 0.10, // +10% harvest yield per level (max +50%)
+    upgrades: [
+        { to: 1, cost: 2000,   items: [{ id: 'gandum', qty: 15 }] },
+        { to: 2, cost: 8000,   items: [{ id: 'jagung', qty: 15 }, { id: 'tomat', qty: 8 }] },
+        { to: 3, cost: 25000,  items: [{ id: 'strawberry', qty: 12 }, { id: 'anggur', qty: 8 }] },
+        { to: 4, cost: 75000,  items: [{ id: 'kopi', qty: 10 }, { id: 'madu', qty: 6 }] },
+        { to: 5, cost: 200000, items: [{ id: 'crystal_flower', qty: 3 }, { id: 'mystic_herb', qty: 2 }] },
+    ],
+};
+
+module.exports = { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS, FARM_TOOLS };
