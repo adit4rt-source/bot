@@ -61,6 +61,7 @@ module.exports = function register() {
   h('stats:gambling', sp, 'handleStatsButton', `stats_gambling_${U}`);
   h('quest:daily', quest, 'handleQuestButton', `quest_daily_${U}`);
   h('quest:weekly', quest, 'handleQuestButton', `quest_weekly_${U}`);
+  h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
   h('level:rank', lvl, 'handleLevelButton', `lvlpnl_rank_${U}`);
   h('level:leaderboard', lvl, 'handleLevelButton', `lvlpnl_leaderboard_${U}`);
   h('level:rewards', lvl, 'handleLevelButton', `lvlpnl_rewards_${U}`);

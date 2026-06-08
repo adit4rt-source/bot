@@ -1,7 +1,7 @@
 // systems/questPanel.js - Quest Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getSetting, getUserStat, incrementUserStat, addIncome, addItem } = require('../database');
-const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('./quests');
+const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, generateQuestByDifficulty, DIFFICULTY_TIERS } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const ui = require('./ui');
 
@@ -82,10 +82,15 @@ function buildDailyPanel(guildId, userId, username) {
         desc += `🎁 **All Done Bonus:** +200 Money (${bonusStatus})`;
     }
 
+    const REROLL_MAX = parseInt(getSetting(guildId, 'quest_reroll_max', '3')) || 3;
+    const REROLL_COST = parseInt(getSetting(guildId, 'quest_reroll_cost', '500')) || 500;
+    const rerollsUsed = getUserStat(guildId, userId, `quest_rerolls_${today}`) || 0;
+    const rerollsLeft = Math.max(0, REROLL_MAX - rerollsUsed);
+
     const embed = new EmbedBuilder()
         .setTitle(ui.title('📋', 'DAILY QUEST', username))
         .setColor(allDailyDone ? ui.COLORS.success : ui.COLORS.warning)
-        .setDescription(desc)
+        .setDescription(desc + `\n${ui.DIVIDER}\n🎲 **Ganti Misi:** sisa **${rerollsLeft}/${REROLL_MAX}** hari ini • biaya 🪙 ${REROLL_COST.toLocaleString('id-ID')}/ganti`)
         .setFooter({ text: ui.footer(`Perfect Days: ${perfectDays} • Streak: ${consecutive}/7 → Bonus 1000 + Mystery Box`) });
 
     // Claim buttons
@@ -99,9 +104,20 @@ function buildDailyPanel(guildId, userId, username) {
         buttons.addComponents(btn);
     });
 
+    // Re-roll buttons (one per quest) — only enabled for incomplete, unclaimed quests
+    const rerollRow = new ActionRowBuilder();
+    quests.forEach((q, i) => {
+        const btn = new ButtonBuilder()
+            .setCustomId(`quest_reroll_${i}_${userId}`)
+            .setLabel(`🎲 Ganti ${i + 1}`)
+            .setStyle(ButtonStyle.Secondary);
+        if (q.claimed || q.progress >= q.target || rerollsLeft <= 0) btn.setDisabled(true);
+        rerollRow.addComponents(btn);
+    });
+
     const navRow = ui.backRow(`quest_back_${userId}`);
 
-    return { embeds: [embed], components: [buttons, navRow] };
+    return { embeds: [embed], components: [buttons, rerollRow, navRow] };
 }
 
 // ============ BUILD: Weekly Quest Sub-panel ============
@@ -194,6 +210,44 @@ async function handleQuestButton(interaction) {
     if (action === 'weekly') {
         const panel = buildWeeklyPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
+    }
+
+    // === RE-ROLL A DAILY QUEST ===
+    if (action === 'reroll') {
+        const qi = parseInt(parts[2]);
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const REROLL_MAX = parseInt(getSetting(guildId, 'quest_reroll_max', '3')) || 3;
+        const REROLL_COST = parseInt(getSetting(guildId, 'quest_reroll_cost', '500')) || 500;
+        const usedKey = `quest_rerolls_${today}`;
+        const used = getUserStat(guildId, userId, usedKey) || 0;
+
+        let row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        if (!row || row.date !== today) return interaction.reply({ content: '\u274c Quest expired.', ephemeral: true });
+
+        let quests = JSON.parse(row.data);
+        const tq = quests[qi];
+        if (!tq) return interaction.reply({ content: '\u274c Misi tidak ditemukan.', ephemeral: true });
+        if (tq.claimed) return interaction.reply({ content: '\u274c Misi sudah diklaim, tidak bisa diganti.', ephemeral: true });
+        if (tq.progress >= tq.target) return interaction.reply({ content: '\u274c Misi sudah selesai — tinggal klaim!', ephemeral: true });
+        if (used >= REROLL_MAX) return interaction.reply({ content: `\u274c Jatah ganti misi habis (${REROLL_MAX}x/hari). Reset 00:00 WIB.`, ephemeral: true });
+
+        const ud = getOrCreateUser(guildId, userId);
+        if (ud.balance < REROLL_COST) return interaction.reply({ content: `\u274c Butuh \ud83e\ude99 **${REROLL_COST.toLocaleString('id-ID')}** untuk ganti misi.`, ephemeral: true });
+
+        // Generate a replacement of the same difficulty, avoiding duplicate types
+        const otherTypes = new Set(quests.filter((_, idx) => idx !== qi).map(q => q.type));
+        let nq, attempts = 0;
+        do { nq = generateQuestByDifficulty(tq.difficulty); attempts++; } while (otherTypes.has(nq.type) && attempts < 25);
+        quests[qi] = nq;
+
+        db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, userId);
+        ud.balance -= REROLL_COST;
+        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, userId);
+        incrementUserStat(guildId, userId, usedKey, 1);
+
+        const panel = buildDailyPanel(guildId, userId, interaction.user.username);
+        await interaction.update(panel);
+        return interaction.followUp({ content: `\ud83c\udfb2 Misi ${qi + 1} diganti! (\u2212\ud83e\ude99 ${REROLL_COST.toLocaleString('id-ID')}) \u2022 Sisa jatah: **${REROLL_MAX - used - 1}/${REROLL_MAX}**`, ephemeral: true });
     }
 
     // === CLAIM DAILY QUEST ===

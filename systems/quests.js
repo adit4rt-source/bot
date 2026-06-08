@@ -473,4 +473,4 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     await checkAchievements(member.guild, member.id, { type: 'balance' });
 }
 
-module.exports = { updateQuestProgress, updateWeeklyQuestProgress, generateDailyQuests, generateWeeklyQuests, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, checkAndUpdateStreak, addXpAndMoney, getRandomInt, poolKata, poolTebakan, DIFFICULTY_TIERS, QUEST_POOL };
+module.exports = { updateQuestProgress, updateWeeklyQuestProgress, generateDailyQuests, generateWeeklyQuests, generateQuestByDifficulty, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, checkAndUpdateStreak, addXpAndMoney, getRandomInt, poolKata, poolTebakan, DIFFICULTY_TIERS, QUEST_POOL };
