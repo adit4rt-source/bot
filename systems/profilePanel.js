@@ -142,11 +142,24 @@ async function handleProfileButton(interaction) {
             .setTitle(`\ud83c\udfc6 Achievement \u2014 ${interaction.user.username}`)
             .setColor('#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Klik kembali untuk lihat per kategori' });
+            .setFooter({ text: 'Pilih kategori untuk lihat tugas & progress tiap badge' });
+        const catMenu = new StringSelectMenuBuilder()
+            .setCustomId(`ach_detail_${userId}`)
+            .setPlaceholder('\ud83d\udcc2 Lihat tugas per kategori...')
+            .setMinValues(1).setMaxValues(1);
+        for (const cat of categories) {
+            const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
+            const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
+            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f' }[cat] || '\ud83d\udcc1';
+            catMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(`${cat} (${catUnlocked}/${catAchs.length})`.slice(0, 100))
+                .setValue(cat)
+                .setDescription(catUnlocked === catAchs.length ? 'Selesai!' : `${catAchs.length - catUnlocked} badge tersisa`));
+        }
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [new ActionRowBuilder().addComponents(catMenu), row] });
     }
 
 
