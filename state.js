@@ -16,4 +16,6 @@ const pendingMarketSell = new Map(); // => { itemType, itemId, itemName }
 const pendingTradeGive = new Map();  // => { type, id, display }
 // Anti-spam: last chat message per user => `${guildId}_${userId}` => { content, ts }
 const lastChatMessages = new Map();
-module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties, pendingMarketSell, pendingTradeGive, lastChatMessages };
+// Pending auction sell selection between the select-menu pick and the modal.
+const pendingAuctionSell = new Map(); // `${guildId}_${userId}` => { type, id }
+module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties, pendingMarketSell, pendingTradeGive, lastChatMessages, pendingAuctionSell };

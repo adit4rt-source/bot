@@ -23,6 +23,7 @@ const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, hand
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
 const { handleArenaCommand, handleArenaButton, isArenaButton } = require('../systems/arena');
+const { handleAuctionCommand, handleAuctionButton, handleAuctionSelect, handleAuctionModal, isAuctionButton, isAuctionSelect, isAuctionModal } = require('../systems/auction');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomySelect, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelSelect, isEconomyPanelModal } = require('../systems/economyPanel');
@@ -379,6 +380,9 @@ async function routeInteraction(interaction) {
         }
         if (command === 'arena') {
             return handleArenaCommand(interaction);
+        }
+        if (command === 'auction') {
+            return handleAuctionCommand(interaction);
         }
 
         // ================= CASINO PANEL (Button-based) =================
@@ -870,6 +874,9 @@ async function routeInteraction(interaction) {
         if (isTradePanelSelectMenu(interaction.customId)) {
             return handleTradeSelectMenu(interaction);
         }
+        if (isAuctionSelect(interaction.customId)) {
+            return handleAuctionSelect(interaction);
+        }
 
         if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️', Pet: '🐾' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); if (unlocked) { desc += `✅ ${ach.emoji} **${ach.name}** — ${ach.desc} · 🪙${ach.reward.toLocaleString('id-ID')} ✓\n`; } else { const prog = getAchievementProgress(guildId, targetUserId, ach.id); let ps = ''; if (prog) { const shown = Math.min(prog.raw, prog.target); const pct = Math.min(100, Math.floor((prog.raw / prog.target) * 100)); const f = Math.round(pct / 10); ps = `\n> ${'▰'.repeat(f)}${'▱'.repeat(10 - f)} ${shown.toLocaleString('id-ID')}/${prog.target.toLocaleString('id-ID')} (${pct}%)`; } desc += `🔒 ${ach.emoji} ~~${ach.name}~~ — ${ach.desc} · 🪙${ach.reward.toLocaleString('id-ID')}${ps}\n`; } } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc.slice(0, 4096)).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
         if (interaction.customId === 'shop_buy_custom_role' || (interaction.customId === 'shop_buy_role_misc' && interaction.values[0] === 'init_cr')) { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
@@ -1082,6 +1089,9 @@ async function routeInteraction(interaction) {
         }
         if (isArenaButton(interaction.customId)) {
             return handleArenaButton(interaction);
+        }
+        if (isAuctionButton(interaction.customId)) {
+            return handleAuctionButton(interaction);
         }
 
         // --- CASINO PANEL BUTTONS ---
@@ -1446,6 +1456,9 @@ async function routeInteraction(interaction) {
 
     // ================= MODAL HANDLERS =================
     if (interaction.isModalSubmit()) {
+        if (isAuctionModal(interaction.customId)) {
+            return handleAuctionModal(interaction);
+        }
         // --- FISHING PANEL MODAL (Lock/Unlock) ---
         if (isFishingPanelModal(interaction.customId)) {
             return handleFishingModal(interaction);

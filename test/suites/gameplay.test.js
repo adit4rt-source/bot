@@ -249,6 +249,42 @@ module.exports = function register() {
     if (after.rating === before.rating) throw new Error('rating should change after a fight');
   });
 
+  // ---- Auction house ----
+  const auction = botRequire('systems/auction.js');
+  test('auction: full lifecycle (list item, bid, outbid refund, settle)', () => {
+    const g = 'AUC_G', seller = 'AUC_S', b1 = 'AUC_B1', b2 = 'AUC_B2';
+    db.getOrCreateUser(g, seller); db.getOrCreateUser(g, b1); db.getOrCreateUser(g, b2);
+    db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(seller);
+    db.db.prepare('UPDATE users SET balance = 100000 WHERE userId = ?').run(b1);
+    db.db.prepare('UPDATE users SET balance = 100000 WHERE userId = ?').run(b2);
+    db.addItem(g, seller, 'mystery_box', 1);
+    const c = auction.createAuction(g, seller, 'Seller', 'item', 'mystery_box', 1000, 6);
+    if (!c.ok) throw new Error('create failed: ' + c.error);
+    if (db.getItemCount(g, seller, 'mystery_box') !== 0) throw new Error('item should be escrowed');
+    const r1 = auction.placeBid(g, c.id, b1, 1000);
+    if (!r1.ok) throw new Error('bid1 failed: ' + r1.error);
+    if (db.getOrCreateUser(g, b1).balance !== 99000) throw new Error('b1 should be debited 1000');
+    const r2 = auction.placeBid(g, c.id, b2, 1500);
+    if (!r2.ok) throw new Error('bid2 failed: ' + r2.error);
+    if (db.getOrCreateUser(g, b1).balance !== 100000) throw new Error('b1 should be refunded on outbid');
+    if (db.getOrCreateUser(g, b2).balance !== 98500) throw new Error('b2 should be debited 1500');
+    const s = auction.settleAuction(c.id);
+    if (!s.ok || !s.sold) throw new Error('settle should sell');
+    if (db.getItemCount(g, b2, 'mystery_box') !== 1) throw new Error('winner should receive item');
+    if (db.getOrCreateUser(g, seller).balance !== 1500) throw new Error('seller should receive gold');
+  });
+  test('auction: cancel with no bids returns the item', () => {
+    const g = 'AUC_G2', seller = 'AUC_S2';
+    db.getOrCreateUser(g, seller);
+    db.addItem(g, seller, 'lucky_charm', 1);
+    const c = auction.createAuction(g, seller, 'S', 'item', 'lucky_charm', 500, 6);
+    if (!c.ok) throw new Error('create failed: ' + c.error);
+    if (db.getItemCount(g, seller, 'lucky_charm') !== 0) throw new Error('item should be escrowed');
+    const x = auction.cancelAuction(c.id, seller);
+    if (!x.ok) throw new Error('cancel failed: ' + x.error);
+    if (db.getItemCount(g, seller, 'lucky_charm') !== 1) throw new Error('item should be returned');
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {

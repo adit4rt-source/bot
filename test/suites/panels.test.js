@@ -26,6 +26,11 @@ module.exports = function register() {
   const arena = botRequire('systems/arena.js');
   panel('arena.buildArenaPanel', () => arena.buildArenaPanel(G, U, NAME));
   panel('arena.buildArenaLeaderboard', () => arena.buildArenaLeaderboard(G, U, NAME));
+  const auction = botRequire('systems/auction.js');
+  panel('auction.buildAuctionPanel', () => auction.buildAuctionPanel(G, U, NAME));
+  panel('auction.buildBrowse', () => auction.buildBrowse(G, U, NAME));
+  panel('auction.buildSellMenu', () => auction.buildSellMenu(G, U, NAME));
+  panel('auction.buildMyListings', () => auction.buildMyListings(G, U, NAME));
   const sp = botRequire('systems/statsPanel.js');
   panel('statsPanel.buildStatsPanel', () => sp.buildStatsPanel(G, U, NAME));
   const casino = botRequire('systems/casinoPanel.js');
@@ -67,6 +72,9 @@ module.exports = function register() {
   h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
   h('arena:lb', arena, 'handleArenaButton', `arena_lb_${U}`);
   h('arena:fight', arena, 'handleArenaButton', `arena_fight_${U}`);
+  h('auction:browse', auction, 'handleAuctionButton', `auc_browse_${U}`);
+  h('auction:sell', auction, 'handleAuctionButton', `auc_sell_${U}`);
+  h('auction:mine', auction, 'handleAuctionButton', `auc_mine_${U}`);
   const farm2 = botRequire('systems/farmPanel.js');
   h('farm:tool', farm2, 'handleFarmButton', `farm_tool_${U}`);
   h('level:rank', lvl, 'handleLevelButton', `lvlpnl_rank_${U}`);

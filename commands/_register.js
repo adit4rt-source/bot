@@ -20,6 +20,7 @@ const commands = [
         .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
     new SlashCommandBuilder().setName('arena').setDescription('⚔️ Ranked Arena — Lawan pet pemain lain, naikkan MMR & rank'),
+    new SlashCommandBuilder().setName('auction').setDescription('🏛️ Auction House — Lelang item/pet/relic, bid pakai money'),
     new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
     new SlashCommandBuilder().setName('gift').setDescription('🎁 Kirim money ke player lain')
         .addUserOption(opt => opt.setName('user').setDescription('Penerima gift').setRequired(true))
