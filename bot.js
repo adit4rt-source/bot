@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.4.0';
-const BUILD_DATE = '2026-06-07';
+const BOT_VERSION = '3.5.0';
+const BUILD_DATE = '2026-06-08';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -263,20 +263,44 @@ client.once(Events.ClientReady, async c => {
             .setTitle(`📦 Update — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `🛠️ **PERBAIKAN & PENYEIMBANGAN**\n` +
+                `Update besar: fitur baru, perbaikan, & penyeimbangan! 🎉\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#E74C3C')
+            .setColor('#F1C40F')
+            .setTitle('✨ Fitur Baru')
+            .setDescription(
+                `> 🎟️ **Togel** — \`/togel angka:<1-100>\` (5.000/angka), diundi **tiap 1 jam**, jackpot **carry-over** kalau belum ada yang tembus.\n` +
+                `> 🎬 **TikTok Converter** — paste link TikTok → bot kirim videonya **tanpa watermark** otomatis.\n` +
+                `> 📿 **Relic Manager** — equip/unequip relic per slot + **lebur** relic numpuk jadi Refine Stone. (Pet → More → 📿 Relic)\n` +
+                `> 📊 **Drop Rates** — lihat rate drop Dungeon/Boss/Expedition/Hunt di dalam bot. (Pet → More → 📊 Rates)\n` +
+                `> 🔔 **Notifikasi DM Opt-in** — bot **hanya** DM yang menyetujui. Atur di \`/profile\` → 🔔 Notifs.`
+            )
+            .setTimestamp(),
+
+        new ChangelogEmbed()
+            .setColor('#E67E22')
             .setTitle('🛠️ Perbaikan')
             .setDescription(
-                `> 🐛 Fix: item langka tidak bisa lagi dibeli GRATIS di /shop\n` +
-                `> 🐛 Fix: Voucher redeem sekarang berfungsi normal\n` +
-                `> 🎟️ Voucher cuma bisa diredeem di server **ID Community** (anti-exploit multi-akun)\n` +
-                `> 🐛 Fix: panel Fusion & Peternakan yang sempat error\n` +
-                `> 🐾 Pet: Pet Dex Secret/GOD, element matchup, Release Pet`
+                `> 🐛 **Relic Refine** sekarang benar-benar menambah stats pet (sebelumnya tanpa efek).\n` +
+                `> 🛡️ **Protection Stone** kini berfungsi — refine gagal **tidak** turun level (stone dipakai).\n` +
+                `> 🧬 **Evolve pet** diperbaiki (tombolnya dulu tidak berfungsi).\n` +
+                `> 🏆 **Achievement** gaya Pokédex — pilih kategori untuk lihat **tugas + progress** tiap badge.\n` +
+                `> 🐛 Fix: resep **Super Bait** dulu menghasilkan umpan rusak.`
+            )
+            .setTimestamp(),
+
+        new ChangelogEmbed()
+            .setColor('#3498DB')
+            .setTitle('⚖️ Penyeimbangan & Crafting')
+            .setDescription(
+                `> ⚔️ **Dungeon & Boss** dibuat lebih kuat (reward tetap gacor — biar pantas).\n` +
+                `> 💰 Reward **World Boss / Expedition / Dungeon** dinaikkan + drop item lebih kaya.\n` +
+                `> 🛒 Harga **/shop** di-rebalance. **Refine Stone, Protection Stone, Rod Parts** kini **drop-only** (dari dungeon/boss/expedition/hunt).\n` +
+                `> 🔨 **Banyak resep crafting baru** (material relic, konversi Mystery Box, anti-monster, dll).\n` +
+                `> 🔁 **Trade** kini pakai **kategori** — bisa tawarkan jauh lebih banyak item (lewati batas 25).`
             )
             .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()
