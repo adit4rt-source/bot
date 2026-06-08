@@ -20,13 +20,13 @@ const WORLD_BOSSES = [
 
 // ==================== REWARD TIERS ====================
 const REWARD_TIERS = [
-    { rank: 1, money: 200000, items: [{ id: 'protection_stone', qty: 10 }, { id: 'xp_booster_3x', qty: 5 }], title: '🥇 MVP' },
-    { rank: 2, money: 140000, items: [{ id: 'protection_stone', qty: 7 }, { id: 'xp_booster_3x', qty: 4 }], title: '🥈 2nd' },
-    { rank: 3, money: 100000, items: [{ id: 'protection_stone', qty: 5 }, { id: 'xp_booster_2x', qty: 5 }], title: '🥉 3rd' },
-    { rank: 10, money: 60000, items: [{ id: 'refine_stone', qty: 8 }, { id: 'xp_booster_2x', qty: 3 }], title: 'Top 10' },
-    { rank: 25, money: 35000, items: [{ id: 'refine_stone', qty: 5 }, { id: 'mystery_box', qty: 3 }], title: 'Top 25' },
-    { rank: 50, money: 20000, items: [{ id: 'refine_stone', qty: 4 }, { id: 'mystery_box', qty: 2 }], title: 'Top 50' },
-    { rank: 999, money: 10000, items: [{ id: 'mystery_box', qty: 2 }], title: 'Participant' },
+    { rank: 1, money: 500000, items: [{ id: 'protection_stone', qty: 15 }, { id: 'xp_booster_3x', qty: 8 }, { id: 'awakening_crystal', qty: 1 }, { id: 'mythic_fragment', qty: 5 }, { id: 'lucky_charm', qty: 3 }], title: '🥇 MVP' },
+    { rank: 2, money: 350000, items: [{ id: 'protection_stone', qty: 10 }, { id: 'xp_booster_3x', qty: 6 }, { id: 'mythic_fragment', qty: 3 }, { id: 'lucky_charm', qty: 2 }, { id: 'money_magnet', qty: 2 }], title: '🥈 2nd' },
+    { rank: 3, money: 250000, items: [{ id: 'protection_stone', qty: 7 }, { id: 'xp_booster_2x', qty: 6 }, { id: 'mythic_fragment', qty: 2 }, { id: 'money_magnet', qty: 2 }], title: '🥉 3rd' },
+    { rank: 10, money: 150000, items: [{ id: 'refine_stone', qty: 10 }, { id: 'xp_booster_2x', qty: 4 }, { id: 'mythic_fragment', qty: 1 }, { id: 'mystery_box', qty: 4 }], title: 'Top 10' },
+    { rank: 25, money: 90000, items: [{ id: 'refine_stone', qty: 6 }, { id: 'mystery_box', qty: 4 }, { id: 'lucky_charm', qty: 1 }], title: 'Top 25' },
+    { rank: 50, money: 50000, items: [{ id: 'refine_stone', qty: 5 }, { id: 'mystery_box', qty: 3 }, { id: 'money_magnet', qty: 1 }], title: 'Top 50' },
+    { rank: 999, money: 25000, items: [{ id: 'mystery_box', qty: 3 }, { id: 'refine_stone', qty: 2 }], title: 'Participant' },
 ];
 
 // ==================== DATABASE ====================
@@ -172,7 +172,7 @@ function attackWorldBoss(guildId, userId, username) {
     }
 
     // Give small money reward per attack
-    const attackReward = getRandomInt(200, 600);
+    const attackReward = getRandomInt(500, 1200);
     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(attackReward, guildId, userId);
     addIncome(guildId, userId, 'battle', attackReward);
     incrementUserStat(guildId, userId, 'world_boss_attacks');
