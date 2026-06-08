@@ -216,6 +216,8 @@ module.exports = function register() {
   });
 
   test('giveaway: endGiveaway picks winners + marks ended', () => {
+    const notif = botRequire('systems/notifications.js');
+    notif.setDmConsent(G, 'wA', true); notif.setDmConsent(G, 'wB', true); // opt-in so winner DM is sent
     const id = giveaway.createGiveaway(G, { prize: 'End', winners: 1, hostId: U, durationMs: 1000 });
     giveaway.addEntry(id, 'wA'); giveaway.addEntry(id, 'wB');
     giveaway.updateGiveaway(id, { channelId: 'c1', messageId: 'm1' });

@@ -7,7 +7,7 @@ const { getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { BAIT_TYPES } = require('../data/fish');
-const { getNotifSettings } = require('./notifications');
+const { getNotifSettings, buildNotifPanel } = require('./notifications');
 const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles } = require('./titles');
 const ui = require('./ui');
 
@@ -395,29 +395,7 @@ async function handleProfileButton(interaction) {
 
     // === NOTIFICATIONS ===
     if (action === 'notifs') {
-        const settings = getNotifSettings(guildId, userId);
-        const embed = new EmbedBuilder()
-            .setTitle('\ud83d\udd14 Notification Settings')
-            .setColor('#F39C12')
-            .setDescription(
-                `${settings.notif_daily ? '\u2705' : '\u274c'} Daily Reminder\n` +
-                `${settings.notif_quest ? '\u2705' : '\u274c'} Quest Complete\n` +
-                `${settings.notif_trade ? '\u2705' : '\u274c'} Trade & Market\n` +
-                `${settings.notif_pet ? '\u2705' : '\u274c'} Pet Warnings\n` +
-                `${settings.notif_farm ? '\u2705' : '\u274c'} Farm Harvest\n\n` +
-                `\ud83d\udca1 *Klik tombol untuk toggle on/off*`
-            );
-        const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`notif_toggle_daily_${userId}`).setLabel(`${settings.notif_daily ? '\u2705' : '\u274c'} Daily`).setStyle(settings.notif_daily ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`notif_toggle_quest_${userId}`).setLabel(`${settings.notif_quest ? '\u2705' : '\u274c'} Quest`).setStyle(settings.notif_quest ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`notif_toggle_trade_${userId}`).setLabel(`${settings.notif_trade ? '\u2705' : '\u274c'} Trade`).setStyle(settings.notif_trade ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`notif_toggle_pet_${userId}`).setLabel(`${settings.notif_pet ? '\u2705' : '\u274c'} Pet`).setStyle(settings.notif_pet ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`notif_toggle_farm_${userId}`).setLabel(`${settings.notif_farm ? '\u2705' : '\u274c'} Farm`).setStyle(settings.notif_farm ? ButtonStyle.Success : ButtonStyle.Secondary)
-        );
-        const row2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
+        return interaction.update(buildNotifPanel(guildId, userId));
     }
 }
 

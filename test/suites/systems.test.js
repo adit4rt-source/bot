@@ -355,4 +355,48 @@ module.exports = function register() {
     if (ach.getAchievementProgress('g', 'u', 'fish_rare') !== null) throw new Error('binary badge should return null');
     if (ach.getAchievementProgress('g', 'u', 'custom_role') !== null) throw new Error('binary badge should return null');
   });
+
+  // ---- DM notification consent (opt-in) ----
+  const notif = botRequire('systems/notifications.js');
+  test('notif: consent defaults OFF and gates canDM', () => {
+    const g = 'NOTIF_G', u = 'NOTIFU1';
+    if (notif.canDM(g, u)) throw new Error('should default to NO consent');
+    notif.setDmConsent(g, u, true);
+    if (!notif.canDM(g, u)) throw new Error('should be allowed after opt-in');
+    notif.setDmConsent(g, u, false);
+    if (notif.canDM(g, u)) throw new Error('should be off after opt-out');
+  });
+  test('notif: sendNotification only sends with consent', () => {
+    const g = 'NOTIF_G2', u = 'NOTIFU2';
+    let sent = 0;
+    const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
+    return Promise.resolve(notif.sendNotification(client, g, u, 'daily', 'hi')).then(r1 => {
+      if (r1 !== false || sent !== 0) throw new Error('must not DM without consent');
+      notif.setDmConsent(g, u, true);
+      return notif.sendNotification(client, g, u, 'daily', 'hi');
+    }).then(r2 => {
+      if (r2 !== true || sent !== 1) throw new Error('should DM once with consent');
+    });
+  });
+  test('notif: dmUser respects consent', () => {
+    const g = 'NOTIF_G4', u = 'NOTIFU4';
+    let sent = 0;
+    const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
+    return Promise.resolve(notif.dmUser(client, g, u, 'win')).then(r => {
+      if (r !== false || sent !== 0) throw new Error('dmUser must respect consent');
+    });
+  });
+  test('notif: dm_asked flips after marking', () => {
+    const g = 'NOTIF_G5', u = 'NOTIFU5';
+    if (notif.wasDmAsked(g, u)) throw new Error('should not be asked initially');
+    notif.markDmAsked(g, u);
+    if (!notif.wasDmAsked(g, u)) throw new Error('should be asked after mark');
+  });
+  test('notif: consent prompt + panel build correctly', () => {
+    const p = notif.buildConsentPrompt('123');
+    const ids = p.components[0].components.map(c => c.data.custom_id);
+    if (!ids.includes('dmconsent_yes_123') || !ids.includes('dmconsent_no_123')) throw new Error('consent buttons missing');
+    const panel = notif.buildNotifPanel('NOTIF_G3', '123');
+    if (!String(panel.components[0].components[0].data.custom_id).startsWith('notif_toggle_master_')) throw new Error('master toggle missing');
+  });
 };

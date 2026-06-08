@@ -39,7 +39,7 @@ const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handl
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotChannelSelect, isAiBotButton, isAiBotChannelSelect } = require('../systems/aiBotPanel');
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
-const { getNotifSettings, toggleNotif } = require('../systems/notifications');
+const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -112,6 +112,13 @@ async function routeInteraction(interaction) {
 
         const userData = getOrCreateUser(guildId, interaction.user.id);
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+        // === DM CONSENT (opt-in) — asked once, before first real use ===
+        // Players must explicitly allow DMs; otherwise the bot never DMs them.
+        if (!wasDmAsked(guildId, interaction.user.id)) {
+            markDmAsked(guildId, interaction.user.id);
+            return interaction.reply(buildConsentPrompt(interaction.user.id));
+        }
 
         // === WELCOME / JOIN SERVER PROMPT (once per guild, first command usage) ===
         const welcomeShown = getSetting(guildId, 'welcome_shown', null);
@@ -1160,37 +1167,31 @@ async function routeInteraction(interaction) {
         }
 
         // --- NOTIFICATION TOGGLE BUTTONS ---
+        if (interaction.customId.startsWith('dmconsent_')) {
+            const parts = interaction.customId.split('_'); // dmconsent_yes_<id> | dmconsent_no_<id>
+            const choice = parts[1];
+            const targetUserId = parts[2];
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+            if (choice === 'yes') {
+                setDmConsent(guildId, targetUserId, true);
+                return interaction.update({ content: '✅ **Notifikasi DM diaktifkan!** Kamu akan menerima pengingat. Atur kategori kapan saja di `/profile` → 🔔 Notifs.\n\n-# Sekarang jalankan lagi command-mu ya.', embeds: [], components: [] });
+            }
+            setDmConsent(guildId, targetUserId, false);
+            return interaction.update({ content: '👌 Oke, kamu **tidak** akan menerima DM. Bisa diaktifkan kapan saja lewat `/profile` → 🔔 Notifs.\n\n-# Sekarang jalankan lagi command-mu ya.', embeds: [], components: [] });
+        }
+
         if (interaction.customId.startsWith('notif_toggle_')) {
             const parts = interaction.customId.split('_');
-            const type = parts[2]; // daily, quest, trade, pet, farm
+            const type = parts[2]; // master, daily, quest, trade, pet, farm
             const targetUserId = parts[3];
             if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
-            const newValue = toggleNotif(guildId, targetUserId, type);
-            const settings = getNotifSettings(guildId, targetUserId);
-            // Rebuild notification panel
-            const { EmbedBuilder: EB, ActionRowBuilder: AR, ButtonBuilder: BB, ButtonStyle: BS } = require('discord.js');
-            const notifEmbed = new EB()
-                .setTitle('🔔 Notification Settings')
-                .setColor('#F39C12')
-                .setDescription(
-                    `${settings.notif_daily ? '✅' : '❌'} Daily Reminder\n` +
-                    `${settings.notif_quest ? '✅' : '❌'} Quest Complete\n` +
-                    `${settings.notif_trade ? '✅' : '❌'} Trade & Market\n` +
-                    `${settings.notif_pet ? '✅' : '❌'} Pet Warnings\n` +
-                    `${settings.notif_farm ? '✅' : '❌'} Farm Harvest\n\n` +
-                    `💡 *Klik tombol untuk toggle on/off*`
-                );
-            const row1 = new AR().addComponents(
-                new BB().setCustomId(`notif_toggle_daily_${targetUserId}`).setLabel(`${settings.notif_daily ? '✅' : '❌'} Daily`).setStyle(settings.notif_daily ? BS.Success : BS.Secondary),
-                new BB().setCustomId(`notif_toggle_quest_${targetUserId}`).setLabel(`${settings.notif_quest ? '✅' : '❌'} Quest`).setStyle(settings.notif_quest ? BS.Success : BS.Secondary),
-                new BB().setCustomId(`notif_toggle_trade_${targetUserId}`).setLabel(`${settings.notif_trade ? '✅' : '❌'} Trade`).setStyle(settings.notif_trade ? BS.Success : BS.Secondary),
-                new BB().setCustomId(`notif_toggle_pet_${targetUserId}`).setLabel(`${settings.notif_pet ? '✅' : '❌'} Pet`).setStyle(settings.notif_pet ? BS.Success : BS.Secondary),
-                new BB().setCustomId(`notif_toggle_farm_${targetUserId}`).setLabel(`${settings.notif_farm ? '✅' : '❌'} Farm`).setStyle(settings.notif_farm ? BS.Success : BS.Secondary)
-            );
-            const row2 = new AR().addComponents(
-                new BB().setCustomId(`profpnl_back_${targetUserId}`).setLabel('🔙 Kembali').setStyle(BS.Secondary)
-            );
-            return interaction.update({ embeds: [notifEmbed], components: [row1, row2] });
+            if (type === 'master') {
+                setDmConsent(guildId, targetUserId, !canDM(guildId, targetUserId));
+            } else {
+                if (!canDM(guildId, targetUserId)) return interaction.reply({ content: '❌ Aktifkan **DM** dulu (tombol di atas) sebelum atur kategori.', ephemeral: true });
+                toggleNotif(guildId, targetUserId, type);
+            }
+            return interaction.update(buildNotifPanel(guildId, targetUserId));
         }
 
         // --- COINFLIP BUTTONS ---

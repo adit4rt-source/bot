@@ -280,8 +280,8 @@ async function endGiveaway(client, gw, { reroll = false } = {}) {
         // Best-effort DM to each winner.
         for (const w of winners) {
             try {
-                const user = await client.users.fetch(w).catch(() => null);
-                if (user) await user.send(`🎉 Selamat! Kamu memenangkan **${gw.prize}**${jumpUrl ? `\n🔗 ${jumpUrl}` : ''}`).catch(() => {});
+                const { dmUser } = require('./notifications');
+                await dmUser(client, gw.guildId, w, `🎉 Selamat! Kamu memenangkan **${gw.prize}**${jumpUrl ? `\n🔗 ${jumpUrl}` : ''}`).catch(() => {});
             } catch (_) { /* DMs closed */ }
         }
     } catch (e) {
