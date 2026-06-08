@@ -237,6 +237,46 @@ async function askAI(question, { history = [] } = {}) {
 const _cooldown = new Map(); // userId -> timestamp
 const COOLDOWN_MS = 8000;
 
+// Token-saving filter for the dedicated AI channel.
+// In that channel people also chit-chat; we don't want to burn API tokens on
+// every message. So (when NOT directly mentioned) we only answer messages that
+// read like a question about THIS bot. Direct mentions bypass this entirely.
+const _QUESTION_WORDS = [
+    'apa', 'apakah', 'gimana', 'gmn', 'gmna', 'bagaimana', 'cara', 'caranya',
+    'kenapa', 'mengapa', 'kapan', 'dimana', 'di mana', 'berapa', 'siapa',
+    'bisakah', 'bolehkah', 'jelasin', 'jelaskan', 'maksud', 'fungsi', 'kegunaan',
+];
+const _BOT_TOPIC_WORDS = [
+    'bot', 'command', 'commands', 'perintah', 'slash', 'fitur', 'menu', 'help',
+    'fishing', 'mancing', 'ikan', 'pancing', 'farm', 'kebun', 'tanam', 'panen', 'farming',
+    'pet', 'hewan', 'peliharaan', 'daily', 'harian', 'balance', 'saldo', 'money', 'koin', 'duit',
+    'casino', 'judi', 'blackjack', 'slot', 'roulette', 'quest', 'misi', 'achievement', 'pencapaian',
+    'level', 'xp', 'exp', 'shop', 'toko', 'beli', 'jual', 'inventory', 'inventaris', 'tas',
+    'expedition', 'ekspedisi', 'dungeon', 'giveaway', 'event', 'leaderboard', 'rank', 'ranking',
+    'profile', 'profil', 'marry', 'nikah', 'clan', 'guild', 'awakening', 'boss', 'combo', 'streak',
+    'livestock', 'ternak', 'crafting', 'craft', 'trade', 'trading', 'transfer', 'bank', 'voucher',
+];
+
+// Returns true if a channel message (no direct mention) is worth answering.
+function shouldAnswerInChannel(text) {
+    const t = String(text || '').trim().toLowerCase();
+    if (t.length < 2) return false;
+
+    const words = t.match(/[a-z0-9]+/g) || [];
+    const wordSet = new Set(words);
+
+    // Explicit help request or a slash-command reference is always relevant.
+    if (['help', 'bantu', 'bantuin', 'tolong', 'tanya', 'nanya'].some(w => wordSet.has(w))) return true;
+    if (/(^|\s)\/[a-z]/.test(t)) return true;
+
+    const hasQuestionMark = t.includes('?');
+    const hasQuestionWord = _QUESTION_WORDS.some(w => (w.includes(' ') ? t.includes(w) : wordSet.has(w)));
+    const hasBotTopic = _BOT_TOPIC_WORDS.some(w => wordSet.has(w));
+
+    // Otherwise: must read like a question AND mention something about the bot.
+    return (hasQuestionMark || hasQuestionWord) && hasBotTopic;
+}
+
 // Returns true if the message was handled as an AI query (caller should stop).
 async function maybeHandleAiMessage(message) {
     try {
@@ -252,6 +292,12 @@ async function maybeHandleAiMessage(message) {
         // Extract the question (strip the bot mention if present).
         let question = message.content || '';
         if (botUser) question = question.replace(new RegExp(`<@!?${botUser.id}>`, 'g'), '').trim();
+
+        // In the dedicated channel (without a direct mention) only spend tokens on
+        // messages that actually look like a question about this bot. This keeps
+        // casual channel chatter from hitting the API. Mentions always pass through.
+        if (inAiChannel && !mentioned && !shouldAnswerInChannel(question)) return false;
+
         if (!question) {
             await message.reply({ content: '👋 Hai! Tanyakan apa saja tentang fitur bot ini, misalnya: *"Cara pakai fishing?"* atau *"Gimana cara daily?"*' }).catch(() => {});
             return true;
@@ -291,5 +337,5 @@ function chunkText(text, size = 1900) {
 module.exports = {
     getAiSetting, setAiSetting, getConfig, isConfigured,
     buildKnowledge, refreshKnowledge, buildSystemPrompt, retrieveContext, buildSections,
-    askAI, maybeHandleAiMessage, chunkText,
+    askAI, maybeHandleAiMessage, chunkText, shouldAnswerInChannel,
 };

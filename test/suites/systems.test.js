@@ -92,4 +92,37 @@ module.exports = function register() {
     const r = sl.buildSecretLocationUnlockEmbed('secret_tier_5', U);
     if (!r.embeds || !r.embeds[0].data.title) throw new Error('no unlock embed');
   });
+
+  // ---- AI Assistant: channel token-saving filter ----
+  const ai = botRequire('systems/aiAssistant.js');
+  assert('aiAssistant: exports shouldAnswerInChannel', typeof ai.shouldAnswerInChannel === 'function');
+  test('aiAssistant: answers bot-related questions in channel', () => {
+    const yes = [
+      'gimana cara fishing?',
+      'apa itu daily reward',
+      'cara pakai pet gimana',
+      'tolong jelasin command casino',
+      '/menu',
+      'help dong',
+      'berapa harga di shop?',
+    ];
+    for (const q of yes) {
+      if (!ai.shouldAnswerInChannel(q)) throw new Error('expected TRUE for: ' + q);
+    }
+  });
+  test('aiAssistant: ignores casual/off-topic chatter in channel', () => {
+    const no = [
+      'wkwkwk',
+      'halo semua apa kabar',
+      'ok sip',
+      'gg',
+      'lagi ngapain nih',
+      '',
+      '   ',
+      'mantap banget tadi',
+    ];
+    for (const q of no) {
+      if (ai.shouldAnswerInChannel(q)) throw new Error('expected FALSE for: ' + q);
+    }
+  });
 };
