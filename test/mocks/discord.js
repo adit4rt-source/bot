@@ -76,10 +76,11 @@ const TextInputStyle = { Short:1, Paragraph:2 };
 const ChannelType = { GuildText:0, GuildVoice:2, GuildCategory:4 };
 const PermissionsBitField = { Flags: new Proxy({}, { get: () => 1n }) };
 class Collection extends Map {}
+class AttachmentBuilder { constructor(data, opts){ this.attachment = data; this.name = opts && opts.name; } }
 module.exports = {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder,
   StringSelectMenuBuilder, UserSelectMenuBuilder, StringSelectMenuOptionBuilder,
   RoleSelectMenuBuilder, ChannelSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle,
-  ButtonStyle, ChannelType, PermissionsBitField, Collection,
+  ButtonStyle, ChannelType, PermissionsBitField, Collection, AttachmentBuilder,
 };

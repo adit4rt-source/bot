@@ -218,6 +218,14 @@ module.exports = function register() {
     if (y !== 4) throw new Error('expected yield 4 with +100% tool bonus, got ' + y);
   });
 
+  // ---- Profile card image ----
+  test('profile card: generates a PNG buffer', () => {
+    const pc = botRequire('systems/profileCard.js');
+    return pc.generateProfileCard({ username: 'Test 🔥', level: 5, xp: 120, xpNeeded: 600, balance: 99999, rankName: '🌟 Elite', badges: 10, streak: 7, rankPosition: 2 }).then(buf => {
+      if (!Buffer.isBuffer(buf) || buf.length < 1000) throw new Error('expected a PNG buffer');
+    });
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {

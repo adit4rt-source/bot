@@ -89,7 +89,11 @@ function buildProfilePanel(guildId, userId, username, member) {
         new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('🔔 Notifs').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1] };
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`profpnl_card_${userId}`).setLabel('🖼️ Kartu Profil').setStyle(ButtonStyle.Success)
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 
@@ -119,6 +123,35 @@ async function handleProfileButton(interaction) {
     if (action === 'back') {
         const member = await interaction.guild.members.fetch(userId).catch(() => null);
         return interaction.update(buildProfilePanel(guildId, userId, interaction.user.username, member));
+    }
+
+    // === PROFILE CARD (image via @napi-rs/canvas) ===
+    if (action === 'card') {
+        const { generateProfileCard } = require('./profileCard');
+        const { AttachmentBuilder } = require('discord.js');
+        const userData = getOrCreateUser(guildId, userId);
+        let rankTitle = null;
+        try { rankTitle = getUserTitle(guildId, userId); } catch (_) { /* ignore */ }
+        let badges = 0, streak = 0, rankPos = 1;
+        try { badges = db.prepare('SELECT COUNT(*) AS c FROM achievements WHERE userId = ?').get(userId)?.c || 0; } catch (_) {}
+        try { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); streak = s ? s.count : 0; } catch (_) {}
+        try { rankPos = (db.prepare('SELECT COUNT(*) AS c FROM users WHERE level > ? OR (level = ? AND xp > ?)').get(userData.level, userData.level, userData.xp)?.c || 0) + 1; } catch (_) {}
+        const avatarURL = (interaction.user && interaction.user.displayAvatarURL) ? interaction.user.displayAvatarURL({ extension: 'png', size: 256 }) : null;
+        const buffer = await generateProfileCard({
+            username: interaction.user.username,
+            avatarURL,
+            level: userData.level,
+            xp: userData.xp,
+            xpNeeded: (userData.level + 1) * 100,
+            balance: userData.balance,
+            rankName: rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '',
+            badges,
+            streak,
+            rankPosition: rankPos,
+            accent: (rankTitle && rankTitle.color) || '#5865F2',
+        });
+        const file = new AttachmentBuilder(buffer, { name: 'profile.png' });
+        return interaction.reply({ files: [file] });
     }
 
     // === ACHIEVEMENT SUMMARY ===

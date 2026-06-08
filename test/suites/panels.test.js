@@ -72,6 +72,7 @@ module.exports = function register() {
   h('eco:leaderboard', eco, 'handleEconomyButton', `ecopnl_leaderboard_${U}`);
   h('eco:shop', eco, 'handleEconomyButton', `ecopnl_shop_${U}`);
   h('profile:achievement', botRequire('systems/profilePanel.js'), 'handleProfileButton', `profpnl_achievement_${U}`);
+  h('profile:card', botRequire('systems/profilePanel.js'), 'handleProfileButton', `profpnl_card_${U}`);
   h('profile:inventory', botRequire('systems/profilePanel.js'), 'handleProfileButton', `profpnl_inventory_${U}`);
   h('casino:coinflip', casino, 'handleCasinoButton', `casino_coinflip_${U}`);
   h('casino:slot', casino, 'handleCasinoButton', `casino_slot_${U}`);
