@@ -33,6 +33,10 @@ module.exports = async function handleMessageCreate(message) {
         return;
     }
 
+    // === AI ASSISTANT (mention bot / dedicated AI channel) ===
+    const { maybeHandleAiMessage } = require('../systems/aiAssistant');
+    if (await maybeHandleAiMessage(message)) return; // handled as an AI query
+
     // Mini-event answer handling
     if (state.activeMiniEvents.has(guildId)) {
         const game = state.activeMiniEvents.get(guildId);

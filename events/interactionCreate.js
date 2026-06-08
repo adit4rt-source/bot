@@ -36,6 +36,7 @@ const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handl
 const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
+const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotChannelSelect, isAiBotButton, isAiBotChannelSelect } = require('../systems/aiBotPanel');
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { getNotifSettings, toggleNotif } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
@@ -652,6 +653,14 @@ async function routeInteraction(interaction) {
             return handleGiveawayCommand(interaction);
         }
 
+        // ================= AI ASSISTANT =================
+        if (command === 'tanya') {
+            return handleTanyaCommand(interaction);
+        }
+        if (command === 'aibot') {
+            return handleAiBotCommand(interaction);
+        }
+
         // ================= TEMPVOICE PANEL =================
         if (command === 'tempvoice') {
             return handleTempvoiceCommand(interaction);
@@ -746,6 +755,9 @@ async function routeInteraction(interaction) {
         }
         if (isGiveawayChannelSelect(interaction.customId)) {
             return handleGiveawayChannelSelect(interaction);
+        }
+        if (isAiBotChannelSelect(interaction.customId)) {
+            return handleAiBotChannelSelect(interaction);
         }
         return;
     }
@@ -1118,6 +1130,11 @@ async function routeInteraction(interaction) {
         // --- GIVEAWAY PANEL BUTTONS (admin) ---
         if (isGiveawayPanelButton(interaction.customId)) {
             return handleGiveawayButton(interaction);
+        }
+
+        // --- AI ASSISTANT PANEL BUTTONS (admin) ---
+        if (isAiBotButton(interaction.customId)) {
+            return handleAiBotButton(interaction);
         }
 
         // --- TEMPVOICE PANEL BUTTONS ---

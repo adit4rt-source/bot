@@ -62,6 +62,14 @@ const commands = [
         .setName('giveaway')
         .setDescription('🎉 Giveaway Panel — Buat & kelola giveaway')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
+    new SlashCommandBuilder()
+        .setName('tanya')
+        .setDescription('🤖 Tanya AI seputar fitur bot ini')
+        .addStringOption(o => o.setName('pertanyaan').setDescription('Pertanyaanmu tentang fitur bot').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('aibot')
+        .setDescription('🤖 AI Assistant Panel — Atur AI bantuan bot')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),

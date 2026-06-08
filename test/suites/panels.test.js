@@ -232,4 +232,49 @@ module.exports = function register() {
       if (dmCount !== winners.length) throw new Error('winners not DMed');
     });
   });
+
+  // ===== AI ASSISTANT =====
+  const aiA = botRequire('systems/aiAssistant.js');
+  const aiPanel = botRequire('systems/aiBotPanel.js');
+
+  test('ai: knowledge is built from repo docs (non-empty)', () => {
+    const k = aiA.buildKnowledge(true);
+    if (!k || k.length < 100) throw new Error('knowledge too small');
+    if (!/command|fitur|fishing|GUIDE|pet/i.test(k)) throw new Error('knowledge missing expected content');
+  });
+
+  test('ai: askAI without API key returns a friendly error', () => {
+    const savedA = process.env.AI_API_KEY, savedO = process.env.OPENAI_API_KEY;
+    delete process.env.AI_API_KEY; delete process.env.OPENAI_API_KEY;
+    return Promise.resolve(aiA.askAI('apa itu fishing?')).then((r) => {
+      if (savedA !== undefined) process.env.AI_API_KEY = savedA;
+      if (savedO !== undefined) process.env.OPENAI_API_KEY = savedO;
+      if (!r.error || !/API key/i.test(r.error)) throw new Error('expected API key error');
+    });
+  });
+
+  panel('aiBotPanel.buildPanel', () => aiPanel.buildPanel(G, U));
+
+  test('ai: detectors match the right customIds', () => {
+    if (!aiPanel.isAiBotButton(`aibot_toggle_${U}`)) throw new Error('button detector failed');
+    if (!aiPanel.isAiBotChannelSelect(`aichan_set_${U}`)) throw new Error('channel detector failed');
+    if (aiPanel.isAiBotButton('gwadm_x')) throw new Error('false positive');
+  });
+
+  test('ai: /tanya without key replies with config notice', () => {
+    const savedA = process.env.AI_API_KEY; delete process.env.AI_API_KEY;
+    const it = mockInteraction({ userId: U, guildId: G, customId: 'tanya' });
+    it.options = { getString: () => 'gimana cara daily?' };
+    return Promise.resolve(aiPanel.handleTanyaCommand(it)).then(() => {
+      if (savedA !== undefined) process.env.AI_API_KEY = savedA;
+      if (!it._cap.reply) throw new Error('did not acknowledge');
+    });
+  });
+
+  test('ai: maybeHandleAiMessage is silent when disabled', () => {
+    const msg = { guild: { id: G }, client: { user: { id: 'bot1' } }, mentions: { has: () => false }, channel: { id: 'cX' }, content: 'halo' };
+    return Promise.resolve(aiA.maybeHandleAiMessage(msg)).then((handled) => {
+      if (handled !== false) throw new Error('should not handle when disabled');
+    });
+  });
 };
