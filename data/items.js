@@ -28,10 +28,32 @@ const ITEMS = [
 ];
 
 const CRAFT_RECIPES = [
-    { id: 'super_bait', name: 'Super Bait', emoji: '🎣', ingredients: [{id: 'mystery_box', qty: 2}], result: {type: 'bait', id: 'mythic_bait', qty: 5}, desc: '2 Mystery Box → 5 Umpan Mitik' },
+    // ===== Fishing / Booster =====
+    { id: 'super_bait', name: 'Super Bait', emoji: '🎣', ingredients: [{id: 'mystery_box', qty: 2}], result: {type: 'bait', id: 'mystic_bait', qty: 5}, desc: '2 Mystery Box → 5 Mystic Bait' },
     { id: 'mega_booster', name: 'Mega Booster', emoji: '<:XPBooster3x:1510785750134816878>', ingredients: [{id: 'xp_booster_2x', qty: 3}], result: {type: 'item', id: 'xp_booster_3x', qty: 1}, desc: '3 XP Booster 2x → 1 XP Booster 3x' },
-    { id: 'protection_bundle', name: 'Protection Bundle', emoji: '🛡️', ingredients: [{id: 'protection_stone', qty: 2}, {id: 'streak_shield', qty: 1}], result: {type: 'item', id: 'protection_stone', qty: 5}, desc: '2 Protection + 1 Shield → 5 Protection Stone' },
     { id: 'lucky_potion', name: 'Lucky Potion', emoji: '<:LuckyCharm:1510785822713184376>', ingredients: [{id: 'lucky_charm', qty: 2}, {id: 'mystery_box', qty: 1}], result: {type: 'item', id: 'lucky_spin_token', qty: 3}, desc: '2 Lucky Charm + 1 Mystery → 3 Lucky Spin' },
+    { id: 'golden_magnet', name: 'Golden Magnet', emoji: '🧲', ingredients: [{id: 'lucky_charm', qty: 3}], result: {type: 'item', id: 'money_magnet', qty: 1}, desc: '3 Lucky Charm → 1 Money Magnet' },
+
+    // ===== Relic materials (sink for the clutter you collect) =====
+    { id: 'stone_shield', name: 'Reinforced Stone', emoji: '🛡️', ingredients: [{id: 'refine_stone', qty: 6}], result: {type: 'item', id: 'protection_stone', qty: 1}, desc: '6 Refine Stone → 1 Protection Stone' },
+    { id: 'protection_bundle', name: 'Protection Bundle', emoji: '🛡️', ingredients: [{id: 'protection_stone', qty: 2}, {id: 'streak_shield', qty: 1}], result: {type: 'item', id: 'protection_stone', qty: 5}, desc: '2 Protection + 1 Shield → 5 Protection Stone' },
+    { id: 'mythic_craft', name: 'Mythic Fragment', emoji: '🌟', ingredients: [{id: 'refine_stone', qty: 10}, {id: 'mystery_box', qty: 3}], result: {type: 'item', id: 'mythic_fragment', qty: 1}, desc: '10 Refine Stone + 3 Mystery → 1 Mythic Fragment' },
+    { id: 'awakening_forge', name: 'Awakening Forge', emoji: '💫', ingredients: [{id: 'mythic_fragment', qty: 5}], result: {type: 'item', id: 'awakening_crystal', qty: 1}, desc: '5 Mythic Fragment → 1 Awakening Crystal' },
+
+    // ===== Mystery Box conversions (sink) =====
+    { id: 'daily_pack', name: 'Daily Pack', emoji: '📅', ingredients: [{id: 'mystery_box', qty: 2}], result: {type: 'item', id: 'daily_doubler', qty: 1}, desc: '2 Mystery Box → 1 Daily Doubler' },
+    { id: 'voucher_pack', name: 'Voucher Pack', emoji: '🎫', ingredients: [{id: 'mystery_box', qty: 3}], result: {type: 'item', id: 'tax_free_voucher', qty: 2}, desc: '3 Mystery Box → 2 Tax-Free Voucher' },
+    { id: 'streak_craft', name: 'Streak Shield Craft', emoji: '🛡️', ingredients: [{id: 'mystery_box', qty: 3}], result: {type: 'item', id: 'streak_shield', qty: 1}, desc: '3 Mystery Box → 1 Streak Shield' },
+    { id: 'spin_bundle', name: 'Spin Bundle', emoji: '🎰', ingredients: [{id: 'mystery_box', qty: 4}], result: {type: 'item', id: 'lucky_spin_token', qty: 2}, desc: '4 Mystery Box → 2 Lucky Spin Token' },
+    { id: 'money_press', name: 'Money Press', emoji: '🪙', ingredients: [{id: 'mystery_box', qty: 5}], result: {type: 'money', amount: 8000}, desc: '5 Mystery Box → 🪙 8.000' },
+
+    // ===== Fishing anti-monster =====
+    { id: 'monster_combo', name: 'Thunder Coating (Repel)', emoji: '⚡', ingredients: [{id: 'monster_repellent', qty: 2}], result: {type: 'item', id: 'thunder_coating', qty: 1}, desc: '2 Monster Repellent → 1 Thunder Coating' },
+    { id: 'shield_combo', name: 'Thunder Coating (Shield)', emoji: '⚡', ingredients: [{id: 'shield_charm', qty: 3}], result: {type: 'item', id: 'thunder_coating', qty: 1}, desc: '3 Shield Charm → 1 Thunder Coating' },
+    { id: 'rod_salvage', name: 'Rod Salvage', emoji: '🔧', ingredients: [{id: 'rod_part', qty: 5}], result: {type: 'money', amount: 6000}, desc: '5 Rod Parts → 🪙 6.000' },
+
+    // ===== Farming =====
+    { id: 'pest_shield_craft', name: 'Pestisida Shield Craft', emoji: '🌿', ingredients: [{id: 'pesticide', qty: 3}], result: {type: 'item', id: 'pesticide_shield', qty: 1}, desc: '3 Pestisida → 1 Pestisida Shield' },
 ];
 
 module.exports = { ITEMS, CRAFT_RECIPES };

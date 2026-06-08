@@ -1395,10 +1395,22 @@ async function handleRefineAction(interaction, guildId, userId, slot, relic) {
         );
         return interaction.update({ embeds: [embed], components: [backRow] });
     } else {
+        // Protection Stone: if owned, consume one and the relic does NOT drop a level.
+        if (getItemCount(guildId, userId, 'protection_stone') > 0) {
+            removeItem(guildId, userId, 'protection_stone');
+            const remaining = getItemCount(guildId, userId, 'protection_stone');
+            const pEmbed = new EmbedBuilder().setColor('#F1C40F').setTitle('🛡️ Refine Failed — Dilindungi!')
+                .setDescription(`**${relic.name}** gagal, tapi **🛡️ Protection Stone** melindungi!\n\n> ${slotEmoji} **${relic.name}** tetap **+${lvl}** (tidak turun)\n> Rate was: ${rate}%\n> 🛡️ Protection Stone tersisa: **${remaining}**`);
+            const pRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [pEmbed], components: [pRow] });
+        }
         const newLvl = Math.max(0, lvl - 1);
         db.prepare('UPDATE relics SET refine_level = ? WHERE id = ?').run(newLvl, relic.id);
         const embed = new EmbedBuilder().setColor('#E74C3C').setTitle('💔 Refine Failed!')
-            .setDescription(`**${relic.name}** gagal di-upgrade...\n\n> ${slotEmoji} **${relic.name}** +${lvl} → **+${newLvl}**\n> Rate was: ${rate}%\n\n> 😢 Level turun 1!`);
+            .setDescription(`**${relic.name}** gagal di-upgrade...\n\n> ${slotEmoji} **${relic.name}** +${lvl} → **+${newLvl}**\n> Rate was: ${rate}%\n\n> 😢 Level turun 1! (bawa 🛡️ Protection Stone biar tidak turun)`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine Lagi').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)

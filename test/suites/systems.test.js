@@ -262,10 +262,7 @@ module.exports = function register() {
   test('shop: golden_rod_ticket craft recipe is removed', () => {
     const { CRAFT_RECIPES } = botRequire('data/items.js');
     if (CRAFT_RECIPES.some(r => r.id === 'golden_rod_ticket')) throw new Error('golden_rod_ticket should be removed');
-    // No remaining recipe should consume refine_stone (now drop-only material).
-    for (const r of CRAFT_RECIPES) {
-      if ((r.ingredients || []).some(i => i.id === 'refine_stone')) throw new Error('recipe still uses refine_stone: ' + r.id);
-    }
+    // refine_stone may be a craft INGREDIENT (a sink); it just must not be buyable.
   });
 
   // ---- Relic equip/unequip/melt + bonus from EQUIPPED relics ----
@@ -398,5 +395,24 @@ module.exports = function register() {
     if (!ids.includes('dmconsent_yes_123') || !ids.includes('dmconsent_no_123')) throw new Error('consent buttons missing');
     const panel = notif.buildNotifPanel('NOTIF_G3', '123');
     if (!String(panel.components[0].components[0].data.custom_id).startsWith('notif_toggle_master_')) throw new Error('master toggle missing');
+  });
+
+  // ---- Crafting recipes integrity ----
+  test('craft: every recipe ingredient/result references a valid item', () => {
+    const { ITEMS, CRAFT_RECIPES } = botRequire('data/items.js');
+    const { BAIT_TYPES } = botRequire('data/fish.js');
+    const itemIds = new Set(ITEMS.map(i => i.id));
+    const baitIds = new Set((BAIT_TYPES || []).map(b => b.id));
+    if (CRAFT_RECIPES.length < 10) throw new Error('expected many recipes, got ' + CRAFT_RECIPES.length);
+    for (const r of CRAFT_RECIPES) {
+      for (const ing of r.ingredients) {
+        if (!itemIds.has(ing.id)) throw new Error(`recipe ${r.id}: bad ingredient ${ing.id}`);
+        if (!(ing.qty > 0)) throw new Error(`recipe ${r.id}: bad ingredient qty`);
+      }
+      if (r.result.type === 'item') { if (!itemIds.has(r.result.id)) throw new Error(`recipe ${r.id}: bad result item ${r.result.id}`); }
+      else if (r.result.type === 'bait') { if (!baitIds.has(r.result.id)) throw new Error(`recipe ${r.id}: bad bait ${r.result.id}`); }
+      else if (r.result.type === 'money') { if (!(r.result.amount > 0)) throw new Error(`recipe ${r.id}: bad money amount`); }
+      else throw new Error(`recipe ${r.id}: unknown result type ${r.result.type}`);
+    }
   });
 };
