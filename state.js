@@ -14,4 +14,6 @@ const activeBossParties = new Map();
 // Keyed by `${guildId}_${userId}`.
 const pendingMarketSell = new Map(); // => { itemType, itemId, itemName }
 const pendingTradeGive = new Map();  // => { type, id, display }
-module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties, pendingMarketSell, pendingTradeGive };
+// Anti-spam: last chat message per user => `${guildId}_${userId}` => { content, ts }
+const lastChatMessages = new Map();
+module.exports = { fishCooldowns, chatCooldowns, reactionCooldowns, voiceSessions, activeCoinflips, slashCooldowns, activeMiniEvents, guildMessageCounters, activeFishEvents, guildFishEventCounters, activeBossParties, pendingMarketSell, pendingTradeGive, lastChatMessages };

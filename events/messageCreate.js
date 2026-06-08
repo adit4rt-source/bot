@@ -10,6 +10,7 @@ const state = require('../state');
 
 const MINI_EVENT_TARGET = 30;
 const FISH_EVENT_TARGET = 100;
+const ANTISPAM_DUP_WINDOW = 60000; // ms — an identical message repeated within this window earns nothing
 const poolAcakKata = ["DISCORD", "KOMPUTER", "INTERNET", "PROGRAMMER", "INDONESIA", "KEYBOARD", "LAPTOP", "MONITOR", "EKONOMI", "SERVER", "DATABASE", "JAVASCRIPT", "DEVELOPER", "APLIKASI", "INTERAKSI", "KOMUNITAS", "GAMER", "STREAMING", "MODERATOR", "ADMINISTRATOR", "HADIAH", "VOUCHER", "DOMPET", "SAHABAT", "KONTRIBUTOR"];
 const poolTrivia = [
     { q: 'Ibu kota Indonesia?', a: 'jakarta' },
@@ -41,6 +42,23 @@ const poolFastType = [
     'jangan lupa bahagia hari ini',
     'gas terus jangan kasih kendor',
 ];
+
+// Returns true if a message should NOT earn rewards (XP/money/quest/chat-count/
+// mini-event progress). Blocks single-char spam, repeated-character spam ("kkkkk"),
+// and rapid exact duplicates. Notifications & streak are unaffected.
+function isSpamMessage(guildId, message) {
+    const raw = (message.content || '').trim();
+    if (raw.length < 2) return true;
+    const compact = raw.replace(/\s+/g, '');
+    if (compact.length >= 4 && /^(.)\1+$/.test(compact)) return true; // "aaaa", "kkkkk", "...."
+    const key = `${guildId}_${message.author.id}`;
+    const norm = raw.toLowerCase();
+    const now = Date.now();
+    const prev = state.lastChatMessages.get(key);
+    state.lastChatMessages.set(key, { content: norm, ts: now });
+    if (prev && prev.content === norm && (now - prev.ts) < ANTISPAM_DUP_WINDOW) return true;
+    return false;
+}
 
 module.exports = async function handleMessageCreate(message) {
     if (message.author.bot || !message.guild) return;
@@ -103,8 +121,12 @@ module.exports = async function handleMessageCreate(message) {
         }
     }
 
+    // Anti-spam gate: low-effort/duplicate messages earn nothing (XP, quests, chat
+    // count, mini-event progress). Computed once; notifications & streak still run.
+    const spam = isSpamMessage(guildId, message);
+
     // Spawn mini-event
-    if (!state.activeMiniEvents.has(guildId)) {
+    if (!spam && !state.activeMiniEvents.has(guildId)) {
         let count = state.guildMessageCounters.get(guildId) || 0; count++;
         if (count >= MINI_EVENT_TARGET) {
             state.guildMessageCounters.set(guildId, 0);
@@ -147,7 +169,7 @@ module.exports = async function handleMessageCreate(message) {
     }
 
     // Fishing tournament spawn
-    if (!state.activeFishEvents.has(guildId)) {
+    if (!spam && !state.activeFishEvents.has(guildId)) {
         let fishCount = state.guildFishEventCounters.get(guildId) || 0; fishCount++;
         if (fishCount >= FISH_EVENT_TARGET) {
             state.guildFishEventCounters.set(guildId, 0);
@@ -182,28 +204,30 @@ module.exports = async function handleMessageCreate(message) {
     const streakActivated = await checkAndUpdateStreak(message);
     if (streakActivated) message.reply({ content: `🔥 **Berhasil!** Kamu telah mengaktifkan streak api hari ini!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 5000); }).catch(() => {});
 
-    // Quest progress
-    const chatText = message.content;
-    updateQuestProgress(guildId, message.author.id, 'typing', 1, chatText);
-    updateQuestProgress(guildId, message.author.id, 'tebak', 1, chatText);
-    if (message.mentions.users.filter(u => !u.bot).size > 0) updateQuestProgress(guildId, message.author.id, 'tag', 1);
+    // Quest progress + chat rewards — skipped entirely for spam messages
+    if (!spam) {
+        const chatText = message.content;
+        updateQuestProgress(guildId, message.author.id, 'typing', 1, chatText);
+        updateQuestProgress(guildId, message.author.id, 'tebak', 1, chatText);
+        if (message.mentions.users.filter(u => !u.bot).size > 0) updateQuestProgress(guildId, message.author.id, 'tag', 1);
 
-    incrementUserStat(guildId, message.author.id, 'total_chats');
-    await checkAchievements(message.guild, message.author.id, { type: 'chat' });
+        incrementUserStat(guildId, message.author.id, 'total_chats');
+        await checkAchievements(message.guild, message.author.id, { type: 'chat' });
 
-    // Pet passive EXP
-    const petExpKey = `pet_exp_${guildId}_${message.author.id}`;
-    if (!state.fishCooldowns.has(petExpKey) || Date.now() > state.fishCooldowns.get(petExpKey)) {
-        state.fishCooldowns.set(petExpKey, Date.now() + 120000);
-        addPetExp(guildId, message.author.id, 2);
-    }
+        // Pet passive EXP
+        const petExpKey = `pet_exp_${guildId}_${message.author.id}`;
+        if (!state.fishCooldowns.has(petExpKey) || Date.now() > state.fishCooldowns.get(petExpKey)) {
+            state.fishCooldowns.set(petExpKey, Date.now() + 120000);
+            addPetExp(guildId, message.author.id, 2);
+        }
 
-    // Chat XP/Money cooldown
-    const cdKey = `${guildId}_${message.author.id}`;
-    if (!state.chatCooldowns.has(cdKey)) {
-        await addXpAndMoney(message.member, 'chat');
-        state.chatCooldowns.add(cdKey);
-        setTimeout(() => state.chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000);
+        // Chat XP/Money cooldown
+        const cdKey = `${guildId}_${message.author.id}`;
+        if (!state.chatCooldowns.has(cdKey)) {
+            await addXpAndMoney(message.member, 'chat');
+            state.chatCooldowns.add(cdKey);
+            setTimeout(() => state.chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000);
+        }
     }
 
     // Pet hunger/happy decay
@@ -252,3 +276,7 @@ module.exports = async function handleMessageCreate(message) {
         }
     }
 };
+
+
+// Exposed for unit tests (anti-spam guard).
+module.exports.isSpamMessage = isSpamMessage;

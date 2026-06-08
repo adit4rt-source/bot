@@ -382,6 +382,18 @@ module.exports = function register() {
     });
   });
 
+  // ---- Anti-spam message gate ----
+  const mc = botRequire('events/messageCreate.js');
+  test('antispam: blocks single-char, repeated-char, and rapid duplicates', () => {
+    const g = 'AS_G', uid = 'AS_U';
+    const mk = (c) => ({ content: c, author: { id: uid } });
+    if (!mc.isSpamMessage(g, mk('k'))) throw new Error('single char should be spam');
+    if (!mc.isSpamMessage(g, mk('kkkkk'))) throw new Error('repeated char should be spam');
+    if (mc.isSpamMessage(g, mk('halo semua apa kabar'))) throw new Error('normal message should NOT be spam');
+    if (!mc.isSpamMessage(g, mk('halo semua apa kabar'))) throw new Error('rapid duplicate should be spam');
+    if (mc.isSpamMessage(g, mk('pesan yang berbeda lagi'))) throw new Error('different message should NOT be spam');
+  });
+
   // ---- DM notification consent (opt-in) ----
   const notif = botRequire('systems/notifications.js');
   test('notif: consent defaults OFF and gates canDM', () => {
