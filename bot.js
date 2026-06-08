@@ -229,6 +229,13 @@ client.once(Events.ClientReady, async c => {
         console.log('🎉 Giveaway scheduler: cek setiap 30 detik');
     } catch (e) { console.error('Giveaway scheduler error:', e); }
 
+    // Start weekly lottery/togel scheduler (auto-draws & announces winners each Monday WIB)
+    try {
+        const { startLotteryScheduler } = require('./systems/lottery');
+        startLotteryScheduler(client);
+        console.log('🎟️ Lottery scheduler: undian otomatis tiap pergantian minggu (WIB)');
+    } catch (e) { console.error('Lottery scheduler error:', e); }
+
     // Initialize seasonal leaderboard (snapshots baselines + handles monthly rollover)
     try {
         const { ensureSeason, getSeasonInfo } = require('./systems/season');

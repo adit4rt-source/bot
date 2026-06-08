@@ -14,6 +14,7 @@ const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMark
 const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
+const { isLotteryButton, handleLotteryButton, buildLotteryPanel } = require('../systems/lottery');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
@@ -561,6 +562,11 @@ async function routeInteraction(interaction) {
             return interaction.reply(panel);
         }
 
+        // ================= TOGEL / LOTTERY =================
+        if (command === 'togel') {
+            return interaction.reply(buildLotteryPanel(guildId));
+        }
+
         // ================= BLACKJACK =================
         if (command === 'blackjack') {
             const bet = interaction.options.getInteger('taruhan') || 500;
@@ -1025,6 +1031,11 @@ async function routeInteraction(interaction) {
         // --- WORLD BOSS BUTTONS ---
         if (isWorldBossButton(interaction.customId)) {
             return handleWorldBossButton(interaction);
+        }
+
+        // --- LOTTERY / TOGEL BUTTONS ---
+        if (isLotteryButton(interaction.customId)) {
+            return handleLotteryButton(interaction);
         }
 
         // --- BLACKJACK BUTTONS ---
