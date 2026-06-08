@@ -415,4 +415,23 @@ module.exports = function register() {
       else throw new Error(`recipe ${r.id}: unknown result type ${r.result.type}`);
     }
   });
+
+  // ---- Dungeon/Boss difficulty integrity (rewards must stay, stats valid) ----
+  test('dungeon/boss: stats well-formed and rewards preserved', () => {
+    const { DUNGEON_TIERS, BOSS_LIST } = botRequire('data/dungeons.js');
+    for (const d of DUNGEON_TIERS) {
+      if (d.monsterHp.length !== d.waves || d.monsterAtk.length !== d.waves) throw new Error(`${d.id}: hp/atk length != waves`);
+      if (d.monsterHp.some(h => h <= 0) || d.monsterAtk.some(a => a <= 0)) throw new Error(`${d.id}: non-positive stat`);
+      if (!(d.reward[1] > d.reward[0] && d.reward[0] > 0)) throw new Error(`${d.id}: bad reward range`);
+    }
+    for (const b of BOSS_LIST) {
+      if (!(b.hp > 0 && b.atk > 0 && b.def > 0)) throw new Error(`${b.id}: non-positive stat`);
+      if (!(b.reward[1] > b.reward[0] && b.reward[0] > 0)) throw new Error(`${b.id}: bad reward range`);
+    }
+    // Rewards intentionally unchanged by the difficulty buff.
+    const void_ = DUNGEON_TIERS.find(d => d.id === 'void');
+    if (void_.reward[0] !== 15000 || void_.reward[1] !== 32000) throw new Error('void reward changed!');
+    const ancient = BOSS_LIST.find(b => b.id === 'ancient');
+    if (ancient.reward[0] !== 70000 || ancient.reward[1] !== 150000) throw new Error('ancient reward changed!');
+  });
 };
