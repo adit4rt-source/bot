@@ -22,6 +22,7 @@ const { handleGuideButton, isGuideButton } = require('../systems/guidePanel');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
+const { handleArenaCommand, handleArenaButton, isArenaButton } = require('../systems/arena');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomySelect, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelSelect, isEconomyPanelModal } = require('../systems/economyPanel');
@@ -375,6 +376,9 @@ async function routeInteraction(interaction) {
         // ================= QUEST PANEL (Button-based) =================
         if (command === 'quest') {
             return handleQuestCommand(interaction);
+        }
+        if (command === 'arena') {
+            return handleArenaCommand(interaction);
         }
 
         // ================= CASINO PANEL (Button-based) =================
@@ -1075,6 +1079,9 @@ async function routeInteraction(interaction) {
         // --- QUEST PANEL BUTTONS ---
         if (isQuestPanelButton(interaction.customId)) {
             return handleQuestButton(interaction);
+        }
+        if (isArenaButton(interaction.customId)) {
+            return handleArenaButton(interaction);
         }
 
         // --- CASINO PANEL BUTTONS ---

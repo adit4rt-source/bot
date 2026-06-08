@@ -23,6 +23,9 @@ module.exports = function register() {
   panel('economyPanel.buildEconomyPanel', () => eco.buildEconomyPanel(G, U, NAME));
   const quest = botRequire('systems/questPanel.js');
   panel('questPanel.buildQuestPanel', () => quest.buildQuestPanel(G, U, NAME));
+  const arena = botRequire('systems/arena.js');
+  panel('arena.buildArenaPanel', () => arena.buildArenaPanel(G, U, NAME));
+  panel('arena.buildArenaLeaderboard', () => arena.buildArenaLeaderboard(G, U, NAME));
   const sp = botRequire('systems/statsPanel.js');
   panel('statsPanel.buildStatsPanel', () => sp.buildStatsPanel(G, U, NAME));
   const casino = botRequire('systems/casinoPanel.js');
@@ -62,6 +65,8 @@ module.exports = function register() {
   h('quest:daily', quest, 'handleQuestButton', `quest_daily_${U}`);
   h('quest:weekly', quest, 'handleQuestButton', `quest_weekly_${U}`);
   h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
+  h('arena:lb', arena, 'handleArenaButton', `arena_lb_${U}`);
+  h('arena:fight', arena, 'handleArenaButton', `arena_fight_${U}`);
   const farm2 = botRequire('systems/farmPanel.js');
   h('farm:tool', farm2, 'handleFarmButton', `farm_tool_${U}`);
   h('level:rank', lvl, 'handleLevelButton', `lvlpnl_rank_${U}`);

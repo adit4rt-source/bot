@@ -226,6 +226,29 @@ module.exports = function register() {
     });
   });
 
+  // ---- Pet PvP ranked arena (ELO) ----
+  const arena = botRequire('systems/arena.js');
+  test('arena: rating defaults to 1000 and tiers map correctly', () => {
+    if (arena.getRating('AR_G', 'AR_NEW') !== 1000) throw new Error('default rating should be 1000');
+    if (arena.getTier(1000).name !== 'Bronze') throw new Error('1000 should be Bronze');
+    if (arena.getTier(1900).name !== 'Master') throw new Error('1900 should be Master');
+  });
+  test('arena: a fight updates rating and W/L record', () => {
+    const g = 'AR_G', a = 'AR_A', b = 'AR_B';
+    db.getOrCreateUser(g, a); db.getOrCreateUser(g, b);
+    db.db.prepare('DELETE FROM pets WHERE userId IN (?, ?)').run(a, b);
+    const ins = db.db.prepare("INSERT INTO pets (guildId,userId,petId,name,level,active,hp,atk,def,spd,crit,element,skills) VALUES (?,?,?,?,?,1,?,?,?,?,?,?, '[]')");
+    ins.run(g, a, 'p1', 'Alpha', 5, 120, 30, 10, 12, 5, 'fire');
+    ins.run(g, b, 'p2', 'Beta', 5, 100, 25, 12, 10, 5, 'water');
+    const before = arena.getArenaStats(g, a);
+    const res = arena.doArenaFight(g, a);
+    if (res.error) throw new Error('fight should run, got ' + res.error);
+    const after = arena.getArenaStats(g, a);
+    if ((after.wins + after.losses) !== (before.wins + before.losses) + 1) throw new Error('W/L should increment by 1');
+    if (after.rating < 100) throw new Error('rating must respect floor');
+    if (after.rating === before.rating) throw new Error('rating should change after a fight');
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {
