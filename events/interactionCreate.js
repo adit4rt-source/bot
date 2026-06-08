@@ -6,7 +6,7 @@ const state = require('../state');
 const { ACHIEVEMENTS, checkAchievements } = require('../systems/achievements');
 const { addComboFeature, getComboMultiplier } = require('../systems/combo');
 const { getContestState, startFishContest, addContestEntry, getContestLeaderboard } = require('../systems/contest');
-const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, elementMultiplier, ELEMENT_EMOJI } = require('../systems/pets');
+const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, elementMultiplier, ELEMENT_EMOJI, getRelicBonus } = require('../systems/pets');
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const ui = require('../systems/ui');
@@ -1393,7 +1393,8 @@ async function routeInteraction(interaction) {
                 if (!mPet) continue;
                 const mPetDef = PET_DATA.find(p => p.id === mPet.petId);
                 const eMult = elementMultiplier(mPet.element, boss.element);
-                const dmg = Math.floor((mPet.atk + mPet.level) * getRandomInt(3, 6) * eMult);
+                const mRelic = getRelicBonus(memberId); // relic/refine bonus applies in party raids too
+                const dmg = Math.floor((mPet.atk + mPet.level + mRelic.atk) * getRandomInt(3, 6) * eMult);
                 totalDmg += dmg;
                 const elTag = eMult > 1 ? ' ⚡' : eMult < 1 ? ' 🛡️' : '';
                 log.push(`> ${mPetDef ? mPetDef.emoji : '🐾'} **${mPet.name}** (Lv.${mPet.level}) → **${dmg}** dmg${elTag}`);

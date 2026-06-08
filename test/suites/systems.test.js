@@ -295,4 +295,17 @@ module.exports = function register() {
     const b = pets.getRelicBonus('RELIC_NONE_USER');
     if (b.atk || b.def || b.spd || b.crit) throw new Error('expected zero bonus');
   });
+  test('relic: bonus actually changes battle outcome (not just visual)', () => {
+    // Identical weak pets vs an enemy that one-shots them. The tank has a huge
+    // DEF relic; the plain pet has none. simulateBattle must reflect that.
+    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)')
+      .run('g', 'RELIC_TANK', 'Aegis', 'armor', 'Legendary', 'def', 5000, 0); // +5000 DEF
+    const mk = (uid) => ({ userId: uid, petId: 'x', hp: 50, atk: 100, def: 10, spd: 10, crit: 0, level: 1, element: null, skills: '[]' });
+    const petDef = { emoji: '🐾' };
+    const enemy = [{ hp: 100000, atk: 1000, def: 0, element: null }]; // never dies; one-shots an unarmored pet
+    const tank = pets.simulateBattle(mk('RELIC_TANK'), petDef, enemy);
+    const plain = pets.simulateBattle(mk('RELIC_PLAIN_NB'), petDef, enemy);
+    if (!tank.alive) throw new Error('tank with +5000 DEF relic should survive');
+    if (plain.alive) throw new Error('plain pet (no relic) should die — relic bonus not applied in battle!');
+  });
 };
