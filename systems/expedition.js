@@ -20,12 +20,12 @@ const EXPEDITION_ZONES = [
         minPetLevel: 1,
         duration: 2 * 60, // 2 jam (menit)
         rewards: {
-            moneyRange: [800, 2500],
+            moneyRange: [2000, 6000],
             expRange: [50, 120],
             drops: [
-                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 40 },
-                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 20 },
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 15 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 45, min: 1, max: 2 },
+                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 25, min: 1, max: 2 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 25, min: 1, max: 2 },
             ]
         }
     },
@@ -38,13 +38,13 @@ const EXPEDITION_ZONES = [
         minPetLevel: 10,
         duration: 3 * 60, // 3 jam
         rewards: {
-            moneyRange: [2000, 5000],
+            moneyRange: [5000, 13000],
             expRange: [100, 200],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 45 },
-                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 35 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 15 },
-                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 25 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 50, min: 1, max: 3 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 40, min: 1, max: 2 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 20, min: 1, max: 1 },
+                { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 30, min: 1, max: 2 },
             ]
         }
     },
@@ -57,14 +57,15 @@ const EXPEDITION_ZONES = [
         minPetLevel: 25,
         duration: 4 * 60, // 4 jam
         rewards: {
-            moneyRange: [4000, 10000],
+            moneyRange: [10000, 26000],
             expRange: [150, 300],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 50 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 25 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 18 },
-                { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 20 },
-                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 30 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 55, min: 2, max: 3 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 30, min: 1, max: 2 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 22, min: 1, max: 1 },
+                { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 25, min: 1, max: 2 },
+                { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 35, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 8, min: 1, max: 1 },
             ]
         }
     },
@@ -77,15 +78,16 @@ const EXPEDITION_ZONES = [
         minPetLevel: 40,
         duration: 5 * 60, // 5 jam
         rewards: {
-            moneyRange: [7000, 18000],
+            moneyRange: [18000, 46000],
             expRange: [200, 400],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 55 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 30 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 22 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 15 },
-                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 18 },
-                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 12 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 60, min: 2, max: 4 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 35, min: 1, max: 2 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 25, min: 1, max: 2 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 18, min: 1, max: 1 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 20, min: 1, max: 1 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 15, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 12, min: 1, max: 1 },
             ]
         }
     },
@@ -98,15 +100,16 @@ const EXPEDITION_ZONES = [
         minPetLevel: 60,
         duration: 6 * 60, // 6 jam
         rewards: {
-            moneyRange: [12000, 30000],
+            moneyRange: [30000, 78000],
             expRange: [300, 600],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 65 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 40 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 25 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 30 },
-                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 20 },
-                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 22 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 70, min: 3, max: 5 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 45, min: 1, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 28, min: 1, max: 2 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 32, min: 1, max: 2 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 22, min: 1, max: 2 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 25, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 20, min: 1, max: 2 },
             ]
         }
     },
@@ -119,15 +122,17 @@ const EXPEDITION_ZONES = [
         minPetLevel: 100,
         duration: 8 * 60, // 8 jam
         rewards: {
-            moneyRange: [20000, 50000],
+            moneyRange: [50000, 125000],
             expRange: [500, 1000],
             drops: [
-                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 75 },
-                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 50 },
-                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 35 },
-                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 35 },
-                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 28 },
-                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 25 },
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 80, min: 3, max: 6 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 55, min: 2, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 38, min: 2, max: 3 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 38, min: 2, max: 3 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 30, min: 1, max: 3 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 28, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 30, min: 1, max: 3 },
+                { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 8, min: 1, max: 1 },
             ]
         }
     },
@@ -338,7 +343,8 @@ function claimExpeditionRewards(guildId, userId) {
     for (const drop of zone.rewards.drops) {
         const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop);
         if (Math.random() * 100 < adjustedChance) {
-            drops.push(drop);
+            const qty = getRandomInt(drop.min || 1, drop.max || 1);
+            drops.push({ ...drop, qty });
         }
     }
 
@@ -354,7 +360,7 @@ function claimExpeditionRewards(guildId, userId) {
     addIncome(guildId, userId, 'expedition', money);
 
     for (const drop of drops) {
-        addItem(guildId, userId, drop.id, 1);
+        addItem(guildId, userId, drop.id, drop.qty || 1);
     }
 
     // Add pet EXP
@@ -438,7 +444,7 @@ async function handleExpeditionButton(interaction) {
         if (result.drops.length > 0) {
             desc += `\n**📦 Item Drops:**\n`;
             result.drops.forEach(d => {
-                desc += `> ${d.emoji} **${d.name}** x1\n`;
+                desc += `> ${d.emoji} **${d.name}** x${d.qty || 1}\n`;
             });
         } else {
             desc += `\n> 📦 Tidak ada item drop kali ini.\n`;
