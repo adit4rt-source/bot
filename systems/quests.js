@@ -302,9 +302,9 @@ async function checkAndUpdateStreak(message) {
                         .replace(/{user\.mention}/g, `<@${userId}>`)
                         .replace(/{user\.name}/g, member.user.username)
                         .replace(/{streak}/g, String(streakData.count));
-                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} ${announceMsg}`).setTimestamp()] }).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} ${announceMsg}`).setTimestamp()] }).catch(() => {});
                 } else {
-                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
+                    streakCh.send({ embeds: [new EmbedBuilder().setColor('#FF4500').setDescription(`${streakEmoji} <@${userId}> mengaktifkan streak hari ke-**${streakData.count}**!`).setTimestamp()] }).catch(() => {});
                 }
             }
         }
