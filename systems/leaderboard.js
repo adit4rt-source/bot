@@ -305,17 +305,17 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
                 const gambling = slot + coin + roulette;
 
                 const score = (u.level * 150)
-                    + Math.floor(u.balance / 20)
+                    + Math.min(Math.floor(u.balance / 500), 25000)
                     + (fish * 3)
                     + (farm * 4)
                     + (craft * 8)
-                    + (streak * 12)
-                    + (petLv * 5)
-                    + (dungeon * 6)
-                    + (boss * 15)
-                    + (pvp * 10)
-                    + (badges * 20)
-                    + (gambling * 2);
+                    + (streak * 20)
+                    + (petLv * 8)
+                    + (dungeon * 8)
+                    + (boss * 20)
+                    + (pvp * 15)
+                    + (badges * 50)
+                    + (gambling * 1);
 
                 return { userId: u.userId, score, level: u.level, balance: u.balance, fish, farm, streak, petLv, battle: dungeon+boss+pvp, badges };
             }).sort((a, b) => b.score - a.score).slice(0, 10);

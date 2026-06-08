@@ -45,18 +45,20 @@ function calculateOverallScore(guildId, userId) {
     const roulette = getUserStat(guildId, userId, 'roulette_wins') || 0;
     const gambling = slot + coin + roulette;
 
+    // Wealth is capped so raw money can't dominate the score (a whale used to hit
+    // tens of millions of points off Money/20 alone). Activity now drives rank.
     const score = (user.level * 150)
-        + Math.floor(user.balance / 20)
+        + Math.min(Math.floor(user.balance / 500), 25000)
         + (fish * 3)
         + (farm * 4)
         + (craft * 8)
-        + (streak * 12)
-        + (petLv * 5)
-        + (dungeon * 6)
-        + (boss * 15)
-        + (pvp * 10)
-        + (badges * 20)
-        + (gambling * 2);
+        + (streak * 20)
+        + (petLv * 8)
+        + (dungeon * 8)
+        + (boss * 20)
+        + (pvp * 15)
+        + (badges * 50)
+        + (gambling * 1);
 
     return score;
 }

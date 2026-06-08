@@ -331,7 +331,7 @@ async function handleProfileButton(interaction) {
             .setTitle(`🏅 Rank System — ${interaction.user.username}`)
             .setColor(titleInfo.current.color || '#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Score = Level×150 + Money/20 + Fish×3 + Farm×4 + Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15 + PvP×10 + Badge×20 + Gambling×2' });
+            .setFooter({ text: 'Score = Level×150 + Money÷500 (maks 25rb) + Fish×3 + Farm×4 + Craft×8 + Streak×20 + Pet×8 + Dungeon×8 + Boss×20 + PvP×15 + Badge×50 + Gambling×1' });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel('🔥 Streak').setStyle(ButtonStyle.Primary),

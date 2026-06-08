@@ -285,6 +285,19 @@ module.exports = function register() {
     if (db.getItemCount(g, seller, 'lucky_charm') !== 1) throw new Error('item should be returned');
   });
 
+  // ---- Rank score rebalance (Option A: prestige) ----
+  const titles = botRequire('systems/titles.js');
+  test('rank score: money is capped so wealth alone cannot reach Immortal', () => {
+    const g = 'RANK_G', u = 'RANK_WHALE';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('UPDATE users SET level = 1, balance = 1000000000 WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM user_stats WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM achievements WHERE userId = ?').run(u);
+    const score = titles.calculateOverallScore(g, u);
+    if (score !== 25150) throw new Error('expected capped score 25150 (150 lvl + 25000 money cap), got ' + score);
+    if (titles.getUserTitle(g, u).id === 'immortal') throw new Error('a pure whale must NOT be Immortal anymore');
+  });
+
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');
   test('ui: helpers produce expected output', () => {
