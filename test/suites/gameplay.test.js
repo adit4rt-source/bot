@@ -297,6 +297,21 @@ module.exports = function register() {
     if (score !== 25150) throw new Error('expected capped score 25150 (150 lvl + 25000 money cap), got ' + score);
     if (titles.getUserTitle(g, u).id === 'immortal') throw new Error('a pure whale must NOT be Immortal anymore');
   });
+  test('rank score: comprehensive formula covers all major systems', () => {
+    // Each new component must contribute its documented weight.
+    const r = titles.computeScore({ worldBossKills: 1, godFish: 1, awakenings: 1, secretLocs: 1, expeditions: 1, trades: 1, weeklyQuests: 1 });
+    // worldBossKills100 + expeditions10 (Battle/Pet Mastery) ... assert a few key high-prestige weights:
+    if (r.breakdown['Battle'] !== 100) throw new Error('worldBossKills should add 100 to Battle, got ' + r.breakdown['Battle']);
+    if (r.breakdown['Fishing'] !== 350) throw new Error('godFish(150)+secretLocs(200)=350 Fishing, got ' + r.breakdown['Fishing']);
+    if (r.breakdown['Pet Mastery'] !== 70) throw new Error('expeditions(10)+awakenings(60)=70, got ' + r.breakdown['Pet Mastery']);
+    if (r.breakdown['Quest'] !== 40) throw new Error('weeklyQuests=40, got ' + r.breakdown['Quest']);
+    if (r.breakdown['Sosial'] !== 20) throw new Error('trades=20, got ' + r.breakdown['Sosial']);
+  });
+  test('rank score: afk/spam stats are down-weighted and capped', () => {
+    const r = titles.computeScore({ chats: 999999, reactions: 999999, voice: 999999 });
+    // caps: chats 2000 + reactions 500 + voice 5000 = 7500
+    if (r.breakdown['Sosial'] !== 7500) throw new Error('afk/spam should cap at 7500, got ' + r.breakdown['Sosial']);
+  });
 
   // ---- UI helpers ----
   const ui = botRequire('systems/ui.js');

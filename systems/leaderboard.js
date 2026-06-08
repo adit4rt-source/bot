@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getUserStat } = require('../database');
 const { PET_DATA } = require('../data/pets');
-const { getTitleFromScore } = require('./titles');
+const { getTitleFromScore, computeScore } = require('./titles');
 
 // ==================== VISUAL HELPERS ====================
 function medal(i) {
@@ -269,55 +269,40 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
             const users = isGlobal ? db.prepare(usersQuery).all() : db.prepare(usersQuery).all(guildId);
             
             const scored = users.map(u => {
-                const fish = isGlobal ? getGlobalStat(u.userId, 'total_fish_caught') : getStat(guildId, u.userId, 'total_fish_caught');
-                const farm = isGlobal ? getGlobalStat(u.userId, 'total_harvests') : getStat(guildId, u.userId, 'total_harvests');
-                const craft = isGlobal ? getGlobalStat(u.userId, 'total_crafts') : getStat(guildId, u.userId, 'total_crafts');
-                
-                // Streak TIDAK dihitung di leaderboard GLOBAL (bisa dimanipulasi admin server)
+                // isGlobal-aware stat fetch (shared weights live in titles.computeScore)
+                const st = (k) => isGlobal ? getGlobalStat(u.userId, k) : getStat(guildId, u.userId, k);
+
+                // Streak is NOT counted in the GLOBAL leaderboard (server admins can manipulate it)
                 let streak = 0;
                 if (!isGlobal) {
                     const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
                     streak = streakRow ? streakRow.count : 0;
                 }
-                
-                let petRow;
-                if (isGlobal) {
-                    petRow = db.prepare('SELECT level FROM pets WHERE userId = ? ORDER BY level DESC LIMIT 1').get(u.userId);
-                } else {
-                    petRow = db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
-                }
+                const petRow = isGlobal
+                    ? db.prepare('SELECT level FROM pets WHERE userId = ? ORDER BY level DESC LIMIT 1').get(u.userId)
+                    : db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
                 const petLv = petRow ? petRow.level : 0;
-                
-                const dungeon = isGlobal ? getGlobalStat(u.userId, 'dungeon_clears') : getStat(guildId, u.userId, 'dungeon_clears');
-                const boss = isGlobal ? getGlobalStat(u.userId, 'boss_kills') : getStat(guildId, u.userId, 'boss_kills');
-                const pvp = isGlobal ? getGlobalStat(u.userId, 'pvp_wins') : getStat(guildId, u.userId, 'pvp_wins');
-                
-                let badges;
-                if (isGlobal) {
-                    badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(u.userId).c;
-                } else {
-                    badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId).c;
-                }
-                
-                const slot = isGlobal ? getGlobalStat(u.userId, 'slot_wins') : getStat(guildId, u.userId, 'slot_wins');
-                const coin = isGlobal ? getGlobalStat(u.userId, 'coinflip_wins') : getStat(guildId, u.userId, 'coinflip_wins');
-                const roulette = isGlobal ? getGlobalStat(u.userId, 'roulette_wins') : getStat(guildId, u.userId, 'roulette_wins');
-                const gambling = slot + coin + roulette;
+                const badges = isGlobal
+                    ? db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(u.userId).c
+                    : db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId).c;
 
-                const score = (u.level * 150)
-                    + Math.min(Math.floor(u.balance / 500), 25000)
-                    + (fish * 3)
-                    + (farm * 4)
-                    + (craft * 8)
-                    + (streak * 20)
-                    + (petLv * 8)
-                    + (dungeon * 8)
-                    + (boss * 20)
-                    + (pvp * 15)
-                    + (badges * 50)
-                    + (gambling * 1);
+                const { score } = computeScore({
+                    level: u.level, balance: u.balance, badges, streak, petLv,
+                    fish: st('total_fish_caught'), giantFish: st('giant_fish_defeated'), seaMonsters: st('sea_monster_encounters'),
+                    godFish: st('fish_caught_god_tier'), secretFish: st('fish_caught_secret_tier'), voidFish: st('fish_caught_void_rift'),
+                    abyssFish: st('fish_caught_abyss'), secretLocs: st('secret_locations_unlocked'), treasures: st('fishing_treasures_found'),
+                    farm: st('total_harvests'), craft: st('total_crafts'),
+                    dungeon: st('dungeon_clears'), boss: st('boss_kills'), pvp: st('pvp_wins'),
+                    worldBossHits: st('world_boss_attacks'), worldBossKills: st('world_boss_last_hit'),
+                    expeditions: st('total_expeditions'), refines: st('refine_successes'), relicMelts: st('relic_melts'),
+                    fusions: st('fusion_success'), awakenings: st('total_awakenings'),
+                    quests: st('total_quests_done'), weeklyQuests: st('total_weekly_quests_done'),
+                    gifts: st('total_gifts_sent'), trades: st('trades_completed'),
+                    chats: st('total_chats'), reactions: st('total_reactions'), voice: st('total_voice_mins'),
+                    gambling: st('slot_wins') + st('coinflip_wins') + st('roulette_wins'), togelWins: st('togel_wins'),
+                });
 
-                return { userId: u.userId, score, level: u.level, balance: u.balance, fish, farm, streak, petLv, battle: dungeon+boss+pvp, badges };
+                return { userId: u.userId, score, level: u.level, balance: u.balance, fish: st('total_fish_caught'), farm: st('total_harvests'), streak, petLv, battle: st('dungeon_clears') + st('boss_kills') + st('pvp_wins'), badges };
             }).sort((a, b) => b.score - a.score).slice(0, 10);
 
             desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;

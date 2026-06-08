@@ -8,7 +8,7 @@ const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings, buildNotifPanel } = require('./notifications');
-const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles } = require('./titles');
+const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles, getScoreBreakdown } = require('./titles');
 const ui = require('./ui');
 
 // ============ HELPER: Safe emoji for select-menu options ============
@@ -317,6 +317,12 @@ async function handleProfileButton(interaction) {
             desc += `> 🏆 **RANK TERTINGGI TERCAPAI!**\n`;
         }
         desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+        const breakdown = getScoreBreakdown(guildId, userId).slice(0, 6);
+        if (breakdown.length) {
+            desc += `**💠 Sumber Skor (top):**\n`;
+            for (const b of breakdown) desc += `> ${b.label}: **${b.points.toLocaleString('id-ID')}** pts\n`;
+            desc += `\n`;
+        }
         desc += `**📋 Semua Rank:**\n\n`;
         
         allTitles.forEach((tier, i) => {
@@ -331,7 +337,7 @@ async function handleProfileButton(interaction) {
             .setTitle(`🏅 Rank System — ${interaction.user.username}`)
             .setColor(titleInfo.current.color || '#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Score = Level×150 + Money÷500 (maks 25rb) + Fish×3 + Farm×4 + Craft×8 + Streak×20 + Pet×8 + Dungeon×8 + Boss×20 + PvP×15 + Badge×50 + Gambling×1' });
+            .setFooter({ text: 'Skor dihitung dari SEMUA aktivitas: Level, Battle, Fishing, Pet, Quest, Farming, Sosial, Badge & Kekayaan (uang di-cap).' });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel('🔥 Streak').setStyle(ButtonStyle.Primary),
