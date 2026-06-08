@@ -135,7 +135,7 @@ function attackWorldBoss(guildId, userId, username) {
     const bossDef = getBossDefinition(boss.bossId);
 
     // Calculate damage
-    const relicBonus = getRelicBonus(userId); // refine/relic bonus applies here too
+    const relicBonus = getRelicBonus(userId, pet.id); // equipped relic bonus applies here too
     const baseAtk = pet.atk + (pet.level * 2) + relicBonus.atk;
     const critChance = pet.crit + Math.floor(pet.level / 10) + relicBonus.crit;
     const isCrit = Math.random() * 100 < critChance;

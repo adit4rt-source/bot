@@ -1393,7 +1393,7 @@ async function routeInteraction(interaction) {
                 if (!mPet) continue;
                 const mPetDef = PET_DATA.find(p => p.id === mPet.petId);
                 const eMult = elementMultiplier(mPet.element, boss.element);
-                const mRelic = getRelicBonus(memberId); // relic/refine bonus applies in party raids too
+                const mRelic = getRelicBonus(memberId, mPet.id); // relic/refine bonus applies in party raids too
                 const dmg = Math.floor((mPet.atk + mPet.level + mRelic.atk) * getRandomInt(3, 6) * eMult);
                 totalDmg += dmg;
                 const elTag = eMult > 1 ? ' ⚡' : eMult < 1 ? ' 🛡️' : '';

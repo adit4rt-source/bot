@@ -104,7 +104,7 @@ function getOfferableItems(guildId, userId) {
         if (!['Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'].includes(fd.tier)) continue;
         out.push({ type: 'fish', id: String(f.id), label: `${fd.emoji} ${fd.name} (${f.weight}kg)`, desc: `${fd.tier} fish`, details: `${fd.tier} | ${f.weight}kg` });
     }
-    return out.slice(0, 25);
+    return out; // no global cap — the offer menu paginates per category (each up to 25)
 }
 
 // Items the accepter owns that satisfy a trade's WANT (type + optional tier).
@@ -323,8 +323,15 @@ function buildTradeBrowse(guildId, userId, page) {
 }
 
 // ==================== BUILD: Post (choose offer item) ====================
-function buildPostOfferMenu(guildId, userId) {
-    const items = getOfferableItems(guildId, userId);
+const _GT_CATS = [
+    { type: 'relic', emoji: '💎', name: 'Relic' },
+    { type: 'pet', emoji: '🐾', name: 'Pet' },
+    { type: 'item', emoji: '📦', name: 'Item' },
+    { type: 'fish', emoji: '🐟', name: 'Fish' },
+];
+
+function buildPostOfferMenu(guildId, userId, category = null) {
+    const allItems = getOfferableItems(guildId, userId);
     const mine = db.prepare('SELECT COUNT(*) c FROM global_trades WHERE posterId = ? AND status = ?').get(userId, 'active').c;
     const embed = new EmbedBuilder().setTitle('📤 Post Trade — Pilih Item Ditawarkan').setColor('#2ECC71')
         .setFooter({ text: `Trade kamu: ${mine}/${MAX_TRADES}` });
@@ -333,16 +340,37 @@ function buildPostOfferMenu(guildId, userId) {
         embed.setDescription(`❌ Sudah mencapai batas **${MAX_TRADES}** trade aktif. Batalkan dulu yang lama.`);
         return { embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`gt_mine_${userId}`).setLabel('📦 My Trades').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId(`gt_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))] };
     }
-    if (items.length === 0) {
+    if (allItems.length === 0) {
         embed.setDescription('📭 Tidak ada item yang bisa ditawarkan.\n\n> Relic (tidak dipakai), Pet (non-aktif), Item, atau Fish Rare+.');
         return { embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`gt_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))] };
     }
-    embed.setDescription('Pilih item yang ingin kamu **tawarkan** untuk ditukar:');
-    const menu = new StringSelectMenuBuilder().setCustomId(`gt_offer_${userId}`).setPlaceholder('📤 Pilih item ditawarkan...').setMinValues(1).setMaxValues(1);
+
+    // Count items per category.
+    const counts = {};
+    for (const it of allItems) counts[it.type] = (counts[it.type] || 0) + 1;
+    const availableCats = _GT_CATS.filter(c => counts[c.type] > 0);
+
+    // Step 1: choose a category (unless one was selected). This is what lets us
+    // show far more than Discord's 25-option-per-menu limit.
+    if (!category || !counts[category]) {
+        embed.setDescription('Pilih **kategori** item yang ingin kamu tawarkan:');
+        const catMenu = new StringSelectMenuBuilder().setCustomId(`gt_offercat_${userId}`).setPlaceholder('🗂️ Pilih kategori...').setMinValues(1).setMaxValues(1);
+        availableCats.forEach(c => catMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (${counts[c.type]})`).setValue(c.type).setEmoji(c.emoji)));
+        return { embeds: [embed], components: [
+            new ActionRowBuilder().addComponents(catMenu),
+            new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`gt_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)),
+        ] };
+    }
+
+    // Step 2: list items within the chosen category (up to 25).
+    const catDef = _GT_CATS.find(c => c.type === category) || { emoji: '📦', name: category };
+    const items = allItems.filter(it => it.type === category).slice(0, 25);
+    embed.setDescription(`${catDef.emoji} **${catDef.name}** — pilih item yang ingin kamu **tawarkan**:` + (counts[category] > 25 ? `\n-# Menampilkan 25 dari ${counts[category]} (lebur/jual sisanya agar muncul).` : ''));
+    const menu = new StringSelectMenuBuilder().setCustomId(`gt_offer_${userId}`).setPlaceholder(`${catDef.emoji} Pilih ${catDef.name} ditawarkan...`).setMinValues(1).setMaxValues(1);
     items.forEach(it => menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(it.label.substring(0, 100)).setValue(`${it.type}:${it.id}`.substring(0, 100)).setDescription((it.desc || '').substring(0, 100))));
     return { embeds: [embed], components: [
         new ActionRowBuilder().addComponents(menu),
-        new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`gt_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)),
+        new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`gt_post_${userId}`).setLabel('🗂️ Ganti Kategori').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`gt_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)),
     ] };
 }
 
@@ -405,7 +433,7 @@ function isGlobalTradeButton(customId) {
     return customId.startsWith('gt_') && !isGlobalTradeSelect(customId);
 }
 function isGlobalTradeSelect(customId) {
-    return customId.startsWith('gt_accept_') || customId.startsWith('gt_offer_') || customId.startsWith('gt_want_')
+    return customId.startsWith('gt_accept_') || customId.startsWith('gt_offer_') || customId.startsWith('gt_offercat_') || customId.startsWith('gt_want_')
         || customId.startsWith('gt_cancel_') || customId.startsWith('gt_give_');
 }
 
@@ -439,6 +467,13 @@ async function handleGlobalTradeButton(interaction) {
 async function handleGlobalTradeSelect(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
+
+    // gt_offercat_<userId> -> chose a category, show items in it
+    if (customId.startsWith('gt_offercat_')) {
+        const userId = customId.split('_').pop();
+        if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Bukan panel kamu!', ephemeral: true });
+        return interaction.update(buildPostOfferMenu(guildId, userId, interaction.values[0]));
+    }
 
     // gt_offer_<userId>  -> chose offer item, ask what they want
     if (customId.startsWith('gt_offer_')) {

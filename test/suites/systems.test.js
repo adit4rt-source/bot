@@ -268,45 +268,75 @@ module.exports = function register() {
     }
   });
 
-  // ---- Relic bonus / Refine actually affects stats ----
+  // ---- Relic equip/unequip/melt + bonus from EQUIPPED relics ----
   const pets = botRequire('systems/pets.js');
-  test('relic: getRelicBonus picks best per stat with refine scaling', () => {
-    const uid = 'RELIC_BEST';
-    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)');
-    ins.run('g', uid, 'W1', 'weapon', 'Rare', 'atk', 20, 0);   // eff 20
-    ins.run('g', uid, 'W2', 'weapon', 'Epic', 'atk', 30, 10);  // eff floor(30*1.5)=45 (best)
-    ins.run('g', uid, 'A1', 'armor', 'Rare', 'def', 10, 20);   // eff floor(10*2)=20
-    const b = pets.getRelicBonus(uid);
-    if (b.atk !== 45) throw new Error('atk best should be 45, got ' + b.atk);
+  test('relic: getRelicBonus sums EQUIPPED relics with refine scaling', () => {
+    const uid = 'RELIC_EQ', PID = 90001;
+    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id) VALUES (?,?,?,?,?,?,?,?,?)');
+    ins.run('g', uid, 'W1', 'weapon', 'Epic', 'atk', 30, 10, PID); // equipped: floor(30*1.5)=45
+    ins.run('g', uid, 'A1', 'armor', 'Rare', 'def', 10, 20, PID);  // equipped: floor(10*2)=20
+    ins.run('g', uid, 'W2', 'weapon', 'Legendary', 'atk', 99, 0, 0); // NOT equipped -> ignored
+    const b = pets.getRelicBonus(uid, PID);
+    if (b.atk !== 45) throw new Error('atk should be 45 (equipped only), got ' + b.atk);
     if (b.def !== 20) throw new Error('def should be 20, got ' + b.def);
     if (b.spd !== 0 || b.crit !== 0) throw new Error('spd/crit should be 0');
   });
-  test('relic: getEffectiveStats adds relic bonus to base pet stats', () => {
-    const uid = 'RELIC_EFF';
-    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)')
-      .run('g', uid, 'Sword', 'weapon', 'Legendary', 'atk', 50, 0); // +50 atk
-    const pet = { userId: uid, hp: 200, atk: 80, def: 40, spd: 20, crit: 10 };
+  test('relic: equipRelic auto-unequips same slot (one per slot)', () => {
+    const uid = 'RELIC_SWAP', PID = 90002;
+    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)');
+    const a = ins.run('g', uid, 'SwA', 'weapon', 'Rare', 'atk', 20, 0).lastInsertRowid;
+    const bId = ins.run('g', uid, 'SwB', 'weapon', 'Legendary', 'atk', 60, 0).lastInsertRowid;
+    pets.equipRelic(uid, PID, Number(a));
+    if (pets.getRelicBonus(uid, PID).atk !== 20) throw new Error('A should give 20');
+    pets.equipRelic(uid, PID, Number(bId)); // must auto-unequip A
+    const eq = pets.getEquippedRelics(PID).filter(r => r.slot === 'weapon');
+    if (eq.length !== 1) throw new Error('only 1 weapon may be equipped, got ' + eq.length);
+    if (pets.getRelicBonus(uid, PID).atk !== 60) throw new Error('B should give 60, got ' + pets.getRelicBonus(uid, PID).atk);
+  });
+  test('relic: unequipRelic / unequipAll clear the bonus', () => {
+    const uid = 'RELIC_UNEQ', PID = 90003;
+    const id = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run('g', uid, 'X', 'accessory', 'Rare', 'spd', 30, 0, PID).lastInsertRowid;
+    if (pets.getRelicBonus(uid, PID).spd !== 30) throw new Error('spd should be 30');
+    pets.unequipRelic(uid, Number(id));
+    if (pets.getRelicBonus(uid, PID).spd !== 0) throw new Error('spd should be 0 after unequip');
+  });
+  test('relic: meltRelic deletes it and yields refine stones', () => {
+    const uid = 'RELIC_MELT';
+    const id = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)')
+      .run('g', uid, 'Junk', 'weapon', 'Legendary', 'atk', 50, 6).lastInsertRowid; // base 3 + floor(6/3)=2 => 5
+    const before = db.getItemCount('g', uid, 'refine_stone');
+    const res = pets.meltRelic('g', uid, Number(id));
+    if (!res.success) throw new Error('melt failed');
+    if (res.stones !== 5) throw new Error('expected 5 stones, got ' + res.stones);
+    const gone = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(Number(id));
+    if (gone) throw new Error('relic should be deleted after melt');
+    if (db.getItemCount('g', uid, 'refine_stone') !== before + 5) throw new Error('stones not granted');
+  });
+  test('relic: getEffectiveStats adds EQUIPPED relic bonus', () => {
+    const uid = 'RELIC_EFF', PID = 90004;
+    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run('g', uid, 'Sword', 'weapon', 'Legendary', 'atk', 50, 0, PID);
+    const pet = { userId: uid, id: PID, hp: 200, atk: 80, def: 40, spd: 20, crit: 10 };
     const eff = pets.getEffectiveStats(pet);
     if (eff.atk !== 130) throw new Error('effective atk should be 130, got ' + eff.atk);
-    if (eff.def !== 40) throw new Error('def unchanged should be 40');
     if (eff.bonus.atk !== 50) throw new Error('bonus.atk should be 50');
   });
-  test('relic: no relics means zero bonus', () => {
-    const b = pets.getRelicBonus('RELIC_NONE_USER');
+  test('relic: no equipped relic means zero bonus', () => {
+    const b = pets.getRelicBonus('RELIC_NONE_USER', 99999);
     if (b.atk || b.def || b.spd || b.crit) throw new Error('expected zero bonus');
   });
-  test('relic: bonus actually changes battle outcome (not just visual)', () => {
-    // Identical weak pets vs an enemy that one-shots them. The tank has a huge
-    // DEF relic; the plain pet has none. simulateBattle must reflect that.
-    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level) VALUES (?,?,?,?,?,?,?,?)')
-      .run('g', 'RELIC_TANK', 'Aegis', 'armor', 'Legendary', 'def', 5000, 0); // +5000 DEF
-    const mk = (uid) => ({ userId: uid, petId: 'x', hp: 50, atk: 100, def: 10, spd: 10, crit: 0, level: 1, element: null, skills: '[]' });
+  test('relic: equipped bonus actually changes battle outcome (not just visual)', () => {
+    const PID = 90005;
+    db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run('g', 'RELIC_TANK', 'Aegis', 'armor', 'Legendary', 'def', 5000, 0, PID); // +5000 DEF equipped to PID
+    const mk = (uid, id) => ({ userId: uid, id, petId: 'x', hp: 50, atk: 100, def: 10, spd: 10, crit: 0, level: 1, element: null, skills: '[]' });
     const petDef = { emoji: '🐾' };
-    const enemy = [{ hp: 100000, atk: 1000, def: 0, element: null }]; // never dies; one-shots an unarmored pet
-    const tank = pets.simulateBattle(mk('RELIC_TANK'), petDef, enemy);
-    const plain = pets.simulateBattle(mk('RELIC_PLAIN_NB'), petDef, enemy);
-    if (!tank.alive) throw new Error('tank with +5000 DEF relic should survive');
-    if (plain.alive) throw new Error('plain pet (no relic) should die — relic bonus not applied in battle!');
+    const enemy = [{ hp: 100000, atk: 1000, def: 0, element: null }];
+    const tank = pets.simulateBattle(mk('RELIC_TANK', PID), petDef, enemy);      // equipped DEF relic
+    const plain = pets.simulateBattle(mk('RELIC_PLAIN_NB', 90006), petDef, enemy); // no equipped relic
+    if (!tank.alive) throw new Error('tank with equipped +5000 DEF relic should survive');
+    if (plain.alive) throw new Error('plain pet should die — equipped relic bonus not applied in battle!');
   });
 
   // ---- Achievement pokedex progress ----

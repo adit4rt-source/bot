@@ -26,28 +26,76 @@ function generatePetStats(tier) {
     return { hp: getRandomInt(r[0],r[1]), atk: getRandomInt(r[2],r[3]), def: getRandomInt(r[4],r[5]), spd: getRandomInt(r[6],r[7]), crit: getRandomInt(r[8],r[9]) };
 }
 
-// ============ RELIC BONUS ============
-// Relics boost a pet's stats. We use the BEST relic per stat type owned by the
-// user (no separate equip step), and refining scales its power:
+// ============ RELIC SYSTEM ============
+// A relic boosts the pet it's EQUIPPED to (equipped_pet_id). Each pet can equip
+// one relic per slot (weapon/armor/accessory). Refining scales its power:
 //   effective bonus = stat_value * (1 + refine_level * 0.05)
-// So a +20 refine roughly doubles that relic's contribution.
-function getRelicBonus(userId) {
-    const best = { atk: 0, def: 0, spd: 0, crit: 0 };
-    if (!userId) return best;
-    let rows;
-    try { rows = db.prepare('SELECT stat_type, stat_value, refine_level FROM relics WHERE userId = ?').all(userId); }
-    catch (_) { return best; }
-    for (const r of rows) {
-        if (!(r.stat_type in best)) continue;
-        const eff = Math.floor((r.stat_value || 0) * (1 + (r.refine_level || 0) * 0.05));
-        if (eff > best[r.stat_type]) best[r.stat_type] = eff;
-    }
-    return best;
+const RELIC_SLOTS = ['weapon', 'armor', 'accessory'];
+
+function relicEffective(relic) {
+    return Math.floor((relic.stat_value || 0) * (1 + (relic.refine_level || 0) * 0.05));
 }
 
-// Base pet stats + relic bonuses (used for display and battle).
+function getUserRelics(userId) {
+    if (!userId) return [];
+    try { return db.prepare('SELECT * FROM relics WHERE userId = ? ORDER BY equipped_pet_id DESC, stat_value DESC').all(userId); }
+    catch (_) { return []; }
+}
+
+function getEquippedRelics(petId) {
+    if (!petId) return [];
+    try { return db.prepare('SELECT * FROM relics WHERE equipped_pet_id = ?').all(petId); }
+    catch (_) { return []; }
+}
+
+// Sum of EQUIPPED relic bonuses for a pet (per stat type).
+function getRelicBonus(userId, petId) {
+    const bonus = { atk: 0, def: 0, spd: 0, crit: 0 };
+    if (!petId) return bonus;
+    for (const r of getEquippedRelics(petId)) {
+        if (!(r.stat_type in bonus)) continue;
+        bonus[r.stat_type] += relicEffective(r);
+    }
+    return bonus;
+}
+
+// Equip a relic to a pet, auto-unequipping any relic in the same slot.
+function equipRelic(userId, petId, relicId) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    if (!relic) return { success: false, error: 'Relic tidak ditemukan.' };
+    if (!petId) return { success: false, error: 'Pet tidak ditemukan.' };
+    db.prepare('UPDATE relics SET equipped_pet_id = 0 WHERE userId = ? AND equipped_pet_id = ? AND slot = ?').run(userId, petId, relic.slot);
+    db.prepare('UPDATE relics SET equipped_pet_id = ? WHERE id = ?').run(petId, relicId);
+    return { success: true, relic };
+}
+
+function unequipRelic(userId, relicId) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    if (!relic) return { success: false, error: 'Relic tidak ditemukan.' };
+    db.prepare('UPDATE relics SET equipped_pet_id = 0 WHERE id = ?').run(relicId);
+    return { success: true, relic };
+}
+
+function unequipAll(userId, petId) {
+    const n = db.prepare('UPDATE relics SET equipped_pet_id = 0 WHERE userId = ? AND equipped_pet_id = ?').run(userId, petId);
+    return { success: true, count: n.changes || 0 };
+}
+
+// Melt (salvage) a relic into Refine Stones. Better rarity / more refines = more stones.
+function meltRelic(guildId, userId, relicId) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    if (!relic) return { success: false, error: 'Relic tidak ditemukan.' };
+    const base = relic.rarity === 'Legendary' ? 3 : relic.rarity === 'Epic' ? 2 : 1;
+    const stones = base + Math.floor((relic.refine_level || 0) / 3);
+    db.prepare('DELETE FROM relics WHERE id = ?').run(relicId);
+    const { addItem } = require('../database');
+    addItem(guildId, userId, 'refine_stone', stones);
+    return { success: true, relic, stones };
+}
+
+// Base pet stats + EQUIPPED relic bonuses (used for display and battle).
 function getEffectiveStats(pet) {
-    const b = getRelicBonus(pet && pet.userId);
+    const b = getRelicBonus(pet && pet.userId, pet && pet.id);
     return {
         hp: pet.hp,
         atk: pet.atk + b.atk,
@@ -62,7 +110,7 @@ function getEffectiveStats(pet) {
 // stat fields, leaving the caller's object untouched.
 function withRelics(pet) {
     if (!pet) return pet;
-    const b = getRelicBonus(pet.userId);
+    const b = getRelicBonus(pet.userId, pet.id);
     return { ...pet, atk: (pet.atk || 0) + b.atk, def: (pet.def || 0) + b.def, spd: (pet.spd || 0) + b.spd, crit: (pet.crit || 0) + b.crit };
 }
 
@@ -409,4 +457,4 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats };
+module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic };

@@ -29,6 +29,21 @@ module.exports = function register() {
   assert('gt: select detector (offer)', gt.isGlobalTradeSelect('gt_offer_1') === true);
   assert('gt: select detector (want)', gt.isGlobalTradeSelect('gt_want_relic_5_1') === true);
   assert('gt: button is not select', gt.isGlobalTradeButton('gt_offer_1') === false);
+  assert('gt: select detector (offercat)', gt.isGlobalTradeSelect('gt_offercat_1') === true);
+
+  // ---- category step lets the offer menu exceed Discord's 25-option limit ----
+  test('gt: post offer menu shows a category chooser, then items per category', () => {
+    const U = '500000000000000009';
+    db.getOrCreateUser(G, U);
+    freshRelic(U, 'Rare'); freshRelic(U, 'Epic');
+    const chooser = gt.buildPostOfferMenu(G, U); // no category -> category select
+    const catMenu = chooser.components[0].components[0];
+    if (!catMenu.data.custom_id.startsWith('gt_offercat_')) throw new Error('expected category select, got ' + catMenu.data.custom_id);
+    const itemView = gt.buildPostOfferMenu(G, U, 'relic'); // category -> item select
+    const itemMenu = itemView.components[0].components[0];
+    if (!itemMenu.data.custom_id.startsWith('gt_offer_')) throw new Error('expected offer select, got ' + itemMenu.data.custom_id);
+    if (!itemMenu.options || itemMenu.options.length < 2) throw new Error('expected >=2 relic options');
+  });
 
   // ---- POST a money-want trade (offer relic, want 10k) ----
   test('gt: post money-want trade escrows the relic', () => {

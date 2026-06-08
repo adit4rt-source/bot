@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS } = require('../data/items');
@@ -75,6 +75,89 @@ function rollRelicDrop(guildId, userId, chance, rareBonus) {
     const statVal = rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
     db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, name, slot, rarity, statType, statVal);
     return `\n> 📿 **RELIC DROP:** ${name} (${rarity})`;
+}
+
+
+// ============ HELPER: Build the Relic Manager panel (equip / melt / refine) ============
+const _SLOT_EMOJI = { weapon: '⚔️', armor: '🛡️', accessory: '💍' };
+const _STAT_EMOJI = { atk: '⚔️', def: '🛡️', spd: '💨', crit: '🎯' };
+
+function _relicLabel(r) {
+    const eff = relicEffective(r);
+    const unit = r.stat_type === 'crit' ? '%' : '';
+    return `${_SLOT_EMOJI[r.slot] || '📿'} ${r.name} (${_STAT_EMOJI[r.stat_type] || ''}+${eff}${unit})`;
+}
+
+function buildRelicPanel(guildId, userId) {
+    const pet = getPetData(guildId, userId);
+    if (!pet) {
+        const embed = new EmbedBuilder().setTitle('📿 Relic Manager').setColor('#FFD700')
+            .setDescription('❌ Kamu belum punya pet aktif! Adopsi pet dulu lewat `/pet`.');
+        return { embeds: [embed], components: [] };
+    }
+
+    const equipped = getEquippedRelics(pet.id);
+    const equippedBySlot = {};
+    for (const r of equipped) equippedBySlot[r.slot] = r;
+    const all = getUserRelics(userId);
+    const bonus = getRelicBonus(userId, pet.id);
+    const stones = getItemCount(guildId, userId, 'refine_stone');
+
+    let desc = `🐾 **${pet.name}** (Lv.${pet.level})\n━━━━━━━━━━━━━━━━━━━━━━\n**🎽 Terpasang:**\n`;
+    for (const slot of ['weapon', 'armor', 'accessory']) {
+        const r = equippedBySlot[slot];
+        const unit = r && r.stat_type === 'crit' ? '%' : '';
+        desc += r
+            ? `> ${_SLOT_EMOJI[slot]} **${r.name}** +${r.refine_level} — ${_STAT_EMOJI[r.stat_type]}+${relicEffective(r)}${unit}\n`
+            : `> ${_SLOT_EMOJI[slot]} *(kosong)*\n`;
+    }
+    desc += `\n**📊 Total Bonus:** ⚔️+${bonus.atk} | 🛡️+${bonus.def} | 💨+${bonus.spd} | 🎯+${bonus.crit}%\n`;
+    desc += `🪨 Refine Stone: **${stones}** | 📿 Total relic: **${all.length}** (${equipped.length} terpasang)\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih relic untuk **dipasang**, atau **lebur** relic tak terpakai jadi Refine Stone.`;
+
+    const embed = new EmbedBuilder().setTitle('📿 Relic Manager').setColor('#FFD700').setDescription(desc);
+    const components = [];
+
+    // Equip select — relics not currently equipped to this pet (max 25).
+    const equippable = all.filter(r => r.equipped_pet_id !== pet.id).slice(0, 25);
+    if (equippable.length > 0) {
+        const equipMenu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_relicequip_select_${userId}`)
+            .setPlaceholder('🎽 Pasang relic...')
+            .setMinValues(1).setMaxValues(1);
+        for (const r of equippable) {
+            equipMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(_relicLabel(r).slice(0, 100))
+                .setValue(String(r.id))
+                .setDescription(`${r.rarity} • +${r.refine_level}${r.equipped_pet_id ? ' • terpasang di pet lain' : ''}`.slice(0, 100)));
+        }
+        components.push(new ActionRowBuilder().addComponents(equipMenu));
+    }
+
+    // Melt select — any relic (multi). Melting an equipped relic auto-removes it.
+    const meltable = all.slice(0, 25);
+    if (meltable.length > 0) {
+        const meltMenu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_relicmelt_select_${userId}`)
+            .setPlaceholder('🔥 Lebur relic jadi Refine Stone...')
+            .setMinValues(1).setMaxValues(Math.min(meltable.length, 25));
+        for (const r of meltable) {
+            const yield_ = (r.rarity === 'Legendary' ? 3 : r.rarity === 'Epic' ? 2 : 1) + Math.floor((r.refine_level || 0) / 3);
+            meltMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(_relicLabel(r).slice(0, 100))
+                .setValue(String(r.id))
+                .setDescription(`Lebur → 🪨 ${yield_} Refine Stone`.slice(0, 100)));
+        }
+        components.push(new ActionRowBuilder().addComponents(meltMenu));
+    }
+
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('Refine').setEmoji('✨').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pet_relicunequipall_${userId}`).setLabel('Lepas Semua').setEmoji('🧷').setStyle(ButtonStyle.Secondary).setDisabled(equipped.length === 0),
+        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('Kembali').setEmoji('🔙').setStyle(ButtonStyle.Secondary),
+    ));
+
+    return { embeds: [embed], components };
 }
 
 
@@ -753,7 +836,7 @@ async function handlePetButton(interaction) {
             .setDescription(desc);
 
         const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('📿 Refine').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`pet_relic_${userId}`).setLabel('📿 Relic').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`pet_doevolve_${userId}`).setLabel('🧬 Evolve').setStyle(ButtonStyle.Success).setDisabled(!evo || pet.level < evo.level),
             new ButtonBuilder().setCustomId(`pet_abilities_${userId}`).setLabel('🧪 Abilities').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`pet_awakening_${userId}`).setLabel('⚡ Awakening').setStyle(ButtonStyle.Danger),
@@ -820,6 +903,19 @@ async function handlePetButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
+
+    // === RELIC MANAGER ===
+    if (action === 'relic') {
+        return interaction.update(buildRelicPanel(guildId, userId));
+    }
+
+    // === UNEQUIP ALL RELICS ===
+    if (action === 'relicunequipall') {
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+        unequipAll(userId, pet.id);
+        return interaction.update(buildRelicPanel(guildId, userId));
+    }
 
     // === REFINE (select slot) ===
     if (action === 'refine') {
@@ -1232,6 +1328,30 @@ async function handlePetSelectMenu(interaction) {
         return;
     }
 
+    // === RELIC EQUIP SELECT ===
+    if (customId.startsWith('pet_relicequip_select_')) {
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
+        const relicId = parseInt(interaction.values[0], 10);
+        const res = equipRelic(userId, pet.id, relicId);
+        if (!res.success) return interaction.reply({ content: `❌ ${res.error}`, ephemeral: true });
+        return interaction.update(buildRelicPanel(guildId, userId));
+    }
+
+    // === RELIC MELT SELECT ===
+    if (customId.startsWith('pet_relicmelt_select_')) {
+        const ids = interaction.values.map(v => parseInt(v, 10));
+        let totalStones = 0, melted = 0;
+        const names = [];
+        for (const id of ids) {
+            const res = meltRelic(guildId, userId, id);
+            if (res.success) { totalStones += res.stones; melted++; names.push(res.relic.name); }
+        }
+        if (melted === 0) return interaction.reply({ content: '❌ Tidak ada relic yang dilebur.', ephemeral: true });
+        await interaction.update(buildRelicPanel(guildId, userId)).catch(() => {});
+        return interaction.followUp({ content: `🔥 Melebur **${melted} relic** → 🪨 **${totalStones} Refine Stone**!\n-# ${names.slice(0, 8).join(', ')}${names.length > 8 ? '…' : ''}`, ephemeral: true }).catch(() => {});
+    }
+
     // === REFINE SELECT ===
     if (customId.startsWith('pet_refine_select_')) {
         const slot = interaction.values[0];
@@ -1327,5 +1447,6 @@ module.exports = {
     isPetPanelButton,
     isPetPanelSelectMenu,
     isPetPanelModal,
-    buildMainPanel
+    buildMainPanel,
+    buildRelicPanel
 };
