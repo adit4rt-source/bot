@@ -212,6 +212,28 @@ module.exports = function register() {
     if (next.carriedOver !== potNow) throw new Error('next round carriedOver mismatch');
   });
 
+  test('lottery: pot keeps growing across many no-winner rounds (never shrinks)', () => {
+    const g = 'LOT_ACCUM', u = 'LOTU_ACCUM';
+    db.getOrCreateUser(g, u);
+    db.updateUserBalance(g, u, 1_000_000);
+    let prevPot = lot.getCurrentRound(g).pot;
+    for (let i = 0; i < 8; i++) {
+      const r = lot.getCurrentRound(g);
+      const startPot = r.pot;
+      if (startPot < prevPot) throw new Error('pot shrank between rounds!');
+      lot.placeBet(g, u, 'Accum', 50);
+      const potWithBet = lot.getRoundRow(g, r.roundId).pot;
+      if (potWithBet !== startPot + BP) throw new Error('bet did not add to pot');
+      const res = lot.drawRound(g, r.roundId, 77); // 50 != 77 -> no winner
+      if (res.winnersCount !== 0) throw new Error('expected no winner');
+      if (res.nextPot !== potWithBet) throw new Error('carryover must equal full pot (no shrink)');
+      prevPot = res.nextPot;
+    }
+    // 8 rounds, 1 bet each, all carried over -> pot grew by 8 * BET_PRICE over the seed.
+    const finalPot = lot.getCurrentRound(g).pot;
+    if (finalPot < 8 * BP) throw new Error('pot did not accumulate across rounds: ' + finalPot);
+  });
+
   test('lottery: admin setPot seeds the pot', () => {
     const g = 'LOT_SEED';
     const r = lot.setPot(g, 500000);
