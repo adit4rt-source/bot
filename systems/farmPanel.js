@@ -1006,12 +1006,12 @@ async function handleFarmButton(interaction) {
         const cropsPage1 = FARM_CROPS.filter(c => ['Common', 'Uncommon', 'Rare'].includes(c.tier));
         const cropsPage2 = FARM_CROPS.filter(c => ['Epic', 'Legendary'].includes(c.tier));
         const seedMenu1 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed_${userId}`).setPlaceholder('🌱 Bibit Common/Uncommon/Rare...').setMinValues(1).setMaxValues(1);
-        cropsPage1.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`)); });
+        cropsPage1.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`.slice(0, 100))); });
 
         const components = [new ActionRowBuilder().addComponents(seedMenu1)];
         if (cropsPage2.length > 0) {
             const seedMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed2_${userId}`).setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
-            cropsPage2.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`)); });
+            cropsPage2.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`.slice(0, 100))); });
             components.push(new ActionRowBuilder().addComponents(seedMenu2));
         }
         // Prestige Crops menu
