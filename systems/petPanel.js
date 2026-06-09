@@ -1214,48 +1214,52 @@ async function handlePetSelectMenu(interaction) {
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         const enemies = dungeon.monsterHp.map((hp, i) => ({ hp, atk: dungeon.monsterAtk[i], def: Math.floor(dungeon.monsterAtk[i] * 0.3), element: dungeon.element }));
 
-        // Show "entering dungeon" then resolve
+        // Defer first so Discord knows we're processing (15 min window)
+        await interaction.deferUpdate();
+
+        // Show "entering dungeon" animation
         const enterEmbed = new EmbedBuilder().setColor('#F39C12').setTitle(`🏰 ${dungeon.name}`)
             .setDescription(`${petDef.emoji} **${pet.name}** memasuki dungeon...\n\n> ⚔️ *Pertarungan sedang berlangsung...*`);
-        await interaction.update({ embeds: [enterEmbed], components: [] });
+        await interaction.editReply({ embeds: [enterEmbed], components: [] });
 
-        setTimeout(async () => {
-            const result = simulateBattle(pet, petDef, enemies);
-            let reward = 0, expGain = 0, lootText = '', relicText = '';
-            if (result.alive) {
-                reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
-                const comboMult = getComboMultiplier(guildId, userId);
-                reward = applyLevelScaling(Math.floor(reward * comboMult), pet.level);
-                expGain = dungeon.exp;
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
-                addPetExp(guildId, userId, expGain);
-                incrementUserStat(guildId, userId, 'dungeon_clears');
-                addIncome(guildId, userId, 'battle', reward);
-                updateQuestProgress(guildId, userId, 'dungeon', 1);
-                await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
-                lootText = rollLoot(guildId, userId, dungeon.loot);
-                relicText = rollRelicDrop(guildId, userId, dungeon.relicChance, dungeon.relicRareBonus);
-            } else {
-                const freshData = getOrCreateUser(guildId, userId);
-                const penalty = computePenalty(dungeon, freshData.balance);
-                if (penalty > 0) db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
-                db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(pet.id);
-                addPetExp(guildId, userId, Math.floor(dungeon.exp * 0.3));
-                reward = -penalty;
-            }
-            const lootBlock = (lootText || relicText) ? `\n${[lootText, relicText.replace(/^\n/, '')].filter(Boolean).join('\n')}` : '';
-            const statusText = result.alive
-                ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}${lootBlock}`
-                : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money\n> ❤️ Happiness -20`;
-            const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`)
-                .setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`)
-                .setFooter({ text: `Pet: ${pet.name} Lv.${pet.level} | CD: ${Math.round((dungeon.cooldown||300000)/60000)} menit` });
-            const backRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon Lagi').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-            );
-            interaction.editReply({ embeds: [embed], components: [backRow] }).catch(() => {});
-        }, 3000);
+        // Resolve after delay
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        const result = simulateBattle(pet, petDef, enemies);
+        let reward = 0, expGain = 0, lootText = '', relicText = '';
+        if (result.alive) {
+            reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
+            const comboMult = getComboMultiplier(guildId, userId);
+            reward = applyLevelScaling(Math.floor(reward * comboMult), pet.level);
+            expGain = dungeon.exp;
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
+            addPetExp(guildId, userId, expGain);
+            incrementUserStat(guildId, userId, 'dungeon_clears');
+            addIncome(guildId, userId, 'battle', reward);
+            updateQuestProgress(guildId, userId, 'dungeon', 1);
+            await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
+            lootText = rollLoot(guildId, userId, dungeon.loot);
+            relicText = rollRelicDrop(guildId, userId, dungeon.relicChance, dungeon.relicRareBonus);
+        } else {
+            const freshData = getOrCreateUser(guildId, userId);
+            const penalty = computePenalty(dungeon, freshData.balance);
+            if (penalty > 0) db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(penalty, guildId, userId);
+            db.prepare('UPDATE pets SET happiness = MAX(0, happiness - 20) WHERE id = ?').run(pet.id);
+            addPetExp(guildId, userId, Math.floor(dungeon.exp * 0.3));
+            reward = -penalty;
+        }
+        const lootBlock = (lootText || relicText) ? `\n${[lootText, relicText.replace(/^\n/, '')].filter(Boolean).join('\n')}` : '';
+        const statusText = result.alive
+            ? `🏆 **CLEAR!**\n> 🪙 +${reward.toLocaleString('id-ID')} Money\n> ✨ +${expGain} Pet EXP\n> ❤️ HP sisa: ${result.remainingHp}${lootBlock}`
+            : `💀 **FAILED!**\n> 🪙 -${Math.abs(reward).toLocaleString('id-ID')} Money\n> ❤️ Happiness -20`;
+        const embed = new EmbedBuilder().setColor(result.alive ? '#2ECC71' : '#E74C3C').setTitle(`🏰 ${dungeon.name}`)
+            .setDescription(`${result.log.join('\n')}\n\n━━━━━━ **RESULT** ━━━━━━\n${statusText}`)
+            .setFooter({ text: `Pet: ${pet.name} Lv.${pet.level} | CD: ${Math.round((dungeon.cooldown||300000)/60000)} menit` });
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon Lagi').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.editReply({ embeds: [embed], components: [backRow] }).catch(() => {});
         return;
     }
 

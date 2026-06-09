@@ -156,9 +156,10 @@ async function handleArenaButton(interaction) {
     if (action === 'fight') {
         const rem = cooldowns.getRemaining('arena', guildId, userId);
         if (rem > 0) return interaction.reply({ content: `⏳ Tunggu **${Math.ceil(rem / 1000)} detik** sebelum cari lawan lagi.`, ephemeral: true });
+        await interaction.deferUpdate();
         const res = doArenaFight(guildId, userId);
-        if (res.error === 'no_pet') return interaction.reply({ content: '❌ Kamu belum punya pet aktif! Tetaskan/aktifkan pet dulu di `/pet`.', ephemeral: true });
-        if (res.error === 'no_opponent') return interaction.reply({ content: '❌ Belum ada lawan tersedia (belum ada pemain lain dengan pet aktif). Coba lagi nanti.', ephemeral: true });
+        if (res.error === 'no_pet') return interaction.followUp({ content: '❌ Kamu belum punya pet aktif! Tetaskan/aktifkan pet dulu di `/pet`.', ephemeral: true });
+        if (res.error === 'no_opponent') return interaction.followUp({ content: '❌ Belum ada lawan tersedia (belum ada pemain lain dengan pet aktif). Coba lagi nanti.', ephemeral: true });
         cooldowns.setCooldown('arena', guildId, userId, FIGHT_COOLDOWN_MS);
         const tier = getTier(res.newRating);
         const sign = res.change >= 0 ? '+' : '';
@@ -177,7 +178,7 @@ async function handleArenaButton(interaction) {
             new ButtonBuilder().setCustomId(`arena_fight_${userId}`).setLabel('⚔️ Cari Lawan Lagi').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`arena_back_${userId}`).setLabel('🔙 Arena').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.editReply({ embeds: [embed], components: [row] });
     }
 }
 

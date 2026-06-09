@@ -1181,9 +1181,10 @@ async function handleFarmSelectMenu(interaction) {
 
     // === CRAFT SELECT ===
     if (customId.startsWith('farm_craftselect_') || customId.startsWith('farm_craftselect2_') || customId.startsWith('farm_craftselect3_')) {
+        await interaction.deferUpdate();
         const recipeId = interaction.values[0];
         const recipe = FARM_RECIPES.find(r => r.id === recipeId);
-        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+        if (!recipe) return interaction.followUp({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
         const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
         const missing = [];
         for (const ing of recipe.ingredients) {
@@ -1191,7 +1192,7 @@ async function handleFarmSelectMenu(interaction) {
             if (have < ing.qty) { const crop = ALL_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
         }
         if (missing.length > 0) {
-            return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], flags: 1 << 6 });
+            return interaction.followUp({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], ephemeral: true });
         }
         for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
         addUserBalance(guildId, userId, recipe.sellPrice);
@@ -1208,7 +1209,7 @@ async function handleFarmSelectMenu(interaction) {
             new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft Lagi').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [backRow] });
+        return interaction.editReply({ embeds: [embed], components: [backRow] });
     }
 
     // === BUY DECORATION ===
