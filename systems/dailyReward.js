@@ -16,6 +16,7 @@ const { db, getOrCreateUser, getUserStat, setUserStat, incrementUserStat, addIte
 // 1 so a brand-new user still gets the day-1 base reward.
 function getChatStreak(guildId, userId) {
     try {
+        // Streak is per-guild
         const row = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
         const c = row ? Math.floor(Number(row.count) || 0) : 0;
         return Math.max(1, c);

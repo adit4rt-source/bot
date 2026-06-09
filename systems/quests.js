@@ -263,19 +263,12 @@ async function checkAndUpdateStreak(message) {
     const streakTimezone = getSetting(guildId, 'streak_timezone', 'Asia/Jakarta');
     const userId = member.id;
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: streakTimezone });
+
     let streakData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId), streakActivatedToday = false;
 
     if (!streakData) {
-        // Fallback: check if user has a streak under a different guildId (e.g. after global migration)
-        const fallback = db.prepare('SELECT * FROM streaks WHERE userId = ? ORDER BY count DESC LIMIT 1').get(userId);
-        if (fallback && fallback.last_date) {
-            // Migrate the streak row to this guild
-            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, userId, fallback.count, fallback.last_date);
-            streakData = { guildId, userId, count: fallback.count, last_date: fallback.last_date };
-        } else {
-            db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 1, ?)').run(guildId, userId, today);
-            streakData = { count: 1, last_date: today }; streakActivatedToday = true;
-        }
+        db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 1, ?)').run(guildId, userId, today);
+        streakData = { count: 1, last_date: today }; streakActivatedToday = true;
     }
     
     if (!streakActivatedToday && streakData.last_date !== today) {

@@ -154,15 +154,11 @@ async function refreshMemberNick(member) {
         const streakAuto = getSetting(guildId, 'streak_auto_nickname', '1');
         if (streakAuto === '1' || streakAuto === 'true') {
             const minStreak = parseInt(getSetting(guildId, 'streak_min_days', '3')) || 3;
-            // Try guild-specific first, then fallback to any match for this user
+            // Streak is per-guild
             let sc = 0;
             try {
                 const row = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
-                if (row) { sc = row.count || 0; }
-                else {
-                    const fallback = db.prepare('SELECT count FROM streaks WHERE userId = ? ORDER BY count DESC LIMIT 1').get(userId);
-                    if (fallback) sc = fallback.count || 0;
-                }
+                if (row) sc = row.count || 0;
             } catch (_) {}
             if (sc >= minStreak) streakSuffix = ` ${streakEmoji}${sc}`;
         }
