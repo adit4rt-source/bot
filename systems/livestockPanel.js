@@ -8,10 +8,26 @@ async function tempReply(interaction, content) {
     const msg = await interaction.reply({ content, fetchReply: true });
     setTimeout(() => msg.delete().catch(() => {}), 4000);
 }
-const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES } = require('../data/livestock');
+const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES, LIVESTOCK_DISEASES } = require('../data/livestock');
 const { FARM_RECIPES } = require('../data/farming');
 const { getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots, getAnimals, collectProducts, feedAnimals, sellAllProducts, getProductInventory } = require('./livestock');
 const { getSeasonDisplay, getSeasonProductionMultiplier } = require('./farmSeason');
+const panelRefresh = require('./panelRefresh');
+
+// Build a short label for a sick animal showing its disease + production penalty.
+function diseaseLabel(animal) {
+    const dz = LIVESTOCK_DISEASES.find(d => d.id === animal.disease);
+    if (!dz) return 'SAKIT!';
+    return `${dz.emoji} ${dz.name} (-${Math.round(dz.prodReduction * 100)}%)`;
+}
+
+// Auto-refresh helpers: keep a coop/barn panel message live so progress bars advance.
+function trackCoop(interaction, userId) {
+    try { panelRefresh.track(interaction.message, () => buildCoopPanel(userId, interaction.user.username)); } catch (e) {}
+}
+function trackBarn(interaction, userId) {
+    try { panelRefresh.track(interaction.message, () => buildBarnPanel(userId, interaction.user.username)); } catch (e) {}
+}
 
 // ============ BUILD: Coop Panel (Kandang Ayam) ============
 function buildCoopPanel(userId, username) {
@@ -44,7 +60,7 @@ function buildCoopPanel(userId, username) {
 
         if (chicken.status === 'sick') {
             const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
         } else if (isReady) {
             const name = chicken.name || 'Ayam';
             animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
@@ -138,7 +154,7 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
         if (cow.status === 'sick') {
-            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`;
         } else if (isReady) {
             cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
@@ -163,7 +179,7 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
         if (s.status === 'sick') {
-            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`;
         } else if (isReady) {
             sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
@@ -320,7 +336,9 @@ async function handleLivestockButton(interaction) {
 
     // === COOP ACTIONS ===
     if (customId === `farm_coop_${userId}` || customId === `farm_coop_refresh_${userId}`) {
-        return interaction.update(buildCoopPanel(userId, interaction.user.username));
+        await interaction.update(buildCoopPanel(userId, interaction.user.username));
+        trackCoop(interaction, userId);
+        return;
     }
     if (customId === `farm_coop_collect_${userId}`) {
         const result = collectProducts(userId, 'chicken');
@@ -328,6 +346,7 @@ async function handleLivestockButton(interaction) {
         const reply = await interaction.reply({ content: `🥚 Collected **${result.totalCollected}** telur! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        trackCoop(interaction, userId);
         return;
     }
     if (customId === `farm_coop_feed_${userId}`) {
@@ -336,6 +355,7 @@ async function handleLivestockButton(interaction) {
         const reply = await interaction.reply({ content: `🌾 Berhasil memberi makan **${result.fed}** ayam! (Pakan: -${result.feedUsed})`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        trackCoop(interaction, userId);
         return;
     }
     if (customId === `farm_coop_heal_${userId}`) {
@@ -350,6 +370,7 @@ async function handleLivestockButton(interaction) {
             const reply = await interaction.reply({ content: `💊 Menyembuhkan **${result.healed}** ayam!`, fetchReply: true });
             setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
             setTimeout(() => { interaction.message.edit(buildCoopPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+            trackCoop(interaction, userId);
             return;
         }
         if (starvingOnes.length > 0) {
@@ -524,7 +545,9 @@ async function handleLivestockButton(interaction) {
 
     // === BARN ACTIONS ===
     if (customId === `farm_barn_${userId}` || customId === `farm_barn_refresh_${userId}`) {
-        return interaction.update(buildBarnPanel(userId, interaction.user.username));
+        await interaction.update(buildBarnPanel(userId, interaction.user.username));
+        trackBarn(interaction, userId);
+        return;
     }
     if (customId === `farm_barn_milk_${userId}`) {
         const result = collectProducts(userId, 'cow');
@@ -532,6 +555,7 @@ async function handleLivestockButton(interaction) {
         const reply = await interaction.reply({ content: `🥛 Collected **${result.totalCollected}** susu! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        trackBarn(interaction, userId);
         return;
     }
     if (customId === `farm_barn_shear_${userId}`) {
@@ -540,6 +564,7 @@ async function handleLivestockButton(interaction) {
         const reply = await interaction.reply({ content: `🧶 Collected **${result.totalCollected}** bulu! (+${result.totalExp} EXP)`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        trackBarn(interaction, userId);
         return;
     }
     if (customId === `farm_barn_feed_${userId}`) {
@@ -552,6 +577,7 @@ async function handleLivestockButton(interaction) {
         const reply = await interaction.reply({ content: `🌾 ${msgs.join(' | ')}`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
         setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+        trackBarn(interaction, userId);
         return;
     }
     if (customId === `farm_barn_heal_${userId}`) {
@@ -561,12 +587,27 @@ async function handleLivestockButton(interaction) {
         const starvingOnes = allBarn.filter(a => a.status !== 'sick' && getHungerPercent(a) <= 0);
         
         if (sickOnes.length > 0) {
-            const cowResult = healAll(userId, 'cow');
-            const sheepResult = healAll(userId, 'sheep');
-            const healed = (cowResult.healed || 0) + (sheepResult.healed || 0);
-            const reply = await interaction.reply({ content: `💊 Menyembuhkan **${healed}** hewan!`, fetchReply: true });
+            // Only heal the species that actually has sick animals, and surface the
+            // real reason (e.g. missing medicine) instead of silently reporting "0".
+            const sickCows = allBarn.filter(a => a.animalType === 'cow' && a.status === 'sick');
+            const sickSheep = allBarn.filter(a => a.animalType === 'sheep' && a.status === 'sick');
+            const cowResult = sickCows.length > 0 ? healAll(userId, 'cow') : null;
+            const sheepResult = sickSheep.length > 0 ? healAll(userId, 'sheep') : null;
+            const healed = ((cowResult && cowResult.healed) || 0) + ((sheepResult && sheepResult.healed) || 0);
+            if (healed === 0) {
+                const errMsg = (cowResult && cowResult.error) || (sheepResult && sheepResult.error) || 'Gagal menyembuhkan hewan.';
+                return interaction.reply({ content: `❌ ${errMsg}`, ephemeral: true });
+            }
+            const healedParts = [];
+            if (cowResult && cowResult.healed) healedParts.push(`🐄 ${cowResult.healed} sapi`);
+            if (sheepResult && sheepResult.healed) healedParts.push(`🐑 ${sheepResult.healed} domba`);
+            // If one species healed but the other failed (e.g. no medicine), note it.
+            const failNote = (cowResult && cowResult.error) ? ` (⚠️ ${cowResult.error})`
+                : (sheepResult && sheepResult.error) ? ` (⚠️ ${sheepResult.error})` : '';
+            const reply = await interaction.reply({ content: `💊 Menyembuhkan ${healedParts.join(' & ')}!${failNote}`, fetchReply: true });
             setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
             setTimeout(() => { interaction.message.edit(buildBarnPanel(userId, interaction.user.username)).catch(() => {}); }, 1500);
+            trackBarn(interaction, userId);
             return;
         }
         if (starvingOnes.length > 0) {

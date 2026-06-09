@@ -12,6 +12,7 @@ const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, ge
 const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
 const { getPetData } = require('./pets');
 const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
+const panelRefresh = require('./panelRefresh');
 const state = require('../state');
 const { fishCooldowns } = state;
 const ui = require('./ui');
@@ -277,19 +278,29 @@ async function handleFarmButton(interaction) {
         return interaction.reply({ content: '❌ Ini bukan panel farm kamu!', ephemeral: true });
     }
 
+    // Auto-refresh: every entry first stops refreshing this message; progress panels
+    // below re-register it. Navigating to a non-progress view simply leaves it stopped.
+    if (interaction.message) panelRefresh.untrack(interaction.message.id);
+
     const userData = getOrCreateUser(guildId, userId);
 
     // === HUB NAVIGATION (from main farm panel) ===
     if (customId === `farm_crops_${userId}`) {
-        return interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        await interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildFarmPanel(guildId, userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_coop_${userId}`) {
         const { buildCoopPanel } = require('./livestockPanel');
-        return interaction.update(buildCoopPanel(userId, interaction.user.username));
+        await interaction.update(buildCoopPanel(userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildCoopPanel(userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_barn_${userId}`) {
         const { buildBarnPanel } = require('./livestockPanel');
-        return interaction.update(buildBarnPanel(userId, interaction.user.username));
+        await interaction.update(buildBarnPanel(userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildBarnPanel(userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_allcraft_${userId}`) {
         const { buildCraftingPanel } = require('./livestockPanel');
@@ -425,8 +436,9 @@ async function handleFarmButton(interaction) {
 
     // === BACK TO MAIN PANEL ===
     if (action === 'back' || action === 'refresh') {
-        const panel = buildFarmPanel(guildId, userId, interaction.user.username);
-        return interaction.update(panel);
+        await interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildFarmPanel(guildId, userId, interaction.user.username));
+        return;
     }
 
     // === PLANT (show seed select menu) ===
@@ -601,16 +613,29 @@ async function handleFarmButton(interaction) {
             const growTime = crop.time * (1 - fert.speedBonus) * 60000;
             
             if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
+                // Pest damage accrued since planting (applied by the reminder tick).
+                let pestEffect = { yieldMult: 1, stolenItems: 0, isDead: false };
+                try { pestEffect = require('./farmWeather').getPestHarvestEffect(guildId, userId, plot.id); } catch (e) {}
+
                 // Weather death check (stormy/drought can kill at harvest)
                 if (weatherDeathChance > 0 && Math.random() < weatherDeathChance) {
                     harvestDesc += `> ☠️ ~~${crop.emoji} ${crop.name}~~ — *mati karena cuaca!*\n`;
                     db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
+                    continue;
+                }
+
+                // Pest death (tikus sawah) — crop is destroyed, harvest fails for this plot.
+                if (pestEffect.isDead) {
+                    harvestDesc += `> 🐀 ~~${crop.emoji} ${crop.name}~~ — *dimakan hama (gagal panen)!*\n`;
+                    db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
                     continue;
                 }
 
                 // Calculate yield with all bonuses
                 const rotationBonus = getRotationBonus(guildId, userId, plot.id, crop.id);
-                const qty = calculateHarvestYield(crop, {
+                let qty = calculateHarvestYield(crop, {
                     weatherYieldMult,
                     fertYieldBonus: fert.yieldBonus,
                     seedLevel,
@@ -618,6 +643,13 @@ async function handleFarmButton(interaction) {
                     petFarmBonus,
                     toolBonus: getFarmToolYieldBonus(guildId, userId)
                 });
+
+                // Apply pest yield reduction + theft (ulat/belalang/jamur reduce, burung steals)
+                let pestNote = '';
+                if (pestEffect.yieldMult < 1 || pestEffect.stolenItems > 0) {
+                    qty = Math.max(0, Math.round(qty * pestEffect.yieldMult) - (pestEffect.stolenItems || 0));
+                    pestNote = ' 🐛';
+                }
 
                 // Roll mutation!
                 const mutation = rollMutation(guildId, userId, seedLevel);
@@ -638,13 +670,14 @@ async function handleFarmButton(interaction) {
                     mutationDesc += `> ${mutation.emoji} **${mutation.prefix} ${crop.name}!** (+🪙 ${mutationMoney.toLocaleString('id-ID')})\n`;
                     harvestDesc += `> ${crop.emoji} ${crop.name} x${qty} ${mutation.emoji} **MUTASI!**\n`;
                 } else {
-                    harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}${rotationBonus > 0 ? ' 🔄' : ''}\n`;
+                    harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}${rotationBonus > 0 ? ' 🔄' : ''}${pestNote}\n`;
                 }
 
                 // Update rotation tracking
                 updateRotation(guildId, userId, plot.id, crop.id);
 
                 harvested++; totalItems += qty;
+                try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
                 db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
             }
         }
@@ -652,6 +685,7 @@ async function handleFarmButton(interaction) {
         const deadPlots = plots.filter(p => p.status === 'dead');
         let deadMsg = '';
         if (deadPlots.length > 0) {
+            for (const dp of deadPlots) { try { require('./farmWeather').resolvePlotPests(guildId, userId, dp.id); } catch (e) {} }
             deleteDeadFarmPlots(guildId, userId);
             deadMsg = `\n🗑️ **${deadPlots.length} tanaman mati** dihapus.`;
         }

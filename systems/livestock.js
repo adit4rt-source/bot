@@ -1,7 +1,7 @@
 // systems/livestock.js — Livestock Logic (Kandang Ayam, Sapi, Domba)
 const { db, getOrCreateUser, getItemCount, removeItem } = require('../database');
-const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, getQualityChance, PRODUCT_QUALITY, LIVESTOCK_PESTS } = require('../data/livestock');
-const { getSeasonProductionMultiplier, getSeasonSickChance, getSeasonPestChance, getSeasonFeedMultiplier } = require('./farmSeason');
+const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, getQualityChance, PRODUCT_QUALITY, LIVESTOCK_PESTS, LIVESTOCK_DISEASES } = require('../data/livestock');
+const { getSeasonProductionMultiplier, getSeasonSickChance, getSeasonPestChance, getSeasonFeedMultiplier, getSeasonWabahChance, getTodaySeason } = require('./farmSeason');
 
 // ==================== DATABASE SETUP ====================
 db.exec(`CREATE TABLE IF NOT EXISTS livestock (
@@ -23,6 +23,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS livestock (
 try { db.exec(`ALTER TABLE livestock ADD COLUMN diesAt INTEGER`); } catch(e) {}
 try { db.exec(`ALTER TABLE livestock ADD COLUMN name TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE livestock ADD COLUMN rarity TEXT DEFAULT 'normal'`); } catch(e) {}
+try { db.exec(`ALTER TABLE livestock ADD COLUMN disease TEXT`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS livestock_data (
     userId TEXT,
@@ -158,6 +159,54 @@ function upgradeBarnLevel(userId) {
     return { success: true, newLevel: currentLevel + 1, name: nextLevel.name, slots: nextLevel.slots };
 }
 
+// ==================== DISEASE & PEST HELPERS ====================
+// Pick a season-appropriate disease for an animal type. Severe diseases (wabah) are
+// reserved for the winter wabah event and never assigned here.
+function pickDisease(animalType) {
+    const season = getTodaySeason();
+    const candidates = LIVESTOCK_DISEASES.filter(d =>
+        d.affects.includes(animalType) &&
+        d.severity !== 'severe' &&
+        (!d.season || d.season === season.id)
+    );
+    if (candidates.length === 0) return null;
+    // Prefer a disease specific to the current season when one exists.
+    const seasonal = candidates.filter(d => d.season === season.id);
+    const pool = seasonal.length > 0 ? seasonal : candidates;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Apply a livestock pest's effect. Returns a small result object describing what happened.
+// - steal_product: deletes collected normal eggs from storage
+// - kill_animal: kills a random affected animal unless the coop/barn level protects it
+//   (fox needs coop Lv.3+, wolf needs barn Lv.4+)
+// - reduce_quality: knocks one affected animal down an evolution tier (kutu)
+function applyLivestockPest(userId, pest) {
+    if (!pest) return { none: true };
+    const alive = getAllAnimals(userId).filter(a => a.status !== 'dead');
+    const affected = alive.filter(a => pest.affects.includes(a.animalType));
+    if (affected.length === 0) return { none: true };
+
+    if (pest.damage === 'steal_product') {
+        db.prepare("DELETE FROM farm_storage WHERE userId = ? AND itemId = 'egg_normal' AND quantity > 0").run(userId);
+        return { stole: true };
+    }
+    if (pest.damage === 'kill_animal') {
+        const target = affected[Math.floor(Math.random() * affected.length)];
+        const protectedChicken = target.animalType === 'chicken' && getCoopLevel(userId) >= 3;
+        const protectedSheep = target.animalType === 'sheep' && getBarnLevel(userId) >= 4;
+        if (protectedChicken || protectedSheep) return { prevented: true, animalType: target.animalType };
+        db.prepare("UPDATE livestock SET status = 'dead' WHERE id = ?").run(target.id);
+        return { killed: true, animalType: target.animalType, animalId: target.id };
+    }
+    if (pest.damage === 'reduce_quality') {
+        const target = affected[Math.floor(Math.random() * affected.length)];
+        if (target.tier > 0) db.prepare('UPDATE livestock SET tier = tier - 1 WHERE id = ?').run(target.id);
+        return { reducedQuality: true, animalType: target.animalType, animalId: target.id };
+    }
+    return { none: true };
+}
+
 // ==================== PRODUCTION ====================
 function collectProducts(userId, animalType) {
     const animals = getAnimals(userId, animalType).filter(a => a.status !== 'dead');
@@ -172,10 +221,16 @@ function collectProducts(userId, animalType) {
     const products = {};
 
     for (const animal of animals) {
-        if (animal.status === 'sick') continue;
         // Skip hungry animals (hunger 0% = no production)
         const hunger = getHungerPercent(animal);
         if (hunger <= 0) continue;
+
+        // Sick animals still produce, but at a reduced rate based on their disease.
+        let diseaseReduction = 0;
+        if (animal.status === 'sick') {
+            const disease = LIVESTOCK_DISEASES.find(d => d.id === animal.disease);
+            diseaseReduction = disease ? disease.prodReduction : 0.5;
+        }
 
         // Calculate produce time based on level + tier
         const produceTime = getProduceTime(animalType, animal.level, animal.tier) / seasonMult;
@@ -191,6 +246,11 @@ function collectProducts(userId, animalType) {
         // Rarity bonus: Golden = 2x, Diamond = 3x yield
         if (animal.rarity === 'golden') yieldCount *= 2;
         else if (animal.rarity === 'diamond') yieldCount *= 3;
+
+        // Disease cuts production (but a sick animal that produces still yields >= 1)
+        if (diseaseReduction > 0) {
+            yieldCount = Math.max(1, Math.floor(yieldCount * (1 - diseaseReduction)));
+        }
 
         // Roll quality for each product
         const qualityChances = getQualityChance(animal.tier);
@@ -329,7 +389,7 @@ function healAll(userId, animalType) {
 
     removeItem(null, userId, animalDef.medicineItem, sickAnimals.length);
     for (const animal of sickAnimals) {
-        db.prepare('UPDATE livestock SET status = ?, sickSince = NULL WHERE id = ?').run('healthy', animal.id);
+        db.prepare('UPDATE livestock SET status = ?, sickSince = NULL, disease = NULL WHERE id = ?').run('healthy', animal.id);
     }
 
     return { success: true, healed: sickAnimals.length };
@@ -373,7 +433,7 @@ function parseLastFed(lastFed) {
 function processDailyLivestock(userId) {
     const animals = getAllAnimals(userId).filter(a => a.status !== 'dead');
     const sickChance = getSeasonSickChance();
-    const results = { sick: 0, died: 0, pests: [] };
+    const results = { sick: 0, died: 0, wabah: 0, pests: [] };
 
     for (const animal of animals) {
         const animalDef = ANIMALS[animal.animalType];
@@ -388,12 +448,14 @@ function processDailyLivestock(userId) {
         if (animal.status === 'healthy') {
             // Not fed for daysToSick → becomes sick
             if (daysSinceLastFed >= animalDef.daysToSick) {
-                db.prepare('UPDATE livestock SET status = ?, sickSince = ? WHERE id = ?').run('sick', Date.now(), animal.id);
+                const dz = pickDisease(animal.animalType);
+                db.prepare('UPDATE livestock SET status = ?, sickSince = ?, disease = ? WHERE id = ?').run('sick', Date.now(), dz ? dz.id : null, animal.id);
                 results.sick++;
             }
             // Random season sickness
             else if (Math.random() < sickChance) {
-                db.prepare('UPDATE livestock SET status = ?, sickSince = ? WHERE id = ?').run('sick', Date.now(), animal.id);
+                const dz = pickDisease(animal.animalType);
+                db.prepare('UPDATE livestock SET status = ?, sickSince = ?, disease = ? WHERE id = ?').run('sick', Date.now(), dz ? dz.id : null, animal.id);
                 results.sick++;
             }
         } else if (animal.status === 'sick') {
@@ -406,21 +468,25 @@ function processDailyLivestock(userId) {
         }
     }
 
+    // Wabah (winter only): a severe outbreak infects every animal in the kandang at once.
+    const wabahChance = getSeasonWabahChance();
+    if (wabahChance > 0 && Math.random() < wabahChance) {
+        const toInfect = getAllAnimals(userId).filter(a => a.status !== 'dead');
+        for (const a of toInfect) {
+            db.prepare("UPDATE livestock SET status = 'sick', sickSince = COALESCE(sickSince, ?), disease = 'wabah' WHERE id = ?").run(Date.now(), a.id);
+        }
+        results.wabah = toInfect.length;
+    }
+
     // Pest check
     const pestChance = getSeasonPestChance();
     if (Math.random() < pestChance) {
-        const possiblePests = LIVESTOCK_PESTS.filter(p => {
-            const userAnimals = animals.map(a => a.animalType);
-            return p.affects.some(t => userAnimals.includes(t));
-        });
+        const userAnimals = animals.map(a => a.animalType);
+        const possiblePests = LIVESTOCK_PESTS.filter(p => p.affects.some(t => userAnimals.includes(t)));
         if (possiblePests.length > 0) {
             const pest = possiblePests[Math.floor(Math.random() * possiblePests.length)];
             results.pests.push(pest);
-            // Apply pest damage
-            if (pest.damage === 'steal_product') {
-                // Steal collected normal eggs (products live in farm_storage)
-                db.prepare("DELETE FROM farm_storage WHERE userId = ? AND itemId = 'egg_normal' AND quantity > 0").run(userId);
-            }
+            applyLivestockPest(userId, pest);
         }
     }
 
@@ -486,6 +552,7 @@ module.exports = {
     collectProducts, sellAllProducts,
     feedAnimals, getHungerPercent, healAll,
     evolveAnimal, processDailyLivestock,
+    pickDisease, applyLivestockPest,
     getProductInventory, getProductCount,
     buryAllDead,
     runDailyTickForAll, startLivestockDailySchedule,
