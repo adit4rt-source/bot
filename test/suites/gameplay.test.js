@@ -219,18 +219,19 @@ module.exports = function register() {
   });
   test('farm yield: additive bonuses are capped at +100% (weather stays separate)', () => {
     const crop = { minYield: 2, maxYield: 2, time: 1 };
-    // bonusSum = fert 0.5 + seedLevel3 (1.0) = 1.5 -> capped to 1.0 -> base 2 * (1+1.0) = 4 (NOT 5)
-    const y = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.5, seedLevel: 3 });
+    // bonusSum = fert 0.8 + tool 0.7 = 1.5 -> capped to 1.0 -> base 2 * (1+1.0) = 4 (NOT 5)
+    const y = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.8, toolBonus: 0.7 });
     if (y !== 4) throw new Error('expected capped yield 4 (bonusSum 1.5 -> 1.0), got ' + y);
     // weather multiplies OUTSIDE the cap: 4 * 1.5 = 6
-    const yw = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.5, seedLevel: 3, weatherYieldMult: 1.5 });
+    const yw = farmMut.calculateHarvestYield(crop, { fertYieldBonus: 0.8, toolBonus: 0.7, weatherYieldMult: 1.5 });
     if (yw !== 6) throw new Error('expected 6 with weather x1.5 applied outside cap, got ' + yw);
   });
-  test('seed upgrade: seedLevel raises yield (0/+25%/+100%)', () => {
-    const crop = { minYield: 4, maxYield: 4, time: 1 };
-    if (farmMut.calculateHarvestYield(crop, { seedLevel: 0 }) !== 4) throw new Error('lvl0 should be 4');
-    if (farmMut.calculateHarvestYield(crop, { seedLevel: 1 }) !== 5) throw new Error('lvl1 (+25%) should be 5');
-    if (farmMut.calculateHarvestYield(crop, { seedLevel: 3 }) !== 8) throw new Error('lvl3 (+100%) should be 8');
+  test('seed upgrade: seedLevel raises yield (0/+10%/+20%/+35%)', () => {
+    const crop = { minYield: 10, maxYield: 10, time: 1 };
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 0 }) !== 10) throw new Error('lvl0 should be 10');
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 1 }) !== 11) throw new Error('lvl1 (+10%) should be 11');
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 2 }) !== 12) throw new Error('lvl2 (+20%) should be 12');
+    if (farmMut.calculateHarvestYield(crop, { seedLevel: 3 }) !== 13) throw new Error('lvl3 (+35%) should be 13');
   });
   test('prestige crop sells for its sellPrice (regression: used to sell for 🪙0)', () => {
     const { addStorage } = botRequire('systems/farming.js');

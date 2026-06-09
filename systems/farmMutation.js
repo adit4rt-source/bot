@@ -29,11 +29,14 @@ const PRESTIGE_CROPS = [
 ];
 
 // ==================== SEED UPGRADE TIERS ====================
+// Balance: seed is a MODERATE yield contributor (capped system fills +100% from
+// many sources), so its identity is the unique +mutation-chance boost. Costs are
+// meaningful because the upgrade is permanent per-user (buy once, applies forever).
 const SEED_UPGRADES = [
     { level: 0, name: 'Normal Seed', emoji: '🌱', yieldBonus: 0, mutationBonus: 0, cost: 0 },
-    { level: 1, name: 'Enhanced Seed', emoji: '🌱✨', yieldBonus: 0.25, mutationBonus: 0.02, cost: 500 },
-    { level: 2, name: 'Premium Seed', emoji: '🌱💎', yieldBonus: 0.50, mutationBonus: 0.05, cost: 2000 },
-    { level: 3, name: 'Legendary Seed', emoji: '🌱🌟', yieldBonus: 1.0, mutationBonus: 0.10, cost: 8000 },
+    { level: 1, name: 'Enhanced Seed', emoji: '🌱✨', yieldBonus: 0.10, mutationBonus: 0.02, cost: 5000 },
+    { level: 2, name: 'Premium Seed', emoji: '🌱💎', yieldBonus: 0.20, mutationBonus: 0.05, cost: 25000 },
+    { level: 3, name: 'Legendary Seed', emoji: '🌱🌟', yieldBonus: 0.35, mutationBonus: 0.10, cost: 100000 },
 ];
 
 // ==================== DATABASE ====================
