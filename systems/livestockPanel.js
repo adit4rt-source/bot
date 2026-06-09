@@ -8,10 +8,17 @@ async function tempReply(interaction, content) {
     const msg = await interaction.reply({ content, fetchReply: true });
     setTimeout(() => msg.delete().catch(() => {}), 4000);
 }
-const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES } = require('../data/livestock');
+const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES, LIVESTOCK_DISEASES } = require('../data/livestock');
 const { FARM_RECIPES } = require('../data/farming');
 const { getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots, getAnimals, collectProducts, feedAnimals, sellAllProducts, getProductInventory } = require('./livestock');
 const { getSeasonDisplay, getSeasonProductionMultiplier } = require('./farmSeason');
+
+// Build a short label for a sick animal showing its disease + production penalty.
+function diseaseLabel(animal) {
+    const dz = LIVESTOCK_DISEASES.find(d => d.id === animal.disease);
+    if (!dz) return 'SAKIT!';
+    return `${dz.emoji} ${dz.name} (-${Math.round(dz.prodReduction * 100)}%)`;
+}
 
 // ============ BUILD: Coop Panel (Kandang Ayam) ============
 function buildCoopPanel(userId, username) {
@@ -44,7 +51,7 @@ function buildCoopPanel(userId, username) {
 
         if (chicken.status === 'sick') {
             const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
         } else if (isReady) {
             const name = chicken.name || 'Ayam';
             animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
@@ -138,7 +145,7 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
         if (cow.status === 'sick') {
-            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`;
         } else if (isReady) {
             cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
@@ -163,7 +170,7 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
         if (s.status === 'sick') {
-            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` SAKIT!${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`;
         } else if (isReady) {
             sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {

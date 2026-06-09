@@ -289,10 +289,69 @@ module.exports = function register() {
     const future = Date.now() + 30 * 24 * 60 * 60 * 1000;
     db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 1, 0, 0, 'healthy', ?, ?, ?, ?, 'normal')")
       .run(u, sixDaysAgo, Date.now(), Date.now(), future);
-    const res = live.processDailyLivestock(u);
+    // random=0 keeps the (now wired) wabah/pest rolls deterministic: the pest picked is
+    // index 0 (rat = harmless steal), never the fox that would kill the chicken.
+    const _r = Math.random; let res;
+    try { Math.random = () => 0; res = live.processDailyLivestock(u); } finally { Math.random = _r; }
     const after = db.db.prepare('SELECT status FROM livestock WHERE userId = ?').get(u);
     if (after.status !== 'sick') throw new Error('expected starved chicken to become sick, got ' + after.status);
     if (res.sick < 1) throw new Error('expected results.sick >= 1, got ' + res.sick);
+  });
+
+  test('crop pest: harvest effect reduces yield, then resolvePlotPests clears it', () => {
+    const fw = botRequire('systems/farmWeather.js');
+    const g = 'PESTG', u = '300000000000000211', plot = 9001;
+    db.db.prepare('DELETE FROM farm_pests WHERE guildId = ? AND userId = ?').run(g, u);
+    fw.applyPest(g, u, plot, 'ulat'); // ulat = yield -30%
+    const eff = fw.getPestHarvestEffect(g, u, plot);
+    if (Math.abs(eff.yieldMult - 0.7) > 1e-9) throw new Error('expected yieldMult 0.7 from ulat, got ' + eff.yieldMult);
+    if (fw.getActivePests(g, u).filter(p => p.plotId === plot).length !== 1) throw new Error('pest should be active before resolve');
+    const cleared = fw.resolvePlotPests(g, u, plot);
+    if (cleared < 1) throw new Error('expected resolvePlotPests to clear >=1 record, got ' + cleared);
+    if (fw.getActivePests(g, u).filter(p => p.plotId === plot).length !== 0) throw new Error('pest should be cleared after resolvePlotPests');
+  });
+
+  test('livestock: sick animal still produces but at a reduced rate (prodReduction)', () => {
+    const live = botRequire('systems/livestock.js');
+    const uSick = '300000000000000212', uWell = '300000000000000213';
+    for (const u of [uSick, uWell]) {
+      db.getOrCreateUser('LVG', u);
+      db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(u);
+      db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    }
+    const nowStr = String(Date.now());               // lastFed now -> hunger 100%
+    const past = Date.now() - 24 * 60 * 60 * 1000;    // lastCollect long ago -> ready
+    const future = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity, disease) VALUES (?, 'chicken', 1, 0, 0, 'sick', ?, ?, ?, ?, 'normal', 'flu')")
+      .run(uSick, nowStr, past, Date.now(), future);
+    db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 1, 0, 0, 'healthy', ?, ?, ?, ?, 'normal')")
+      .run(uWell, nowStr, past, Date.now(), future);
+    const _r = Math.random;
+    try {
+      Math.random = () => 0; // deterministic: tier0 chicken yieldRange [2,6] -> 2
+      const well = live.collectProducts(uWell, 'chicken');
+      const sick = live.collectProducts(uSick, 'chicken');
+      if (well.totalCollected !== 2) throw new Error('healthy chicken should yield 2, got ' + well.totalCollected);
+      if (sick.totalCollected !== 1) throw new Error('sick chicken (flu -50%) should yield 1, got ' + sick.totalCollected);
+      if (!(sick.totalCollected > 0 && sick.totalCollected < well.totalCollected)) throw new Error('sick must produce less than healthy but > 0');
+    } finally { Math.random = _r; }
+  });
+
+  test('livestock pest: fox kills an unprotected (coop Lv.1) chicken', () => {
+    const live = botRequire('systems/livestock.js');
+    const { LIVESTOCK_PESTS } = botRequire('data/livestock.js');
+    const u = '300000000000000214';
+    db.getOrCreateUser('LVG', u);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM livestock_data WHERE userId = ?').run(u); // coop level defaults to 1 (no protection)
+    const future = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 1, 0, 0, 'healthy', ?, ?, ?, ?, 'normal')")
+      .run(u, String(Date.now()), Date.now(), Date.now(), future);
+    const fox = LIVESTOCK_PESTS.find(p => p.id === 'fox_pest');
+    const res = live.applyLivestockPest(u, fox);
+    if (!res.killed) throw new Error('fox should kill an unprotected chicken, got ' + JSON.stringify(res));
+    const row = db.db.prepare("SELECT status FROM livestock WHERE userId = ?").get(u);
+    if (row.status !== 'dead') throw new Error('chicken should be dead after fox attack, got ' + row.status);
   });
 
   // ---- Profile card image ----

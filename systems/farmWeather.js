@@ -219,6 +219,15 @@ function rollPestAttack(guildId, userId, plotId) {
     const weather = getTodayWeather();
     const weatherMod = WEATHER_PEST_MODIFIER[weather.id] || 1.0;
 
+    // Season also influences pest pressure. Baseline is spring (pestChance 0.05 = x1.0);
+    // summer doubles pests, autumn/winter reduce them. Clamped to a sane range.
+    let seasonMod = 1.0;
+    try {
+        const { getSeasonPestChance } = require('./farmSeason');
+        const sc = getSeasonPestChance();
+        if (sc > 0) seasonMod = Math.max(0.3, Math.min(2.0, sc / 0.05));
+    } catch (e) {}
+
     // Check pest immunity (pesticide_shield active)
     try {
         const { getUserStat } = require('../database');
@@ -254,7 +263,7 @@ function rollPestAttack(guildId, userId, plotId) {
 
     // Roll for each pest type
     for (const pest of PEST_TYPES) {
-        const adjustedChance = pest.chance * weatherMod * (1 - protectionReduction);
+        const adjustedChance = pest.chance * weatherMod * seasonMod * (1 - protectionReduction);
         if (Math.random() < adjustedChance) {
             return pest; // This pest attacks!
         }
@@ -282,6 +291,16 @@ function resolvePest(guildId, userId, pestRecordId) {
         db.prepare('UPDATE farm_pests SET resolved = 1 WHERE id = ? AND guildId = ? AND userId = ?').run(pestRecordId, guildId, userId);
         return true;
     } catch(e) { return false; }
+}
+
+// ==================== RESOLVE ALL PESTS ON A PLOT (anti-orphan cleanup) ====================
+// Called when a plot is harvested or removed so its pest records don't linger and
+// keep counting toward the 5-pest cap (or attach to a future crop on the same plot).
+function resolvePlotPests(guildId, userId, plotId) {
+    try {
+        const r = db.prepare('UPDATE farm_pests SET resolved = 1 WHERE guildId = ? AND userId = ? AND plotId = ? AND resolved = 0').run(guildId, userId, plotId);
+        return r.changes || 0;
+    } catch(e) { return 0; }
 }
 
 // ==================== GET PEST EFFECT ON HARVEST ====================
@@ -350,5 +369,6 @@ module.exports = {
     getActivePests,
     applyPest,
     resolvePest,
+    resolvePlotPests,
     getPestHarvestEffect
 };
