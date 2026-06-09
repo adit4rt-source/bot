@@ -54,9 +54,10 @@ function getFarmToolYieldBonus(guildId, userId) {
 
 // ==================== GREENHOUSE ====================
 const GREENHOUSE_COSTS = [
-    { level: 1, cost: 150000, slots: 4 },
-    { level: 2, cost: 400000, slots: 6 },
-    { level: 3, cost: 1000000, slots: 8 },
+    { level: 1, cost: 150000, slots: 6 },
+    { level: 2, cost: 300000, slots: 9 },
+    { level: 3, cost: 700000, slots: 12 },
+    { level: 4, cost: 1200000, slots: 15 },
 ];
 
 function getGreenhouseLevel(userId) {
@@ -67,7 +68,8 @@ function getGreenhouseLevel(userId) {
 function getGreenhouseSlots(userId) {
     const level = getGreenhouseLevel(userId);
     if (level === 0) return 0;
-    return 2 + level * 2; // Lv1=4, Lv2=6, Lv3=8
+    const tier = GREENHOUSE_COSTS.find(c => c.level === level);
+    return tier ? tier.slots : 0;
 }
 
 function upgradeGreenhouse(userId) {
