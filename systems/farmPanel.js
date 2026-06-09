@@ -656,6 +656,38 @@ async function handleFarmButton(interaction) {
         return;
     }
 
+    // === PLANT QUANTITY BUTTON (plant X seeds at once) ===
+    if (action === 'plantqty') {
+        // Format: farm_plantqty_cropId_qty_userId
+        const cropId = parts[2];
+        const qty = parseInt(parts[3]);
+        let crop = FARM_CROPS.find(c => c.id === cropId) || PRESTIGE_CROPS.find(c => c.id === cropId);
+        if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+        const owned = getSeedCount(guildId, userId, cropId);
+        const maxSlots = getFarmSlots(guildId, userId);
+        const plots = getPlots(guildId, userId);
+        const available = maxSlots - plots.length;
+        const toPlant = Math.min(qty, owned, available);
+        if (toPlant <= 0) return interaction.reply({ content: '❌ Tidak bisa tanam! (bibit habis atau lahan penuh)', ephemeral: true });
+
+        for (let i = 0; i < toPlant; i++) {
+            removeSeed(guildId, userId, cropId, 1);
+            insertFarmPlot(guildId, userId, cropId, Date.now(), Date.now());
+        }
+        const sisa = getSeedCount(guildId, userId, cropId);
+        const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
+        const isPrestige = crop.tier === 'Prestige';
+        const { getCropSeasonEffect } = require('./farmSeason');
+        const se = getCropSeasonEffect(crop);
+        const embed = new EmbedBuilder().setColor(isPrestige ? '#FFD700' : '#2ECC71').setTitle(`🌱 ${crop.emoji} ${crop.name} x${toPlant} Ditanam!${isPrestige ? ' 🏆' : ''}`)
+            .setDescription(`> Jumlah: **${toPlant} bibit** ditanam!\n> Siap panen dalam **${timeDisplay}**\n> 📦 Sisa bibit: **${sisa}**\n> ${se.label}\n${isPrestige ? '\n> 🏆 *Prestige crop — jaga siram agar tidak mati!*' : ''}`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Tanam Lagi').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
     // === PLANT (show seed select menu) ===
     if (action === 'plant') {
         const maxSlots = getFarmSlots(guildId, userId);
@@ -1247,24 +1279,32 @@ async function handleFarmSelectMenu(interaction) {
         const available = maxSlots - plots.length;
         if (available <= 0) return interaction.reply({ content: '❌ Lahan penuh!', ephemeral: true });
 
-        // Plant as many as possible (min of owned seeds and available slots)
-        const toPlant = Math.min(owned, available);
-        for (let i = 0; i < toPlant; i++) {
-            removeSeed(guildId, userId, cropId, 1);
-            insertFarmPlot(guildId, userId, cropId, Date.now(), Date.now());
-        }
-        const sisa = getSeedCount(guildId, userId, cropId);
-        const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
-        const isPrestige = crop.tier === 'Prestige';
+        const maxPlant = Math.min(owned, available);
         const { getCropSeasonEffect } = require('./farmSeason');
         const se = getCropSeasonEffect(crop);
-        const embed = new EmbedBuilder().setColor(isPrestige ? '#FFD700' : '#2ECC71').setTitle(`🌱 ${crop.emoji} ${crop.name} x${toPlant} Ditanam!${isPrestige ? ' 🏆' : ''}`)
-            .setDescription(`> Jumlah: **${toPlant} bibit** ditanam sekaligus!\n> Siap panen dalam **${timeDisplay}**\n> 📦 Sisa bibit: **${sisa}**\n> ${se.label}\n${isPrestige ? '\n> 🏆 *Prestige crop — jaga siram agar tidak mati!*' : ''}`);
-        const backRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Tanam Lagi').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
+
+        // Show quantity options
+        const embed = new EmbedBuilder().setColor('#3498DB').setTitle(`🌱 Tanam ${crop.emoji} ${crop.name}`)
+            .setDescription(
+                `> 📦 Bibit dimiliki: **${owned}**\n` +
+                `> 🌾 Slot tersedia: **${available}**\n` +
+                `> ⏱️ Waktu tumbuh: **${timeDisplay}**\n` +
+                `> ${se.label}\n\n` +
+                `**Mau tanam berapa?**`
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_plantqty_${cropId}_1_${userId}`).setLabel('1').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`farm_plantqty_${cropId}_3_${userId}`).setLabel('3').setStyle(ButtonStyle.Secondary).setDisabled(maxPlant < 3),
+            new ButtonBuilder().setCustomId(`farm_plantqty_${cropId}_5_${userId}`).setLabel('5').setStyle(ButtonStyle.Secondary).setDisabled(maxPlant < 5),
+            new ButtonBuilder().setCustomId(`farm_plantqty_${cropId}_10_${userId}`).setLabel('10').setStyle(ButtonStyle.Primary).setDisabled(maxPlant < 10),
+            new ButtonBuilder().setCustomId(`farm_plantqty_${cropId}_${maxPlant}_${userId}`).setLabel(`Semua (${maxPlant})`).setStyle(ButtonStyle.Success)
         );
-        return interaction.update({ embeds: [embed], components: [backRow] });
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🔙 Batal').setStyle(ButtonStyle.Danger)
+        );
+        return interaction.update({ embeds: [embed], components: [row, row2] });
     }
 
     // === GREENHOUSE PLANT SEED SELECT ===
