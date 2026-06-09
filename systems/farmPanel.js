@@ -110,6 +110,16 @@ function buildFarmPanel(guildId, userId, username) {
         });
     }
 
+    // Season compatibility legend
+    const { getTodaySeason } = require('./farmSeason');
+    const currentSeason = getTodaySeason();
+    let seasonLegend = `\n**🌤️ Season: ${currentSeason.emoji} ${currentSeason.name}**\n`;
+    seasonLegend += `> 🌈 Peak = -20% waktu, +30% yield, +5% mutasi\n`;
+    seasonLegend += `> ✅ In = +20% yield\n`;
+    seasonLegend += `> ⚠️ Off = normal\n`;
+    seasonLegend += `> ❌ Wrong = **+50% waktu, -30% yield, 15% mati!**\n`;
+    seasonLegend += `> 🏠 Greenhouse = kebal penalty season\n`;
+
     const embed = new EmbedBuilder()
         .setTitle(ui.title('🌾', 'FARM', username))
         .setColor(readyCount > 0 ? ui.COLORS.economy : ui.COLORS.farming)
@@ -124,9 +134,10 @@ function buildFarmPanel(guildId, userId, username) {
                 (readyCount > 0 ? `🔔 **${readyCount} tanaman siap dipanen!**` : '🌱 *Tanaman masih tumbuh, sabar ya...*'),
                 (pestCount > 0 ? `🐛 **${pestCount} tanaman kena hama!** Segera pakai 🧴 Pestisida` : ''),
             ].filter(Boolean)) +
-            `\n📋 **Status Kebun:**\n${plotStatus}`
+            `\n📋 **Status Kebun:**\n${plotStatus}` +
+            seasonLegend
         )
-        .setFooter({ text: ui.footer('✅ Siap panen • 🌱 Tumbuh • 🥀 Layu (siram!) • ☠️ Mati • 🔄 Refresh') });
+        .setFooter({ text: ui.footer('✅ Siap panen • 🌱 Tumbuh • 🥀 Layu (siram!) • ☠️ Mati • 🏠 Greenhouse') });
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
@@ -957,12 +968,12 @@ async function handleFarmButton(interaction) {
         const cropsPage1 = FARM_CROPS.filter(c => ['Common', 'Uncommon', 'Rare'].includes(c.tier));
         const cropsPage2 = FARM_CROPS.filter(c => ['Epic', 'Legendary'].includes(c.tier));
         const seedMenu1 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed_${userId}`).setPlaceholder('🌱 Bibit Common/Uncommon/Rare...').setMinValues(1).setMaxValues(1);
-        cropsPage1.slice(0, 25).forEach(c => seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice}`)));
+        cropsPage1.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`)); });
 
         const components = [new ActionRowBuilder().addComponents(seedMenu1)];
         if (cropsPage2.length > 0) {
             const seedMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed2_${userId}`).setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
-            cropsPage2.slice(0, 25).forEach(c => seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice}`)));
+            cropsPage2.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`)); });
             components.push(new ActionRowBuilder().addComponents(seedMenu2));
         }
         // Prestige Crops menu
