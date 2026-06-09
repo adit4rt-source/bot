@@ -12,10 +12,10 @@ const { getWeatherMutationBonus } = require('./farmWeather');
 // elsewhere may quote higher "chance %" numbers — those are cosmetic hype, not
 // the real odds defined here.
 const MUTATION_TYPES = [
-    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 5, chance: 0.007, color: '#FFD700' },
-    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 8, chance: 0.002, color: '#B9F2FF' },
-    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 6, chance: 0.004, color: '#2C2F33' },
-    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 10, chance: 0.0006, color: '#FF69B4' },
+    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 5, chance: 0.010, color: '#FFD700' },
+    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 8, chance: 0.003, color: '#B9F2FF' },
+    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 6, chance: 0.005, color: '#2C2F33' },
+    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 10, chance: 0.001, color: '#FF69B4' },
 ];
 
 // Maximum money a single mutation can give (hard cap to prevent economy breaking)
