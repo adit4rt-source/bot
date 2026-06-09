@@ -1,10 +1,14 @@
-// systems/love.js — "Love" reactions (❤️ next to the name, like the 🔥 streak).
+// systems/love.js — Global "Love" system (like followers).
 //
 // A member earns a "love" when someone reacts ❤️ on their message. Each love is
-// UNIQUE per (lover -> loved) pair: one person can only ever give you +1 love, so
-// re-reacting (or reacting again later) never inflates the count. You also can't
-// love your own message. The count shown is the number of DISTINCT people who
-// loved you — i.e. "PekoID ❤️10" = 10 different people like Peko.
+// UNIQUE per (lover -> loved) pair GLOBALLY: one person can only ever give you
+// +1 love across ALL servers the bot is in. Re-reacting, reacting in a different
+// server, or reacting again later never inflates the count. You also can't love
+// your own message.
+//
+// Think of it like "followers" — the count shown is the number of DISTINCT people
+// who loved you across the entire bot network: "PekoID ❤️10" = 10 different people
+// like Peko, regardless of which server the love came from.
 //
 // The display lives both in /profile and (optionally) appended to the Discord
 // nickname next to the streak: "PekoID 🔥10 ❤️10". Because the streak system also
@@ -19,35 +23,33 @@
 
 const { db, getSetting } = require('../database');
 
-// Self-creating table (same pattern as systems/inviteTracker.js). Composite PK
-// enforces the "one love per relationship" uniqueness for free.
-db.exec(`CREATE TABLE IF NOT EXISTS loves (guildId TEXT, loverId TEXT, lovedId TEXT, createdAt INTEGER, PRIMARY KEY(guildId, loverId, lovedId))`);
+// Global loves table — like "followers". One person can only give you ONE love,
+// regardless of which server the reaction happened in. PK is (loverId, lovedId).
+// The guildId column is kept for reference (where the love was first given) but
+// is NOT part of the uniqueness constraint.
+db.exec(`CREATE TABLE IF NOT EXISTS loves (loverId TEXT, lovedId TEXT, guildId TEXT, createdAt INTEGER, PRIMARY KEY(loverId, lovedId))`);
 
-// --- Auto-repair the loves table schema ---------------------------------------
-// The intended primary key is (guildId, loverId, lovedId): one person can love
-// MANY different people, each a separate row. If an older/partial deploy created
-// the table with a narrower PK (e.g. (guildId, loverId)), then one person loving
-// a new target would REPLACE/collide with their previous love — making it look
-// like love "moves" from one user to another. `CREATE TABLE IF NOT EXISTS` won't
-// fix an already-existing table, so detect a wrong PK and rebuild it (existing
-// rows are preserved). No-op when the schema is already correct.
+// --- Auto-migrate from per-guild to global schema ---
+// Old schema had PK (guildId, loverId, lovedId). Detect and rebuild with the new
+// global PK (loverId, lovedId), keeping the earliest love per pair.
 (function ensureLovesSchema() {
     try {
         const cols = db.prepare('PRAGMA table_info(loves)').all();
-        if (!cols.length) return; // table just created correctly above
+        if (!cols.length) return;
         const pkCols = cols.filter(c => c.pk > 0).sort((a, b) => a.pk - b.pk).map(c => c.name);
-        const correct = pkCols.length === 3 &&
-            pkCols.includes('guildId') && pkCols.includes('loverId') && pkCols.includes('lovedId');
-        if (correct) return;
-        db.exec('DROP TABLE IF EXISTS loves_fix');
-        db.exec(`CREATE TABLE loves_fix (guildId TEXT, loverId TEXT, lovedId TEXT, createdAt INTEGER, PRIMARY KEY(guildId, loverId, lovedId))`);
-        db.exec(`INSERT OR IGNORE INTO loves_fix (guildId, loverId, lovedId, createdAt)
-                 SELECT guildId, loverId, lovedId, createdAt FROM loves`);
+        // Already correct: PK is (loverId, lovedId) only
+        if (pkCols.length === 2 && pkCols[0] === 'loverId' && pkCols[1] === 'lovedId') return;
+        // Need migration
+        db.exec('DROP TABLE IF EXISTS loves_global');
+        db.exec(`CREATE TABLE loves_global (loverId TEXT, lovedId TEXT, guildId TEXT, createdAt INTEGER, PRIMARY KEY(loverId, lovedId))`);
+        // Insert only the earliest love per (loverId, lovedId) pair across all guilds
+        db.exec(`INSERT OR IGNORE INTO loves_global (loverId, lovedId, guildId, createdAt)
+                 SELECT loverId, lovedId, guildId, MIN(createdAt) FROM loves GROUP BY loverId, lovedId`);
         db.exec('DROP TABLE loves');
-        db.exec('ALTER TABLE loves_fix RENAME TO loves');
-        console.log('[love] Repaired loves table primary key -> (guildId, loverId, lovedId)');
+        db.exec('ALTER TABLE loves_global RENAME TO loves');
+        console.log('[love] Migrated loves table to global PK (loverId, lovedId) — like followers');
     } catch (e) {
-        try { console.error('[love] loves schema check failed:', e && e.message); } catch (_) {}
+        try { console.error('[love] loves schema migration failed:', e && e.message); } catch (_) {}
     }
 })();
 
@@ -70,28 +72,31 @@ function isLoveEmoji(guildId, emojiName) {
     return normEmoji(emojiName) === normEmoji(getEmoji(guildId));
 }
 
-// Number of distinct people who have loved this user.
+// Number of distinct people who have loved this user (GLOBAL — all servers combined).
 function getLoveCount(guildId, userId) {
-    return db.prepare('SELECT COUNT(*) AS c FROM loves WHERE guildId = ? AND lovedId = ?').get(guildId, userId)?.c || 0;
+    return db.prepare('SELECT COUNT(*) AS c FROM loves WHERE lovedId = ?').get(userId)?.c || 0;
 }
 
+// Has this person already loved the target? (global check — regardless of server)
 function hasLoved(guildId, loverId, lovedId) {
-    return !!db.prepare('SELECT 1 FROM loves WHERE guildId = ? AND loverId = ? AND lovedId = ?').get(guildId, loverId, lovedId);
+    return !!db.prepare('SELECT 1 FROM loves WHERE loverId = ? AND lovedId = ?').get(loverId, lovedId);
 }
 
-// People who loved this user, newest first (array of { loverId }).
+// People who loved this user, newest first (array of { loverId }). Global.
 function getLovers(guildId, userId, limit = 25) {
-    return db.prepare('SELECT loverId FROM loves WHERE guildId = ? AND lovedId = ? ORDER BY createdAt DESC LIMIT ?').all(guildId, userId, limit);
+    return db.prepare('SELECT loverId FROM loves WHERE lovedId = ? ORDER BY createdAt DESC LIMIT ?').all(userId, limit);
 }
 
-// Server leaderboard of most-loved users: [{ lovedId, count }].
+// Global leaderboard of most-loved users: [{ lovedId, count }].
 function getTopLoved(guildId, limit = 10) {
-    return db.prepare('SELECT lovedId, COUNT(*) AS count FROM loves WHERE guildId = ? GROUP BY lovedId ORDER BY count DESC, MIN(createdAt) ASC LIMIT ?').all(guildId, limit);
+    return db.prepare('SELECT lovedId, COUNT(*) AS count FROM loves GROUP BY lovedId ORDER BY count DESC, MIN(createdAt) ASC LIMIT ?').all(limit);
 }
 
 // Record a love. Returns { added, count, reason }.
 //   added=true  -> a brand-new love was recorded (caller should refresh the nick)
 //   added=false -> nothing changed; reason is 'self' | 'already'
+// Love is GLOBAL: 1 person can only give 1 love to a target, ever (like a follow).
+// guildId is stored for reference (where the love originated) but not for uniqueness.
 function giveLove(guildId, loverId, lovedId) {
     if (!loverId || !lovedId || loverId === lovedId) {
         return { added: false, count: getLoveCount(guildId, lovedId), reason: 'self' };
@@ -99,8 +104,8 @@ function giveLove(guildId, loverId, lovedId) {
     if (hasLoved(guildId, loverId, lovedId)) {
         return { added: false, count: getLoveCount(guildId, lovedId), reason: 'already' };
     }
-    db.prepare('INSERT OR IGNORE INTO loves (guildId, loverId, lovedId, createdAt) VALUES (?, ?, ?, ?)')
-        .run(guildId, loverId, lovedId, Date.now());
+    db.prepare('INSERT OR IGNORE INTO loves (loverId, lovedId, guildId, createdAt) VALUES (?, ?, ?, ?)')
+        .run(loverId, lovedId, guildId, Date.now());
     return { added: true, count: getLoveCount(guildId, lovedId) };
 }
 
