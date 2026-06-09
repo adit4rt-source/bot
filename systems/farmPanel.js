@@ -537,6 +537,7 @@ async function handleFarmButton(interaction) {
                 row.addComponents(new ButtonBuilder().setCustomId(`farm_ghplant_${userId}`).setLabel('🌱 Plant (GH)').setStyle(ButtonStyle.Success));
             }
             row.addComponents(new ButtonBuilder().setCustomId(`farm_ghharvest_${userId}`).setLabel('🌾 Harvest (GH)').setStyle(ButtonStyle.Primary));
+            row.addComponents(new ButtonBuilder().setCustomId(`farm_ghpupuk_${userId}`).setLabel('🧫 Pupuk (GH)').setStyle(ButtonStyle.Secondary));
             if (ghLevel < maxGhLevel) {
                 row.addComponents(new ButtonBuilder().setCustomId(`farm_ghupgrade_${userId}`).setLabel(`⬆️ Upgrade Lv.${ghLevel + 1}`).setStyle(ButtonStyle.Secondary));
             }
@@ -645,6 +646,37 @@ async function handleFarmButton(interaction) {
             .setDescription(`**${harvested} tanaman** dipanen (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke Storage.`);
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === GREENHOUSE PUPUK ===
+    if (customId === `farm_ghpupuk_${userId}`) {
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        const unfertilized = ghPlots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
+        if (unfertilized.length === 0) return interaction.reply({ content: '❌ Semua tanaman greenhouse sudah dipupuk!', ephemeral: true });
+        
+        const ownedFerts = getAllFerts(guildId, userId);
+        if (ownedFerts.length === 0) {
+            const embed = new EmbedBuilder().setTitle('🧫 Pupuk Greenhouse').setColor('#E74C3C')
+                .setDescription('❌ Tidak punya pupuk! Beli dulu di 🛒 Shop.');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🔙 Greenhouse').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+        
+        // Apply fertilizer to ALL unfertilized greenhouse plots at once
+        const fertMenu = new StringSelectMenuBuilder().setCustomId(`farm_ghpupukfert_${userId}`).setPlaceholder('🧫 Pilih pupuk untuk semua tanaman greenhouse...').setMinValues(1).setMaxValues(1);
+        ownedFerts.forEach(inv => {
+            const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId);
+            if (f && f.id !== 'none') fertMenu.addOptions({ label: `${f.name} x${inv.quantity}`, value: f.id, description: `-${Math.round(f.speedBonus * 100)}% waktu, +${Math.round(f.yieldBonus * 100)}% hasil` });
+        });
+        
+        const embed = new EmbedBuilder().setTitle('🧫 Pupuk Greenhouse').setColor('#27AE60')
+            .setDescription(`📊 Tanaman yang belum dipupuk: **${unfertilized.length}**\n\nPilih pupuk untuk diterapkan ke semua tanaman greenhouse:\n\n${ownedFerts.map(inv => { const f = FARM_FERTILIZERS.find(fe => fe.id === inv.fertId); return f ? `> ${f.emoji} ${f.name} x**${inv.quantity}**` : ''; }).filter(Boolean).join('\n')}`);
+        const row1 = new ActionRowBuilder().addComponents(fertMenu);
+        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🔙 Greenhouse').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
     const action = parts[1];
@@ -1439,6 +1471,38 @@ async function handleFarmSelectMenu(interaction) {
     }
 
 
+    // === GREENHOUSE PUPUK FERTILIZER SELECT ===
+    if (customId.startsWith('farm_ghpupukfert_')) {
+        const fertId = interaction.values[0];
+        const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
+        if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
+        const owned = getFertCount(guildId, userId, fertId);
+        if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya ${fert.emoji} **${fert.name}**!`, ephemeral: true });
+
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        const unfertilized = ghPlots.filter(p => p.fertilizer === 'none' && p.status !== 'dead');
+        if (unfertilized.length === 0) return interaction.reply({ content: '❌ Semua tanaman greenhouse sudah dipupuk!', ephemeral: true });
+
+        const canApply = Math.min(owned, unfertilized.length);
+        for (let i = 0; i < canApply; i++) {
+            db.prepare('UPDATE farm_plots SET fertilizer = ? WHERE id = ?').run(fertId, unfertilized[i].id);
+        }
+        removeFert(guildId, userId, fertId, canApply);
+
+        let resultDesc = `✅ **${canApply} tanaman greenhouse** dipupuk dengan ${fert.emoji} **${fert.name}**!\n`;
+        resultDesc += `> ⏩ -${Math.round(fert.speedBonus * 100)}% waktu${fert.yieldBonus > 0 ? ` | +${Math.round(fert.yieldBonus * 100)}% hasil` : ''}\n`;
+        const remaining = getFertCount(guildId, userId, fertId);
+        resultDesc += `> 📦 Sisa stok: **${remaining}**`;
+
+        const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🏠 Pupuk Greenhouse!')
+            .setDescription(resultDesc);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Greenhouse').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Farm').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
     // === PUPUK PLOT SELECT (apply fertilizer from inventory to specific plot) ===
     if (customId.startsWith('farm_pupukplot_')) {
         // customId: farm_pupukplot_{fertId}_{userId} — fertId can have underscores!
@@ -1703,7 +1767,7 @@ function isFarmPanelSelectMenu(customId) {
            customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
            customId.startsWith('farm_craftselect') || customId.startsWith('farm_hubcraft') ||
            customId.startsWith('farm_buydeco_') ||
-           customId.startsWith('farm_ghplantseed_') || customId.startsWith('farm_marketsell_') ||
+           customId.startsWith('farm_ghplantseed_') || customId.startsWith('farm_ghpupukfert_') || customId.startsWith('farm_marketsell_') ||
            customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_');
 }
 
