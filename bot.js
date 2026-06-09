@@ -217,6 +217,10 @@ client.once(Events.ClientReady, async c => {
     startReminderSchedules(client);
     console.log('🔔 Reminder: daily (1 jam) + pet lapar (10 menit)');
 
+    // Start panel auto-refresh ticker (live progress bars for farm/coop/barn panels)
+    require('./systems/panelRefresh').start();
+    console.log('🔄 Panel auto-refresh: progress panel update tiap 30 detik');
+
     // Start voice tick (periodic quest progress for users in VC)
     const { startVoiceTickInterval } = require('./events/voiceStateUpdate');
     startVoiceTickInterval();

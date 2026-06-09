@@ -12,6 +12,7 @@ const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, ge
 const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
 const { getPetData } = require('./pets');
 const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
+const panelRefresh = require('./panelRefresh');
 const state = require('../state');
 const { fishCooldowns } = state;
 const ui = require('./ui');
@@ -277,19 +278,29 @@ async function handleFarmButton(interaction) {
         return interaction.reply({ content: '❌ Ini bukan panel farm kamu!', ephemeral: true });
     }
 
+    // Auto-refresh: every entry first stops refreshing this message; progress panels
+    // below re-register it. Navigating to a non-progress view simply leaves it stopped.
+    if (interaction.message) panelRefresh.untrack(interaction.message.id);
+
     const userData = getOrCreateUser(guildId, userId);
 
     // === HUB NAVIGATION (from main farm panel) ===
     if (customId === `farm_crops_${userId}`) {
-        return interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        await interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildFarmPanel(guildId, userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_coop_${userId}`) {
         const { buildCoopPanel } = require('./livestockPanel');
-        return interaction.update(buildCoopPanel(userId, interaction.user.username));
+        await interaction.update(buildCoopPanel(userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildCoopPanel(userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_barn_${userId}`) {
         const { buildBarnPanel } = require('./livestockPanel');
-        return interaction.update(buildBarnPanel(userId, interaction.user.username));
+        await interaction.update(buildBarnPanel(userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildBarnPanel(userId, interaction.user.username));
+        return;
     }
     if (customId === `farm_allcraft_${userId}`) {
         const { buildCraftingPanel } = require('./livestockPanel');
@@ -425,8 +436,9 @@ async function handleFarmButton(interaction) {
 
     // === BACK TO MAIN PANEL ===
     if (action === 'back' || action === 'refresh') {
-        const panel = buildFarmPanel(guildId, userId, interaction.user.username);
-        return interaction.update(panel);
+        await interaction.update(buildFarmPanel(guildId, userId, interaction.user.username));
+        panelRefresh.track(interaction.message, () => buildFarmPanel(guildId, userId, interaction.user.username));
+        return;
     }
 
     // === PLANT (show seed select menu) ===
