@@ -236,6 +236,13 @@ client.once(Events.ClientReady, async c => {
         console.log('🎟️ Lottery scheduler: undian togel otomatis tiap 1 jam');
     } catch (e) { console.error('Lottery scheduler error:', e); }
 
+    // Start livestock daily tick (neglect sickness, seasonal illness, pests, death)
+    try {
+        const { startLivestockDailySchedule } = require('./systems/livestock');
+        startLivestockDailySchedule();
+        console.log('🐔 Livestock daily tick: cek pergantian hari WIB tiap 30 menit');
+    } catch (e) { console.error('Livestock daily tick error:', e); }
+
     // Initialize seasonal leaderboard (snapshots baselines + handles monthly rollover)
     try {
         const { ensureSeason, getSeasonInfo } = require('./systems/season');

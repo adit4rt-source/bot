@@ -247,6 +247,54 @@ module.exports = function register() {
     });
   });
 
+  // ---- Livestock (kandang ayam & peternakan) regressions ----
+  test('livestock craft: recipe pulls ingredients from farm_storage (regression: was uncraftable)', () => {
+    const { addStorage, getStorageQty } = botRequire('systems/farming.js');
+    const lp = botRequire('systems/livestockPanel.js');
+    const g = 'LVG', u = '300000000000000201';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    // roti_telur = gandum x3 (farm) + egg_normal x3 (livestock); sellPrice 250
+    addStorage(g, u, 'gandum', 3);
+    addStorage(g, u, 'egg_normal', 3);
+    const it = mockInteraction({ userId: u, guildId: g, customId: `farm_hubcraft_${u}`, values: ['roti_telur'] });
+    return Promise.resolve(lp.handleLivestockSelectMenu(it)).then(() => {
+      if (db.getOrCreateUser(g, u).balance !== 250) throw new Error('expected +250 from craft, got ' + db.getOrCreateUser(g, u).balance);
+      if (getStorageQty(g, u, 'egg_normal') !== 0) throw new Error('egg_normal not consumed from farm_storage');
+      if (getStorageQty(g, u, 'gandum') !== 0) throw new Error('gandum not consumed from farm_storage');
+    });
+  });
+  test('storage hub sell-all: prices farm crops + livestock products (regression: sold 🪙0)', () => {
+    const { addStorage } = botRequire('systems/farming.js');
+    const lp = botRequire('systems/livestockPanel.js');
+    const g = 'LVG', u = '300000000000000202';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    addStorage(g, u, 'gandum', 5);       // crop sellPrice 12 -> 60
+    addStorage(g, u, 'egg_premium', 2);  // product price 100 -> 200
+    const it = mockInteraction({ userId: u, guildId: g, customId: `farm_allstorage_sellall_${u}` });
+    return Promise.resolve(lp.handleLivestockButton(it)).then(() => {
+      const bal = db.getOrCreateUser(g, u).balance;
+      if (bal !== 260) throw new Error('expected 260 (gandum 60 + egg_premium 200), got ' + bal);
+    });
+  });
+  test('livestock daily tick: starved animal becomes sick (regression: ms-timestamp parse)', () => {
+    const live = botRequire('systems/livestock.js');
+    const u = '300000000000000203';
+    db.getOrCreateUser('LVG', u);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(u);
+    const sixDaysAgo = String(Date.now() - 6 * 24 * 60 * 60 * 1000); // ms-epoch STRING (how feed stores it)
+    const future = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 1, 0, 0, 'healthy', ?, ?, ?, ?, 'normal')")
+      .run(u, sixDaysAgo, Date.now(), Date.now(), future);
+    const res = live.processDailyLivestock(u);
+    const after = db.db.prepare('SELECT status FROM livestock WHERE userId = ?').get(u);
+    if (after.status !== 'sick') throw new Error('expected starved chicken to become sick, got ' + after.status);
+    if (res.sick < 1) throw new Error('expected results.sick >= 1, got ' + res.sick);
+  });
+
   // ---- Profile card image ----
   test('profile card: generates a PNG buffer', () => {
     const pc = botRequire('systems/profileCard.js');

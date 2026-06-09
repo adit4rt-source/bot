@@ -244,20 +244,29 @@ function collectProducts(userId, animalType) {
     return { success: true, totalCollected, totalExp, products };
 }
 
+// Livestock products are stored in farm_storage (keys like 'egg_premium'), the same
+// place collectProducts writes them. The legacy livestock_products table is unused.
+function getStorageProducts(userId) {
+    return db.prepare("SELECT itemId, quantity FROM farm_storage WHERE userId = ? AND quantity > 0 AND (itemId LIKE 'egg_%' OR itemId LIKE 'milk_%' OR itemId LIKE 'wool_%')").all(userId);
+}
+
 function sellAllProducts(userId) {
-    const products = db.prepare('SELECT * FROM livestock_products WHERE userId = ? AND quantity > 0').all(userId);
-    if (products.length === 0) return { error: 'Tidak ada produk untuk dijual!' };
+    const rows = getStorageProducts(userId);
+    if (rows.length === 0) return { error: 'Tidak ada produk untuk dijual!' };
 
     let totalPrice = 0;
-    for (const p of products) {
-        const qualityData = PRODUCT_QUALITY[p.productId]?.find(q => q.quality === p.quality);
-        if (qualityData) totalPrice += qualityData.price * p.quantity;
+    for (const r of rows) {
+        const lastU = r.itemId.lastIndexOf('_');
+        const productId = r.itemId.substring(0, lastU);
+        const quality = r.itemId.substring(lastU + 1);
+        const qualityData = PRODUCT_QUALITY[productId]?.find(q => q.quality === quality);
+        if (qualityData) totalPrice += qualityData.price * r.quantity;
     }
 
-    db.prepare('DELETE FROM livestock_products WHERE userId = ? AND quantity > 0').run(userId);
+    db.prepare("DELETE FROM farm_storage WHERE userId = ? AND (itemId LIKE 'egg_%' OR itemId LIKE 'milk_%' OR itemId LIKE 'wool_%')").run(userId);
     db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(totalPrice, userId);
 
-    return { success: true, totalPrice, itemsSold: products.length };
+    return { success: true, totalPrice, itemsSold: rows.length };
 }
 
 // ==================== FEEDING ====================
@@ -349,10 +358,20 @@ function evolveAnimal(userId, animalId) {
     return { success: true, animalId, newTier: nextTier.tier, tierName: nextTier.name, tierEmoji: nextTier.emoji };
 }
 
+// Parse a stored timestamp that may be a ms-epoch string ("1700000000000"),
+// a numeric epoch, or a date string. Returns ms epoch or null.
+function parseLastFed(lastFed) {
+    if (!lastFed) return null;
+    if (typeof lastFed === 'number') return lastFed;
+    const n = Number(lastFed);
+    if (!isNaN(n)) return n;            // ms-epoch string (how feed/buy stores it)
+    const t = new Date(lastFed).getTime();
+    return isNaN(t) ? null : t;
+}
+
 // ==================== DAILY TICK (called once per day) ====================
 function processDailyLivestock(userId) {
     const animals = getAllAnimals(userId).filter(a => a.status !== 'dead');
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const sickChance = getSeasonSickChance();
     const results = { sick: 0, died: 0, pests: [] };
 
@@ -360,8 +379,11 @@ function processDailyLivestock(userId) {
         const animalDef = ANIMALS[animal.animalType];
         if (!animalDef) continue;
 
-        // Check if fed today
-        const daysSinceLastFed = animal.lastFed ? Math.floor((new Date(today) - new Date(animal.lastFed)) / (1000 * 60 * 60 * 24)) : 999;
+        // Days since last fed. lastFed is stored as a ms-epoch string, so it MUST be
+        // parsed numerically — `new Date("1700000000000")` is Invalid Date and used to
+        // silently break this whole starvation check.
+        const lastFedMs = parseLastFed(animal.lastFed);
+        const daysSinceLastFed = lastFedMs ? Math.floor((Date.now() - lastFedMs) / (1000 * 60 * 60 * 24)) : 999;
 
         if (animal.status === 'healthy') {
             // Not fed for daysToSick → becomes sick
@@ -396,8 +418,8 @@ function processDailyLivestock(userId) {
             results.pests.push(pest);
             // Apply pest damage
             if (pest.damage === 'steal_product') {
-                // Remove some products
-                db.prepare("DELETE FROM livestock_products WHERE userId = ? AND productId = 'egg' AND quality = 'normal' AND quantity > 0").run(userId);
+                // Steal collected normal eggs (products live in farm_storage)
+                db.prepare("DELETE FROM farm_storage WHERE userId = ? AND itemId = 'egg_normal' AND quantity > 0").run(userId);
             }
         }
     }
@@ -407,12 +429,53 @@ function processDailyLivestock(userId) {
 
 // ==================== PRODUCT INVENTORY ====================
 function getProductInventory(userId) {
-    return db.prepare('SELECT * FROM livestock_products WHERE userId = ? AND quantity > 0').all(userId);
+    return getStorageProducts(userId).map(r => {
+        const lastU = r.itemId.lastIndexOf('_');
+        return { productId: r.itemId.substring(0, lastU), quality: r.itemId.substring(lastU + 1), quantity: r.quantity };
+    });
 }
 
 function getProductCount(userId, productId, quality) {
-    const row = db.prepare('SELECT quantity FROM livestock_products WHERE userId = ? AND productId = ? AND quality = ?').get(userId, productId, quality);
+    const row = db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(userId, `${productId}_${quality}`);
     return row ? row.quantity : 0;
+}
+
+// ==================== DAILY SCHEDULER ====================
+// Runs the daily tick (sickness from neglect, seasonal illness, pests, death) once
+// per WIB day for every owner of livestock. A sentinel row in livestock_data tracks
+// the last run date so restarts within the same day don't double-process.
+function runDailyTickForAll() {
+    const rows = db.prepare('SELECT DISTINCT userId FROM livestock').all();
+    const summary = { users: 0, sick: 0, died: 0 };
+    for (const { userId } of rows) {
+        try {
+            const r = processDailyLivestock(userId);
+            summary.users++;
+            summary.sick += r.sick;
+            summary.died += r.died;
+        } catch (e) { /* never let one user break the batch */ }
+    }
+    return summary;
+}
+
+const LIVESTOCK_DAILY_KEY = 'livestock_daily_lastrun';
+const LIVESTOCK_DAILY_SENTINEL = '__global__';
+
+function startLivestockDailySchedule() {
+    const todayWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const tick = () => {
+        try {
+            const today = todayWIB();
+            const last = db.prepare('SELECT value FROM livestock_data WHERE userId = ? AND key = ?')
+                .get(LIVESTOCK_DAILY_SENTINEL, LIVESTOCK_DAILY_KEY)?.value;
+            if (last === today) return;
+            runDailyTickForAll();
+            db.prepare('INSERT OR REPLACE INTO livestock_data (userId, key, value) VALUES (?, ?, ?)')
+                .run(LIVESTOCK_DAILY_SENTINEL, LIVESTOCK_DAILY_KEY, today);
+        } catch (e) { /* swallow: scheduler must not crash the bot */ }
+    };
+    setTimeout(tick, 30 * 1000);                 // shortly after boot (catch a missed day)
+    return setInterval(tick, 30 * 60 * 1000);    // re-check every 30 minutes
 }
 
 module.exports = {
@@ -425,4 +488,5 @@ module.exports = {
     evolveAnimal, processDailyLivestock,
     getProductInventory, getProductCount,
     buryAllDead,
+    runDailyTickForAll, startLivestockDailySchedule,
 };

@@ -767,23 +767,28 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_allstorage_sellall_${userId}`) {
         const { getStorage, removeStorage } = require('./farming');
         const { FARM_CROPS } = require('../data/farming');
+        const { PRODUCT_QUALITY } = require('../data/livestock');
         const PRESTIGE_CROPS = (() => { try { const { PRESTIGE_CROPS: PC } = require('./farmMutation'); return PC || []; } catch(e) { return []; } })();
         const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
 
         let totalMoney = 0;
 
-        // Sell farm storage
-        const farmStorage = getStorage(guildId, userId);
-        for (const s of farmStorage) {
-            const crop = ALL_CROPS.find(c => c.id === s.cropId);
-            if (crop) totalMoney += crop.sellPrice * s.quantity;
-            removeStorage(guildId, userId, s.cropId, s.quantity);
+        // Everything (crops + livestock products) lives in farm_storage keyed by itemId.
+        const storage = getStorage(guildId, userId);
+        for (const s of storage) {
+            const crop = ALL_CROPS.find(c => c.id === s.itemId);
+            if (crop) {
+                totalMoney += crop.sellPrice * s.quantity;
+            } else {
+                // Livestock product: itemId like 'egg_premium' -> price via PRODUCT_QUALITY.
+                const lastU = s.itemId.lastIndexOf('_');
+                const prodId = s.itemId.substring(0, lastU);
+                const quality = s.itemId.substring(lastU + 1);
+                const qData = PRODUCT_QUALITY[prodId]?.find(q => q.quality === quality);
+                if (qData) totalMoney += qData.price * s.quantity;
+            }
+            removeStorage(guildId, userId, s.itemId, s.quantity);
         }
-
-        // Sell livestock products
-        const { sellAllProducts: sellLP } = require('./livestock');
-        const lpResult = sellLP(userId);
-        if (lpResult.success) totalMoney += lpResult.totalPrice;
 
         if (totalMoney === 0) return interaction.reply({ content: '❌ Tidak ada item untuk dijual!', ephemeral: true });
 
@@ -942,17 +947,11 @@ async function handleLivestockSelectMenu(interaction) {
         const { getProductCount } = require('./livestock');
         const { getItemCount: getIC, addItem: addI } = require('../database');
 
-        // Check ingredients
+        // Check ingredients. BOTH farm crops and livestock products live in
+        // farm_storage (collectProducts stores keys like 'egg_normal'), so the
+        // ingredient id matches the storage itemId directly for either source.
         for (const ing of recipe.ingredients) {
-            let have = 0;
-            if (ing.source === 'livestock') {
-                // Format: egg_normal, milk_premium, wool_superior
-                const [productId, quality] = [ing.id.substring(0, ing.id.lastIndexOf('_')), ing.id.substring(ing.id.lastIndexOf('_') + 1)];
-                have = getProductCount(userId, productId, quality);
-            } else {
-                // Farm storage
-                have = getStorageQty(guildId, userId, ing.id);
-            }
+            const have = getStorageQty(guildId, userId, ing.id);
             if (have < ing.qty) {
                 const c = ALL_CROPS.find(cr => cr.id === ing.id);
                 const name = c ? c.name : ing.id;
@@ -960,14 +959,9 @@ async function handleLivestockSelectMenu(interaction) {
             }
         }
 
-        // Deduct ingredients
+        // Deduct ingredients (all from farm_storage)
         for (const ing of recipe.ingredients) {
-            if (ing.source === 'livestock') {
-                const [productId, quality] = [ing.id.substring(0, ing.id.lastIndexOf('_')), ing.id.substring(ing.id.lastIndexOf('_') + 1)];
-                db.prepare('UPDATE livestock_products SET quantity = quantity - ? WHERE userId = ? AND productId = ? AND quality = ?').run(ing.qty, userId, productId, quality);
-            } else {
-                removeStorage(guildId, userId, ing.id, ing.qty);
-            }
+            removeStorage(guildId, userId, ing.id, ing.qty);
         }
 
         // Add money
