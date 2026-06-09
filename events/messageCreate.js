@@ -1,6 +1,6 @@
 // events/messageCreate.js - Message event handler
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, getConf, getSetting, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, getConf, getSetting, incrementUserStat, addItem } = require('../database');
 const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
 const { checkAchievements } = require('../systems/achievements');
 const { updateQuestProgress, checkAndUpdateStreak, addXpAndMoney } = require('../systems/quests');
@@ -185,9 +185,20 @@ module.exports = async function handleMessageCreate(message) {
             else if (chosen === 'heaviest') eventDesc = 'Siapa yang bisa menangkap ikan **paling berat** dalam 5 menit?';
             else if (chosen === 'most_fish') eventDesc = 'Siapa yang bisa menangkap ikan **paling banyak** dalam 5 menit?';
             else if (chosen === 'first_trash') eventDesc = 'Siapa yang bisa menangkap **Sampah (Trash)** pertama kali? 🗑️';
-            const reward = chosen === 'first_legendary' ? 3000 : (chosen === 'heaviest' ? 2000 : (chosen === 'most_fish' ? 2000 : 1000));
+            // Balanced rewards: difficulty-scaled money + bonus items
+            const TOURNEY_REWARDS = {
+                first_legendary: { money: 500000, items: [{ id: 'mystery_box', qty: 5 }], difficulty: '⭐⭐⭐⭐⭐' },
+                heaviest:        { money: 350000, items: [{ id: 'mystery_box', qty: 3 }], difficulty: '⭐⭐⭐⭐' },
+                most_fish:       { money: 250000, items: [{ id: 'mystery_box', qty: 3 }], difficulty: '⭐⭐⭐' },
+                first_rare:      { money: 150000, items: [{ id: 'mystery_box', qty: 2 }], difficulty: '⭐⭐' },
+                first_trash:     { money: 75000,  items: [],                               difficulty: '⭐' },
+            };
+            const tr = TOURNEY_REWARDS[chosen];
+            const reward = tr.money;
             eventData.reward = reward;
-            const embed = new EmbedBuilder().setColor('#1ABC9C').setTitle('🎣🏆 FISHING TOURNAMENT!').setDescription(`**Kompetisi memancing dimulai!**\n\n> 🎯 **Tantangan:** ${eventDesc}\n> 🎁 **Hadiah:** 🪙 **${reward.toLocaleString('id-ID')} Money**\n> ⏱️ **Durasi:** 5 menit\n\n*Gunakan \`/fish\` untuk ikut!*`).setTimestamp();
+            eventData.bonusItems = tr.items;
+            const itemDesc = tr.items.length > 0 ? `\n> 🎁 **Bonus:** ${tr.items.map(i => `${i.qty}× ${i.id.replace(/_/g, ' ')}`).join(', ')}` : '';
+            const embed = new EmbedBuilder().setColor('#1ABC9C').setTitle('🎣🏆 FISHING TOURNAMENT!').setDescription(`**Kompetisi memancing dimulai!**\n\n> 🎯 **Tantangan:** ${eventDesc}\n> 💰 **Hadiah:** 🪙 **${reward.toLocaleString('id-ID')} Money**${itemDesc}\n> 🏅 **Difficulty:** ${tr.difficulty}\n> ⏱️ **Durasi:** 5 menit\n\n*Gunakan \`/fish\` untuk ikut!*`).setTimestamp();
             message.channel.send({ embeds: [embed] }).then(() => {
                 state.activeFishEvents.set(guildId, eventData);
                 setTimeout(() => {
@@ -196,7 +207,7 @@ module.exports = async function handleMessageCreate(message) {
                         let winner = null, winnerValue = 0;
                         if (ev.type === 'heaviest') { for (const [uid, data] of Object.entries(ev.participants)) { if (data.heaviest > winnerValue) { winner = uid; winnerValue = data.heaviest; } } }
                         else if (ev.type === 'most_fish') { for (const [uid, data] of Object.entries(ev.participants)) { if (data.count > winnerValue) { winner = uid; winnerValue = data.count; } } }
-                        if (winner) { const winnerData = getOrCreateUser(guildId, winner); winnerData.balance += ev.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner); const resultText = ev.type === 'heaviest' ? `ikan terberat: **${winnerValue} kg**` : `total tangkapan: **${winnerValue} ikan**`; const ch = message.guild.channels.cache.get(ev.channelId); if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT SELESAI!').setDescription(`Pemenang: <@${winner}>\n> ${resultText}\n\n🎁 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**`)] }); }
+                        if (winner) { const winnerData = getOrCreateUser(guildId, winner); winnerData.balance += ev.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner); if (ev.bonusItems) { for (const bi of ev.bonusItems) { try { addItem(guildId, winner, bi.id, bi.qty); } catch(_){} } } const resultText = ev.type === 'heaviest' ? `ikan terberat: **${winnerValue} kg**` : `total tangkapan: **${winnerValue} ikan**`; const itemText = ev.bonusItems && ev.bonusItems.length > 0 ? `\n> 🎁 **Bonus:** ${ev.bonusItems.map(i => `${i.qty}× ${i.id.replace(/_/g, ' ')}`).join(', ')}` : ''; const ch = message.guild.channels.cache.get(ev.channelId); if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT SELESAI!').setDescription(`Pemenang: <@${winner}>\n> ${resultText}\n\n💰 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**${itemText}`)] }); }
                         else { const ch = message.guild.channels.cache.get(ev.channelId); if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle('🏆 TOURNAMENT SELESAI').setDescription('Tidak ada pemenang.')] }); }
                     }
                 }, 300000);

@@ -355,8 +355,10 @@ async function routeInteraction(interaction) {
                     activeFishEvents.delete(guildId);
                     userData.balance += ev.reward;
                     db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+                    if (ev.bonusItems) { for (const bi of ev.bonusItems) { try { addItem(guildId, interaction.user.id, bi.id, bi.qty); } catch(_){} } }
+                    const itemText = ev.bonusItems && ev.bonusItems.length > 0 ? `\n> 🎁 **Bonus:** ${ev.bonusItems.map(i => `${i.qty}× ${i.id.replace(/_/g, ' ')}`).join(', ')}` : '';
                     const ch = interaction.guild.channels.cache.get(ev.channelId);
-                    if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT WINNER!').setDescription(`<@${interaction.user.id}> memenangkan tournament!\n> Tangkapan: ${result.tier.emoji} **${result.fish.name}** (${result.weight} kg)\n\n🎁 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**`)] });
+                    if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT WINNER!').setDescription(`<@${interaction.user.id}> memenangkan tournament!\n> Tangkapan: ${result.tier.emoji} **${result.fish.name}** (${result.weight} kg)\n\n💰 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**${itemText}`)] });
                 }
             }
             return;
