@@ -23,7 +23,7 @@ const { handleGuideButton, isGuideButton } = require('../systems/guidePanel');
 const { handleFishingCommand, handleFishingButton, handleFishingSelectMenu, handleFishingModal, isFishingPanelButton, isFishingPanelSelectMenu, isFishingPanelModal, buildFishingPanel } = require('../systems/fishPanel');
 const { handleFarmCommand, handleFarmButton, handleFarmSelectMenu, handleFarmModal, isFarmPanelButton, isFarmPanelSelectMenu, isFarmPanelModal } = require('../systems/farmPanel');
 const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('../systems/questPanel');
-const { handleArenaCommand, handleArenaButton, isArenaButton } = require('../systems/arena');
+const { handleArenaCommand, handleArenaButton, handleArenaSelectMenu, isArenaButton, isArenaSelectMenu } = require('../systems/arena');
 const { handleAuctionCommand, handleAuctionButton, handleAuctionSelect, handleAuctionModal, isAuctionButton, isAuctionSelect, isAuctionModal } = require('../systems/auction');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
 const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
@@ -909,6 +909,11 @@ async function routeInteraction(interaction) {
         // --- FARM PANEL SELECT MENUS ---
         if (isFarmPanelSelectMenu(interaction.customId)) {
             return handleFarmSelectMenu(interaction);
+        }
+
+        // --- ARENA SHOP SELECT MENUS ---
+        if (isArenaSelectMenu(interaction.customId)) {
+            return handleArenaSelectMenu(interaction);
         }
 
         // --- PET PANEL SELECT MENUS ---
