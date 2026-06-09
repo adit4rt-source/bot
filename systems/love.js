@@ -130,7 +130,11 @@ function stripTags(name, emojis) {
 
 async function refreshMemberNick(member) {
     try {
-        if (!member || !member.user || member.user.bot || !member.manageable) return;
+        if (!member || !member.user || member.user.bot) return;
+        try { if (!member.guild.members.me) await member.guild.members.fetchMe(); } catch (_) {}
+        let manageable = false;
+        try { manageable = member.manageable; } catch (_) { manageable = false; }
+        if (!manageable) return;
         const guildId = member.guild.id;
         const userId = member.id;
 
