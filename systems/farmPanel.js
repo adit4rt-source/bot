@@ -143,8 +143,8 @@ function buildFarmPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_plant_${userId}`).setLabel('🌱 Plant').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_water_${userId}`).setLabel('💧 Water').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_harvest_${userId}`).setLabel('🌾 Harvest').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_pest_${userId}`).setLabel(`🧴 Pest${pestCount > 0 ? ` (${pestCount})` : ''}`).setStyle(pestCount > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_pest_${userId}`).setLabel(`🧴 Pest${pestCount > 0 ? ` (${pestCount})` : ''}`).setStyle(pestCount > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
