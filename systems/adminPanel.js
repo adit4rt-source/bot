@@ -288,19 +288,20 @@ function buildGiveawaySubPanel(guildId) {
 
 // ============ BUILD: Blacklist sub-panel ============
 function buildBlacklistSubPanel(guildId) {
-    // Ensure table exists
-    try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+    // Global blacklist (economy is global, blacklist must be too)
+    try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (userId TEXT PRIMARY KEY, reason TEXT, addedAt INTEGER, addedBy TEXT)`); } catch (_) {}
 
-    const list = db.prepare('SELECT * FROM blacklist WHERE guildId = ? ORDER BY addedAt DESC LIMIT 10').all(guildId);
+    let list = [];
+    try { list = db.prepare('SELECT * FROM blacklist ORDER BY addedAt DESC LIMIT 10').all(); } catch (_) {}
     let listText = list.length > 0
         ? list.map((b, i) => `> **${i+1}.** <@${b.userId}> — ${b.reason || 'No reason'}`).join('\n')
         : '*Tidak ada user yang di-blacklist.*';
 
     const embed = new EmbedBuilder()
-        .setTitle('🚫 BLACKLIST')
+        .setTitle('🚫 BLACKLIST (GLOBAL)')
         .setColor('#E74C3C')
         .setDescription(
-            `User yang di-blacklist tidak bisa:\n` +
+            `User yang di-blacklist tidak bisa di **semua server**:\n` +
             `> ❌ Earn XP & Money dari chat\n` +
             `> ❌ Claim /daily, /fish, /farm\n` +
             `> ❌ Ikut giveaway & tournament\n\n` +
@@ -1055,7 +1056,7 @@ async function handleAdminModal(interaction) {
         const fishCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(targetId)?.c || 0;
         // Check blacklist
         let blacklisted = false;
-        try { blacklisted = !!db.prepare('SELECT 1 FROM blacklist WHERE guildId = ? AND userId = ?').get(guildId, targetId); } catch (_) {}
+        try { blacklisted = !!db.prepare('SELECT 1 FROM blacklist WHERE userId = ?').get(targetId); } catch (_) {}
 
         const embed = new EmbedBuilder()
             .setTitle(`👤 User Lookup: <@${targetId}>`)
@@ -1131,22 +1132,22 @@ async function handleAdminModal(interaction) {
 
     // === BLACKLIST: Add ===
     if (customId === 'admpnl_modal_blacklist_add') {
-        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (userId TEXT PRIMARY KEY, reason TEXT, addedAt INTEGER, addedBy TEXT)`); } catch (_) {}
         const rawTarget = interaction.fields.getTextInputValue('target').trim();
         const targetId = await resolveTargetId(interaction, rawTarget);
         if (!targetId) return interaction.reply({ content: '❌ User tidak ditemukan!', ephemeral: true });
         const reason = (interaction.fields.getTextInputValue('reason') || '').trim() || 'No reason';
-        db.prepare('INSERT OR REPLACE INTO blacklist (guildId, userId, reason, addedAt, addedBy) VALUES (?, ?, ?, ?, ?)').run(guildId, targetId, reason, Date.now(), interaction.user.id);
-        return interaction.reply({ content: `🚫 <@${targetId}> telah di-**blacklist**!\n> Alasan: ${reason}`, allowedMentions: { users: [] } });
+        db.prepare('INSERT OR REPLACE INTO blacklist (userId, reason, addedAt, addedBy) VALUES (?, ?, ?, ?)').run(targetId, reason, Date.now(), interaction.user.id);
+        return interaction.reply({ content: `🚫 <@${targetId}> telah di-**blacklist GLOBAL**!\n> Alasan: ${reason}\n> Berlaku di semua server.`, allowedMentions: { users: [] } });
     }
 
     // === BLACKLIST: Remove ===
     if (customId === 'admpnl_modal_blacklist_remove') {
-        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (userId TEXT PRIMARY KEY, reason TEXT, addedAt INTEGER, addedBy TEXT)`); } catch (_) {}
         const targetId = interaction.fields.getTextInputValue('target').trim();
-        const existing = db.prepare('SELECT 1 FROM blacklist WHERE guildId = ? AND userId = ?').get(guildId, targetId);
+        const existing = db.prepare('SELECT 1 FROM blacklist WHERE userId = ?').get(targetId);
         if (!existing) return interaction.reply({ content: '❌ User tidak ada di blacklist!', ephemeral: true });
-        db.prepare('DELETE FROM blacklist WHERE guildId = ? AND userId = ?').run(guildId, targetId);
+        db.prepare('DELETE FROM blacklist WHERE userId = ?').run(targetId);
         return interaction.reply({ content: `✅ <@${targetId}> telah di-**unblacklist**.`, allowedMentions: { users: [] } });
     }
 
