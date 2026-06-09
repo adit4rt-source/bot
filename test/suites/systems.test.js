@@ -243,6 +243,97 @@ module.exports = function register() {
     if (round.pot < 500000) throw new Error('current round not topped up');
   });
 
+  // ---- Togel ambient promo (eye-catching one-click bet card) ----
+  // These guard the engagement-driver added in feat/togel-ambient-promo:
+  //   1) the promo card must surface the lottery_quickbet button (not just a slash hint),
+  //   2) submitting lottery_betmodal must actually deduct balance + grow the pot
+  //      (i.e. the modal really places a bet, not just shows a confirmation), and
+  //   3) the message-driven drop must be gated by spam / threshold / cooldown / disabled
+  //      so a busy server never gets spammed and an off switch actually turns it off.
+  const togelPromo = botRequire('systems/togelPromo.js');
+  const stateMod  = botRequire('state.js');
+  const dbMod     = botRequire('database.js');
+
+  test('togelPromo: promo card exposes a one-click lottery_quickbet button', () => {
+    const g = 'TPROMO_CARD';
+    const payload = lot.buildTogelPromo(g);
+    if (!payload || !Array.isArray(payload.components) || !payload.components[0]) {
+      throw new Error('promo card has no components row');
+    }
+    const buttons = payload.components[0].components || [];
+    const ids = buttons.map(b => b && (b.data ? b.data.custom_id : b.custom_id)).filter(Boolean);
+    if (!ids.includes('lottery_quickbet')) {
+      throw new Error('promo card must offer lottery_quickbet button, got: ' + ids.join(','));
+    }
+  });
+
+  test('togelPromo: lottery_betmodal places a bet (deducts balance + grows pot)', () => {
+    const g = 'TPROMO_MODAL', u = 'TPROMOU_MODAL';
+    dbMod.getOrCreateUser(g, u);
+    dbMod.updateUserBalance(g, u, 100000);
+    const balBefore = dbMod.getOrCreateUser(g, u).balance;
+    const potBefore = lot.getCurrentRound(g).pot;
+    const it = mockInteraction({
+      guildId: g, userId: u, username: 'PromoBetter',
+      customId: 'lottery_betmodal', fields: { number: '37' },
+    });
+    return Promise.resolve(lot.handleLotteryModal(it)).then(() => {
+      if (!it._cap.reply) throw new Error('modal handler did not reply');
+      const balAfter = dbMod.getOrCreateUser(g, u).balance;
+      // Modal must charge the user. (Side-effects like the togel_first achievement
+      // can credit a small reward back, so we don't require the full BP delta —
+      // we just require a real deduction. The pot/bet checks below cover the rest.)
+      if (balAfter >= balBefore) throw new Error(`balance not deducted: ${balBefore} -> ${balAfter}`);
+      const potAfter = lot.getCurrentRound(g).pot;
+      if (potAfter !== potBefore + BP) throw new Error(`pot did not grow: ${potBefore} -> ${potAfter}`);
+      const mine = lot.getUserBets(g, lot.getCurrentRound(g).roundId, u).map(b => b.number);
+      if (!mine.includes(37)) throw new Error('bet 37 was not recorded for user');
+    });
+  });
+
+  test('togelPromo: drop gating — spam never counts; threshold drops once; cooldown & disabled block', async () => {
+    const N = togelPromo.MESSAGES_PER_PROMO;
+    const g = 'TPROMO_GATE';
+    // Reset per-guild state so other suites don't leak in.
+    stateMod.togelPromoCounters.delete(g);
+    stateMod.togelPromoCooldown.delete(g);
+    stateMod.activeMiniEvents.delete(g);
+
+    let sent = 0;
+    const channel = { send: async () => { sent++; return { delete: async () => {} }; } };
+    const mkMsg = () => ({
+      author: { id: 'TPROMOU_GATE', bot: false },
+      guild: { id: g },
+      channel,
+    });
+
+    // (a) Spam messages must NOT increment the counter or trigger a drop, even past the threshold.
+    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), /*spam*/ true);
+    if (sent !== 0) throw new Error('spam messages must not drop a promo');
+    if ((stateMod.togelPromoCounters.get(g) || 0) !== 0) throw new Error('spam should not bump the counter');
+
+    // (b) Non-spam messages: counter accrues silently; only the Nth drops exactly one card.
+    for (let i = 0; i < N - 1; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
+    if (sent !== 0) throw new Error('must not drop before reaching threshold');
+    await togelPromo.maybeDropTogelPromo(mkMsg(), false);     // Nth message → drop
+    if (sent !== 1) throw new Error('expected exactly 1 drop at threshold, got ' + sent);
+
+    // (c) Cooldown is now armed: subsequent messages (even past N) must NOT drop again.
+    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
+    if (sent !== 1) throw new Error('cooldown should block further drops, got sent=' + sent);
+
+    // (d) Admin disable switch: even with cooldown cleared and counter primed, no drop.
+    stateMod.togelPromoCooldown.delete(g);
+    stateMod.togelPromoCounters.set(g, N - 1);
+    dbMod.setSetting(g, 'togel_promo_enabled', '0');
+    try {
+      for (let i = 0; i < 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
+      if (sent !== 1) throw new Error('disabled guild must not drop, got sent=' + sent);
+    } finally {
+      dbMod.setSetting(g, 'togel_promo_enabled', '1');
+    }
+  });
+
   // ---- Shop balance: Refine Stone is drop-only, no free buyables ----
   const { ITEMS } = botRequire('data/items.js');
   test('shop: refine_stone is not buyable (drop-only)', () => {

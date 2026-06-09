@@ -345,6 +345,11 @@ function getSetting(guildId, key, defaultVal) {
     return row ? row.value : defaultVal;
 }
 
+function setSetting(guildId, key, value) {
+    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
+    return value;
+}
+
 function getUserStat(guildId, userId, key) {
     if (checkGlobalMode()) {
         const row = db.prepare('SELECT stat_value FROM user_stats WHERE userId = ? AND stat_key = ?').get(userId, key);
@@ -693,7 +698,7 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
 // ================= EXPORTS (always at the very bottom) =================
 module.exports = {
     db, checkGlobalMode,
-    getOrCreateUser, getConf, getSetting,
+    getOrCreateUser, getConf, getSetting, setSetting,
     getUserStat, incrementUserStat, setUserStat, setUserStatMax,
     addIncome, addSpending,
     getItemCount, addItem, removeItem,
