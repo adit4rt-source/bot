@@ -64,17 +64,17 @@ function computeDailyStreak(prevStreak, lastDaily, today, hasShield = false) {
 // ==================== PURE: REWARD CURVE ====================
 // Exact-day jackpots layered on top of the base escalation + recurring weekly bonus.
 const MILESTONES = {
-    7:   { money: 3000,  items: [{ id: 'mystery_box', qty: 2 }],                                    label: '1 Minggu Beruntun!' },
-    14:  { money: 8000,  items: [{ id: 'xp_booster_2x', qty: 1 }],                                 label: '2 Minggu Beruntun!' },
-    30:  { money: 20000, items: [{ id: 'lucky_charm', qty: 1 }, { id: 'daily_doubler', qty: 1 }],  label: '30 Hari Beruntun!' },
-    60:  { money: 50000, items: [{ id: 'money_magnet', qty: 1 }],                                   label: '60 Hari — Dewa Login!' },
-    100: { money: 100000, items: [{ id: 'streak_shield', qty: 2 }, { id: 'xp_booster_3x', qty: 1 }], label: '100 HARI — LEGENDA!' },
+    7:   { money: 10000,  items: [{ id: 'mystery_box', qty: 3 }],                                    label: '1 Minggu Beruntun!' },
+    14:  { money: 25000,  items: [{ id: 'xp_booster_2x', qty: 2 }],                                 label: '2 Minggu Beruntun!' },
+    30:  { money: 75000,  items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }],  label: '30 Hari Beruntun!' },
+    60:  { money: 200000, items: [{ id: 'money_magnet', qty: 2 }],                                   label: '60 Hari — Dewa Login!' },
+    100: { money: 500000, items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — LEGENDA!' },
 };
 
-const BASE = 1500;
-const PER_DAY = 200;     // +200 money per consecutive day
+const BASE = 3000;
+const PER_DAY = 400;     // +400 money per consecutive day
 const CAP_DAYS = 60;     // escalation caps at day 60
-const WEEKLY_BONUS = 3000;
+const WEEKLY_BONUS = 5000;
 
 function baseMoneyFor(streak) {
     const s = Math.max(1, Math.floor(streak));

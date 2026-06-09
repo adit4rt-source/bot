@@ -33,28 +33,28 @@ module.exports = function register() {
   });
 
   // ============ DAILY: pure reward curve ============
-  test('daily reward: day 1 pays the base 1500', () => {
+  test('daily reward: day 1 pays the base 3000', () => {
     const r = dr.computeDailyReward(1, {});
-    if (r.money !== 1500 || r.baseMoney !== 1500) throw new Error('day1 should be 1500, got ' + r.money);
+    if (r.money !== 3000 || r.baseMoney !== 3000) throw new Error('day1 should be 3000, got ' + r.money);
   });
-  test('daily reward: escalates +200/day', () => {
+  test('daily reward: escalates +400/day', () => {
     const r = dr.computeDailyReward(10, {});
-    if (r.money !== 3300) throw new Error('day10 base should be 3300, got ' + r.money);
+    if (r.money !== 6600) throw new Error('day10 base should be 6600, got ' + r.money);
   });
   test('daily reward: weekly bonus on day 7 (money + mystery box)', () => {
     const r = dr.computeDailyReward(7, {});
     if (!r.isWeeklyBonus) throw new Error('day7 should be weekly bonus');
-    if (r.money !== 2700 + 3000 + 3000) throw new Error('day7 money wrong: ' + r.money);
+    if (r.money !== 5400 + 5000 + 10000) throw new Error('day7 money wrong: ' + r.money);
     if (!r.items.some(i => i.id === 'mystery_box')) throw new Error('weekly bonus should grant mystery_box');
   });
   test('daily reward: milestone day 30 jackpot + label', () => {
     const r = dr.computeDailyReward(30, {});
     if (!r.milestoneLabel) throw new Error('day30 should have a milestone label');
-    if (r.money !== 7300 + 20000) throw new Error('day30 money wrong: ' + r.money);
+    if (r.money !== 14600 + 75000) throw new Error('day30 money wrong: ' + r.money);
   });
   test('daily reward: doubler doubles total money', () => {
     const r = dr.computeDailyReward(1, { hasDoubler: true });
-    if (r.money !== 3000) throw new Error('doubler day1 should be 3000, got ' + r.money);
+    if (r.money !== 6000) throw new Error('doubler day1 should be 6000, got ' + r.money);
   });
 
   // ============ DAILY: full claim (DB, uses chat streak) ============
@@ -70,7 +70,7 @@ module.exports = function register() {
     if (r.streak !== 10) throw new Error('streak should be 10 (from chat streak), got ' + r.streak);
     const after = D.getOrCreateUser(G, U);
     if (after.lastDaily !== '2030-06-01') throw new Error('lastDaily not updated');
-    if (after.balance < before + 3300) throw new Error('balance should grow by >= base for streak 10 (3300)');
+    if (after.balance < before + 6600) throw new Error('balance should grow by >= base for streak 10 (6600)');
   });
   test('daily claim: blocks a second claim the same day', () => {
     const G = 'engG_daily2', U = '910000000000000002';
