@@ -37,6 +37,7 @@ function buildCasinoPanel(guildId, userId, username) {
                 { emoji: '🪙', label: 'Coinflip', desc: 'Tebak kepala/ekor — tebakan benar, uang jadi 2x' },
                 { emoji: '🎰', label: 'Slot', desc: 'Tarik tuas, samakan simbol — hadiah hingga 25x' },
                 { emoji: '🎯', label: 'Roulette', desc: 'Pasang di warna/angka — hadiah hingga 14x' },
+                { emoji: '🃏', label: 'Blackjack', desc: 'Kartu 21 — hit, stand, double. Pair = bonus!' },
             ]) +
             `\n\n> ⚠️ *Ingat: ini hiburan, bukan cara cari uang. Main secukupnya ya!*`
         )
@@ -46,7 +47,8 @@ function buildCasinoPanel(guildId, userId, username) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('🪙 Coinflip').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('🎰 Slot').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('🎯 Roulette').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('🎯 Roulette').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_${userId}`).setLabel('🃏 Blackjack').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -199,6 +201,36 @@ function buildRouletteBetButtons(guildId, userId, choice) {
 }
 
 
+// ============ BUILD: Blackjack bet panel ============
+function buildBlackjackBetPanel(guildId, userId) {
+    const userData = getOrCreateUser(guildId, userId);
+    const embed = new EmbedBuilder()
+        .setTitle('🃏 BLACKJACK — Masukkan taruhan!')
+        .setColor('#3498DB')
+        .setDescription(
+            `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n` +
+            `Pilih jumlah taruhan:\n` +
+            `> Hit 21 = **2.5x** | Win = **2x** | Pair = **bonus!**\n` +
+            `> Max taruhan: 🪙 **100,000**`
+        )
+        .setFooter({ text: 'Pilih nominal taruhan di bawah' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_1000_${userId}`).setLabel('1K').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_5000_${userId}`).setLabel('5K').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_10000_${userId}`).setLabel('10K').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_25000_${userId}`).setLabel('25K').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_50000_${userId}`).setLabel('50K').setStyle(ButtonStyle.Secondary)
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`casino_blackjack_bet_100000_${userId}`).setLabel('100K').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row, row2] };
+}
+
+
 // ============ HANDLER: /casino command ============
 async function handleCasinoCommand(interaction) {
     const guildId = interaction.guild.id;
@@ -249,6 +281,33 @@ async function handleCasinoButton(interaction) {
     if (action === 'roulette' && parts[2] !== 'bet') {
         const panel = buildRouletteBetPanel(guildId, userId);
         return interaction.update(panel);
+    }
+
+    // === BLACKJACK BET PANEL ===
+    if (action === 'blackjack' && parts[2] !== 'bet') {
+        const panel = buildBlackjackBetPanel(guildId, userId);
+        return interaction.update(panel);
+    }
+
+    // === BLACKJACK BET SELECTION (start game) ===
+    if (action === 'blackjack' && parts[2] === 'bet') {
+        const bet = parseInt(parts[3]);
+        const { startBlackjack } = require('./blackjack');
+        const result = startBlackjack(guildId, userId, bet);
+        if (!result.success) {
+            return interaction.reply({ content: result.error, ephemeral: true });
+        }
+
+        const { buildGameEmbed, buildGameButtons } = require('./blackjack');
+        if (result.immediate) {
+            const embed = buildGameEmbed(result.game, true, result.result);
+            const row = buildGameButtons(userId, result.game, true);
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+
+        const embed = buildGameEmbed(result.game);
+        const row = buildGameButtons(userId, result.game);
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
 

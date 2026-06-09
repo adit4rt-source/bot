@@ -37,7 +37,7 @@ const commands = [
         .addStringOption(opt => opt.setName('promo').setDescription('[Admin] Promo togel otomatis di channel ramai').setRequired(false)
             .addChoices({ name: 'Aktifkan', value: 'on' }, { name: 'Nonaktifkan', value: 'off' })),
     new SlashCommandBuilder().setName('blackjack').setDescription('🃏 Blackjack — Main kartu 21')
-        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (100-5000)').setRequired(true).setMinValue(100).setMaxValue(5000)),
+        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (100-100000)').setRequired(true).setMinValue(100).setMaxValue(100000)),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
     new SlashCommandBuilder().setName('leaderboard').setDescription('🏆 Leaderboard — Ranking pemain')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori ranking').setRequired(false)
