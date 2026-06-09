@@ -32,12 +32,12 @@ const FARM_CROPS = [
     { id: 'sakura', name: 'Sakura', emoji: '🌸', tier: 'Epic', cost: 1100, time: 70, minYield: 1, maxYield: 2, sellPrice: 400, seasons: { spring: 'peak', summer: 'in', autumn: 'off', winter: 'wrong' } },
     { id: 'madu', name: 'Madu', emoji: '🍯', tier: 'Epic', cost: 700, time: 50, minYield: 2, maxYield: 3, sellPrice: 230, seasons: { spring: 'off', summer: 'peak', autumn: 'in', winter: 'wrong' } },
     { id: 'hibiscus', name: 'Hibiscus', emoji: '🌺', tier: 'Epic', cost: 650, time: 50, minYield: 2, maxYield: 3, sellPrice: 170, seasons: { spring: 'peak', summer: 'in', autumn: 'off', winter: 'wrong' } },
-    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '💎', tier: 'Legendary', cost: 3500, time: 150, minYield: 1, maxYield: 2, sellPrice: 1400, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
-    { id: 'star_fruit', name: 'Star Fruit', emoji: '🌟', tier: 'Legendary', cost: 3000, time: 150, minYield: 1, maxYield: 2, sellPrice: 1100, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
-    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '🔮', tier: 'Legendary', cost: 4500, time: 180, minYield: 1, maxYield: 1, sellPrice: 1800, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
-    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '🐉', tier: 'Legendary', cost: 3500, time: 165, minYield: 1, maxYield: 2, sellPrice: 1400, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
-    { id: 'lotus', name: 'Lotus Suci', emoji: '🪷', tier: 'Legendary', cost: 5000, time: 210, minYield: 1, maxYield: 1, sellPrice: 2200, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
-    { id: 'ice_berry', name: 'Ice Berry', emoji: '❄️', tier: 'Legendary', cost: 3200, time: 150, minYield: 1, maxYield: 2, sellPrice: 1300, seasons: { spring: 'wrong', summer: 'wrong', autumn: 'off', winter: 'peak' } }
+    { id: 'crystal_flower', name: 'Crystal Flower', emoji: '<:CrystalFlower:1514047615556387037>', tier: 'Legendary', cost: 3500, time: 150, minYield: 1, maxYield: 2, sellPrice: 1400, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
+    { id: 'star_fruit', name: 'Star Fruit', emoji: '<:StarFruit:1514047614058762401>', tier: 'Legendary', cost: 3000, time: 150, minYield: 1, maxYield: 2, sellPrice: 1100, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
+    { id: 'mystic_herb', name: 'Mystic Herb', emoji: '<:MysticHerb:1514047612100280411>', tier: 'Legendary', cost: 4500, time: 180, minYield: 1, maxYield: 1, sellPrice: 1800, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
+    { id: 'dragon_fruit_crop', name: 'Dragon Fruit', emoji: '<:DragonFruit:1514047610241941615>', tier: 'Legendary', cost: 3500, time: 165, minYield: 1, maxYield: 2, sellPrice: 1400, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
+    { id: 'lotus', name: 'Lotus Suci', emoji: '<:LotusSuci:1514047608274944030>', tier: 'Legendary', cost: 5000, time: 210, minYield: 1, maxYield: 1, sellPrice: 2200, seasons: { spring: 'off', summer: 'wrong', autumn: 'in', winter: 'peak' } },
+    { id: 'ice_berry', name: 'Ice Berry', emoji: '<:IceBerry:1514047606349893874>', tier: 'Legendary', cost: 3200, time: 150, minYield: 1, maxYield: 2, sellPrice: 1300, seasons: { spring: 'wrong', summer: 'wrong', autumn: 'off', winter: 'peak' } }
 ];
 
 const FARM_RECIPES = [
