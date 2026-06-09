@@ -21,8 +21,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 1,
         duration: 2 * 60, // 2 jam (menit)
         rewards: {
-            moneyRange: [2000, 6000],
-            expRange: [50, 120],
+            moneyRange: [8000, 20000],
+            expRange: [100, 250],
             drops: [
                 { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 45, min: 1, max: 2 },
                 { id: 'rod_part', name: 'Rod Parts', emoji: '🔧', chance: 25, min: 1, max: 2 },
@@ -39,8 +39,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 10,
         duration: 3 * 60, // 3 jam
         rewards: {
-            moneyRange: [5000, 13000],
-            expRange: [100, 200],
+            moneyRange: [20000, 50000],
+            expRange: [200, 400],
             drops: [
                 { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 50, min: 1, max: 3 },
                 { id: 'mystery_box', name: 'Mystery Box', emoji: '📦', chance: 40, min: 1, max: 2 },
@@ -58,8 +58,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 25,
         duration: 4 * 60, // 4 jam
         rewards: {
-            moneyRange: [10000, 26000],
-            expRange: [150, 300],
+            moneyRange: [40000, 100000],
+            expRange: [300, 600],
             drops: [
                 { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 55, min: 2, max: 3 },
                 { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 30, min: 1, max: 2 },
@@ -79,8 +79,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 40,
         duration: 5 * 60, // 5 jam
         rewards: {
-            moneyRange: [18000, 46000],
-            expRange: [200, 400],
+            moneyRange: [75000, 180000],
+            expRange: [400, 800],
             drops: [
                 { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 60, min: 2, max: 4 },
                 { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 35, min: 1, max: 2 },
@@ -101,8 +101,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 60,
         duration: 6 * 60, // 6 jam
         rewards: {
-            moneyRange: [30000, 78000],
-            expRange: [300, 600],
+            moneyRange: [120000, 300000],
+            expRange: [600, 1200],
             drops: [
                 { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 70, min: 3, max: 5 },
                 { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 45, min: 1, max: 3 },
@@ -123,8 +123,8 @@ const EXPEDITION_ZONES = [
         minPetLevel: 100,
         duration: 8 * 60, // 8 jam
         rewards: {
-            moneyRange: [50000, 125000],
-            expRange: [500, 1000],
+            moneyRange: [200000, 500000],
+            expRange: [1000, 2000],
             drops: [
                 { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 80, min: 3, max: 6 },
                 { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 55, min: 2, max: 3 },
@@ -134,6 +134,113 @@ const EXPEDITION_ZONES = [
                 { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 28, min: 1, max: 2 },
                 { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 30, min: 1, max: 3 },
                 { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 8, min: 1, max: 1 },
+            ]
+        }
+    },
+    {
+        id: 'frozen_abyss',
+        name: '❄️ Frozen Abyss',
+        emoji: '❄️',
+        description: 'Kedalaman es abadi. Temperatur -100°C.',
+        favoredElement: 'water',
+        minPetLevel: 50,
+        duration: 4 * 60,
+        rewards: {
+            moneyRange: [60000, 150000],
+            expRange: [350, 700],
+            drops: [
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 65, min: 2, max: 4 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 40, min: 1, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 25, min: 1, max: 2 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 20, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 15, min: 1, max: 2 },
+            ]
+        }
+    },
+    {
+        id: 'volcanic_core',
+        name: '🌋 Volcanic Core',
+        emoji: '🌋',
+        description: 'Inti gunung berapi aktif. Panas luar biasa.',
+        favoredElement: 'fire',
+        minPetLevel: 70,
+        duration: 6 * 60,
+        rewards: {
+            moneyRange: [100000, 250000],
+            expRange: [500, 1000],
+            drops: [
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 75, min: 3, max: 5 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 50, min: 2, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 32, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 25, min: 1, max: 2 },
+                { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 5, min: 1, max: 1 },
+            ]
+        }
+    },
+    {
+        id: 'spirit_world',
+        name: '👻 Spirit World',
+        emoji: '👻',
+        description: 'Dunia roh — antara hidup dan mati.',
+        favoredElement: 'dark',
+        minPetLevel: 80,
+        duration: 7 * 60,
+        rewards: {
+            moneyRange: [150000, 350000],
+            expRange: [700, 1400],
+            drops: [
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 80, min: 3, max: 6 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 55, min: 2, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 35, min: 2, max: 3 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 35, min: 1, max: 2 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 28, min: 1, max: 3 },
+                { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 10, min: 1, max: 1 },
+            ]
+        }
+    },
+    {
+        id: 'dimension_rift',
+        name: '🌀 Dimension Rift',
+        emoji: '🌀',
+        description: 'Celah dimensi — reward luar biasa, bahaya tak terduga.',
+        favoredElement: 'light',
+        minPetLevel: 90,
+        duration: 10 * 60,
+        rewards: {
+            moneyRange: [250000, 600000],
+            expRange: [1000, 2500],
+            drops: [
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 85, min: 4, max: 8 },
+                { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 60, min: 2, max: 4 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 40, min: 2, max: 3 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 40, min: 2, max: 3 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 35, min: 2, max: 3 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 35, min: 2, max: 3 },
+                { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 15, min: 1, max: 2 },
+            ]
+        }
+    },
+    {
+        id: 'void_realm',
+        name: '🕳️ Void Realm',
+        emoji: '🕳️',
+        description: '⚠️ SECRET ZONE — Hanya untuk explorer sejati (100+ expeditions).',
+        favoredElement: null,
+        minPetLevel: 50,
+        duration: 12 * 60,
+        isSecret: true,
+        unlockCondition: 100, // total_expeditions required
+        rewards: {
+            moneyRange: [400000, 1000000],
+            expRange: [2000, 4000],
+            drops: [
+                { id: 'refine_stone', name: 'Refine Stone', emoji: '🪨', chance: 90, min: 5, max: 10 },
+                { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 50, min: 2, max: 5 },
+                { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 25, min: 1, max: 2 },
+                { id: 'lucky_charm', name: 'Lucky Charm', emoji: '🍀', chance: 50, min: 2, max: 3 },
+                { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 45, min: 2, max: 3 },
+                { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡', chance: 45, min: 2, max: 3 },
+                { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 35, min: 1, max: 2 },
             ]
         }
     },
@@ -150,6 +257,15 @@ db.exec(`CREATE TABLE IF NOT EXISTS expeditions (
     endsAt INTEGER,
     status TEXT DEFAULT 'active',
     rewards TEXT DEFAULT '{}'
+)`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS expedition_coop (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guildId TEXT,
+    leaderId TEXT,
+    memberId TEXT,
+    expeditionId INTEGER,
+    bonusApplied INTEGER DEFAULT 0
 )`);
 
 // ==================== HELPER: Get active expedition ====================
@@ -238,6 +354,14 @@ function buildExpeditionPanel(guildId, userId, username) {
     desc += `**📍 Pilih Zona Ekspedisi:**\n\n`;
 
     EXPEDITION_ZONES.forEach(zone => {
+        // Skip secret zones that aren't unlocked
+        if (zone.isSecret) {
+            const totalExps = getUserStat(guildId, userId, 'total_expeditions') || 0;
+            if (totalExps < zone.unlockCondition) {
+                desc += `🔒 ❓ **???** (Unlock setelah ${zone.unlockCondition} expeditions — kamu: ${totalExps})\n\n`;
+                return; // skip adding to select menu
+            }
+        }
         const canEnter = pet.level >= zone.minPetLevel;
         const lock = canEnter ? '✅' : '🔒';
         const hours = Math.floor(zone.duration / 60);
@@ -260,6 +384,11 @@ function buildExpeditionPanel(guildId, userId, username) {
         .setMinValues(1).setMaxValues(1);
 
     EXPEDITION_ZONES.forEach(zone => {
+        // Skip secret zones that aren't unlocked for select menu
+        if (zone.isSecret) {
+            const totalExps = getUserStat(guildId, userId, 'total_expeditions') || 0;
+            if (totalExps < zone.unlockCondition) return;
+        }
         const canEnter = pet.level >= zone.minPetLevel;
         const hours = Math.floor(zone.duration / 60);
         const synTag = hasZoneSynergy(pet, zone) ? '🎯 SYNERGY! ' : '';
@@ -285,6 +414,14 @@ function startExpedition(guildId, userId, zoneId) {
 
     const zone = EXPEDITION_ZONES.find(z => z.id === zoneId);
     if (!zone) return { success: false, message: '❌ Zona tidak ditemukan!' };
+
+    // Check secret zone unlock
+    if (zone.isSecret) {
+        const totalExps = getUserStat(guildId, userId, 'total_expeditions') || 0;
+        if (totalExps < zone.unlockCondition) {
+            return { success: false, message: `🔒 Zona ini membutuhkan ${zone.unlockCondition} total expeditions untuk unlock! (kamu: ${totalExps})` };
+        }
+    }
 
     if (pet.level < zone.minPetLevel) {
         return { success: false, message: `🔒 Pet level terlalu rendah! Butuh Lv.${zone.minPetLevel}+ (sekarang: Lv.${pet.level})` };
@@ -356,6 +493,49 @@ function claimExpeditionRewards(guildId, userId) {
         doubleMoney = true;
     }
 
+    // Rare Events (10% chance total)
+    let rareEvent = null;
+    const eventRoll = Math.random();
+    if (eventRoll < 0.03) {
+        // 3% — Hidden Treasure Cache
+        const bonusMoney = Math.floor(money * 0.5);
+        money += bonusMoney;
+        rareEvent = { type: 'treasure', label: '💎 **HIDDEN TREASURE!** Pet menemukan gua harta karun!', bonusMoney };
+    } else if (eventRoll < 0.06) {
+        // 3% — Ancient Spirit Blessing (2x EXP)
+        exp *= 2;
+        rareEvent = { type: 'spirit', label: '👻 **SPIRIT BLESSING!** Roh kuno memberkati pet — EXP x2!' };
+    } else if (eventRoll < 0.08) {
+        // 2% — Mysterious Merchant (free rare item)
+        const rareItems = [
+            { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', qty: 2 },
+            { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', qty: 1 },
+            { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', qty: 2 },
+        ];
+        const picked = rareItems[Math.floor(Math.random() * rareItems.length)];
+        drops.push({ ...picked });
+        rareEvent = { type: 'merchant', label: `🧙 **MYSTERIOUS MERCHANT!** Pedagang misterius memberi hadiah: ${picked.emoji} ${picked.name} x${picked.qty}!` };
+    } else if (eventRoll < 0.10) {
+        // 2% — Portal Discovery (instant money bonus)
+        const portalBonus = getRandomInt(50000, 200000);
+        money += portalBonus;
+        rareEvent = { type: 'portal', label: `🌀 **PORTAL DISCOVERY!** Pet menemukan portal dimensi lain — bonus 🪙 ${portalBonus.toLocaleString('id-ID')}!` };
+    }
+
+    // Co-op bonus check
+    let coopBonus = false;
+    try {
+        const coopRow = db.prepare('SELECT * FROM expedition_coop WHERE expeditionId = ? AND bonusApplied = 0').get(activeExp.id);
+        if (coopRow) {
+            money = Math.floor(money * 1.3);
+            coopBonus = true;
+            db.prepare('UPDATE expedition_coop SET bonusApplied = 1 WHERE id = ?').run(coopRow.id);
+            // Give partner bonus too
+            const partnerBonus = Math.floor(money * 0.15);
+            db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(partnerBonus, coopRow.memberId);
+        }
+    } catch (_) {}
+
     // Apply rewards
     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(money, guildId, userId);
     addIncome(guildId, userId, 'expedition', money);
@@ -373,7 +553,7 @@ function claimExpeditionRewards(guildId, userId) {
     updateQuestProgress(guildId, userId, 'expedition', 1);
 
     // Mark expedition as complete
-    const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney, synergy });
+    const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney, synergy, rareEvent: rareEvent ? rareEvent.type : null, coopBonus });
     db.prepare('UPDATE expeditions SET status = ?, rewards = ? WHERE id = ?').run('completed', rewardsData, activeExp.id);
 
     return {
@@ -383,6 +563,8 @@ function claimExpeditionRewards(guildId, userId) {
         drops,
         doubleMoney,
         synergy,
+        rareEvent,
+        coopBonus,
         expResult,
         zone,
         pet
@@ -441,6 +623,12 @@ async function handleExpeditionButton(interaction) {
         desc += `> ✨ Pet EXP: **+${result.exp}**\n`;
         if (result.synergy) {
             desc += `> ${ELEMENT_EMOJI[result.zone.favoredElement] || '✨'} **ELEMENT SYNERGY!** +25% money, +20% EXP, +15% drop 🎯\n`;
+        }
+        if (result.rareEvent) {
+            desc += `\n${result.rareEvent.label}\n`;
+        }
+        if (result.coopBonus) {
+            desc += `> 👥 **CO-OP BONUS!** +30% money (partner juga dapat 15%)\n`;
         }
 
         if (result.drops.length > 0) {
