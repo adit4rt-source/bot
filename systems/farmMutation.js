@@ -12,11 +12,14 @@ const { getWeatherMutationBonus } = require('./farmWeather');
 // elsewhere may quote higher "chance %" numbers — those are cosmetic hype, not
 // the real odds defined here.
 const MUTATION_TYPES = [
-    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 10, chance: 0.010, color: '#FFD700' },
-    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 20, chance: 0.003, color: '#B9F2FF' },
-    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 15, chance: 0.006, color: '#2C2F33' },
-    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 25, chance: 0.0012, color: '#FF69B4' },
+    { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 5, chance: 0.010, color: '#FFD700' },
+    { id: 'crystal', prefix: 'Crystal', emoji: '💎', multiplier: 8, chance: 0.003, color: '#B9F2FF' },
+    { id: 'shadow', prefix: 'Shadow', emoji: '🌑', multiplier: 6, chance: 0.006, color: '#2C2F33' },
+    { id: 'rainbow', prefix: 'Rainbow', emoji: '🌈', multiplier: 10, chance: 0.0012, color: '#FF69B4' },
 ];
+
+// Maximum money a single mutation can give (hard cap to prevent economy breaking)
+const MUTATION_VALUE_CAP = 500000; // Max 500k per single mutated crop
 
 // ==================== PRESTIGE CROPS ====================
 // Ultra-rare crops that take 24-48 hours but sell for massive amounts
@@ -152,6 +155,7 @@ function getMutationStats(guildId, userId) {
 // ==================== EXPORTS ====================
 module.exports = {
     MUTATION_TYPES,
+    MUTATION_VALUE_CAP,
     PRESTIGE_CROPS,
     SEED_UPGRADES,
     rollMutation,
