@@ -14,7 +14,7 @@ function getFarmSlots(guildId, userId) {
 }
 
 function getPlots(guildId, userId) {
-    return db.prepare('SELECT * FROM farm_plots WHERE userId = ?').all(userId);
+    return db.prepare('SELECT * FROM farm_plots WHERE userId = ? AND greenhouse = 0').all(userId);
 }
 
 function getStorage(guildId, userId) {
@@ -52,4 +52,42 @@ function getFarmToolYieldBonus(guildId, userId) {
     return getFarmToolLevel(guildId, userId) * FARM_TOOLS.yieldPerLevel;
 }
 
-module.exports = { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolLevel, getFarmToolYieldBonus };
+// ==================== GREENHOUSE ====================
+const GREENHOUSE_COSTS = [
+    { level: 1, cost: 150000, slots: 4 },
+    { level: 2, cost: 400000, slots: 6 },
+    { level: 3, cost: 1000000, slots: 8 },
+];
+
+function getGreenhouseLevel(userId) {
+    const row = db.prepare('SELECT level FROM greenhouse WHERE userId = ?').get(userId);
+    return row ? row.level : 0;
+}
+
+function getGreenhouseSlots(userId) {
+    const level = getGreenhouseLevel(userId);
+    if (level === 0) return 0;
+    return 2 + level * 2; // Lv1=4, Lv2=6, Lv3=8
+}
+
+function upgradeGreenhouse(userId) {
+    const current = getGreenhouseLevel(userId);
+    const next = current + 1;
+    if (next > 3) return false;
+    if (current === 0) {
+        db.prepare('INSERT OR REPLACE INTO greenhouse (userId, level, purchasedAt) VALUES (?, ?, ?)').run(userId, 1, Date.now());
+    } else {
+        db.prepare('UPDATE greenhouse SET level = ? WHERE userId = ?').run(next, userId);
+    }
+    return true;
+}
+
+function getGreenhousePlots(guildId, userId) {
+    return db.prepare('SELECT * FROM farm_plots WHERE userId = ? AND greenhouse = 1').all(userId);
+}
+
+function insertGreenhousePlot(guildId, userId, cropId, plantedAt, wateredAt) {
+    db.prepare('INSERT INTO farm_plots (userId, cropId, plantedAt, wateredAt, greenhouse) VALUES (?, ?, ?, ?, 1)').run(userId, cropId, plantedAt, wateredAt);
+}
+
+module.exports = { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolLevel, getFarmToolYieldBonus, getGreenhouseLevel, getGreenhouseSlots, upgradeGreenhouse, getGreenhousePlots, insertGreenhousePlot, GREENHOUSE_COSTS };

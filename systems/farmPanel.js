@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, addUserBalance, subtractUserBalance, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolYieldBonus } = require('./farming');
+const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolYieldBonus, getGreenhouseLevel, getGreenhouseSlots, upgradeGreenhouse, getGreenhousePlots, insertGreenhousePlot, GREENHOUSE_COSTS } = require('./farming');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
@@ -10,6 +10,7 @@ const { addPetExp } = require('../systems/pets');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS, FARM_TOOLS } = require('../data/farming');
 const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, getWeatherDeathChance, isAutoWaterWeather, formatWeatherEmbed } = require('./farmWeather');
 const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
+const { getCropSeasonEffect, SEASON_CROP_EFFECTS } = require('./farmSeason');
 const { getPetData } = require('./pets');
 const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
 const panelRefresh = require('./panelRefresh');
@@ -40,7 +41,8 @@ function buildFarmPanel(guildId, userId, username) {
         const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
         if (!crop || p.status === 'dead') return false;
         const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
-        const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+        const seasonEffect = (p.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
+        const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
         return Date.now() - p.plantedAt >= growTime;
     }).length;
 
@@ -68,7 +70,8 @@ function buildFarmPanel(guildId, userId, username) {
             if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
             if (!crop) return;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-            const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+            const seasonEffect = (plot.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
+            const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
             const elapsed = Date.now() - plot.plantedAt;
             const dryTime = Date.now() - plot.wateredAt;
             const deadThreshold = growTime * 2.5;
@@ -77,6 +80,9 @@ function buildFarmPanel(guildId, userId, username) {
             const plotPest = activePests.find(p => p.plotId === plot.id);
             const pestIcon = plotPest ? (() => { const pt = PEST_TYPES.find(p => p.id === plotPest.pestId); return pt ? ` ${pt.emoji}` : ' 🐛'; })() : '';
             
+            // Season tag
+            const seasonTag = plot.greenhouse === 1 ? ' 🏠' : ` ${seasonEffect.label.split(' ')[0]}`;
+
             let statusIcon = '', statusText = '', progressBar = '';
             if (plot.status === 'dead' || dryTime > deadThreshold) {
                 statusIcon = '☠️'; statusText = 'Mati';
@@ -100,7 +106,7 @@ function buildFarmPanel(guildId, userId, username) {
             }
             
             const fertIcon = fert.id !== 'none' ? ` ${fert.emoji}` : '';
-            plotStatus += `> \`[${i+1}]\` ${crop.emoji} **${crop.name}**${fertIcon}${pestIcon}\n>  ┗ ${statusIcon} \`${progressBar}\` ${statusText}\n`;
+            plotStatus += `> \`[${i+1}]\` ${crop.emoji} **${crop.name}**${fertIcon}${pestIcon}${seasonTag}\n>  ┗ ${statusIcon} \`${progressBar}\` ${statusText}\n`;
         });
     }
 
@@ -131,9 +137,9 @@ function buildFarmPanel(guildId, userId, username) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_market_${userId}`).setLabel('🏪 Market').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Greenhouse').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_pupuk_${userId}`).setLabel('🧫 Pupuk').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_deco_${userId}`).setLabel('🎨 Deco').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2] };
@@ -159,7 +165,8 @@ function buildFarmHub(guildId, userId, username) {
         const crop = FARM_CROPS.find(c => c.id === p.cropId) || PRESTIGE_CROPS.find(c => c.id === p.cropId);
         if (!crop || p.status === 'dead') return false;
         const fert = FARM_FERTILIZERS.find(f => f.id === p.fertilizer) || FARM_FERTILIZERS[0];
-        const growTime = crop.time * (1 - fert.speedBonus) * 60000 / (season.effects?.farmGrow || 1);
+        const seasonEffect = (p.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
+        const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
         return Date.now() - p.plantedAt >= growTime;
     }).length;
 
@@ -432,6 +439,203 @@ async function handleFarmButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
+    // === NPC MARKET PANEL ===
+    if (customId === `farm_market_${userId}`) {
+        const { buildMarketEmbed, getTodayOrders, ALL_CROPS: MKT_CROPS } = require('./farmMarket');
+        const { desc, orders } = buildMarketEmbed(userId);
+        const storage = getStorage(guildId, userId);
+        
+        const embed = new EmbedBuilder().setTitle('🏪 NPC Market').setColor('#E67E22').setDescription(desc);
+        const components = [];
+        
+        // Build select menu for selling crops that match orders
+        const sellable = orders.filter(o => {
+            const have = storage.find(s => s.itemId === o.cropId);
+            return have && have.quantity > 0;
+        });
+        
+        if (sellable.length > 0) {
+            const sellMenu = new StringSelectMenuBuilder().setCustomId(`farm_marketsell_${userId}`).setPlaceholder('💰 Jual crop ke NPC Market...').setMinValues(1).setMaxValues(1);
+            for (const o of sellable) {
+                const crop = MKT_CROPS.find(c => c.id === o.cropId);
+                if (!crop) continue;
+                const have = storage.find(s => s.itemId === o.cropId);
+                sellMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${crop.name} (punya: ${have.quantity}) — 🪙${o.pricePerUnit}/pc`).setValue(crop.id).setDescription(`Order: x${o.qty} | Premium price!`));
+            }
+            components.push(new ActionRowBuilder().addComponents(sellMenu));
+        }
+        
+        components.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        ));
+        return interaction.update({ embeds: [embed], components });
+    }
+
+    // === GREENHOUSE PANEL ===
+    if (customId === `farm_greenhouse_${userId}`) {
+        const ghLevel = getGreenhouseLevel(userId);
+        const ghSlots = getGreenhouseSlots(userId);
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        const maxGhLevel = 3;
+        
+        let desc = `🏠 **Greenhouse** — Tanaman terlindung dari penalti musim!\n`;
+        desc += `> Greenhouse crops selalu dianggap "In-Season" (1.0x grow, 1.2x yield, 0% mati).\n\n`;
+        
+        if (ghLevel === 0) {
+            desc += `❌ **Belum punya Greenhouse!**\n`;
+            desc += `> 🪙 **150.000** untuk membeli Greenhouse Lv.1 (4 slot)\n`;
+        } else {
+            desc += `📊 Level: **${ghLevel}/${maxGhLevel}** | Slot: **${ghPlots.length}/${ghSlots}**\n\n`;
+            
+            if (ghPlots.length === 0) {
+                desc += `> *🌿 Greenhouse kosong! Tanam bibit di greenhouse.*\n`;
+            } else {
+                ghPlots.forEach((plot, i) => {
+                    let crop = FARM_CROPS.find(c => c.id === plot.cropId) || PRESTIGE_CROPS.find(c => c.id === plot.cropId);
+                    if (!crop) return;
+                    const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
+                    const growTime = crop.time * (1 - fert.speedBonus) * 1.0 * 60000; // always 1.0 growMult
+                    const elapsed = Date.now() - plot.plantedAt;
+                    let statusIcon = '', statusText = '';
+                    if (plot.status === 'dead') {
+                        statusIcon = '☠️'; statusText = 'Mati';
+                    } else if (elapsed >= growTime) {
+                        statusIcon = '✅'; statusText = 'Siap Panen!';
+                    } else {
+                        const pct = Math.min(100, Math.floor((elapsed / growTime) * 100));
+                        const remainMin = Math.max(0, Math.ceil((growTime - elapsed) / 60000));
+                        statusIcon = '🌱'; statusText = `${pct}% (${remainMin}m)`;
+                    }
+                    desc += `> 🏠 \`[${i+1}]\` ${crop.emoji} **${crop.name}** — ${statusIcon} ${statusText}\n`;
+                });
+            }
+            
+            if (ghLevel < maxGhLevel) {
+                const nextCost = GREENHOUSE_COSTS.find(c => c.level === ghLevel + 1);
+                desc += `\n⬆️ Upgrade ke Lv.${ghLevel + 1}: 🪙 **${nextCost.cost.toLocaleString('id-ID')}** (${nextCost.slots} slot)`;
+            }
+        }
+        
+        const embed = new EmbedBuilder().setTitle(`🏠 GREENHOUSE — ${interaction.user.username}`).setColor('#27AE60').setDescription(desc);
+        const row = new ActionRowBuilder();
+        
+        if (ghLevel === 0) {
+            row.addComponents(new ButtonBuilder().setCustomId(`farm_ghbuy_${userId}`).setLabel('🏠 Beli Greenhouse (🪙150.000)').setStyle(ButtonStyle.Success));
+        } else {
+            if (ghPlots.length < ghSlots) {
+                row.addComponents(new ButtonBuilder().setCustomId(`farm_ghplant_${userId}`).setLabel('🌱 Plant (GH)').setStyle(ButtonStyle.Success));
+            }
+            row.addComponents(new ButtonBuilder().setCustomId(`farm_ghharvest_${userId}`).setLabel('🌾 Harvest (GH)').setStyle(ButtonStyle.Primary));
+            if (ghLevel < maxGhLevel) {
+                row.addComponents(new ButtonBuilder().setCustomId(`farm_ghupgrade_${userId}`).setLabel(`⬆️ Upgrade Lv.${ghLevel + 1}`).setStyle(ButtonStyle.Secondary));
+            }
+        }
+        row.addComponents(new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === GREENHOUSE BUY ===
+    if (customId === `farm_ghbuy_${userId}`) {
+        const ghLevel = getGreenhouseLevel(userId);
+        if (ghLevel > 0) return interaction.reply({ content: '❌ Kamu sudah punya Greenhouse!', ephemeral: true });
+        if (userData.balance < 150000) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **150.000** (punya: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
+        subtractUserBalance(guildId, userId, 150000);
+        upgradeGreenhouse(userId);
+        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🏠 Greenhouse Dibeli!')
+            .setDescription(`Sekarang kamu punya **Greenhouse Lv.1** dengan **4 slot** tanam!\n\n> Tanaman di greenhouse tidak terkena penalti musim salah.\n> Selalu dianggap "In-Season" (1.2x yield, 0% kematian).`);
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === GREENHOUSE UPGRADE ===
+    if (customId === `farm_ghupgrade_${userId}`) {
+        const ghLevel = getGreenhouseLevel(userId);
+        if (ghLevel >= 3) return interaction.reply({ content: '✅ Greenhouse sudah level MAX!', ephemeral: true });
+        const nextInfo = GREENHOUSE_COSTS.find(c => c.level === ghLevel + 1);
+        if (!nextInfo) return interaction.reply({ content: '❌ Upgrade tidak tersedia.', ephemeral: true });
+        if (userData.balance < nextInfo.cost) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${nextInfo.cost.toLocaleString('id-ID')}**.`, ephemeral: true });
+        subtractUserBalance(guildId, userId, nextInfo.cost);
+        upgradeGreenhouse(userId);
+        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('🏠 Greenhouse Upgraded!')
+            .setDescription(`Greenhouse naik ke **Lv.${ghLevel + 1}** — sekarang **${nextInfo.slots} slot**!`);
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === GREENHOUSE PLANT ===
+    if (customId === `farm_ghplant_${userId}`) {
+        const ghSlots = getGreenhouseSlots(userId);
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        if (ghPlots.length >= ghSlots) return interaction.reply({ content: `❌ Greenhouse penuh! (${ghPlots.length}/${ghSlots})`, ephemeral: true });
+        const owned = getAllSeeds(guildId, userId);
+        if (owned.length === 0) {
+            const embed = new EmbedBuilder().setTitle('🏠 Plant di Greenhouse').setColor('#E74C3C')
+                .setDescription('📦 Tidak punya bibit! Beli dulu di Shop.');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+        const seedMenu = new StringSelectMenuBuilder().setCustomId(`farm_ghplantseed_${userId}`).setPlaceholder('🏠 Pilih bibit untuk Greenhouse...').setMinValues(1).setMaxValues(1);
+        owned.slice(0, 25).forEach(inv => {
+            let c = FARM_CROPS.find(cr => cr.id === inv.cropId) || PRESTIGE_CROPS.find(cr => cr.id === inv.cropId);
+            if (!c) return;
+            const timeDisplay = c.time >= 60 ? `${Math.floor(c.time / 60)}j` : `${c.time}m`;
+            seedMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (x${inv.quantity}) — ${c.tier} | ${timeDisplay}`).setValue(c.id).setDescription(`Jual: 🪙${c.sellPrice.toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield} | 🏠 No penalty`));
+        });
+        const embed = new EmbedBuilder().setTitle('🏠 Plant di Greenhouse').setColor('#27AE60')
+            .setDescription(`Slot tersedia: **${ghSlots - ghPlots.length}** dari ${ghSlots}\n> 🏠 Greenhouse: tanaman selalu In-Season!`);
+        const row1 = new ActionRowBuilder().addComponents(seedMenu);
+        const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+    }
+
+    // === GREENHOUSE HARVEST ===
+    if (customId === `farm_ghharvest_${userId}`) {
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        if (ghPlots.length === 0) return interaction.reply({ content: '❌ Greenhouse kosong!', ephemeral: true });
+        
+        const weatherYieldMult = getWeatherYieldMultiplier();
+        const seedLevel = getUserStat(guildId, userId, 'farm_seed_level') || 0;
+        let harvested = 0, totalItems = 0, harvestDesc = '';
+
+        for (const plot of ghPlots) {
+            let crop = FARM_CROPS.find(c => c.id === plot.cropId) || PRESTIGE_CROPS.find(c => c.id === plot.cropId);
+            if (!crop) continue;
+            const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
+            const growTime = crop.time * (1 - fert.speedBonus) * 1.0 * 60000; // greenhouse = always 1.0
+            
+            if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
+                // Greenhouse always in-season: yieldMult 1.2
+                const seasonYieldMult = 1.2;
+                const rotationBonus = getRotationBonus(guildId, userId, plot.id, crop.id);
+                let qty = calculateHarvestYield(crop, {
+                    weatherYieldMult: weatherYieldMult * seasonYieldMult,
+                    fertYieldBonus: fert.yieldBonus,
+                    seedLevel,
+                    rotationBonus,
+                    petFarmBonus: 0,
+                    toolBonus: getFarmToolYieldBonus(guildId, userId)
+                });
+                
+                addStorage(guildId, userId, crop.id, qty);
+                updateRotation(guildId, userId, plot.id, crop.id);
+                harvestDesc += `> 🏠 ${crop.emoji} ${crop.name} x${qty}\n`;
+                harvested++; totalItems += qty;
+                db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+            }
+        }
+        
+        if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman greenhouse siap dipanen!', ephemeral: true });
+        
+        incrementUserStat(guildId, userId, 'total_harvests', harvested);
+        const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🏠 Greenhouse Harvest!')
+            .setDescription(`**${harvested} tanaman** dipanen (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke Storage.`);
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
     const action = parts[1];
 
     // === BACK TO MAIN PANEL ===
@@ -610,9 +814,18 @@ async function handleFarmButton(interaction) {
             if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
             if (!crop) continue;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-            const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+            const seasonEffect = (plot.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
+            const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
             
             if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
+                // Season death check (wrong season can kill crops at harvest)
+                if (seasonEffect.deathChance > 0 && Math.random() < seasonEffect.deathChance) {
+                    harvestDesc += `> ❌ ~~${crop.emoji} ${crop.name}~~ — *mati karena musim salah!*\n`;
+                    db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
+                    try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
+                    continue;
+                }
+
                 // Pest damage accrued since planting (applied by the reminder tick).
                 let pestEffect = { yieldMult: 1, stolenItems: 0, isDead: false };
                 try { pestEffect = require('./farmWeather').getPestHarvestEffect(guildId, userId, plot.id); } catch (e) {}
@@ -633,10 +846,10 @@ async function handleFarmButton(interaction) {
                     continue;
                 }
 
-                // Calculate yield with all bonuses
+                // Calculate yield with all bonuses (including season yieldMult)
                 const rotationBonus = getRotationBonus(guildId, userId, plot.id, crop.id);
                 let qty = calculateHarvestYield(crop, {
-                    weatherYieldMult,
+                    weatherYieldMult: weatherYieldMult * seasonEffect.yieldMult,
                     fertYieldBonus: fert.yieldBonus,
                     seedLevel,
                     rotationBonus,
@@ -651,17 +864,13 @@ async function handleFarmButton(interaction) {
                     pestNote = ' 🐛';
                 }
 
-                // Roll mutation!
+                // Roll mutation! (season mutation bonus added)
                 const mutation = rollMutation(guildId, userId, seedLevel);
                 
                 addStorage(guildId, userId, crop.id, qty);
                 if (crop.tier === 'Legendary') harvestedLegendary = true;
 
                 if (mutation) {
-                    // Mutation jackpot! The harvested crop ALSO goes to storage (worth
-                    // sellPrice x qty when sold), so we pay the bonus as (multiplier - 1)x
-                    // here. Total value = stored crop (1x) + bonus = multiplier x — keeping
-                    // the advertised multiplier honest instead of double-counting it.
                     const mutationMoney = crop.sellPrice * qty * (mutation.multiplier - 1);
                     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(mutationMoney, guildId, userId);
                     addIncome(guildId, userId, 'farm_mutation', mutationMoney);
@@ -1040,6 +1249,57 @@ async function handleFarmSelectMenu(interaction) {
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
+    // === GREENHOUSE PLANT SEED SELECT ===
+    if (customId.startsWith('farm_ghplantseed_')) {
+        const cropId = interaction.values[0];
+        let crop = FARM_CROPS.find(c => c.id === cropId) || PRESTIGE_CROPS.find(c => c.id === cropId);
+        if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+        const owned = getSeedCount(guildId, userId, cropId);
+        if (owned <= 0) return interaction.reply({ content: `❌ Kamu tidak punya bibit **${crop.emoji} ${crop.name}**!`, ephemeral: true });
+        const ghSlots = getGreenhouseSlots(userId);
+        const ghPlots = getGreenhousePlots(guildId, userId);
+        if (ghPlots.length >= ghSlots) return interaction.reply({ content: '❌ Greenhouse penuh!', ephemeral: true });
+        removeSeed(guildId, userId, cropId, 1);
+        insertGreenhousePlot(guildId, userId, cropId, Date.now(), Date.now());
+        const sisa = getSeedCount(guildId, userId, cropId);
+        const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
+        const embed = new EmbedBuilder().setColor('#27AE60').setTitle(`🏠 ${crop.emoji} ${crop.name} Ditanam di Greenhouse!`)
+            .setDescription(`> Siap panen dalam **${timeDisplay}** (tanpa penalti musim!)\n> 📦 Sisa bibit: **${sisa}**\n> 🏠 *Greenhouse: selalu In-Season!*`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_ghplant_${userId}`).setLabel('🌱 Tanam Lagi (GH)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🔙 Greenhouse').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // === NPC MARKET SELL SELECT ===
+    if (customId.startsWith('farm_marketsell_')) {
+        const cropId = interaction.values[0];
+        const { fulfillOrder, ALL_CROPS: MKT_CROPS } = require('./farmMarket');
+        const crop = MKT_CROPS.find(c => c.id === cropId);
+        if (!crop) return interaction.reply({ content: '❌ Crop tidak ditemukan!', ephemeral: true });
+        const storageQty = getStorageQty(guildId, userId, cropId);
+        if (storageQty <= 0) return interaction.reply({ content: `❌ Kamu tidak punya **${crop.name}** di storage!`, ephemeral: true });
+        
+        // Sell as many as possible to fill the order
+        const result = fulfillOrder(userId, cropId, storageQty);
+        if (!result.success) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        
+        // Remove from storage
+        removeStorage(guildId, userId, cropId, result.filled);
+        // Pay the player
+        addUserBalance(guildId, userId, result.totalPrice);
+        addIncome(guildId, userId, 'farm_market', result.totalPrice);
+        
+        const embed = new EmbedBuilder().setColor('#F39C12').setTitle('🏪 NPC Market — Terjual!')
+            .setDescription(`${crop.emoji} **${crop.name}** x${result.filled} terjual!\n\n> 💰 Pendapatan: 🪙 **${result.totalPrice.toLocaleString('id-ID')}**\n> 📋 Sisa order: **${result.remaining}**\n> 💼 Saldo: 🪙 **${(userData.balance + result.totalPrice).toLocaleString('id-ID')}**`);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_market_${userId}`).setLabel('🏪 Kembali ke Market').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Farm').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
     // === BUY SEED (shows quantity modal) ===
     if (customId.startsWith('farm_buyseed_') || customId.startsWith('farm_buyseed2_')) {
         const cropId = interaction.values[0];
@@ -1309,7 +1569,9 @@ function isFarmPanelButton(customId) {
            !customId.includes('pupukfert_') && 
            !customId.includes('pupukplot_') && 
            !customId.includes('craftselect_') && 
-           !customId.includes('buydeco_');
+           !customId.includes('buydeco_') &&
+           !customId.includes('ghplantseed_') &&
+           !customId.includes('marketsell_');
 }
 
 function isFarmPanelSelectMenu(customId) {
@@ -1318,6 +1580,7 @@ function isFarmPanelSelectMenu(customId) {
            customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
            customId.startsWith('farm_craftselect') || customId.startsWith('farm_hubcraft') ||
            customId.startsWith('farm_buydeco_') ||
+           customId.startsWith('farm_ghplantseed_') || customId.startsWith('farm_marketsell_') ||
            customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_');
 }
 

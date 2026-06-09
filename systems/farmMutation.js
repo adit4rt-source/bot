@@ -21,11 +21,11 @@ const MUTATION_TYPES = [
 // ==================== PRESTIGE CROPS ====================
 // Ultra-rare crops that take 24-48 hours but sell for massive amounts
 const PRESTIGE_CROPS = [
-    { id: 'golden_lotus', name: 'Golden Lotus', emoji: '🪷✨', tier: 'Prestige', cost: 15000, time: 1440, minYield: 1, maxYield: 1, sellPrice: 25000, desc: 'Bunga suci berlapis emas. Butuh 24 jam.' },
-    { id: 'void_rose', name: 'Void Rose', emoji: '🌹🌑', tier: 'Prestige', cost: 20000, time: 1800, minYield: 1, maxYield: 1, sellPrice: 40000, desc: 'Mawar dari dimensi kegelapan. Butuh 30 jam.' },
-    { id: 'celestial_tree', name: 'Celestial Tree', emoji: '🌳⭐', tier: 'Prestige', cost: 30000, time: 2160, minYield: 1, maxYield: 1, sellPrice: 65000, desc: 'Pohon langit yang memancarkan cahaya. 36 jam.' },
-    { id: 'phoenix_flower', name: 'Phoenix Flower', emoji: '🌺🔥', tier: 'Prestige', cost: 25000, time: 1920, minYield: 1, maxYield: 2, sellPrice: 50000, desc: 'Bunga api yang tidak pernah mati. 32 jam.' },
-    { id: 'time_blossom', name: 'Time Blossom', emoji: '🌸⌛', tier: 'Prestige', cost: 50000, time: 2880, minYield: 1, maxYield: 1, sellPrice: 120000, desc: 'Bunga waktu — paling langka. Butuh 48 jam penuh!' },
+    { id: 'golden_lotus', name: 'Golden Lotus', emoji: '🪷✨', tier: 'Prestige', cost: 15000, time: 1440, minYield: 1, maxYield: 1, sellPrice: 25000, desc: 'Bunga suci berlapis emas. Butuh 24 jam.', seasons: { spring: 'off', summer: 'off', autumn: 'peak', winter: 'off' } },
+    { id: 'void_rose', name: 'Void Rose', emoji: '🌹🌑', tier: 'Prestige', cost: 20000, time: 1800, minYield: 1, maxYield: 1, sellPrice: 40000, desc: 'Mawar dari dimensi kegelapan. Butuh 30 jam.', seasons: { spring: 'off', summer: 'off', autumn: 'peak', winter: 'off' } },
+    { id: 'celestial_tree', name: 'Celestial Tree', emoji: '🌳⭐', tier: 'Prestige', cost: 30000, time: 2160, minYield: 1, maxYield: 1, sellPrice: 65000, desc: 'Pohon langit yang memancarkan cahaya. 36 jam.', seasons: { spring: 'off', summer: 'off', autumn: 'peak', winter: 'off' } },
+    { id: 'phoenix_flower', name: 'Phoenix Flower', emoji: '🌺🔥', tier: 'Prestige', cost: 25000, time: 1920, minYield: 1, maxYield: 2, sellPrice: 50000, desc: 'Bunga api yang tidak pernah mati. 32 jam.', seasons: { spring: 'off', summer: 'off', autumn: 'peak', winter: 'off' } },
+    { id: 'time_blossom', name: 'Time Blossom', emoji: '🌸⌛', tier: 'Prestige', cost: 50000, time: 2880, minYield: 1, maxYield: 1, sellPrice: 120000, desc: 'Bunga waktu — paling langka. Butuh 48 jam penuh!', seasons: { spring: 'off', summer: 'off', autumn: 'peak', winter: 'off' } },
 ];
 
 // ==================== SEED UPGRADE TIERS ====================

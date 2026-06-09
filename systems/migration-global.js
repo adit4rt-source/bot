@@ -153,7 +153,8 @@ function runGlobalMigration(db) {
                 wateredAt INTEGER,
                 fertilizer TEXT DEFAULT 'none',
                 status TEXT DEFAULT 'growing',
-                notified INTEGER DEFAULT 0
+                notified INTEGER DEFAULT 0,
+                greenhouse INTEGER DEFAULT 0
             );
             
             CREATE TABLE IF NOT EXISTS farm_storage_global (

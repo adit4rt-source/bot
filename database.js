@@ -276,11 +276,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS pet_food_inventory (guildId TEXT, userId TEX
 db.exec(`CREATE TABLE IF NOT EXISTS seed_inventory (guildId TEXT, userId TEXT, cropId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, cropId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS fertilizer_inventory (guildId TEXT, userId TEXT, fertId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, fertId))`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing')`);
+db.exec(`CREATE TABLE IF NOT EXISTS farm_plots (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, cropId TEXT, plantedAt INTEGER, wateredAt INTEGER, fertilizer TEXT DEFAULT 'none', status TEXT DEFAULT 'growing', greenhouse INTEGER DEFAULT 0)`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_storage (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS farm_data (guildId TEXT, userId TEXT, farm_level INTEGER DEFAULT 1, PRIMARY KEY(guildId, userId))`);
 try { db.exec(`ALTER TABLE farm_plots ADD COLUMN notified INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE farm_plots ADD COLUMN greenhouse INTEGER DEFAULT 0`); } catch(e) {}
 
+db.exec(`CREATE TABLE IF NOT EXISTS greenhouse (userId TEXT PRIMARY KEY, level INTEGER DEFAULT 0, purchasedAt INTEGER)`);
 db.exec(`CREATE TABLE IF NOT EXISTS pets (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, petId TEXT, name TEXT, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, happiness INTEGER DEFAULT 100, hunger INTEGER DEFAULT 100, status TEXT DEFAULT 'happy', active INTEGER DEFAULT 0, adoptedAt INTEGER)`);
 try { db.exec(`ALTER TABLE pets ADD COLUMN hunting_until INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN skills TEXT DEFAULT '[]'`); } catch(e) {}
