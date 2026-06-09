@@ -266,9 +266,19 @@ async function checkAndUpdateStreak(message) {
     let streakData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId), streakActivatedToday = false;
 
     if (!streakData) {
-        db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 1, ?)').run(guildId, userId, today);
-        streakData = { count: 1, last_date: today }; streakActivatedToday = true;
-    } else if (streakData.last_date !== today) {
+        // Fallback: check if user has a streak under a different guildId (e.g. after global migration)
+        const fallback = db.prepare('SELECT * FROM streaks WHERE userId = ? ORDER BY count DESC LIMIT 1').get(userId);
+        if (fallback && fallback.last_date) {
+            // Migrate the streak row to this guild
+            db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run(guildId, userId, fallback.count, fallback.last_date);
+            streakData = { guildId, userId, count: fallback.count, last_date: fallback.last_date };
+        } else {
+            db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 1, ?)').run(guildId, userId, today);
+            streakData = { count: 1, last_date: today }; streakActivatedToday = true;
+        }
+    }
+    
+    if (!streakActivatedToday && streakData.last_date !== today) {
         const diffDays = Math.floor((new Date(today) - new Date(streakData.last_date)) / 86400000);
         if (diffDays === 1) streakData.count += 1;
         else { if (streakData.count > 1) db.prepare('INSERT OR REPLACE INTO streak_history (guildId, userId, lost_count) VALUES (?, ?, ?)').run(guildId, userId, streakData.count); streakData.count = 1; }
