@@ -92,16 +92,16 @@ function getYieldRange(animalType, tier) {
 // Every 10 levels = 1 evolution tier
 const EVOLUTION_TIERS = [
     { tier: 0, name: 'Normal', emoji: '', levelReq: 0, cost: 0, feedPremiumReq: 0 },
-    { tier: 1, name: 'Enhanced', emoji: '⭐', levelReq: 10, cost: 3000, feedPremiumReq: 2 },
-    { tier: 2, name: 'Superior', emoji: '⭐⭐', levelReq: 20, cost: 6000, feedPremiumReq: 4 },
-    { tier: 3, name: 'Excellent', emoji: '⭐⭐⭐', levelReq: 30, cost: 12000, feedPremiumReq: 6 },
-    { tier: 4, name: 'Refined', emoji: '🌟', levelReq: 40, cost: 20000, feedPremiumReq: 8 },
-    { tier: 5, name: 'Premium', emoji: '🌟🌟', levelReq: 50, cost: 35000, feedPremiumReq: 10 },
-    { tier: 6, name: 'Elite', emoji: '🌟🌟🌟', levelReq: 60, cost: 55000, feedPremiumReq: 13 },
-    { tier: 7, name: 'Master', emoji: '💫', levelReq: 70, cost: 80000, feedPremiumReq: 16 },
-    { tier: 8, name: 'Grand Master', emoji: '💫💫', levelReq: 80, cost: 120000, feedPremiumReq: 20 },
-    { tier: 9, name: 'Legendary', emoji: '👑', levelReq: 90, cost: 180000, feedPremiumReq: 25 },
-    { tier: 10, name: 'Divine', emoji: '👑💎', levelReq: 100, cost: 300000, feedPremiumReq: 30 },
+    { tier: 1, name: 'Enhanced', emoji: '⭐', levelReq: 10, cost: 25000, feedPremiumReq: 3 },
+    { tier: 2, name: 'Superior', emoji: '⭐⭐', levelReq: 20, cost: 60000, feedPremiumReq: 5 },
+    { tier: 3, name: 'Excellent', emoji: '⭐⭐⭐', levelReq: 30, cost: 120000, feedPremiumReq: 8 },
+    { tier: 4, name: 'Refined', emoji: '🌟', levelReq: 40, cost: 200000, feedPremiumReq: 12 },
+    { tier: 5, name: 'Premium', emoji: '🌟🌟', levelReq: 50, cost: 350000, feedPremiumReq: 16 },
+    { tier: 6, name: 'Elite', emoji: '🌟🌟🌟', levelReq: 60, cost: 550000, feedPremiumReq: 20 },
+    { tier: 7, name: 'Master', emoji: '💫', levelReq: 70, cost: 800000, feedPremiumReq: 25 },
+    { tier: 8, name: 'Grand Master', emoji: '💫💫', levelReq: 80, cost: 1200000, feedPremiumReq: 30 },
+    { tier: 9, name: 'Legendary', emoji: '👑', levelReq: 90, cost: 1800000, feedPremiumReq: 40 },
+    { tier: 10, name: 'Divine', emoji: '👑💎', levelReq: 100, cost: 3000000, feedPremiumReq: 50 },
 ];
 
 // ==================== PRODUCT QUALITY ====================
