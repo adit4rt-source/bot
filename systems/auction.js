@@ -157,12 +157,18 @@ function fmtTimeLeft(endsAt) {
 function buildAuctionPanel(guildId, userId, username) {
     const active = getActiveAuctions(50);
     const mine = active.filter(a => a.sellerId === userId);
+    const petCount = active.filter(a => a.offerType === 'pet').length;
+    const relicCount = active.filter(a => a.offerType === 'relic').length;
+    const itemCount = active.filter(a => a.offerType === 'item').length;
+    const fishCount = active.filter(a => a.offerType === 'fish').length;
+
     const embed = new EmbedBuilder()
         .setColor('#C27C0E')
         .setTitle(`🏛️ AUCTION HOUSE — ${username}`)
         .setDescription(
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `📦 Lelang aktif: **${active.length}**  •  🧾 Punyamu: **${mine.length}/${MAX_ACTIVE_PER_USER}**\n` +
+            `> 🐾 Pet: **${petCount}**  •  💎 Relic: **${relicCount}**  •  📦 Item: **${itemCount}**  •  🐟 Fish: **${fishCount}**\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
             `Lelang item, pet, relic, atau ikanmu — pemain lain saling bid!\n` +
             `> 💰 Bid tertinggi menang saat waktu habis\n` +
@@ -170,18 +176,30 @@ function buildAuctionPanel(guildId, userId, username) {
             `> 🛡️ Aset & uang bid diamankan (escrow)`
         )
         .setFooter({ text: 'Auction House • bid otomatis di-settle saat berakhir' });
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`auc_browse_${userId}`).setLabel('🔍 Browse & Bid').setStyle(ButtonStyle.Primary),
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`auc_browse_all_${userId}`).setLabel('🔍 Semua').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`auc_browse_pet_${userId}`).setLabel(`🐾 Pet (${petCount})`).setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`auc_browse_relic_${userId}`).setLabel(`💎 Relic (${relicCount})`).setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`auc_browse_item_${userId}`).setLabel(`📦 Item (${itemCount})`).setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`auc_browse_fish_${userId}`).setLabel(`🐟 Fish (${fishCount})`).setStyle(ButtonStyle.Secondary)
+    );
+    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`auc_sell_${userId}`).setLabel('➕ Jual / Lelang').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`auc_mine_${userId}`).setLabel('🧾 Lelangku').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
-function buildBrowse(guildId, userId, username) {
-    const active = getActiveAuctions(25);
+function buildBrowse(guildId, userId, username, filter = 'all') {
+    let active = getActiveAuctions(50);
+    if (filter !== 'all') active = active.filter(a => a.offerType === filter);
+    active = active.slice(0, 25); // Discord select menu max 25
+
+    const filterLabels = { all: '🔍 Semua', pet: '🐾 Pet', relic: '💎 Relic', item: '📦 Item', fish: '🐟 Fish' };
+    const title = `${filterLabels[filter] || '🔍'} Lelang Aktif`;
+
     if (!active.length) {
-        return { embeds: [new EmbedBuilder().setColor('#C27C0E').setTitle('🔍 Browse Lelang').setDescription('*Belum ada lelang aktif. Jadilah yang pertama menjual!*')], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`auc_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))] };
+        return { embeds: [new EmbedBuilder().setColor('#C27C0E').setTitle(title).setDescription(`*Tidak ada lelang ${filter === 'all' ? '' : filter + ' '}aktif saat ini.*`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`auc_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))] };
     }
     let desc = '';
     const menu = new StringSelectMenuBuilder().setCustomId(`aucsel_bid_${userId}`).setPlaceholder('Pilih lelang untuk bid...').setMinValues(1).setMaxValues(1);
@@ -190,7 +208,7 @@ function buildBrowse(guildId, userId, username) {
         desc += `**#${a.id}** ${a.offerName} — ${bidTxt} • ⏳ ${fmtTimeLeft(a.endsAt)}\n`;
         menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`#${a.id} ${a.offerName}`.slice(0, 100)).setValue(String(a.id)).setDescription(`${bidTxt} • ⏳ ${fmtTimeLeft(a.endsAt)}`.slice(0, 100)));
     }
-    const embed = new EmbedBuilder().setColor('#C27C0E').setTitle('🔍 Lelang Aktif').setDescription(desc.slice(0, 4000)).setFooter({ text: 'Pilih dari menu untuk menempatkan bid' });
+    const embed = new EmbedBuilder().setColor('#C27C0E').setTitle(title).setDescription(desc.slice(0, 4000)).setFooter({ text: `Filter: ${filterLabels[filter]} | Pilih dari menu untuk bid` });
     return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`auc_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))] };
 }
 
@@ -236,7 +254,10 @@ async function handleAuctionButton(interaction) {
     if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
     const action = parts[1];
     if (action === 'back') return interaction.update(buildAuctionPanel(guildId, userId, interaction.user.username));
-    if (action === 'browse') return interaction.update(buildBrowse(guildId, userId, interaction.user.username));
+    if (action === 'browse') {
+        const filter = parts[2] !== userId ? parts[2] : 'all'; // auc_browse_pet_userId → filter = 'pet'
+        return interaction.update(buildBrowse(guildId, userId, interaction.user.username, filter));
+    }
     if (action === 'sell') return interaction.update(buildSellMenu(guildId, userId, interaction.user.username));
     if (action === 'mine') return interaction.update(buildMyListings(guildId, userId, interaction.user.username));
 }
