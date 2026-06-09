@@ -275,6 +275,25 @@ async function handleLotteryButton(interaction) {
     const userId = interaction.user.id;
     const id = interaction.customId;
 
+    // One-click bet straight from the promo card / panel: opens a tiny modal so the
+    // player never has to remember the `/togel angka:` slash command.
+    if (id === 'lottery_quickbet') {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId('lottery_betmodal').setTitle('🎟️ Pasang Angka Togel');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('number')
+                    .setLabel(`Angka ${NUMBER_MIN}-${NUMBER_MAX} (bayar ${BET_PRICE.toLocaleString('id-ID')})`)
+                    .setPlaceholder('contoh: 19')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+                    .setMaxLength(3)
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
     if (id === 'lottery_refresh') {
         return interaction.update(buildLotteryPanel(guildId)).catch(() => {});
     }
@@ -310,6 +329,88 @@ async function handleLotteryButton(interaction) {
             );
         return interaction.reply({ embeds: [embed], ephemeral: true });
     }
+}
+
+// ==================== AMBIENT PROMO CARD ====================
+// A compact, eye-catching "ad" for Togel that the promo engine drops into active
+// channels (see systems/togelPromo.js). Copy varies with round state so repeated
+// drops don't feel identical/spammy. Reuses the same lottery_* buttons.
+function buildTogelPromo(guildId) {
+    const round = getCurrentRound(guildId);
+    const last = getLastDrawn(guildId);
+    const minsLeft = Math.max(0, Math.ceil((round.drawAt - Date.now()) / 60000));
+    const hasJackpot = round.carriedOver > 0 || round.pot >= BET_PRICE * 20;
+    const soon = minsLeft <= 10;
+
+    let hook;
+    if (hasJackpot) {
+        const v = ['🔥 JACKPOT MENGGUNUNG!', '💰 Pot togel lagi gendut banget!', '🤑 Belum ada yang tembus — hadiah numpuk!'];
+        hook = v[Math.floor(Math.random() * v.length)];
+    } else if (soon) {
+        const v = ['⏰ Undian sebentar lagi!', '🚨 Buruan, ronde mau ditutup!', '⌛ Last call — pasang angkamu!'];
+        hook = v[Math.floor(Math.random() * v.length)];
+    } else {
+        const v = ['🎟️ Coba peruntunganmu di TOGEL!', '🍀 Tebak 1 angka, bawa pulang pot!', '🎰 Lagi gabut? Pasang angka togel yuk!'];
+        hook = v[Math.floor(Math.random() * v.length)];
+    }
+
+    let desc = `**${hook}**\n\n`;
+    desc += `🎰 Pot ronde **#${round.roundId}**: 🪙 **${round.pot.toLocaleString('id-ID')}**\n`;
+    if (round.carriedOver > 0) desc += `-# ↪️ termasuk carry-over 🪙 ${round.carriedOver.toLocaleString('id-ID')}\n`;
+    desc += `⏰ Diundi <t:${Math.floor(round.drawAt / 1000)}:R>  •  🎟️ 🪙 ${BET_PRICE.toLocaleString('id-ID')}/angka (maks ${MAX_NUMBERS_PER_USER})\n`;
+    if (last) {
+        desc += last.winnersCount > 0
+            ? `\n🎲 Ronde lalu: angka **${last.drawnNumber}** → **${last.winnersCount}** menang 🪙 ${last.payoutEach.toLocaleString('id-ID')}/org`
+            : `\n🎲 Ronde lalu: angka **${last.drawnNumber}** → nihil, pot di-carry over!`;
+    }
+    desc += `\n\nKlik **🎟️ Pasang Angka** di bawah, atau ketik \`/togel angka:<${NUMBER_MIN}-${NUMBER_MAX}>\`.`;
+
+    const embed = new EmbedBuilder()
+        .setColor(hasJackpot ? '#E67E22' : '#F1C40F')
+        .setTitle('🎟️ TOGEL — Pasang 1 Angka, Menang Pot!')
+        .setDescription(desc)
+        .setFooter({ text: 'Mini-lotere server • Undian otomatis tiap 1 jam' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('lottery_quickbet').setLabel('Pasang Angka').setEmoji('🎟️').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('lottery_mybets').setLabel('Angka Saya').setEmoji('🧾').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('lottery_info').setLabel('Cara Main').setEmoji('❓').setStyle(ButtonStyle.Secondary),
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+// ==================== MODAL HANDLER (one-click quick bet) ====================
+function isLotteryModal(customId) {
+    return typeof customId === 'string' && customId.startsWith('lottery_betmodal');
+}
+
+async function handleLotteryModal(interaction) {
+    const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    const raw = (interaction.fields.getTextInputValue('number') || '').trim();
+    const number = parseInt(raw, 10);
+
+    const result = placeBet(guildId, userId, username, number);
+    if (!result.success) return interaction.reply({ content: result.error, ephemeral: true });
+
+    try {
+        const { checkAchievements } = require('./achievements');
+        await checkAchievements(interaction.guild, userId, { type: 'togel_bet' }).catch(() => {});
+    } catch (_) { /* achievements optional */ }
+
+    const embed = new EmbedBuilder()
+        .setColor('#2ECC71')
+        .setTitle('🎟️ Angka Terpasang!')
+        .setDescription(
+            `> ✅ Kamu pasang angka **${result.number}** (ronde #${result.roundId}).\n` +
+            `> 🔢 Angkamu ronde ini: **${result.myNumbers.join(', ')}**\n` +
+            `> 💸 Bayar: 🪙 ${result.cost.toLocaleString('id-ID')}  •  Saldo: 🪙 ${result.newBalance.toLocaleString('id-ID')}\n` +
+            `> 🎰 Pot sekarang: 🪙 **${result.pot.toLocaleString('id-ID')}**\n` +
+            `> ⏰ Diundi <t:${Math.floor(result.drawAt / 1000)}:R>`
+        );
+    return interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // ==================== SCHEDULER (auto hourly draw) ====================
@@ -374,6 +475,7 @@ module.exports = {
     getSeed, setSeed, setPot,
     getCurrentRound, getRoundRow, getOpenRound, getUserBets, getRoundBets, getLastDrawn,
     placeBet, drawRound,
-    buildLotteryPanel, isLotteryButton, handleLotteryButton,
+    buildLotteryPanel, buildTogelPromo, isLotteryButton, handleLotteryButton,
+    isLotteryModal, handleLotteryModal,
     startLotteryScheduler, announceDraw,
 };

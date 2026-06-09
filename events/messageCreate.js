@@ -125,6 +125,10 @@ module.exports = async function handleMessageCreate(message) {
     // count, mini-event progress). Computed once; notifications & streak still run.
     const spam = isSpamMessage(guildId, message);
 
+    // Ambient Togel promo: occasionally surface the togel card in whatever channel
+    // is active (gated by message-count + cooldown, auto-deletes). Fire-and-forget.
+    require('../systems/togelPromo').maybeDropTogelPromo(message, spam).catch(() => {});
+
     // Spawn mini-event
     if (!spam && !state.activeMiniEvents.has(guildId)) {
         let count = state.guildMessageCounters.get(guildId) || 0; count++;

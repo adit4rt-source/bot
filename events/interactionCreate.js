@@ -14,7 +14,7 @@ const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMark
 const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
-const { isLotteryButton, handleLotteryButton, buildLotteryPanel, placeBet, setPot, BET_PRICE } = require('../systems/lottery');
+const { isLotteryButton, handleLotteryButton, buildLotteryPanel, placeBet, setPot, BET_PRICE, isLotteryModal, handleLotteryModal } = require('../systems/lottery');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
@@ -584,6 +584,20 @@ async function routeInteraction(interaction) {
                 }
                 const r = setPot(guildId, setpotVal);
                 return interaction.reply({ content: `✅ Pot togel di-set ke 🪙 **${r.pot.toLocaleString('id-ID')}** (seed per ronde: 🪙 **${r.amount.toLocaleString('id-ID')}**). Ronde aktif: **#${r.roundId}**.` });
+            }
+            const promoOpt = interaction.options.getString('promo');
+            if (promoOpt !== null) {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
+                    return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa atur promo togel.', ephemeral: true });
+                }
+                const { setSetting } = require('../database');
+                setSetting(guildId, 'togel_promo_enabled', promoOpt === 'on' ? '1' : '0');
+                return interaction.reply({
+                    content: promoOpt === 'on'
+                        ? '✅ **Promo togel otomatis: AKTIF.** Kartu togel akan muncul sesekali di channel yang sedang ramai (anti-spam: dibatasi cooldown & auto-hapus).'
+                        : '🛑 **Promo togel otomatis: NONAKTIF.** Bot tidak akan lagi memunculkan kartu togel otomatis.',
+                    ephemeral: true,
+                });
             }
             const angka = interaction.options.getInteger('angka');
             if (angka !== null) {
@@ -1458,6 +1472,10 @@ async function routeInteraction(interaction) {
     if (interaction.isModalSubmit()) {
         if (isAuctionModal(interaction.customId)) {
             return handleAuctionModal(interaction);
+        }
+        // --- TOGEL / LOTTERY MODAL (one-click quick bet) ---
+        if (isLotteryModal(interaction.customId)) {
+            return handleLotteryModal(interaction);
         }
         // --- FISHING PANEL MODAL (Lock/Unlock) ---
         if (isFishingPanelModal(interaction.customId)) {
