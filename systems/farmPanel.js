@@ -1316,7 +1316,8 @@ function isFarmPanelSelectMenu(customId) {
            customId.startsWith('farm_buyfert_') || customId.startsWith('farm_buyprestige_') ||
            customId.startsWith('farm_pupukfert_') || customId.startsWith('farm_pupukplot_') ||
            customId.startsWith('farm_craftselect') || customId.startsWith('farm_hubcraft') ||
-           customId.startsWith('farm_buydeco_');
+           customId.startsWith('farm_buydeco_') ||
+           customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_');
 }
 
 function isFarmPanelModal(customId) {

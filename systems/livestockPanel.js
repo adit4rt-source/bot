@@ -10,7 +10,7 @@ async function tempReply(interaction, content) {
 }
 const { ANIMALS, COOP_LEVELS, BARN_LEVELS, EVOLUTION_TIERS, PRODUCT_QUALITY, COOP_SHOP, BARN_SHOP, LIVESTOCK_RECIPES, LIVESTOCK_DISEASES } = require('../data/livestock');
 const { FARM_RECIPES } = require('../data/farming');
-const { getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots, getAnimals, collectProducts, feedAnimals, sellAllProducts, getProductInventory } = require('./livestock');
+const { getCoopLevel, getBarnLevel, getCoopSlots, getBarnSlots, getAnimals, collectProducts, feedAnimals, sellAllProducts, getProductInventory, evolveAnimal } = require('./livestock');
 const { getSeasonDisplay, getSeasonProductionMultiplier } = require('./farmSeason');
 const panelRefresh = require('./panelRefresh');
 
@@ -225,11 +225,12 @@ function buildBarnPanel(userId, username) {
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_barn_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_barn_sell_${userId}`).setLabel('💰 Sell Products').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_barn_evolve_${userId}`).setLabel('⬆️ Evolve').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_barn_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_barn_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
         ...(deadBarnCount > 0 ? [new ButtonBuilder().setCustomId(`farm_barn_bury_${userId}`).setLabel(`⚰️ Kubur (${deadBarnCount})`).setStyle(ButtonStyle.Danger)] : [])
     );
     const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_barn_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_barn_refresh_${userId}`).setLabel('🔄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
@@ -400,6 +401,37 @@ async function handleLivestockButton(interaction) {
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         await tempReply(interaction, `⬆️ Kandang Ayam upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`); return;
     }
+
+    // === EVOLVE AYAM ===
+    if (customId === `farm_coop_evolve_${userId}`) {
+        const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
+        if (chickens.length === 0) return interaction.reply({ content: '❌ Tidak punya ayam!', ephemeral: true });
+        // Find chickens eligible for evolution (level >= next tier's levelReq)
+        const eligible = chickens.filter(a => {
+            const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+            return nextTier && a.level >= nextTier.levelReq;
+        });
+        if (eligible.length === 0) {
+            const info = chickens.map((a, i) => {
+                const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+                const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
+                return `\`[${i + 1}]\` 🐔 Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
+            }).join('\n');
+            return interaction.reply({ content: `❌ Tidak ada ayam yang siap evolve!\n\n${info}`, ephemeral: true });
+        }
+        // Show select menu of eligible chickens
+        const { StringSelectMenuBuilder } = require('discord.js');
+        const options = eligible.map((a, idx) => {
+            const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+            const globalIdx = chickens.indexOf(a);
+            return { label: `[${globalIdx + 1}] ${a.name || 'Ayam'} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
+        }).slice(0, 25);
+        const select = new StringSelectMenuBuilder().setCustomId(`farm_coop_evolveselect_${userId}`).setPlaceholder('Pilih ayam untuk evolve...').addOptions(options);
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.reply({ content: '⬆️ **Pilih ayam yang mau di-evolve:**', components: [row], ephemeral: true });
+    }
+
+    // === EVOLVE SELECT (AYAM) — handled in handleLivestockSelectMenu ===
 
     // === RENAME AYAM ===
     if (customId === `farm_coop_rename_${userId}`) {
@@ -660,6 +692,38 @@ async function handleLivestockButton(interaction) {
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         await tempReply(interaction, `⬆️ Peternakan upgraded ke **${result.name}** (Lv.${result.newLevel})! Slots: ${result.slots}`); return;
     }
+
+    // === EVOLVE BARN (COW/SHEEP) ===
+    if (customId === `farm_barn_evolve_${userId}`) {
+        const cows = getAnimals(userId, 'cow').filter(a => a.status !== 'dead');
+        const sheep = getAnimals(userId, 'sheep').filter(a => a.status !== 'dead');
+        const allBarn = [...cows, ...sheep];
+        if (allBarn.length === 0) return interaction.reply({ content: '❌ Tidak punya hewan di peternakan!', ephemeral: true });
+        const eligible = allBarn.filter(a => {
+            const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+            return nextTier && a.level >= nextTier.levelReq;
+        });
+        if (eligible.length === 0) {
+            const info = allBarn.map((a, i) => {
+                const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+                const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
+                const icon = a.type === 'cow' ? '🐄' : '🐑';
+                return `\`[${i + 1}]\` ${icon} Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
+            }).join('\n');
+            return interaction.reply({ content: `❌ Tidak ada hewan yang siap evolve!\n\n${info}`, ephemeral: true });
+        }
+        const { StringSelectMenuBuilder } = require('discord.js');
+        const options = eligible.map(a => {
+            const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
+            const icon = a.type === 'cow' ? '🐄 Sapi' : '🐑 Domba';
+            return { label: `${icon} ${a.name || a.type} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
+        }).slice(0, 25);
+        const select = new StringSelectMenuBuilder().setCustomId(`farm_barn_evolveselect_${userId}`).setPlaceholder('Pilih hewan untuk evolve...').addOptions(options);
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.reply({ content: '⬆️ **Pilih hewan yang mau di-evolve:**', components: [row], ephemeral: true });
+    }
+
+    // === EVOLVE SELECT (BARN) — handled in handleLivestockSelectMenu ===
     if (customId === `farm_barn_bury_${userId}`) {
         const { buryAllDead } = require('./livestock');
         const result = buryAllDead(userId);
@@ -961,7 +1025,8 @@ async function handleLivestockModal(interaction) {
 }
 
 function isLivestockSelectMenu(customId) {
-    return customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_');
+    return customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_') ||
+           customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_');
 }
 
 // ============ HANDLER: Craft select menu ============
@@ -973,6 +1038,30 @@ async function handleLivestockSelectMenu(interaction) {
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    }
+
+    // === EVOLVE SELECT (COOP) ===
+    if (customId.startsWith('farm_coop_evolveselect_')) {
+        const animalId = parseInt(interaction.values[0]);
+        const result = evolveAnimal(userId, animalId);
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        const oldTier = result.newTier - 1;
+        await interaction.update({ content: `⬆️ **Evolusi berhasil!** 🐔 → **${result.tierName}** ${result.tierEmoji}\n> Tier ${oldTier} → Tier ${result.newTier}\n> Produksi & quality meningkat!`, components: [] });
+        setTimeout(() => { interaction.message.delete().catch(() => {}); }, 5000);
+        trackCoop(interaction, userId);
+        return;
+    }
+
+    // === EVOLVE SELECT (BARN) ===
+    if (customId.startsWith('farm_barn_evolveselect_')) {
+        const animalId = parseInt(interaction.values[0]);
+        const result = evolveAnimal(userId, animalId);
+        if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
+        const oldTier = result.newTier - 1;
+        await interaction.update({ content: `⬆️ **Evolusi berhasil!** → **${result.tierName}** ${result.tierEmoji}\n> Tier ${oldTier} → Tier ${result.newTier}\n> Produksi & quality meningkat!`, components: [] });
+        setTimeout(() => { interaction.message.delete().catch(() => {}); }, 5000);
+        trackBarn(interaction, userId);
+        return;
     }
 
     if (customId.startsWith('farm_hubcraft_') || customId.startsWith('farm_hubcraft2_')) {
