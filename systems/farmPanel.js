@@ -1364,7 +1364,7 @@ async function handleFarmSelectMenu(interaction) {
         const cropId = interaction.values[0];
         const crop = FARM_CROPS.find(c => c.id === cropId);
         if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
-        const modal = new ModalBuilder().setCustomId(`farm_seedqty_${cropId}_${userId}`).setTitle(`Beli ${crop.emoji} ${crop.name}`);
+        const modal = new ModalBuilder().setCustomId(`farm_seedqty_${cropId}_${userId}`).setTitle(`Beli ${crop.name}`.slice(0, 45));
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder().setCustomId('farm_seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
         ));
