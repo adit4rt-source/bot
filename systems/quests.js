@@ -276,15 +276,10 @@ async function checkAndUpdateStreak(message) {
         streakActivatedToday = true;
     }
 
-    // Auto-nickname from dashboard settings
-    const autoNick = getSetting(guildId, 'streak_auto_nickname', '0');
-    if ((autoNick === '1' || autoNick === 'true') && member.manageable) {
-        const minStreak = parseInt(getSetting(guildId, 'streak_min_days', '3')) || 3;
-        const emoji = getSetting(guildId, 'streak_emoji', '🔥');
-        const baseNick = (member.nickname || member.user.username).split(` ${emoji} `)[0];
-        const newNick = streakData.count >= minStreak ? `${baseNick} ${emoji} ${streakData.count}` : baseNick;
-        if ((member.nickname || member.user.username) !== newNick && newNick.length <= 32) await member.setNickname(newNick).catch(() => {});
-    }
+    // Auto-nickname — delegated to the unified builder so the 🔥 streak and ❤️ love
+    // suffixes coexist on the nickname instead of overwriting each other.
+    // (refreshMemberNick internally respects streak_auto_nickname / streak_min_days.)
+    try { await require('./love').refreshMemberNick(member); } catch (_) { /* best-effort */ }
 
     if (streakActivatedToday) {
         resetConsecutivePerfect(guildId, userId);

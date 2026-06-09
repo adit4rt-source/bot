@@ -30,4 +30,25 @@ module.exports = async function handleReactionAdd(reaction, user) {
     await checkAchievements(reaction.message.guild, reactorId, { type: 'reaction' });
     if (awardTo === 'both' || awardTo === 'reactor') await processReactionXp(reactorId);
     if ((awardTo === 'both' || awardTo === 'author') && !isAuthorBot && reactorId !== authorId) await processReactionXp(authorId);
+
+    // ❤️ LOVE — reacting with the love emoji gives the message author +1 love
+    // (unique per reactor→author, no self-love). See systems/love.js.
+    try {
+        const love = require('../systems/love');
+        if (love.isEnabled(guildId) && love.isLoveEmoji(guildId, reaction.emoji && reaction.emoji.name)) {
+            // Re-derive the author safely (the message may be a partial that wasn't cached).
+            let msg = reaction.message;
+            if (msg.partial) msg = await msg.fetch().catch(() => null);
+            const lovedId = msg && msg.author ? msg.author.id : null;
+            const lovedBot = msg && msg.author ? msg.author.bot : true;
+            if (lovedId && !lovedBot && lovedId !== reactorId) {
+                const res = love.giveLove(guildId, reactorId, lovedId);
+                if (res.added) {
+                    incrementUserStat(guildId, lovedId, 'love_received');
+                    const lovedMember = await reaction.message.guild.members.fetch(lovedId).catch(() => null);
+                    if (lovedMember) await love.refreshMemberNick(lovedMember);
+                }
+            }
+        }
+    } catch (_) { /* love is best-effort; never break reaction handling */ }
 };

@@ -42,6 +42,10 @@ function buildProfilePanel(guildId, userId, username, member) {
     const streakCount = sData ? sData.count : 0;
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
+    // Love (❤️) — number of distinct people who reacted ❤️ to this user.
+    let loveCount = 0, loveEmoji = '❤️';
+    try { const love = require('./love'); loveCount = love.getLoveCount(guildId, userId); loveEmoji = love.getEmoji(guildId); } catch (_) {}
+
     const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
     const totalBadges = userAchs.length;
 
@@ -90,6 +94,7 @@ function buildProfilePanel(guildId, userId, username, member) {
             `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})\n` +
             `${ui.money(userData.balance)}\n` +
             `${streakEmoji} **Streak** ${streakCount} Hari\n` +
+            `${loveEmoji} **Love** ${loveCount}\n` +
             `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}${titleLine}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `${rankTitle.emoji} **Rank:** ${rankTitle.name}${progressLine}\n` +

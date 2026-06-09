@@ -56,6 +56,10 @@ const commands = [
 
     // ================= SOCIAL / SERVER TOOLS =================
     new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
+    new SlashCommandBuilder().setName('love').setDescription('❤️ Love — Lihat berapa orang yang menyukaimu (react ❤️ di chat orang untuk kasih love)')
+        .addUserOption(opt => opt.setName('user').setDescription('Lihat love milik user lain').setRequired(false))
+        .addStringOption(opt => opt.setName('admin').setDescription('[Admin] Aktif/nonaktifkan fitur love').setRequired(false)
+            .addChoices({ name: 'Aktifkan', value: 'on' }, { name: 'Nonaktifkan', value: 'off' })),
     new SlashCommandBuilder()
         .setName('welcomer')
         .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')

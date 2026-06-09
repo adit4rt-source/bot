@@ -15,6 +15,7 @@ const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, i
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
 const { isLotteryButton, handleLotteryButton, buildLotteryPanel, placeBet, setPot, BET_PRICE, isLotteryModal, handleLotteryModal } = require('../systems/lottery');
+const love = require('../systems/love');
 const { startBlackjack, handleBlackjackButton, isBlackjackButton, handValue, getCardValue } = require('../systems/blackjack');
 const { handleAbilityButton, handleAbilitySelectMenu, isAbilityButton, isAbilitySelectMenu } = require('../systems/petAbilities');
 const { handleAwakeningButton, isAwakeningButton } = require('../systems/awakening');
@@ -686,6 +687,54 @@ async function routeInteraction(interaction) {
         // ================= INVITE PANEL =================
         if (command === 'invite') {
             return handleInviteCommand(interaction);
+        }
+
+        // ================= LOVE (❤️ social) =================
+        if (command === 'love') {
+            // Admin toggle: /love admin:on|off
+            const adminOpt = interaction.options.getString('admin');
+            if (adminOpt !== null) {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
+                    return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa mengatur fitur love.', ephemeral: true });
+                }
+                const { setSetting } = require('../database');
+                setSetting(guildId, 'love_enabled', adminOpt === 'on' ? '1' : '0');
+                return interaction.reply({
+                    content: adminOpt === 'on'
+                        ? '✅ **Fitur Love: AKTIF.** Member bisa kasih ❤️ ke chat orang lain (1x per orang).'
+                        : '🛑 **Fitur Love: NONAKTIF.** Reaction ❤️ tidak lagi menambah love.',
+                    ephemeral: true,
+                });
+            }
+
+            if (!love.isEnabled(guildId)) {
+                return interaction.reply({ content: '🛑 Fitur Love sedang dinonaktifkan di server ini.', ephemeral: true });
+            }
+
+            const target = interaction.options.getUser('user') || interaction.user;
+            const isSelf = target.id === interaction.user.id;
+            const emoji = love.getEmoji(guildId);
+            const count = love.getLoveCount(guildId, target.id);
+
+            // Top-loved leaderboard for context.
+            const top = love.getTopLoved(guildId, 10);
+            let board = '';
+            if (top.length) {
+                const medals = ['🥇', '🥈', '🥉'];
+                board = '\n\n**🏆 Paling Dicintai:**\n' + top.map((r, i) =>
+                    `${medals[i] || `\`#${i + 1}\``} <@${r.lovedId}> — ${emoji} **${r.count}**`).join('\n');
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor('#E91E63')
+                .setTitle(`${emoji} Love`)
+                .setDescription(
+                    `${isSelf ? 'Kamu' : `<@${target.id}>`} disukai oleh ${emoji} **${count}** orang.\n` +
+                    `-# Cara kasih love: react ${emoji} di chat seseorang (1x per orang, tidak bisa ke diri sendiri).` +
+                    board
+                )
+                .setThumbnail(target.displayAvatarURL({ dynamic: true, size: 128 }));
+            return interaction.reply({ embeds: [embed] });
         }
 
         // ================= WELCOMER PANEL =================
