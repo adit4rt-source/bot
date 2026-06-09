@@ -73,12 +73,17 @@ function buildAdminPanel(guildId) {
             `> \ud83d\uded2 **Shop** \u2014 Tambah role/item/voucher ke toko\n` +
             `> \ud83d\udcb0 **Money** \u2014 Kelola uang user & banker\n` +
             `> \ud83d\udd25 **Streak** \u2014 Set/reset/restore streak user\n` +
-            `> \u2699\ufe0f **Setting** \u2014 Atur channel notifikasi\n` +
+            `> \u2699\ufe0f **Setting** \u2014 Atur semua konfigurasi server\n` +
             `> \ud83d\udce2 **Notifications** \u2014 Auto-create channel notif\n` +
             `> \ud83c\udf99\ufe0f **TempVoice** \u2014 Setup voice channel privat\n` +
             `> 🏆 **Contest** — Fishing contest\n` +
             `> 📊 **Analytics** — Command usage stats\n` +
-            `> 🔧 **DB Tools** — Cek & restore data user (Owner only)\n` +
+            `> 🎁 **Giveaway** — Mulai/akhiri giveaway\n` +
+            `> 👤 **User Lookup** — Cek stats & data user\n` +
+            `> 📢 **Announce** — Kirim embed ke channel\n` +
+            `> 🚫 **Blacklist** — Block user dari ekonomi\n` +
+            `> 🏷️ **Custom Embed** — Edit embed server\n` +
+            `> 🔧 **DB Tools** — Cek & restore data (Owner)\n` +
             `━━━━━━━━━━━━━━━━━━━━━━`
         )
         .setFooter({ text: 'Hanya Admin yang bisa menggunakan panel ini' })
@@ -88,15 +93,20 @@ function buildAdminPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_shop').setLabel('\ud83d\uded2 Shop').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_money').setLabel('\ud83d\udcb0 Money').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_streak').setLabel('\ud83d\udd25 Streak').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_setting').setLabel('\u2699\ufe0f Setting').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('admpnl_setting').setLabel('\u2699\ufe0f Setting').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('\ud83d\udce2 Notif').setStyle(ButtonStyle.Success)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('\ud83d\udce2 Notifications').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('\ud83c\udf99\ufe0f TempVoice').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83c\udfc6 Contest').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_giveaway').setLabel('🎁 Giveaway').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_userlookup').setLabel('👤 Lookup').setStyle(ButtonStyle.Primary)
     );
     const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_announce').setLabel('📢 Announce').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_blacklist').setLabel('🚫 Blacklist').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔧 DB Tools').setStyle(ButtonStyle.Danger)
     );
 
@@ -244,6 +254,69 @@ function buildSettingSubPanel(guildId) {
 }
 
 
+// ============ BUILD: Giveaway sub-panel ============
+function buildGiveawaySubPanel(guildId) {
+    // Show active giveaways
+    let activeList = '*Tidak ada giveaway aktif.*';
+    try {
+        const active = db.prepare("SELECT * FROM giveaways WHERE guildId = ? AND ended = 0 ORDER BY endsAt ASC LIMIT 5").all(guildId);
+        if (active.length > 0) {
+            activeList = active.map((g, i) => `> **${i+1}.** 🎁 ${g.prize} — <t:${Math.floor(g.endsAt / 1000)}:R> (${g.entries || 0} entries)`).join('\n');
+        }
+    } catch (_) {}
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎁 GIVEAWAY MANAGER')
+        .setColor('#E91E63')
+        .setDescription(
+            `Kelola giveaway server:\n\n` +
+            `**Aktif saat ini:**\n${activeList}\n\n` +
+            `> 🎉 **Start** — Mulai giveaway baru\n` +
+            `> 🏁 **End** — Akhiri giveaway lebih awal\n` +
+            `> 🔄 **Reroll** — Pilih ulang pemenang`
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_giveaway_start').setLabel('🎉 Start').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_giveaway_end').setLabel('🏁 End').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_giveaway_reroll').setLabel('🔄 Reroll').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+// ============ BUILD: Blacklist sub-panel ============
+function buildBlacklistSubPanel(guildId) {
+    // Ensure table exists
+    try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+
+    const list = db.prepare('SELECT * FROM blacklist WHERE guildId = ? ORDER BY addedAt DESC LIMIT 10').all(guildId);
+    let listText = list.length > 0
+        ? list.map((b, i) => `> **${i+1}.** <@${b.userId}> — ${b.reason || 'No reason'}`).join('\n')
+        : '*Tidak ada user yang di-blacklist.*';
+
+    const embed = new EmbedBuilder()
+        .setTitle('🚫 BLACKLIST')
+        .setColor('#E74C3C')
+        .setDescription(
+            `User yang di-blacklist tidak bisa:\n` +
+            `> ❌ Earn XP & Money dari chat\n` +
+            `> ❌ Claim /daily, /fish, /farm\n` +
+            `> ❌ Ikut giveaway & tournament\n\n` +
+            `**Daftar Blacklist (${list.length}):**\n${listText}`
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_blacklist_add').setLabel('🚫 Add').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('admpnl_blacklist_remove').setLabel('✅ Remove').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+
 // ============ BUILD: Contest sub-panel ============
 function buildContestSubPanel(guildId) {
     const embed = new EmbedBuilder()
@@ -344,9 +417,85 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
 
+    // === NEW PANELS ===
+    if (customId === 'admpnl_giveaway') return interaction.update(buildGiveawaySubPanel(guildId));
+    if (customId === 'admpnl_userlookup') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_userlookup').setTitle('👤 User Lookup');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('@user / 123456789 / budi'))
+        );
+        return interaction.showModal(modal);
+    }
+    if (customId === 'admpnl_announce') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_announce').setTitle('📢 Kirim Announcement');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID tujuan').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan channel > Copy ID')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul embed').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: 🎉 Event Baru!')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi pesan (support \\n untuk newline)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Tulis pesan pengumuman...')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex (kosong = biru)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#FF5733')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image_url').setLabel('Image URL (kosong = tanpa gambar)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('https://i.imgur.com/xxx.png'))
+        );
+        return interaction.showModal(modal);
+    }
+    if (customId === 'admpnl_blacklist') return interaction.update(buildBlacklistSubPanel(guildId));
+    if (customId === 'admpnl_customembed') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_customembed').setTitle('🏷️ Custom Embed');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID (kirim embed ke sini)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Channel ID')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Judul embed')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi (\\n untuk newline, {server} untuk nama)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Konten embed...')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#2B2D31')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer text (kosong = tanpa footer)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Footer teks'))
+        );
+        return interaction.showModal(modal);
+    }
+
     // === DB TOOLS (Owner Only) ===
     if (customId.startsWith('admpnl_dbtools')) {
         return handleDbToolsButton(interaction);
+    }
+
+    // === BLACKLIST: Add/Remove buttons ===
+    if (customId === 'admpnl_blacklist_add') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_blacklist_add').setTitle('🚫 Blacklist User');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('@user / 123456789 / budi')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Alasan (opsional)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Exploit / bot / dll'))
+        );
+        return interaction.showModal(modal);
+    }
+    if (customId === 'admpnl_blacklist_remove') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_blacklist_remove').setTitle('✅ Unblacklist User');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('123456789012345678'))
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === GIVEAWAY: Start/End/Pick ===
+    if (customId === 'admpnl_giveaway_start') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_giveaway_start').setTitle('🎁 Start Giveaway');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Channel untuk giveaway')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('prize').setLabel('Hadiah').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('🪙 50.000 Money + Mystery Box')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('duration').setLabel('Durasi (contoh: 1h, 30m, 2d)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('1h')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('winners').setLabel('Jumlah pemenang').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('1'))
+        );
+        return interaction.showModal(modal);
+    }
+    if (customId === 'admpnl_giveaway_end') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_giveaway_end').setTitle('🏁 End Giveaway');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message_id').setLabel('Message ID giveaway').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan pesan giveaway > Copy Message ID'))
+        );
+        return interaction.showModal(modal);
+    }
+    if (customId === 'admpnl_giveaway_reroll') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_giveaway_reroll').setTitle('🔄 Reroll Pemenang');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message_id').setLabel('Message ID giveaway').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Message ID giveaway yang sudah selesai'))
+        );
+        return interaction.showModal(modal);
     }
 
     // === ANALYTICS ===
@@ -889,6 +1038,224 @@ async function handleAdminModal(interaction) {
         const rerollCost = (interaction.fields.getTextInputValue('reroll_cost') || '').trim();
         if (rerollCost && !isNaN(parseInt(rerollCost))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_reroll_cost', rerollCost); updated.push(`Reroll Cost: 🪙 ${rerollCost}`); }
         return interaction.reply({ content: updated.length > 0 ? `✅ Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+    }
+
+    // === USER LOOKUP ===
+    if (customId === 'admpnl_modal_userlookup') {
+        const rawTarget = interaction.fields.getTextInputValue('target').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget);
+        if (!targetId) return interaction.reply({ content: '❌ User tidak ditemukan!', ephemeral: true });
+        const user = getOrCreateUser(guildId, targetId);
+        const streakRow = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, targetId) || { count: 0, last_date: '-' };
+        const totalDailies = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_dailies'").get(guildId, targetId)?.stat_value || 0;
+        const totalEarned = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_earned'").get(guildId, targetId)?.stat_value || 0;
+        const totalSpent = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_spent'").get(guildId, targetId)?.stat_value || 0;
+        const petCount = db.prepare('SELECT COUNT(*) as c FROM pets WHERE userId = ?').get(targetId)?.c || 0;
+        const achCount = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(targetId)?.c || 0;
+        const fishCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(targetId)?.c || 0;
+        // Check blacklist
+        let blacklisted = false;
+        try { blacklisted = !!db.prepare('SELECT 1 FROM blacklist WHERE guildId = ? AND userId = ?').get(guildId, targetId); } catch (_) {}
+
+        const embed = new EmbedBuilder()
+            .setTitle(`👤 User Lookup: <@${targetId}>`)
+            .setColor(blacklisted ? '#E74C3C' : '#3498DB')
+            .setDescription(
+                (blacklisted ? '> 🚫 **USER DI-BLACKLIST**\n\n' : '') +
+                `**💰 Ekonomi:**\n` +
+                `> Balance: 🪙 **${(user.balance || 0).toLocaleString('id-ID')}**\n` +
+                `> Total Earned: 🪙 ${totalEarned.toLocaleString('id-ID')}\n` +
+                `> Total Spent: 🪙 ${totalSpent.toLocaleString('id-ID')}\n\n` +
+                `**📊 Progress:**\n` +
+                `> Level: **${user.level || 0}** (XP: ${user.xp || 0})\n` +
+                `> 🔥 Streak: **${streakRow.count}** hari (last: ${streakRow.last_date})\n` +
+                `> 📅 Daily Claims: **${totalDailies}**\n\n` +
+                `**🎮 Collection:**\n` +
+                `> 🐾 Pets: **${petCount}**\n` +
+                `> 🏆 Achievements: **${achCount}**\n` +
+                `> 🐟 Fish: **${fishCount}**\n\n` +
+                `> Last Daily: ${user.lastDaily || 'Never'}`
+            )
+            .setFooter({ text: `ID: ${targetId}` })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    }
+
+    // === ANNOUNCEMENT ===
+    if (customId === 'admpnl_modal_announce') {
+        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+        const title = interaction.fields.getTextInputValue('title').trim();
+        const description = interaction.fields.getTextInputValue('description').replace(/\\n/g, '\n');
+        const color = interaction.fields.getTextInputValue('color')?.trim() || '#3498DB';
+        const imageUrl = interaction.fields.getTextInputValue('image_url')?.trim() || '';
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setTitle(title)
+            .setDescription(description)
+            .setColor(color.startsWith('#') ? color : `#${color}`)
+            .setTimestamp()
+            .setFooter({ text: `Oleh ${interaction.user.username}` });
+        if (imageUrl) embed.setImage(imageUrl);
+
+        await channel.send({ embeds: [embed] });
+        return interaction.reply({ content: `✅ Announcement terkirim ke <#${channelId}>!`, ephemeral: true });
+    }
+
+    // === CUSTOM EMBED ===
+    if (customId === 'admpnl_modal_customembed') {
+        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+        const title = interaction.fields.getTextInputValue('title')?.trim() || '';
+        const description = interaction.fields.getTextInputValue('description').replace(/\\n/g, '\n').replace(/{server}/g, interaction.guild.name);
+        const color = interaction.fields.getTextInputValue('color')?.trim() || '#2B2D31';
+        const footer = interaction.fields.getTextInputValue('footer')?.trim() || '';
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setDescription(description)
+            .setColor(color.startsWith('#') ? color : `#${color}`);
+        if (title) embed.setTitle(title);
+        if (footer) embed.setFooter({ text: footer });
+
+        await channel.send({ embeds: [embed] });
+        return interaction.reply({ content: `✅ Custom embed terkirim ke <#${channelId}>!`, ephemeral: true });
+    }
+
+    // === BLACKLIST: Add ===
+    if (customId === 'admpnl_modal_blacklist_add') {
+        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+        const rawTarget = interaction.fields.getTextInputValue('target').trim();
+        const targetId = await resolveTargetId(interaction, rawTarget);
+        if (!targetId) return interaction.reply({ content: '❌ User tidak ditemukan!', ephemeral: true });
+        const reason = (interaction.fields.getTextInputValue('reason') || '').trim() || 'No reason';
+        db.prepare('INSERT OR REPLACE INTO blacklist (guildId, userId, reason, addedAt, addedBy) VALUES (?, ?, ?, ?, ?)').run(guildId, targetId, reason, Date.now(), interaction.user.id);
+        return interaction.reply({ content: `🚫 <@${targetId}> telah di-**blacklist**!\n> Alasan: ${reason}`, allowedMentions: { users: [] } });
+    }
+
+    // === BLACKLIST: Remove ===
+    if (customId === 'admpnl_modal_blacklist_remove') {
+        try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, addedBy TEXT, PRIMARY KEY(guildId, userId))`); } catch (_) {}
+        const targetId = interaction.fields.getTextInputValue('target').trim();
+        const existing = db.prepare('SELECT 1 FROM blacklist WHERE guildId = ? AND userId = ?').get(guildId, targetId);
+        if (!existing) return interaction.reply({ content: '❌ User tidak ada di blacklist!', ephemeral: true });
+        db.prepare('DELETE FROM blacklist WHERE guildId = ? AND userId = ?').run(guildId, targetId);
+        return interaction.reply({ content: `✅ <@${targetId}> telah di-**unblacklist**.`, allowedMentions: { users: [] } });
+    }
+
+    // === GIVEAWAY: Start ===
+    if (customId === 'admpnl_modal_giveaway_start') {
+        try { db.exec(`CREATE TABLE IF NOT EXISTS giveaways (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, channelId TEXT, messageId TEXT, prize TEXT, winners INTEGER DEFAULT 1, endsAt INTEGER, ended INTEGER DEFAULT 0, entries INTEGER DEFAULT 0, hostId TEXT)`); } catch (_) {}
+        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+        const prize = interaction.fields.getTextInputValue('prize').trim();
+        const durationStr = interaction.fields.getTextInputValue('duration').trim();
+        const winnersCount = parseInt(interaction.fields.getTextInputValue('winners') || '1') || 1;
+
+        // Parse duration
+        let ms = 0;
+        const dMatch = durationStr.match(/(\d+)\s*(d|h|m)/i);
+        if (dMatch) {
+            const num = parseInt(dMatch[1]);
+            const unit = dMatch[2].toLowerCase();
+            if (unit === 'd') ms = num * 86400000;
+            else if (unit === 'h') ms = num * 3600000;
+            else ms = num * 60000;
+        } else { ms = parseInt(durationStr) * 60000 || 3600000; }
+
+        const endsAt = Date.now() + ms;
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const gaEmbed = new EmbedBuilder()
+            .setTitle('🎁 GIVEAWAY!')
+            .setColor('#E91E63')
+            .setDescription(
+                `**Hadiah:** ${prize}\n\n` +
+                `> ⏰ Berakhir: <t:${Math.floor(endsAt / 1000)}:R>\n` +
+                `> 🏆 Pemenang: **${winnersCount}** orang\n` +
+                `> 👤 Host: <@${interaction.user.id}>\n\n` +
+                `React 🎉 untuk ikut!`
+            )
+            .setFooter({ text: 'Klik 🎉 di bawah untuk berpartisipasi' })
+            .setTimestamp(endsAt);
+
+        const msg = await channel.send({ embeds: [gaEmbed] });
+        await msg.react('🎉');
+
+        db.prepare('INSERT INTO giveaways (guildId, channelId, messageId, prize, winners, endsAt, hostId) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, channelId, msg.id, prize, winnersCount, endsAt, interaction.user.id);
+        return interaction.reply({ content: `✅ Giveaway dimulai di <#${channelId}>!\n> Hadiah: ${prize}\n> Durasi: ${durationStr}\n> Pemenang: ${winnersCount}`, ephemeral: true });
+    }
+
+    // === GIVEAWAY: End ===
+    if (customId === 'admpnl_modal_giveaway_end') {
+        const messageId = interaction.fields.getTextInputValue('message_id').trim();
+        const ga = db.prepare('SELECT * FROM giveaways WHERE guildId = ? AND messageId = ?').get(guildId, messageId);
+        if (!ga) return interaction.reply({ content: '❌ Giveaway tidak ditemukan! Pastikan Message ID benar.', ephemeral: true });
+        if (ga.ended) return interaction.reply({ content: '❌ Giveaway sudah selesai!', ephemeral: true });
+
+        const channel = interaction.guild.channels.cache.get(ga.channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const msg = await channel.messages.fetch(messageId).catch(() => null);
+        if (!msg) return interaction.reply({ content: '❌ Message tidak ditemukan!', ephemeral: true });
+
+        const reaction = msg.reactions.cache.get('🎉');
+        let users = [];
+        if (reaction) {
+            const fetched = await reaction.users.fetch();
+            users = fetched.filter(u => !u.bot).map(u => u.id);
+        }
+
+        if (users.length === 0) {
+            db.prepare('UPDATE giveaways SET ended = 1 WHERE id = ?').run(ga.id);
+            await msg.edit({ embeds: [new EmbedBuilder().setTitle('🎁 GIVEAWAY SELESAI').setColor('#95A5A6').setDescription(`**Hadiah:** ${ga.prize}\n\n❌ Tidak ada peserta.`)] });
+            return interaction.reply({ content: '⚠️ Giveaway berakhir tanpa peserta.', ephemeral: true });
+        }
+
+        const winners = [];
+        const pool = [...users];
+        for (let i = 0; i < Math.min(ga.winners, pool.length); i++) {
+            const idx = Math.floor(Math.random() * pool.length);
+            winners.push(pool.splice(idx, 1)[0]);
+        }
+
+        db.prepare('UPDATE giveaways SET ended = 1, entries = ? WHERE id = ?').run(users.length, ga.id);
+        const winText = winners.map(w => `<@${w}>`).join(', ');
+        await msg.edit({ embeds: [new EmbedBuilder().setTitle('🎁 GIVEAWAY SELESAI!').setColor('#FFD700').setDescription(`**Hadiah:** ${ga.prize}\n\n🏆 **Pemenang:** ${winText}\n\n> Total peserta: ${users.length}`)] });
+        await channel.send({ content: `🎉 Selamat ${winText}! Kamu memenangkan **${ga.prize}**! 🎁` });
+        return interaction.reply({ content: `✅ Giveaway selesai! Pemenang: ${winText}`, ephemeral: true });
+    }
+
+    // === GIVEAWAY: Reroll ===
+    if (customId === 'admpnl_modal_giveaway_reroll') {
+        const messageId = interaction.fields.getTextInputValue('message_id').trim();
+        const ga = db.prepare('SELECT * FROM giveaways WHERE guildId = ? AND messageId = ?').get(guildId, messageId);
+        if (!ga) return interaction.reply({ content: '❌ Giveaway tidak ditemukan!', ephemeral: true });
+
+        const channel = interaction.guild.channels.cache.get(ga.channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const msg = await channel.messages.fetch(messageId).catch(() => null);
+        if (!msg) return interaction.reply({ content: '❌ Message tidak ditemukan!', ephemeral: true });
+
+        const reaction = msg.reactions.cache.get('🎉');
+        let users = [];
+        if (reaction) {
+            const fetched = await reaction.users.fetch();
+            users = fetched.filter(u => !u.bot).map(u => u.id);
+        }
+        if (users.length === 0) return interaction.reply({ content: '❌ Tidak ada peserta untuk di-reroll!', ephemeral: true });
+
+        const winner = users[Math.floor(Math.random() * users.length)];
+        await channel.send({ content: `🔄 **Reroll!** Pemenang baru: <@${winner}>! Selamat memenangkan **${ga.prize}**! 🎁` });
+        return interaction.reply({ content: `✅ Reroll berhasil! Pemenang baru: <@${winner}>`, ephemeral: true });
     }
 }
 
