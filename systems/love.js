@@ -23,6 +23,34 @@ const { db, getSetting } = require('../database');
 // enforces the "one love per relationship" uniqueness for free.
 db.exec(`CREATE TABLE IF NOT EXISTS loves (guildId TEXT, loverId TEXT, lovedId TEXT, createdAt INTEGER, PRIMARY KEY(guildId, loverId, lovedId))`);
 
+// --- Auto-repair the loves table schema ---------------------------------------
+// The intended primary key is (guildId, loverId, lovedId): one person can love
+// MANY different people, each a separate row. If an older/partial deploy created
+// the table with a narrower PK (e.g. (guildId, loverId)), then one person loving
+// a new target would REPLACE/collide with their previous love — making it look
+// like love "moves" from one user to another. `CREATE TABLE IF NOT EXISTS` won't
+// fix an already-existing table, so detect a wrong PK and rebuild it (existing
+// rows are preserved). No-op when the schema is already correct.
+(function ensureLovesSchema() {
+    try {
+        const cols = db.prepare('PRAGMA table_info(loves)').all();
+        if (!cols.length) return; // table just created correctly above
+        const pkCols = cols.filter(c => c.pk > 0).sort((a, b) => a.pk - b.pk).map(c => c.name);
+        const correct = pkCols.length === 3 &&
+            pkCols.includes('guildId') && pkCols.includes('loverId') && pkCols.includes('lovedId');
+        if (correct) return;
+        db.exec('DROP TABLE IF EXISTS loves_fix');
+        db.exec(`CREATE TABLE loves_fix (guildId TEXT, loverId TEXT, lovedId TEXT, createdAt INTEGER, PRIMARY KEY(guildId, loverId, lovedId))`);
+        db.exec(`INSERT OR IGNORE INTO loves_fix (guildId, loverId, lovedId, createdAt)
+                 SELECT guildId, loverId, lovedId, createdAt FROM loves`);
+        db.exec('DROP TABLE loves');
+        db.exec('ALTER TABLE loves_fix RENAME TO loves');
+        console.log('[love] Repaired loves table primary key -> (guildId, loverId, lovedId)');
+    } catch (e) {
+        try { console.error('[love] loves schema check failed:', e && e.message); } catch (_) {}
+    }
+})();
+
 const DEFAULT_EMOJI = '❤️';
 
 // Discord may deliver hearts with/without the U+FE0F variation selector; strip it
