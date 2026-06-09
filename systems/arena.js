@@ -10,7 +10,9 @@ const cooldowns = require('./cooldowns');
 const BASE_RATING = 1000;
 const K_FACTOR = 32;
 const RATING_FLOOR = 100;
-const FIGHT_COOLDOWN_MS = 30000;
+const FIGHT_COOLDOWN_MS = 45000; // 45 seconds between fights (was 30)
+const MAX_AP_PER_DAY = 500;      // Cap arena points earned per day
+const MAX_FIGHTS_PER_DAY = 50;   // Max fights per day to prevent mindless farming
 
 // ==================== TIER SYSTEM ====================
 const ARENA_TIERS = [
@@ -141,6 +143,12 @@ function findOpponent(guildId, userId, myRating) {
 
 // ==================== FIGHT LOGIC ====================
 function doArenaFight(guildId, userId) {
+    // Daily fight limit
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const fightKey = `arena_fights_${today}`;
+    const fightsToday = getUserStat(guildId, userId, fightKey) || 0;
+    if (fightsToday >= MAX_FIGHTS_PER_DAY) return { error: 'daily_limit' };
+
     const myPet = getPetData(guildId, userId);
     if (!myPet) return { error: 'no_pet' };
     const myRating = getRating(guildId, userId);
@@ -149,10 +157,25 @@ function doArenaFight(guildId, userId) {
     const oppPet = getPetData(guildId, opp.userId);
     if (!oppPet) return { error: 'no_opponent' };
 
+    // Anti-collusion: can't fight same opponent twice in a row
+    const lastOpp = getUserStat(guildId, userId, 'arena_last_opp') || '';
+    if (lastOpp === opp.userId) {
+        // Try to find a different opponent
+        const altOpp = findOpponent(guildId, userId, myRating);
+        if (altOpp && altOpp.userId !== opp.userId) {
+            Object.assign(opp, altOpp);
+        }
+        // If still same, allow it (small server) but no streak bonus
+    }
+    setUserStat(guildId, userId, 'arena_last_opp', opp.userId);
+
     const myDef = PET_DATA.find(p => p.id === myPet.petId) || { emoji: '🐾' };
     const oppDef = PET_DATA.find(p => p.id === oppPet.petId) || { emoji: '🐾' };
     const result = simulatePvP(myPet, myDef, oppPet, oppDef);
     const win = result.winner === 1;
+
+    // Increment daily fight counter
+    incrementUserStat(guildId, userId, fightKey);
 
     // ELO update
     const expected = 1 / (1 + Math.pow(10, (opp.rating - myRating) / 400));
@@ -167,21 +190,38 @@ function doArenaFight(guildId, userId) {
     setWinStreak(guildId, userId, currentStreak);
 
     // Rewards (money + arena points + streak bonus)
+    // Money is modest: base 300 + rating/10 (capped by streak at x2 max for money)
     let reward = 0, pointsEarned = 0, streakLabel = '';
     if (win) {
-        const baseMoney = 500 + Math.floor(newRating / 5);
-        const basePoints = 10 + Math.floor(newRating / 100);
+        const baseMoney = 300 + Math.floor(newRating / 10);
+        const basePoints = 8 + Math.floor(newRating / 150);
         const { mult, label } = getStreakMultiplier(currentStreak);
         streakLabel = label;
-        reward = Math.floor(baseMoney * mult);
+        // Money multiplier capped at x2 to prevent hyperinflation
+        const moneyMult = Math.min(2.0, mult);
+        reward = Math.floor(baseMoney * moneyMult);
         pointsEarned = Math.floor(basePoints * mult);
+
+        // Daily AP cap
+        const apToday = getUserStat(guildId, userId, `arena_ap_${today}`) || 0;
+        if (apToday + pointsEarned > MAX_AP_PER_DAY) {
+            pointsEarned = Math.max(0, MAX_AP_PER_DAY - apToday);
+        }
+
         addUserBalance(guildId, userId, reward);
         addIncome(guildId, userId, 'battle', reward);
-        addArenaPoints(guildId, userId, pointsEarned);
+        if (pointsEarned > 0) {
+            addArenaPoints(guildId, userId, pointsEarned);
+            setUserStat(guildId, userId, `arena_ap_${today}`, apToday + pointsEarned);
+        }
     } else {
-        // Small consolation points for trying
+        // Small consolation points
         pointsEarned = 2;
-        addArenaPoints(guildId, userId, pointsEarned);
+        const apToday = getUserStat(guildId, userId, `arena_ap_${today}`) || 0;
+        if (apToday < MAX_AP_PER_DAY) {
+            addArenaPoints(guildId, userId, pointsEarned);
+            setUserStat(guildId, userId, `arena_ap_${today}`, apToday + pointsEarned);
+        } else { pointsEarned = 0; }
     }
 
     // Tier promotion check
@@ -372,6 +412,7 @@ async function handleArenaButton(interaction) {
         const res = doArenaFight(guildId, userId);
         if (res.error === 'no_pet') return interaction.followUp({ content: '❌ Kamu belum punya pet aktif! Tetaskan/aktifkan pet dulu di `/pet`.', ephemeral: true });
         if (res.error === 'no_opponent') return interaction.followUp({ content: '❌ Belum ada lawan tersedia (belum ada pemain lain dengan pet aktif). Coba lagi nanti.', ephemeral: true });
+        if (res.error === 'daily_limit') return interaction.followUp({ content: `❌ Kamu sudah mencapai limit **${MAX_FIGHTS_PER_DAY} fight/hari**! Istirahat dulu, lanjut besok.`, ephemeral: true });
         cooldowns.setCooldown('arena', guildId, userId, FIGHT_COOLDOWN_MS);
 
         const tier = getTier(res.newRating);
