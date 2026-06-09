@@ -691,13 +691,32 @@ async function routeInteraction(interaction) {
 
         // ================= LOVE (❤️ social) =================
         if (command === 'love') {
-            // Admin toggle: /love admin:on|off
             const adminOpt = interaction.options.getString('admin');
+            const channelOpt = interaction.options.getChannel('channel');
+
+            // Admin: set the notification channel.
+            if (channelOpt) {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
+                    return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa atur channel notifikasi love.', ephemeral: true });
+                }
+                const { setSetting } = require('../database');
+                setSetting(guildId, 'love_announce_channel', channelOpt.id);
+                return interaction.reply({
+                    content: `✅ **Notifikasi love AKTIF** di <#${channelOpt.id}>.\nSetiap ada yang dapat love baru, bot akan kirim pemberitahuan ke sana.`,
+                    ephemeral: true,
+                });
+            }
+
+            // Admin: feature/notification toggles.
             if (adminOpt !== null) {
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
                     return interaction.reply({ content: '❌ Hanya admin (Manage Server) yang bisa mengatur fitur love.', ephemeral: true });
                 }
                 const { setSetting } = require('../database');
+                if (adminOpt === 'notif_off') {
+                    setSetting(guildId, 'love_announce_channel', '');
+                    return interaction.reply({ content: '🔕 **Notifikasi love channel: NONAKTIF.** Love tetap jalan, tapi bot tidak mengumumkan ke channel.', ephemeral: true });
+                }
                 setSetting(guildId, 'love_enabled', adminOpt === 'on' ? '1' : '0');
                 return interaction.reply({
                     content: adminOpt === 'on'

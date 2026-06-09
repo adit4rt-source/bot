@@ -1,5 +1,5 @@
 // commands/_register.js - All slash command definitions
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 
 const commands = [
     // ================= PANEL COMMANDS (Player) =================
@@ -58,8 +58,13 @@ const commands = [
     new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
     new SlashCommandBuilder().setName('love').setDescription('❤️ Love — Lihat berapa orang yang menyukaimu (react ❤️ di chat orang untuk kasih love)')
         .addUserOption(opt => opt.setName('user').setDescription('Lihat love milik user lain').setRequired(false))
-        .addStringOption(opt => opt.setName('admin').setDescription('[Admin] Aktif/nonaktifkan fitur love').setRequired(false)
-            .addChoices({ name: 'Aktifkan', value: 'on' }, { name: 'Nonaktifkan', value: 'off' })),
+        .addChannelOption(opt => opt.setName('channel').setDescription('[Admin] Set channel notifikasi saat ada yang memberi love').setRequired(false).addChannelTypes(ChannelType.GuildText))
+        .addStringOption(opt => opt.setName('admin').setDescription('[Admin] Atur fitur love').setRequired(false)
+            .addChoices(
+                { name: 'Aktifkan Fitur', value: 'on' },
+                { name: 'Nonaktifkan Fitur', value: 'off' },
+                { name: 'Matikan Notifikasi Channel', value: 'notif_off' },
+            )),
     new SlashCommandBuilder()
         .setName('welcomer')
         .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')

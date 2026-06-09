@@ -47,6 +47,13 @@ module.exports = async function handleReactionAdd(reaction, user) {
                     incrementUserStat(guildId, lovedId, 'love_received');
                     const lovedMember = await reaction.message.guild.members.fetch(lovedId).catch(() => null);
                     if (lovedMember) await love.refreshMemberNick(lovedMember);
+                    // Notify the configured channel (like the streak announcement).
+                    await love.announceLove(
+                        reaction.message.guild,
+                        { id: reactorId, name: user.username },
+                        { id: lovedId, name: lovedMember ? lovedMember.user.username : (msg.author.username || 'User') },
+                        res.count
+                    );
                 }
             }
         }

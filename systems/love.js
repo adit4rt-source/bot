@@ -143,9 +143,47 @@ async function refreshMemberNick(member) {
     } catch (_) { /* nickname update is best-effort, never throw */ }
 }
 
+// ==================== ANNOUNCEMENT ====================
+// Posts a notification when someone receives a new love, mirroring the streak
+// announcement. Configured via server_settings:
+//   love_announce_channel  channel ID to post in ('' = off)
+//   love_announce_message  optional custom template, supports placeholders:
+//     {lover.mention} {lover.name} {loved.mention} {loved.name} {count} {emoji}
+// `lover`/`loved` are { id, name }. Best-effort; never throws.
+async function announceLove(guild, lover, loved, count) {
+    try {
+        const { EmbedBuilder } = require('discord.js');
+        const guildId = guild.id;
+        const channelId = getSetting(guildId, 'love_announce_channel', '');
+        if (!channelId) return; // notifications off until an admin sets a channel
+        const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel || typeof channel.send !== 'function') return;
+
+        const emoji = getEmoji(guildId);
+        const tpl = getSetting(guildId, 'love_announce_message', '');
+        let desc;
+        if (tpl) {
+            desc = tpl
+                .replace(/{lover\.mention}/g, `<@${lover.id}>`)
+                .replace(/{lover\.name}/g, lover.name || 'Seseorang')
+                .replace(/{loved\.mention}/g, `<@${loved.id}>`)
+                .replace(/{loved\.name}/g, loved.name || 'User')
+                .replace(/{count}/g, String(count))
+                .replace(/{emoji}/g, emoji);
+        } else {
+            desc = `${emoji} <@${lover.id}> memberikan love ke <@${loved.id}>!\n` +
+                `Sekarang <@${loved.id}> disukai oleh ${emoji} **${count}** orang.`;
+        }
+
+        await channel.send({
+            embeds: [new EmbedBuilder().setColor('#E91E63').setDescription(desc).setTimestamp()],
+        }).catch(() => {});
+    } catch (_) { /* announcement is best-effort */ }
+}
+
 module.exports = {
     isEnabled, getEmoji, isLoveEmoji,
     getLoveCount, hasLoved, getLovers, getTopLoved,
-    giveLove, refreshMemberNick,
+    giveLove, refreshMemberNick, announceLove,
     DEFAULT_EMOJI,
 };
