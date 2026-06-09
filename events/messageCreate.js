@@ -219,6 +219,21 @@ module.exports = async function handleMessageCreate(message) {
     const streakActivated = await checkAndUpdateStreak(message);
     if (streakActivated) message.reply({ content: `🔥 **Berhasil!** Kamu telah mengaktifkan streak api hari ini!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 5000); }).catch(() => {});
 
+    // Daily reminder: show claim button if user hasn't claimed today (only on streak activation = first chat of the day)
+    if (streakActivated && !spam) {
+        try {
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const userData = getOrCreateUser(guildId, message.author.id);
+            if (userData.lastDaily !== today) {
+                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`daily_claim_${message.author.id}`).setLabel('🎁 Claim Daily Reward!').setStyle(ButtonStyle.Success)
+                );
+                message.channel.send({ content: `<@${message.author.id}> 👋 Kamu belum claim **/daily** hari ini! Klik tombol di bawah:`, components: [row], allowedMentions: { users: [message.author.id] } }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 30000); }).catch(() => {});
+            }
+        } catch (_) {}
+    }
+
     // Quest progress + chat rewards — skipped entirely for spam messages
     if (!spam) {
         const chatText = message.content;

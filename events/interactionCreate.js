@@ -1115,6 +1115,30 @@ async function routeInteraction(interaction) {
             return interaction.reply({ content: '📖 Gunakan `/help` untuk panduan lengkap, atau `/menu` untuk navigasi cepat!', ephemeral: true });
         }
 
+        // --- DAILY CLAIM BUTTON (from chat reminder) ---
+        if (interaction.customId.startsWith('daily_claim_')) {
+            const targetUserId = interaction.customId.split('_')[2];
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Tombol ini bukan untuk kamu!', ephemeral: true });
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const { claimDaily } = require('../systems/dailyReward');
+            const r = claimDaily(guildId, interaction.user.id, { today });
+            if (r.alreadyClaimed) return interaction.reply({ content: '❌ Kamu sudah claim /daily hari ini!', ephemeral: true });
+            const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+            const embed = new EmbedBuilder()
+                .setTitle('🎁 Daily Reward!')
+                .setColor('#2ECC71')
+                .setDescription(
+                    `> 🪙 Money: **+${r.money.toLocaleString('id-ID')}**\n` +
+                    `> 🐾 Pet EXP: **+${r.petExp}**\n` +
+                    `> ✨ XP Bonus: **+${r.xp}**\n\n` +
+                    `> ${streakEmoji} **Streak:** ${r.streak} hari *(ikut streak chat ${streakEmoji})*`
+                )
+                .setFooter({ text: 'Makin panjang streak chat, makin gede reward /daily!' });
+            // Delete the reminder message
+            try { interaction.message.delete().catch(() => {}); } catch (_) {}
+            return interaction.reply({ embeds: [embed] });
+        }
+
         // --- FISHING PANEL BUTTONS ---
         if (isFishingPanelButton(interaction.customId)) {
             return handleFishingButton(interaction);
