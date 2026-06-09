@@ -96,8 +96,21 @@ async function handleMemberJoin(member) {
     // Store invite record
     db.prepare('INSERT OR REPLACE INTO invites (guildId, inviterId, invitedId, code, joinedAt, leftAt, fake) VALUES (?, ?, ?, ?, ?, NULL, ?)').run(guildId, inviterUserId, member.id, usedCode, Date.now(), isFake);
 
-    // Send announcement
     const channelId = getInviteSetting(guildId, 'invite_channel', '');
+
+    // Tiered invite rewards — grant any milestone the inviter just crossed (valid
+    // invites only). Best-effort: never let a reward error block the join flow.
+    if (!isFake) {
+        try {
+            const { processInviteJoinRewards } = require('./inviteRewards');
+            const validInvites = getInviterStats(guildId, inviterUserId).total;
+            await processInviteJoinRewards(member.guild, inviterUserId, validInvites, channelId);
+        } catch (e) {
+            // swallow — invite tracking must keep working even if rewards fail
+        }
+    }
+
+    // Send announcement
     if (channelId) {
         const channel = member.guild.channels.cache.get(channelId);
         if (channel) {

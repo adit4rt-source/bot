@@ -175,9 +175,10 @@ async function handleProfileButton(interaction) {
             streak,
             rankPosition: rankPos,
             accent: (rankTitle && rankTitle.color) || '#5865F2',
+            footerTag: (interaction.guild && interaction.guild.name) ? interaction.guild.name : '',
         });
         const file = new AttachmentBuilder(buffer, { name: 'profile.png' });
-        return interaction.reply({ files: [file] });
+        return interaction.reply({ content: `📤 **Kartu profil ${interaction.user.username}** — pamerin ke teman-temanmu! 🔥`, files: [file] });
     }
 
     // === ACHIEVEMENT SUMMARY ===

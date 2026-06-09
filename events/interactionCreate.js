@@ -212,44 +212,47 @@ async function routeInteraction(interaction) {
 
         if (command === 'daily') {
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-            if (userData.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
-            const streakData = db.prepare('SELECT * FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
-            const streak = streakData ? streakData.count : 0;
-            const week = Math.floor(streak / 7);
-            const dayInCycle = (streak % 7);
-            let moneyReward = 500 + (dayInCycle * 100) + (week * 200);
-            let petExpReward = 10 + Math.min(week * 5, 30);
-            let bonusDesc = '';
-            let isWeekBonus = (streak > 0 && streak % 7 === 0);
-            if (isWeekBonus) { moneyReward += 1000; addItem(guildId, interaction.user.id, 'mystery_box', 1); bonusDesc += '> 🎉 **STREAK BONUS MINGGUAN!** +1.000 + 📦 Mystery Box!\n'; }
-            if (streak > 0 && streak % 30 === 0) { moneyReward += 3000; addItem(guildId, interaction.user.id, 'rod_part', 3); bonusDesc += '> 🏆 **STREAK 30 HARI!** +3.000 + 🔧 Rod Parts x3!\n'; }
-            const hasDoubler = getUserStat(guildId, interaction.user.id, 'daily_doubler_active') > 0;
-            if (hasDoubler) { moneyReward *= 2; incrementUserStat(guildId, interaction.user.id, 'daily_doubler_active', -1); bonusDesc += '> 📅 **Daily Doubler** aktif! Money x2!\n'; }
-            const roll = Math.random();
-            let randomReward = '';
-            if (roll < 0.15) { const possibleItems = ['mystery_box', 'lucky_charm', 'xp_booster_2x']; const wonItem = possibleItems[Math.floor(Math.random() * possibleItems.length)]; const itemDef = ITEMS.find(i => i.id === wonItem); addItem(guildId, interaction.user.id, wonItem); randomReward = `\n> 🎁 **Bonus Item:** ${itemDef.emoji} ${itemDef.name}!`; }
-            else if (roll < 0.35) { const extra = getRandomInt(100, 500); moneyReward += extra; randomReward = `\n> 💰 **Bonus Money:** +${extra} extra!`; }
-            else if (roll < 0.50) { petExpReward += 15; randomReward = `\n> 🐾 **Bonus Pet EXP:** +15 extra!`; }
-            db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(moneyReward, today, guildId, interaction.user.id);
-            incrementUserStat(guildId, interaction.user.id, 'total_dailies');
-            addIncome(guildId, interaction.user.id, 'daily', moneyReward);
-            addPetExp(guildId, interaction.user.id, petExpReward);
+            const { claimDaily } = require('../systems/dailyReward');
+            const r = claimDaily(guildId, interaction.user.id, { today });
+            if (r.alreadyClaimed) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
+
             updateQuestProgress(guildId, interaction.user.id, 'daily', 1);
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' });
-            const nextDayReward = 500 + (((dayInCycle + 1) % 7) * 100) + ((dayInCycle === 6 ? week + 1 : week) * 200);
-            const progressBar = '▰'.repeat(Math.min(dayInCycle + 1, 7)) + '▱'.repeat(Math.max(0, 6 - dayInCycle));
+
+            // Build reward/bonus description lines.
+            const ITEM_LABEL = (id, qty) => { const d = ITEMS.find(i => i.id === id); return `${d ? (d.menuEmoji || '') : ''} ${d ? d.name : id}${qty > 1 ? ` ×${qty}` : ''}`.trim(); };
+            let bonusDesc = '';
+            if (r.milestoneLabel) bonusDesc += `> 🎉 **${r.milestoneLabel}**\n`;
+            if (r.shieldUsed) bonusDesc += `> 🛡️ **Streak Shield** terpakai — streak kamu selamat!\n`;
+            if (r.hasDoubler) bonusDesc += `> 📅 **Daily Doubler** aktif! Money x2!\n`;
+
+            const milestoneItems = (r.items || []);
+            let itemLines = milestoneItems.map(it => `> 🎁 ${ITEM_LABEL(it.id, it.qty)}`).join('\n');
+            if (itemLines) itemLines = '\n' + itemLines;
+
+            let randomReward = '';
+            if (r.randomItem) randomReward = `\n> 🎁 **Bonus Item:** ${ITEM_LABEL(r.randomItem, 1)}!`;
+            else if (r.randomMoney) randomReward = `\n> 💰 **Bonus Money:** +${r.randomMoney} extra!`;
+            else if (r.randomPetExp) randomReward = `\n> 🐾 **Bonus Pet EXP:** +${r.randomPetExp} extra!`;
+
+            const dayInCycle = ((r.streak - 1) % 7);
+            const progressBar = '▰'.repeat(dayInCycle + 1) + '▱'.repeat(Math.max(0, 6 - dayInCycle));
+            const nextIsMilestone = ((r.streak + 1) % 7 === 0) || [14, 30, 60, 100].includes(r.streak + 1);
+
             const embed = new EmbedBuilder()
-                .setColor(isWeekBonus ? '#FFD700' : '#F1C40F')
-                .setTitle(isWeekBonus ? '🎉 Daily Reward — WEEKLY BONUS!' : '🎁 Daily Reward!')
-                .setDescription(`${bonusDesc}> 🪙 **Money:** +${moneyReward.toLocaleString('id-ID')}\n> 🐾 **Pet EXP:** +${petExpReward}\n> ✨ **XP Bonus:** +15${randomReward}\n\n> 🔥 **Streak:** ${streak} hari\n> 📈 **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n> 💡 **Besok:** 🪙 ~${nextDayReward.toLocaleString('id-ID')}${dayInCycle === 6 ? ' + 🎉 BONUS!' : ''}`)
-                .setFooter({ text: 'Login setiap hari = reward makin besar! | Reset jika streak putus' })
+                .setColor(r.milestoneLabel ? '#FFD700' : '#F1C40F')
+                .setTitle(r.milestoneLabel ? `🎉 Daily Reward — ${r.milestoneLabel}` : '🎁 Daily Reward!')
+                .setDescription(
+                    `${bonusDesc}> 🪙 **Money:** +${r.money.toLocaleString('id-ID')}\n` +
+                    `> 🐾 **Pet EXP:** +${r.petExp}\n` +
+                    `> ✨ **XP Bonus:** +${r.xp}${itemLines}${randomReward}\n\n` +
+                    `> 🔥 **Login Streak:** ${r.streak} hari${r.reset && r.prevStreak > 1 ? ' *(streak baru — sebelumnya putus)*' : ''}\n` +
+                    `> 📈 **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n` +
+                    `> 💡 **Besok:** 🪙 ~${r.nextMoney.toLocaleString('id-ID')}${nextIsMilestone ? ' + 🎉 BONUS!' : ''}`
+                )
+                .setFooter({ text: 'Login tiap hari = reward makin gede! Punya 🛡️ Streak Shield? Aman walau bolong 1 hari.' })
                 .setTimestamp();
-            
-            // Bonus XP from daily
-            const user = getOrCreateUser(guildId, interaction.user.id);
-            user.xp += 15;
-            db.prepare('UPDATE users SET xp = ? WHERE guildId = ? AND userId = ?').run(user.xp, guildId, interaction.user.id);
-            
+
             return interaction.reply({ embeds: [embed] });
         }
 

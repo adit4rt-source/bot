@@ -337,6 +337,10 @@ client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) =>
     log('INFO', `[event] GuildMemberAdd: ${member.user.tag} bergabung ke ${member.guild?.name} (${member.guild?.id})`);
     await handleInviteJoin(member);
     await handleWelcome(member);
+    try {
+        const { handleOnboarding } = require('./systems/onboarding');
+        await handleOnboarding(member);
+    } catch (e) { log('WARN', `[onboarding] gagal kirim DM ke ${member.user?.tag}: ${e.message}`); }
 }));
 
 client.on(Events.GuildMemberRemove, wrapHandler('guildMemberRemove', async (member) => {

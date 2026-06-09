@@ -40,6 +40,7 @@ const suiteFiles = [
   'suites/gameplay.test.js',
   'suites/systems.test.js',
   'suites/globaltrade.test.js',
+  'suites/engagement.test.js',
 ];
 
 (async () => {

@@ -2,7 +2,17 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getSetting } = require('../database');
 const { getInviterStats, getInviteLeaderboard, getInvitedBy, getInvitedList, getAllInviteSettings } = require('./inviteTracker');
+const { getTiers, getClaimedTiers } = require('./inviteRewards');
 const ui = require('./ui');
+
+let ITEM_DEFS = [];
+try { ITEM_DEFS = require('../data/items'); } catch (_) { ITEM_DEFS = []; }
+function itemLabel(it) {
+    const def = Array.isArray(ITEM_DEFS) ? ITEM_DEFS.find(d => d.id === it.id) : null;
+    const name = def ? def.name : it.id;
+    const emoji = def ? (def.menuEmoji || '') : '';
+    return `${emoji} ${name} ×${it.qty}`.trim();
+}
 
 // ============ BUILD: Main Invite Panel ============
 function buildInvitePanel(guildId, userId, username, guild) {
@@ -24,6 +34,7 @@ function buildInvitePanel(guildId, userId, username, guild) {
             ]) +
             `\n**Menu:**\n` +
             ui.menuList([
+                { emoji: '🎁', label: 'Rewards', desc: 'Hadiah berjenjang dari mengundang teman' },
                 { emoji: '🏆', label: 'Leaderboard', desc: 'Siapa pengundang terbanyak di server' },
                 { emoji: '📋', label: 'My Invites', desc: 'Daftar orang yang kamu undang' },
                 { emoji: '📊', label: 'Detail Stats', desc: 'Rincian lengkap & peringkatmu' },
@@ -34,6 +45,7 @@ function buildInvitePanel(guildId, userId, username, guild) {
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`invpnl_rewards_${userId}`).setLabel('🎁 Rewards').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`invpnl_leaderboard_${userId}`).setLabel('🏆 Leaderboard').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`invpnl_myinvites_${userId}`).setLabel('📋 My Invites').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`invpnl_stats_${userId}`).setLabel('📊 Detail Stats').setStyle(ButtonStyle.Secondary),
@@ -67,6 +79,47 @@ async function handleInviteButton(interaction) {
     // === BACK ===
     if (action === 'back') {
         return interaction.update(buildInvitePanel(guildId, userId, interaction.user.username, interaction.guild));
+    }
+
+    // === REWARDS (tiered invite milestones) ===
+    if (action === 'rewards') {
+        const stats = getInviterStats(guildId, userId);
+        const claimed = new Set(getClaimedTiers(guildId, userId));
+        const tiers = getTiers();
+
+        let nextTier = null;
+        const lines = tiers.map(t => {
+            const done = claimed.has(t.invites) || stats.total >= t.invites;
+            const isClaimed = claimed.has(t.invites);
+            const mark = isClaimed ? '✅' : (stats.total >= t.invites ? '🎉' : '🔒');
+            if (!done && !nextTier) nextTier = t;
+            const items = (t.items || []).map(itemLabel).join(', ');
+            return `${mark} ${t.emoji} **${t.invites} undangan** — 🪙 ${t.money.toLocaleString('id-ID')}` +
+                (items ? ` + ${items}` : '') +
+                `\n     *${t.label}*`;
+        });
+
+        let progressLine;
+        if (nextTier) {
+            const remaining = Math.max(0, nextTier.invites - stats.total);
+            const bar = ui.progressBar(stats.total, nextTier.invites, 12);
+            progressLine = `\n\n**Progress ke tier berikutnya (${nextTier.emoji} ${nextTier.invites}):**\n${bar} ${stats.total}/${nextTier.invites}\n💡 Tinggal **${remaining}** undangan valid lagi!`;
+        } else {
+            progressLine = `\n\n🏆 **Semua tier sudah terbuka — kamu legenda rekrutmen!**`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle(ui.title('🎁', 'Invite Rewards', interaction.user.username))
+            .setColor(ui.COLORS.economy)
+            .setDescription(
+                `Undang teman → makin banyak undangan **valid**, makin gede hadiahnya. Hadiah masuk otomatis saat tercapai! 🎉\n\n` +
+                lines.join('\n') +
+                progressLine
+            )
+            .setFooter({ text: ui.footer(`Undangan valid kamu: ${stats.total} • ✅ sudah diklaim | 🔒 terkunci`) });
+
+        const row = ui.backRow(`invpnl_back_${userId}`);
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // === LEADERBOARD ===
