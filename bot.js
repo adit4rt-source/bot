@@ -205,9 +205,9 @@ client.once(Events.ClientReady, async c => {
     setDiscordClient(client);
     startApiServer();
 
-    // Start auto-backup schedule (every 6 hours + immediate backup)
-    startBackupSchedule();
-    console.log('💾 Auto-backup: setiap 6 jam');
+    // Start auto-backup schedule (every 6 hours + immediate backup + Discord upload)
+    startBackupSchedule(client);
+    console.log('💾 Auto-backup: setiap 6 jam → Discord channel');
 
     // Start auto-harvest notifier (DMs users with the Auto-Harvest Pass when crops are ready)
     startAutoHarvestSchedule(client);
