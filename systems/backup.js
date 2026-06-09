@@ -32,6 +32,33 @@ function getBackupTimestamp() {
 }
 
 /**
+ * Create a LOCAL-only backup (no Discord upload). Used on startup/restart.
+ */
+function createLocalBackup() {
+    try {
+        if (!fs.existsSync(DB_PATH)) {
+            log('WARN', 'Backup skipped: economy.sqlite not found');
+            return false;
+        }
+
+        const timestamp = getBackupTimestamp();
+        const backupFile = path.join(BACKUP_DIR, `economy_${timestamp}.sqlite`);
+
+        fs.copyFileSync(DB_PATH, backupFile);
+
+        const stats = fs.statSync(backupFile);
+        const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+        log('INFO', `💾 Local backup created: economy_${timestamp}.sqlite (${sizeMB} MB)`);
+
+        cleanOldBackups();
+        return true;
+    } catch (err) {
+        log('ERROR', 'Local backup failed', err);
+        return false;
+    }
+}
+
+/**
  * Create a backup of the SQLite database (local + Discord upload)
  */
 function createBackup() {
@@ -150,24 +177,26 @@ function cleanOldBackups() {
 
 /**
  * Start the automatic backup schedule (every 6 hours)
+ * Discord upload ONLY on scheduled intervals, NOT on every restart.
+ * Local backup still runs on startup for crash recovery.
  * @param {Client} client - Discord.js client instance
  */
 function startBackupSchedule(client) {
     _client = client || null;
 
-    // Delay startup backup by 10 seconds to ensure bot is fully connected
+    // Startup: local backup only (no Discord upload) — prevents spam on frequent restarts
     setTimeout(() => {
-        log('INFO', '💾 Creating startup backup...');
-        createBackup();
+        log('INFO', '💾 Creating startup backup (local only)...');
+        createLocalBackup();
     }, 10000);
 
-    // Schedule recurring backups
+    // Scheduled: full backup + Discord upload every 6 hours
     setInterval(() => {
-        log('INFO', '💾 Running scheduled backup...');
+        log('INFO', '💾 Running scheduled backup + Discord upload...');
         createBackup();
     }, BACKUP_INTERVAL);
 
-    log('INFO', `💾 Auto-backup scheduled: setiap 6 jam → Discord #backup (${BACKUP_CHANNEL_ID})`);
+    log('INFO', `💾 Auto-backup scheduled: lokal setiap restart, Discord setiap 6 jam (${BACKUP_CHANNEL_ID})`);
 }
 
 /**
