@@ -57,20 +57,20 @@ module.exports = function register() {
     if (r.money !== 1000) throw new Error('doubler day1 should be 1000, got ' + r.money);
   });
 
-  // ============ DAILY: full claim (DB) ============
-  test('daily claim: increments streak, sets lastDaily, credits balance', () => {
+  // ============ DAILY: full claim (DB, uses chat streak) ============
+  test('daily claim: uses chat streak, sets lastDaily, credits balance', () => {
     const G = 'engG_daily', U = '910000000000000001';
     D.getOrCreateUser(G, U);
     D.db.prepare('UPDATE users SET lastDaily = ? WHERE userId = ?').run('2030-05-31', U);
-    D.setUserStat(G, U, 'daily_streak', 3);
+    // Seed chat streak in the streaks table (same one used for 🔥 nickname)
+    try { D.db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 10, ?)').run(G, U, '2030-06-01'); } catch(_){}
     const before = D.getOrCreateUser(G, U).balance;
     const r = dr.claimDaily(G, U, { today: '2030-06-01' });
     if (r.alreadyClaimed) throw new Error('should not be alreadyClaimed');
-    if (r.streak !== 4) throw new Error('streak should be 4, got ' + r.streak);
+    if (r.streak !== 10) throw new Error('streak should be 10 (from chat streak), got ' + r.streak);
     const after = D.getOrCreateUser(G, U);
     if (after.lastDaily !== '2030-06-01') throw new Error('lastDaily not updated');
-    if (after.balance < before + 800) throw new Error('balance should grow by >= base 800');
-    if (D.getUserStat(G, U, 'daily_streak') !== 4) throw new Error('daily_streak stat not persisted');
+    if (after.balance < before + 1400) throw new Error('balance should grow by >= base for streak 10 (1400)');
   });
   test('daily claim: blocks a second claim the same day', () => {
     const G = 'engG_daily2', U = '910000000000000002';

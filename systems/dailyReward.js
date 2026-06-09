@@ -1,13 +1,28 @@
-// systems/dailyReward.js — Escalating daily login-streak rewards.
+// systems/dailyReward.js — Escalating daily rewards that follow the CHAT streak.
 //
-// Unlike the old inline handler (which scaled off the CHAT streak), this tracks a
-// dedicated *daily-claim* streak (user_stats key `daily_streak`) that grows only when
-// a user claims /daily on consecutive days — a true "login streak". Rewards escalate
-// with the streak, milestone days pay big jackpots + items, and a `streak_shield`
-// item is auto-consumed to forgive a single missed day.
+// The /daily reward escalation is driven by the user's chat streak 🔥 (the `streaks`
+// table, maintained by quests.js whenever the user chats). There is NO separate
+// "login/claim" streak: the more consecutive days a user stays active in chat, the
+// bigger their daily reward. Milestone days pay big jackpots + items.
 //
-// The compute helpers are pure (no DB) so they can be unit-tested in isolation.
+// `computeDailyStreak` / `computeDailyReward` are pure (no DB) so they can be
+// unit-tested in isolation. `getChatStreak` reads the same streaks table used for
+// the 🔥 nickname suffix, so /daily and the streak display always agree.
 const { db, getOrCreateUser, getUserStat, setUserStat, incrementUserStat, addItem, getItemCount, addIncome } = require('../database');
+
+// ==================== DB: READ CHAT STREAK ====================
+// Read the current chat streak (🔥) for a user from the `streaks` table. This is the
+// same value quests.js maintains and love.js renders on the nickname. Returns at least
+// 1 so a brand-new user still gets the day-1 base reward.
+function getChatStreak(guildId, userId) {
+    try {
+        const row = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        const c = row ? Math.floor(Number(row.count) || 0) : 0;
+        return Math.max(1, c);
+    } catch (_) {
+        return 1;
+    }
+}
 
 // ==================== DATE HELPERS ====================
 // Compare calendar dates expressed as 'YYYY-MM-DD' strings. We parse them as UTC
@@ -105,8 +120,10 @@ function computeDailyReward(streak, opts = {}) {
 
 // ==================== DB: FULL CLAIM ====================
 /**
- * Perform a full /daily claim. Caller should already know it's a new day, but this
- * re-checks (returns {alreadyClaimed:true}) to stay safe under races.
+ * Perform a full /daily claim. The reward escalates off the user's CHAT streak 🔥
+ * (the `streaks` table), so there is no separate login streak. Caller should already
+ * know it's a new day, but this re-checks (returns {alreadyClaimed:true}) to stay safe
+ * under races.
  * @returns full result object used to build the reply embed.
  */
 function claimDaily(guildId, userId, opts = {}) {
@@ -117,15 +134,8 @@ function claimDaily(guildId, userId, opts = {}) {
         return { alreadyClaimed: true };
     }
 
-    const prevStreak = getUserStat(guildId, userId, 'daily_streak') || 0;
-    const hasShield = getItemCount(guildId, userId, 'streak_shield') > 0;
-    const prog = computeDailyStreak(prevStreak, user.lastDaily, today, hasShield);
-    const streak = prog.streak;
-
-    // Consume the shield if it saved the streak.
-    if (prog.shieldUsed) {
-        try { addItem(guildId, userId, 'streak_shield', -1); } catch (_) {}
-    }
+    // Reward scales off the chat streak (🔥) — the same value shown on the nickname.
+    const streak = getChatStreak(guildId, userId);
 
     const hasDoubler = getUserStat(guildId, userId, 'daily_doubler_active') > 0;
     const reward = computeDailyReward(streak, { hasDoubler });
@@ -148,7 +158,6 @@ function claimDaily(guildId, userId, opts = {}) {
 
     // ----- Persist -----
     db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(totalMoney, today, guildId, userId);
-    setUserStat(guildId, userId, 'daily_streak', streak);
     try { incrementUserStat(guildId, userId, 'total_dailies'); } catch (_) {}
     try { addIncome(guildId, userId, 'daily', totalMoney); } catch (_) {}
 
@@ -166,9 +175,6 @@ function claimDaily(guildId, userId, opts = {}) {
     return {
         alreadyClaimed: false,
         streak,
-        prevStreak,
-        shieldUsed: prog.shieldUsed,
-        reset: prog.reset,
         money: totalMoney,
         baseMoney: reward.baseMoney,
         petExp: totalPetExp,

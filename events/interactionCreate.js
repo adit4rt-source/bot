@@ -223,7 +223,6 @@ async function routeInteraction(interaction) {
             const ITEM_LABEL = (id, qty) => { const d = ITEMS.find(i => i.id === id); return `${d ? (d.menuEmoji || '') : ''} ${d ? d.name : id}${qty > 1 ? ` ×${qty}` : ''}`.trim(); };
             let bonusDesc = '';
             if (r.milestoneLabel) bonusDesc += `> 🎉 **${r.milestoneLabel}**\n`;
-            if (r.shieldUsed) bonusDesc += `> 🛡️ **Streak Shield** terpakai — streak kamu selamat!\n`;
             if (r.hasDoubler) bonusDesc += `> 📅 **Daily Doubler** aktif! Money x2!\n`;
 
             const milestoneItems = (r.items || []);
@@ -246,11 +245,11 @@ async function routeInteraction(interaction) {
                     `${bonusDesc}> 🪙 **Money:** +${r.money.toLocaleString('id-ID')}\n` +
                     `> 🐾 **Pet EXP:** +${r.petExp}\n` +
                     `> ✨ **XP Bonus:** +${r.xp}${itemLines}${randomReward}\n\n` +
-                    `> 🔥 **Login Streak:** ${r.streak} hari${r.reset && r.prevStreak > 1 ? ' *(streak baru — sebelumnya putus)*' : ''}\n` +
+                    `> 🔥 **Streak:** ${r.streak} hari *(ikut streak chat 🔥)*\n` +
                     `> 📈 **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n` +
                     `> 💡 **Besok:** 🪙 ~${r.nextMoney.toLocaleString('id-ID')}${nextIsMilestone ? ' + 🎉 BONUS!' : ''}`
                 )
-                .setFooter({ text: 'Login tiap hari = reward makin gede! Punya 🛡️ Streak Shield? Aman walau bolong 1 hari.' })
+                .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed] });
