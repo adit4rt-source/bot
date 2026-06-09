@@ -3,10 +3,10 @@ const { SEASONS } = require('../data/livestock');
 
 // ==================== CROP SEASON COMPATIBILITY ====================
 const SEASON_CROP_EFFECTS = {
-    peak:  { growMult: 0.80, yieldMult: 1.30, deathChance: 0, mutationBonus: 0.05, label: '🌈 Peak Season', color: '#2ECC71' },
-    in:    { growMult: 1.00, yieldMult: 1.20, deathChance: 0, mutationBonus: 0, label: '✅ In-Season', color: '#3498DB' },
-    off:   { growMult: 1.00, yieldMult: 1.00, deathChance: 0, mutationBonus: 0, label: '⚠️ Off-Season', color: '#F1C40F' },
-    wrong: { growMult: 1.50, yieldMult: 0.70, deathChance: 0.15, mutationBonus: 0, label: '❌ Wrong Season', color: '#E74C3C' },
+    peak:  { growMult: 0.80, yieldMult: 1.30, deathChance: 0, mutationBonus: 0.05, label: '🌈 Musim Ideal', color: '#2ECC71' },
+    in:    { growMult: 1.00, yieldMult: 1.20, deathChance: 0, mutationBonus: 0, label: '✅ Cocok', color: '#3498DB' },
+    off:   { growMult: 1.00, yieldMult: 1.00, deathChance: 0, mutationBonus: 0, label: '⚠️ Kurang Cocok', color: '#F1C40F' },
+    wrong: { growMult: 1.50, yieldMult: 0.70, deathChance: 0.15, mutationBonus: 0, label: '❌ Tidak Cocok', color: '#E74C3C' },
 };
 
 function getCropSeasonEffect(crop) {

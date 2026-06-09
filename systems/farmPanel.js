@@ -113,12 +113,12 @@ function buildFarmPanel(guildId, userId, username) {
     // Season compatibility legend
     const { getTodaySeason } = require('./farmSeason');
     const currentSeason = getTodaySeason();
-    let seasonLegend = `\n**🌤️ Season: ${currentSeason.emoji} ${currentSeason.name}**\n`;
-    seasonLegend += `> 🌈 Peak = -20% waktu, +30% yield, +5% mutasi\n`;
-    seasonLegend += `> ✅ In = +20% yield\n`;
-    seasonLegend += `> ⚠️ Off = normal\n`;
-    seasonLegend += `> ❌ Wrong = **+50% waktu, -30% yield, 15% mati!**\n`;
-    seasonLegend += `> 🏠 Greenhouse = kebal penalty season\n`;
+    let seasonLegend = `\n**🌤️ Musim: ${currentSeason.emoji} ${currentSeason.name}**\n`;
+    seasonLegend += `> 🌈 Musim Ideal = -20% waktu, +30% hasil, +5% mutasi\n`;
+    seasonLegend += `> ✅ Cocok = +20% hasil\n`;
+    seasonLegend += `> ⚠️ Kurang Cocok = normal\n`;
+    seasonLegend += `> ❌ Tidak Cocok = **+50% waktu, -30% hasil, 15% mati!**\n`;
+    seasonLegend += `> 🏠 Greenhouse = kebal penalty musim\n`;
 
     const embed = new EmbedBuilder()
         .setTitle(ui.title('🌾', 'FARM', username))
