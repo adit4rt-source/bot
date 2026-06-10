@@ -1,10 +1,13 @@
 // systems/cardGame.js — Pokemon TCG Card System
-// Drop cards, grab, collect, trade — powered by pokemontcg.io API
+// Gacha buy system — powered by pokemontcg.io API
 // Fan-made project, not affiliated with Nintendo/The Pokemon Company/Creatures Inc.
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
 const state = require('../state');
+
+// ==================== CONSTANTS ====================
+const GACHA_PRICE = 10000; // Harga per gacha (3 kartu)
 
 // ==================== DB TABLES ====================
 db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
@@ -23,6 +26,18 @@ db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
     locked INTEGER DEFAULT 0,
     dye TEXT DEFAULT ''
 )`);
+
+// Migrate card_prints: old table had charId (INTEGER), new needs cardId (TEXT)
+try {
+    const tableInfo = db.prepare("PRAGMA table_info(card_prints)").all();
+    if (tableInfo.length > 0) {
+        const hasCardId = tableInfo.some(col => col.name === 'cardId');
+        if (!hasCardId) {
+            // Old table with charId — drop and recreate
+            db.exec(`DROP TABLE IF EXISTS card_prints`);
+        }
+    }
+} catch (_) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS card_prints (
     cardId TEXT PRIMARY KEY,
@@ -51,12 +66,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS pokemon_card_cache (
     cachedAt INTEGER
 )`);
 
-// Migrate old anime_cards table if exists (backward compat)
+// Clean up old anime_cards table reference (keep data, just don't use)
 try {
     const hasOldTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='anime_cards'").get();
     if (hasOldTable) {
-        // Keep old table but don't use it anymore — data is anime, not Pokemon
-        // Users start fresh with Pokemon TCG cards
+        // Old anime data preserved but unused
     }
 } catch (_) {}
 
@@ -394,38 +408,38 @@ function buildCardPanel(userId) {
 
     let topDesc = topCards.length > 0
         ? topCards.map(c => `> ${getRarityData(c.rarity).emoji} **${c.cardName}** — *${c.setName}* (${c.rarity})`).join('\n')
-        : '> *Belum ada kartu! Klik \u{1F0CF} Drop untuk mulai.*';
+        : '> *Belum ada kartu! Klik 🎴 Gacha untuk mulai.*';
 
     const embed = new EmbedBuilder()
-        .setTitle('\u{1F0CF} POKEMON TCG CARD PANEL')
+        .setTitle('🃏 POKEMON TCG CARD PANEL')
         .setColor('#FF6B35')
         .setDescription(
-            `**\u{1F4CA} Stats:**\n` +
-            `> \u{1F0CF} Kartu: **${totalCards.c}** | \u{1F3B4} Unique: **${uniqueCards.c}**\n` +
-            `> \u{1F4AB} Stardust: **${stardust}**\n\n` +
-            `**\u{1F3C6} Top Cards:**\n${topDesc}\n\n` +
-            `**\u{1F4CB} Menu:**\n` +
-            `> \u{1F0CF} **Drop** \u2014 Drop 3 kartu Pokemon random (8 min CD)\n` +
-            `> \u{1F4E6} **Collection** \u2014 Lihat semua kartumu\n` +
-            `> \u{1F525} **Burn** \u2014 Hancurkan kartu \u2192 Stardust\n` +
-            `> \u{1F504} **Trade** \u2014 Tukar kartu dengan player lain\n` +
-            `> \u{1F3A8} **Dye** \u2014 Beri warna custom\n` +
-            `> \u{2764}\u{FE0F} **Wishlist** \u2014 Pokemon incaran\n` +
-            `> \u{1F4E6} **Album** \u2014 Koleksi per Set\n` +
-            `> \u{1F4CA} **Leaderboard** \u2014 Top collectors`
+            `**📊 Stats:**\n` +
+            `> 🃏 Kartu: **${totalCards.c}** | 🎴 Unique: **${uniqueCards.c}**\n` +
+            `> 💫 Stardust: **${stardust}**\n\n` +
+            `**🏆 Top Cards:**\n${topDesc}\n\n` +
+            `**📋 Menu:**\n` +
+            `> 🎴 **Gacha** — Beli 3 kartu Pokemon random (💰 ${GACHA_PRICE.toLocaleString('id-ID')})\n` +
+            `> 📦 **Collection** — Lihat semua kartumu\n` +
+            `> 🔥 **Burn** — Hancurkan kartu → Stardust\n` +
+            `> 🔄 **Trade** — Tukar kartu dengan player lain\n` +
+            `> 🎨 **Dye** — Beri warna custom\n` +
+            `> ❤️ **Wishlist** — Pokemon incaran\n` +
+            `> 📦 **Album** — Koleksi per Set\n` +
+            `> 📊 **Leaderboard** — Top collectors`
         )
-        .setFooter({ text: 'Fan-made \u2022 Not affiliated with Nintendo/The Pokemon Company' })
+        .setFooter({ text: 'Fan-made • Not affiliated with Nintendo/The Pokemon Company' })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`card_drop_${userId}`).setLabel('\u{1F0CF} Drop').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('\u{1F4E6} Collection').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('\u{1F4E6} Album').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_wishlist_${userId}`).setLabel('\u{2764}\u{FE0F} Wishlist').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`card_drop_${userId}`).setLabel('🎴 Gacha (💰10k)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('📦 Collection').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('📦 Album').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_wishlist_${userId}`).setLabel('❤️ Wishlist').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`card_leaderboard_${userId}`).setLabel('\u{1F4CA} Leaderboard').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_stardust_${userId}`).setLabel('\u{1F4AB} Stardust').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`card_leaderboard_${userId}`).setLabel('📊 Leaderboard').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_stardust_${userId}`).setLabel('💫 Stardust').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -493,21 +507,22 @@ function isCardPanelButton(customId) {
     return typeof customId === 'string' && customId.startsWith('card_') && !customId.startsWith('cardgrab_') && !customId.startsWith('cardtrade_');
 }
 
-// ==================== DROP COMMAND ====================
+// ==================== DROP/GACHA COMMAND (Buy 3 cards for 10,000 money) ====================
 async function handleDropCommand(interaction) {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
-    // Cooldown: 8 minutes between drops
-    const cdKey = `card_drop_${userId}`;
-    const cooldownMs = 8 * 60 * 1000;
-    if (state.fishCooldowns.has(cdKey) && Date.now() < state.fishCooldowns.get(cdKey)) {
-        const remaining = Math.ceil((state.fishCooldowns.get(cdKey) - Date.now()) / 1000);
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        return interaction.reply({ content: `\u23F3 Drop cooldown! Tunggu **${mins}m ${secs}s** lagi.`, ephemeral: true });
+    // Check user balance
+    const userData = getOrCreateUser(guildId, userId);
+    if (userData.balance < GACHA_PRICE) {
+        return interaction.reply({
+            content: `❌ Uang tidak cukup! Butuh **💰 ${GACHA_PRICE.toLocaleString('id-ID')}**, kamu punya **💰 ${userData.balance.toLocaleString('id-ID')}**.\n> Kumpulkan uang dari daily, chat, dll!`,
+            ephemeral: true
+        });
     }
-    state.fishCooldowns.set(cdKey, Date.now() + cooldownMs);
+
+    // Deduct money
+    db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(GACHA_PRICE, guildId, userId);
 
     await interaction.deferReply();
 
@@ -515,151 +530,71 @@ async function handleDropCommand(interaction) {
         // Fetch 3 random Pokemon TCG cards
         const cards = await fetchRandomCards(3);
         if (!cards || cards.length < 3) {
-            state.fishCooldowns.delete(cdKey);
-            return interaction.editReply({ content: '\u274C Gagal fetch kartu dari Pokemon TCG API. Coba lagi!' });
+            // Refund on failure
+            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(GACHA_PRICE, guildId, userId);
+            return interaction.editReply({ content: '❌ Gagal fetch kartu dari Pokemon TCG API. Uang dikembalikan! Coba lagi.' });
         }
 
-        // Assign print numbers
+        // Assign print numbers & save all 3 cards directly to buyer
         const cardsWithPrint = cards.map(c => ({
             ...c,
             printNumber: getNextPrint(c.cardId),
         }));
 
+        // Save all 3 cards to user's collection
+        for (const card of cardsWithPrint) {
+            db.prepare(`INSERT INTO pokemon_cards (userId, cardId, cardName, setName, rarity, imageUrl, types, hp, artist, printNumber, obtainedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                userId, card.cardId, card.name, card.setName, card.rarity, card.imageUrl,
+                card.types || '', card.hp || '', card.artist || '', card.printNumber, Date.now()
+            );
+        }
+
+        incrementUserStat(guildId, userId, 'cards_grabbed');
+
         // Generate drop image (3 cards side by side using HD images from API)
         const dropImage = await generateDropImage(cardsWithPrint);
-        const attachment = new AttachmentBuilder(dropImage, { name: 'drop.png' });
-
-        // Store drop state for grab
-        const dropId = `${guildId}_${Date.now()}`;
-        state.activeCardDrops = state.activeCardDrops || new Map();
-        state.activeCardDrops.set(dropId, {
-            cards: cardsWithPrint,
-            grabbed: [false, false, false],
-            droppedBy: userId,
-            timestamp: Date.now(),
-        });
-
-        // Clean old drops (> 60 seconds)
-        for (const [key, drop] of state.activeCardDrops) {
-            if (Date.now() - drop.timestamp > 60000) state.activeCardDrops.delete(key);
-        }
+        const attachment = new AttachmentBuilder(dropImage, { name: 'gacha.png' });
 
         const rarityLine = cardsWithPrint.map((c, i) => {
             const rd = getRarityData(c.rarity);
-            return `**${i + 1}.** ${rd.emoji} **${c.name}** \u2014 *${c.setName}* [${c.rarity}]`;
+            return `**${i + 1}.** ${rd.emoji} **${c.name}** — *${c.setName}* [${c.rarity}]`;
         }).join('\n');
 
         // Check wishlist notifications
         const wishNotifs = checkWishlistNotify(guildId, cardsWithPrint);
         let wishText = '';
         if (wishNotifs.length > 0) {
-            wishText = '\n\n\u{1F4E2} ' + wishNotifs.map(n => `<@${n.userId}> wishlist: **${n.cardName}**!`).join(' | ');
+            wishText = '\n\n📢 ' + wishNotifs.map(n => `<@${n.userId}> wishlist: **${n.cardName}**!`).join(' | ');
         }
 
+        const newBalance = userData.balance - GACHA_PRICE;
         const embed = new EmbedBuilder()
             .setColor('#FF6B35')
-            .setTitle('\u{1F0CF} POKEMON TCG DROP!')
-            .setDescription(`${rarityLine}${wishText}\n\n> Klik tombol di bawah untuk grab kartu!\n> \u23F1\u{FE0F} Hilang dalam 60 detik`)
-            .setImage('attachment://drop.png')
-            .setFooter({ text: `Dropped by ${interaction.user.username} \u2022 Grab cooldown: 4 min \u2022 pokemontcg.io` })
+            .setTitle('🎴 POKEMON TCG GACHA!')
+            .setDescription(
+                `<@${userId}> membeli gacha! 💰 -${GACHA_PRICE.toLocaleString('id-ID')}\n\n` +
+                `${rarityLine}${wishText}\n\n` +
+                `> ✅ Semua 3 kartu langsung masuk koleksimu!\n` +
+                `> 💰 Sisa balance: **${newBalance.toLocaleString('id-ID')}**`
+            )
+            .setImage('attachment://gacha.png')
+            .setFooter({ text: `Fan-made • Not affiliated with Nintendo/The Pokemon Company • pokemontcg.io` })
             .setTimestamp();
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`cardgrab_${dropId}_0`).setLabel('1').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`cardgrab_${dropId}_1`).setLabel('2').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`cardgrab_${dropId}_2`).setLabel('3').setStyle(ButtonStyle.Primary),
-        );
-
-        await interaction.editReply({ embeds: [embed], files: [attachment], components: [row] });
-
-        // Auto-expire after 60 seconds
-        setTimeout(() => {
-            if (state.activeCardDrops.has(dropId)) {
-                state.activeCardDrops.delete(dropId);
-                const disabledRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`cardgrab_expired_0`).setLabel('1').setStyle(ButtonStyle.Secondary).setDisabled(true),
-                    new ButtonBuilder().setCustomId(`cardgrab_expired_1`).setLabel('2').setStyle(ButtonStyle.Secondary).setDisabled(true),
-                    new ButtonBuilder().setCustomId(`cardgrab_expired_2`).setLabel('3').setStyle(ButtonStyle.Secondary).setDisabled(true),
-                );
-                interaction.editReply({ components: [disabledRow] }).catch(() => {});
-            }
-        }, 60000);
+        await interaction.editReply({ embeds: [embed], files: [attachment] });
 
     } catch (e) {
-        console.error('[cardGame] Drop error:', e);
-        state.fishCooldowns.delete(cdKey);
-        return interaction.editReply({ content: '\u274C Error saat generate drop. Coba lagi!' });
+        console.error('[cardGame] Gacha error:', e);
+        // Refund on error
+        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(GACHA_PRICE, guildId, userId);
+        return interaction.editReply({ content: '❌ Error saat generate gacha. Uang dikembalikan! Coba lagi.' });
     }
 }
 
-// ==================== GRAB HANDLER ====================
+// ==================== GRAB HANDLER (legacy — gacha system gives cards directly now) ====================
 async function handleCardGrab(interaction) {
-    const parts = interaction.customId.split('_');
-    // cardgrab_<guildId>_<timestamp>_<index>
-    const dropId = parts[1] + '_' + parts[2]; // reconstruct guildId_timestamp
-    const cardIndex = parseInt(parts[3]);
-    const userId = interaction.user.id;
-    const guildId = interaction.guild.id;
-
-    state.activeCardDrops = state.activeCardDrops || new Map();
-    const drop = state.activeCardDrops.get(dropId);
-
-    if (!drop) {
-        return interaction.reply({ content: '\u274C Drop ini sudah expired!', ephemeral: true });
-    }
-
-    if (cardIndex < 0 || cardIndex > 2) {
-        return interaction.reply({ content: '\u274C Invalid card index.', ephemeral: true });
-    }
-
-    if (drop.grabbed[cardIndex]) {
-        return interaction.reply({ content: '\u274C Kartu ini sudah di-grab orang lain!', ephemeral: true });
-    }
-
-    // Grab cooldown: 4 minutes per user
-    const grabCdKey = `card_grab_${userId}`;
-    const grabCooldownMs = 4 * 60 * 1000;
-    if (state.fishCooldowns.has(grabCdKey) && Date.now() < state.fishCooldowns.get(grabCdKey)) {
-        const remaining = Math.ceil((state.fishCooldowns.get(grabCdKey) - Date.now()) / 1000);
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        return interaction.reply({ content: `\u23F3 Grab cooldown! Tunggu **${mins}m ${secs}s** lagi.`, ephemeral: true });
-    }
-    state.fishCooldowns.set(grabCdKey, Date.now() + grabCooldownMs);
-
-    // Mark as grabbed
-    drop.grabbed[cardIndex] = true;
-    const card = drop.cards[cardIndex];
-
-    // Save to DB
-    db.prepare(`INSERT INTO pokemon_cards (userId, cardId, cardName, setName, rarity, imageUrl, types, hp, artist, printNumber, obtainedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        userId, card.cardId, card.name, card.setName, card.rarity, card.imageUrl,
-        card.types || '', card.hp || '', card.artist || '', card.printNumber, Date.now()
-    );
-
-    incrementUserStat(guildId, userId, 'cards_grabbed');
-
-    const rarityData = getRarityData(card.rarity);
-    await interaction.reply({
-        content: `${rarityData.emoji} <@${userId}> grabbed **${card.name}** from *${card.setName}*! (${card.rarity} #${String(card.printNumber).padStart(4, '0')})`,
-        allowedMentions: { users: [] }
-    });
-
-    // Update buttons (disable grabbed ones)
-    const newRow = new ActionRowBuilder();
-    for (let i = 0; i < 3; i++) {
-        const btn = new ButtonBuilder()
-            .setCustomId(drop.grabbed[i] ? `cardgrab_claimed_${i}` : `cardgrab_${dropId}_${i}`)
-            .setLabel(drop.grabbed[i] ? '\u2713' : String(i + 1))
-            .setStyle(drop.grabbed[i] ? ButtonStyle.Success : ButtonStyle.Primary)
-            .setDisabled(drop.grabbed[i]);
-        newRow.addComponents(btn);
-    }
-    try { await interaction.message.edit({ components: [newRow] }); } catch (_) {}
-
-    // If all grabbed, delete drop state
-    if (drop.grabbed.every(g => g)) state.activeCardDrops.delete(dropId);
+    return interaction.reply({ content: '❌ Sistem baru: kartu langsung masuk ke pembeli gacha! Tidak perlu grab.', ephemeral: true });
 }
 
 // ==================== COLLECTION COMMAND ====================
@@ -1029,10 +964,10 @@ async function handleStardustCommand(interaction) {
     const userId = interaction.user.id;
     const amount = getStardust(userId);
 
-    let desc = `\u{1F4AB} **Stardust Balance**\n\n> \u{1F48E} Kamu punya: **${amount}** Stardust\n\n`;
-    desc += `**\u{1F6D2} Stardust Shop:**\n`;
-    desc += `> \u{1F3A8} Card Dye \u2014 50-100 \u2728\n`;
-    desc += `> \u{1F0CF} Extra Drop (skip cooldown) \u2014 200 \u2728\n\n`;
+    let desc = `💫 **Stardust Balance**\n\n> 💎 Kamu punya: **${amount}** Stardust\n\n`;
+    desc += `**🛒 Stardust Shop:**\n`;
+    desc += `> 🎨 Card Dye — 50-100 ✨\n`;
+    desc += `> 🎴 Extra Gacha (diskon 50%) — 200 ✨\n\n`;
     desc += `-# Burn kartu untuk dapat Stardust! /cardburn id:<card_id>`;
 
     const embed = new EmbedBuilder()
