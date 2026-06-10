@@ -190,8 +190,8 @@ function buildFarmHub(guildId, userId, username) {
             `> ${season.desc}\n\n` +
             `📊 **Overview:**\n` +
             `> 🌱 Tanaman: **${plots.length}** plot ${readyCount > 0 ? `(🔔 ${readyCount} siap panen!)` : ''}\n` +
-            `> 🐔 Ayam: **${chickens.length}** ekor (Kandang Lv.${coopLvl})\n` +
-            `> 🐄 Sapi: **${cows.length}** | 🐑 Domba: **${sheep.length}** (Kandang Lv.${barnLvl})\n` +
+            `> <:chicken:1514062471248216154> Ayam: **${chickens.length}** ekor (Kandang Lv.${coopLvl})\n` +
+            `> <:cow:1514062469276893356> Sapi: **${cows.length}** | <:sheep:1514062467393781792> Domba: **${sheep.length}** (Kandang Lv.${barnLvl})\n` +
             `> 💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
             `Pilih fitur yang mau dikelola:`
@@ -201,8 +201,8 @@ function buildFarmHub(guildId, userId, username) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_crops_${userId}`).setLabel('🌱 Tanaman').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel(`🐔 Kandang Ayam`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel(`🐄 Peternakan`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel(`<:chicken:1514062471248216154> Kandang Ayam`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel(`<:cow:1514062469276893356> Peternakan`).setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🧪 Crafting').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_allstorage_${userId}`).setLabel('📦 Storage').setStyle(ButtonStyle.Secondary)
     );

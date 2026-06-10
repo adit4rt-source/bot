@@ -60,17 +60,17 @@ function buildCoopPanel(userId, username) {
 
         if (chicken.status === 'sick') {
             const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
         } else if (isReady) {
             const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const name = chicken.name || 'Ayam';
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            animalList += `\`[${i + 1}]\` 🐔 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -82,11 +82,11 @@ function buildCoopPanel(userId, username) {
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
-        .setTitle(ui.title('🐔', 'KANDANG AYAM', username))
+        .setTitle(ui.title('<:chicken:1514062471248216154>', 'KANDANG AYAM', username))
         .setColor(totalReady > 0 ? ui.COLORS.economy : ui.COLORS.pet)
         .setDescription(
             `🏠 **${coopInfo.name}** (Lv.${coopLvl})  •  ${season.emoji} ${season.name}\n` +
-            `> 🐔 Ayam: **${chickens.length}**/${maxSlots}  •  🥚 Siap: **${totalReady}**\n` +
+            `> <:chicken:1514062471248216154> Ayam: **${chickens.length}**/${maxSlots}  •  🥚 Siap: **${totalReady}**\n` +
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> 📈 Produksi: **${Math.round(prodMult * 100)}%**  •  ${ui.money(userData.balance)}\n` +
             (sickCount > 0 ? `> ⚠️ **${sickCount} ayam sakit!** Beri obat segera.\n` : '') +
@@ -105,7 +105,7 @@ function buildCoopPanel(userId, username) {
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_coop_sell_${userId}`).setLabel('💰 Sell Telur').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_coop_sellbird_${userId}`).setLabel('🐔 Jual Ayam').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`farm_coop_sellbird_${userId}`).setLabel('<:chicken:1514062471248216154> Jual Ayam').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_coop_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_coop_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary)
     );
@@ -154,15 +154,15 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
         if (cow.status === 'sick') {
-            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`;
         } else if (isReady) {
-            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            cowList += `\`[${i + 1}]\` 🐄 ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -179,15 +179,15 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
         if (s.status === 'sick') {
-            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`;
         } else if (isReady) {
-            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            sheepList += `\`[${i + 1}]\` 🐑 ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
         }
     });
 
@@ -200,11 +200,11 @@ function buildBarnPanel(userId, username) {
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
     const embed = new EmbedBuilder()
-        .setTitle(ui.title('🐄', 'PETERNAKAN', username))
+        .setTitle(ui.title('<:cow:1514062469276893356>', 'PETERNAKAN', username))
         .setColor((totalMilk + totalWool) > 0 ? ui.COLORS.economy : '#8B4513')
         .setDescription(
             `🏠 **${barnInfo.name}** (Lv.${barnLvl})  •  ${season.emoji} ${season.name}\n` +
-            `> 🐄 Sapi: **${cows.length}**  •  🐑 Domba: **${sheep.length}** (${totalAnimals}/${maxSlots})\n` +
+            `> <:cow:1514062469276893356> Sapi: **${cows.length}**  •  <:sheep:1514062467393781792> Domba: **${sheep.length}** (${totalAnimals}/${maxSlots})\n` +
             `> 🥛 Siap: **${totalMilk}**  •  🧶 Siap: **${totalWool}**\n` +
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> ${ui.money(userData.balance)}\n` +
@@ -250,7 +250,7 @@ function buildCraftingPanel(guildId, userId, username) {
             `💰 Saldo: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n` +
             `📋 **${FARM_RECIPES.length} resep tersedia**\n\n` +
             `> 🌾 Tanaman: 36 resep\n` +
-            `> 🐔🐄 Livestock: 15 resep baru\n\n` +
+            `> <:chicken:1514062471248216154><:cow:1514062469276893356> Livestock: 15 resep baru\n\n` +
             `Klik **🧪 Craft** untuk membuka menu resep.\n` +
             `Bahan diambil dari **Storage** (panen + produk ternak).\n\n` +
             `🛠️ **Alat Tani:** craft gear permanen penambah hasil panen!`
@@ -415,7 +415,7 @@ async function handleLivestockButton(interaction) {
             const info = chickens.map((a, i) => {
                 const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
                 const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
-                return `\`[${i + 1}]\` 🐔 Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
+                return `\`[${i + 1}]\` <:chicken:1514062471248216154> Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
             }).join('\n');
             return interaction.reply({ content: `❌ Tidak ada ayam yang siap evolve!\n\n${info}`, ephemeral: true });
         }
@@ -503,7 +503,7 @@ async function handleLivestockButton(interaction) {
             .setColor('#FFA500')
             .setDescription(
                 `**📈 Overview:**\n` +
-                `> 🐔 Total Ayam (hidup): **${alive.length}**\n` +
+                `> <:chicken:1514062471248216154> Total Ayam (hidup): **${alive.length}**\n` +
                 `> ✨ Golden: **${goldenCount}** | 💎 Diamond: **${diamondCount}**\n` +
                 `> 🥚 Total Telur Collected: **${totalEggs.toLocaleString('id-ID')}**\n` +
                 `> 📈 Rata-rata Level: **${avgLevel}**\n` +
@@ -529,13 +529,13 @@ async function handleLivestockButton(interaction) {
         desc += `> 💊 Obat Ayam: **${medCount}** dosis\n`;
         desc += `> ⭐ Pakan Premium: **${premCount}** pc\n\n`;
         desc += `🛒 **Daftar Harga:**\n`;
-        desc += `> 🐔 Ayam Baru — 🪙 3,000/ekor\n`;
+        desc += `> <:chicken:1514062471248216154> Ayam Baru — 🪙 3,000/ekor\n`;
         desc += `> 🌾 Pakan Ayam — 🪙 60/pack (1 pack = +10% hunger)\n`;
         desc += `> 💊 Obat Ayam — 🪙 250/dosis\n`;
         desc += `> ⭐ Pakan Premium — 🪙 1,200/pc (untuk evolve)\n`;
         const embed = new EmbedBuilder().setTitle('🛒 Shop Kandang Ayam').setColor('#FFA500').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('🐔 Beli Ayam').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('<:chicken:1514062471248216154> Beli Ayam').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_coop_buyfeed_input_${userId}`).setLabel('🌾 Beli Pakan').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_coop_buymeds_input_${userId}`).setLabel('💊 Beli Obat').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_coop_buypremium_input_${userId}`).setLabel('⭐ Beli Premium').setStyle(ButtonStyle.Secondary)
@@ -548,7 +548,7 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_coop_buyhen_${userId}`) {
         const result = buyAnimal(userId, 'chicken');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        await tempReply(interaction, `🐔 Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
+        await tempReply(interaction, `<:chicken:1514062471248216154> Berhasil beli ayam! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
     }
     if (customId === `farm_coop_buyfeed_input_${userId}`) {
         const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -603,8 +603,8 @@ async function handleLivestockButton(interaction) {
         const cowResult = feedAnimals(userId, 'cow');
         const sheepResult = feedAnimals(userId, 'sheep');
         const msgs = [];
-        if (cowResult.success) msgs.push(`🐄 Fed ${cowResult.fed} sapi`);
-        if (sheepResult.success) msgs.push(`🐑 Fed ${sheepResult.fed} domba`);
+        if (cowResult.success) msgs.push(`<:cow:1514062469276893356> Fed ${cowResult.fed} sapi`);
+        if (sheepResult.success) msgs.push(`<:sheep:1514062467393781792> Fed ${sheepResult.fed} domba`);
         if (msgs.length === 0) return interaction.reply({ content: `❌ ${cowResult.error || sheepResult.error || 'Tidak ada hewan!'}`, ephemeral: true });
         const reply = await interaction.reply({ content: `🌾 ${msgs.join(' | ')}`, fetchReply: true });
         setTimeout(() => { reply.delete().catch(() => {}); }, 4000);
@@ -631,8 +631,8 @@ async function handleLivestockButton(interaction) {
                 return interaction.reply({ content: `❌ ${errMsg}`, ephemeral: true });
             }
             const healedParts = [];
-            if (cowResult && cowResult.healed) healedParts.push(`🐄 ${cowResult.healed} sapi`);
-            if (sheepResult && sheepResult.healed) healedParts.push(`🐑 ${sheepResult.healed} domba`);
+            if (cowResult && cowResult.healed) healedParts.push(`<:cow:1514062469276893356> ${cowResult.healed} sapi`);
+            if (sheepResult && sheepResult.healed) healedParts.push(`<:sheep:1514062467393781792> ${sheepResult.healed} domba`);
             // If one species healed but the other failed (e.g. no medicine), note it.
             const failNote = (cowResult && cowResult.error) ? ` (⚠️ ${cowResult.error})`
                 : (sheepResult && sheepResult.error) ? ` (⚠️ ${sheepResult.error})` : '';
@@ -666,7 +666,7 @@ async function handleLivestockButton(interaction) {
             const boostedCollect = currentCollect - (5 * 60 * 1000); // Move 5 minutes forward
             db.prepare('UPDATE livestock SET lastCollect = ? WHERE id = ?').run(boostedCollect, animal.id);
         }
-        const playMsgs = ['🐄 Sapi berlari senang!', '🐑 Domba melompat-lompat!', '🎾 Hewan-hewan bermain bersama!', '🌿 Mereka makan rumput segar sambil bermain!'];
+        const playMsgs = ['<:cow:1514062469276893356> Sapi berlari senang!', '<:sheep:1514062467393781792> Domba melompat-lompat!', '🎾 Hewan-hewan bermain bersama!', '🌿 Mereka makan rumput segar sambil bermain!'];
         const msg = playMsgs[Math.floor(Math.random() * playMsgs.length)];
         await tempReply(interaction, `🎾 **Bermain dengan hewan!**\n> ${msg}\n> ⚡ Produksi dipercepat 5 menit untuk semua hewan!`); return;
     }
@@ -707,7 +707,7 @@ async function handleLivestockButton(interaction) {
             const info = allBarn.map((a, i) => {
                 const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
                 const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
-                const icon = a.type === 'cow' ? '🐄' : '🐑';
+                const icon = a.type === 'cow' ? '<:cow:1514062469276893356>' : '<:sheep:1514062467393781792>';
                 return `\`[${i + 1}]\` ${icon} Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
             }).join('\n');
             return interaction.reply({ content: `❌ Tidak ada hewan yang siap evolve!\n\n${info}`, ephemeral: true });
@@ -715,7 +715,7 @@ async function handleLivestockButton(interaction) {
         const { StringSelectMenuBuilder } = require('discord.js');
         const options = eligible.map(a => {
             const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
-            const icon = a.type === 'cow' ? '🐄 Sapi' : '🐑 Domba';
+            const icon = a.type === 'cow' ? '<:cow:1514062469276893356> Sapi' : '<:sheep:1514062467393781792> Domba';
             return { label: `${icon} ${a.name || a.type} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
         }).slice(0, 25);
         const select = new StringSelectMenuBuilder().setCustomId(`farm_barn_evolveselect_${userId}`).setPlaceholder('Pilih hewan untuk evolve...').addOptions(options);
@@ -747,7 +747,7 @@ async function handleLivestockButton(interaction) {
             .setColor('#8B4513')
             .setDescription(
                 `**📈 Overview:**\n` +
-                `> 🐄 Sapi: **${cows.length}** | 🐑 Domba: **${sheep.length}**\n` +
+                `> <:cow:1514062469276893356> Sapi: **${cows.length}** | <:sheep:1514062467393781792> Domba: **${sheep.length}**\n` +
                 `> ✨ Golden: **${goldenCount}** | 💎 Diamond: **${diamondCount}**\n` +
                 `> 🥛 Total Susu Collected: **${totalMilk.toLocaleString('id-ID')}**\n` +
                 `> 🧶 Total Bulu Collected: **${totalWool.toLocaleString('id-ID')}**\n` +
@@ -774,14 +774,14 @@ async function handleLivestockButton(interaction) {
         desc += `> 💊 Obat Sapi: **${cowMed}** | Obat Domba: **${sheepMed}**\n`;
         desc += `> ⭐ Pakan Premium: **${premCount}**\n\n`;
         desc += `🛒 **Daftar Harga:**\n`;
-        desc += `> 🐄 Sapi — 🪙 10,000 | 🐑 Domba — 🪙 8,000\n`;
+        desc += `> <:cow:1514062469276893356> Sapi — 🪙 10,000 | <:sheep:1514062467393781792> Domba — 🪙 8,000\n`;
         desc += `> 🌾 Pakan Sapi — 🪙 90/pc | Pakan Domba — 🪙 70/pc\n`;
         desc += `> 💊 Obat Sapi — 🪙 400 | Obat Domba — 🪙 350\n`;
         desc += `> ⭐ Pakan Premium — 🪙 1,200/pc\n`;
         const embed = new EmbedBuilder().setTitle('🛒 Shop Peternakan').setColor('#8B4513').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('🐄 Sapi (10K)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('🐑 Domba (8K)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('<:cow:1514062469276893356> Sapi (10K)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('<:sheep:1514062467393781792> Domba (8K)').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_barn_buycowfeed_input_${userId}`).setLabel('🌾 Pakan Sapi').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_barn_buysheepfeed_input_${userId}`).setLabel('🌾 Pakan Domba').setStyle(ButtonStyle.Success)
         );
@@ -796,12 +796,12 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_barn_buycow_${userId}`) {
         const result = buyAnimal(userId, 'cow');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        await tempReply(interaction, `🐄 Berhasil beli sapi! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
+        await tempReply(interaction, `<:cow:1514062469276893356> Berhasil beli sapi! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
     }
     if (customId === `farm_barn_buysheep_${userId}`) {
         const result = buyAnimal(userId, 'sheep');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
-        await tempReply(interaction, `🐑 Berhasil beli domba! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
+        await tempReply(interaction, `<:sheep:1514062467393781792> Berhasil beli domba! (-🪙 ${result.price.toLocaleString('id-ID')})${result.rarityMsg || ''}`); return;
     }
     // Modal inputs for barn shop
     if (customId === `farm_barn_buycowfeed_input_${userId}`) {
@@ -954,7 +954,7 @@ async function handleLivestockModal(interaction) {
         const name = chicken.name || 'Ayam';
         db.prepare('DELETE FROM livestock WHERE id = ?').run(chicken.id);
         db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(sellPrice, userId);
-        await tempReply(interaction, `🐔 **${name}** (Lv.${chicken.level}) terjual! 🪙 **+${sellPrice.toLocaleString('id-ID')}**`); return;
+        await tempReply(interaction, `<:chicken:1514062471248216154> **${name}** (Lv.${chicken.level}) terjual! 🪙 **+${sellPrice.toLocaleString('id-ID')}**`); return;
     }
 
     const qty = parseInt(interaction.fields.getTextInputValue('qty'));
@@ -1046,7 +1046,7 @@ async function handleLivestockSelectMenu(interaction) {
         const result = evolveAnimal(userId, animalId);
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
         const oldTier = result.newTier - 1;
-        await interaction.update({ content: `⬆️ **Evolusi berhasil!** 🐔 → **${result.tierName}** ${result.tierEmoji}\n> Tier ${oldTier} → Tier ${result.newTier}\n> Produksi & quality meningkat!`, components: [] });
+        await interaction.update({ content: `⬆️ **Evolusi berhasil!** <:chicken:1514062471248216154> → **${result.tierName}** ${result.tierEmoji}\n> Tier ${oldTier} → Tier ${result.newTier}\n> Produksi & quality meningkat!`, components: [] });
         setTimeout(() => { interaction.message.delete().catch(() => {}); }, 5000);
         trackCoop(interaction, userId);
         return;
