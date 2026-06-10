@@ -458,6 +458,7 @@ async function handleAdminButton(interaction) {
 
     // === BLACKLIST: Add/Remove buttons ===
     if (customId === 'admpnl_blacklist_add') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '🛑 Blacklist (GLOBAL) hanya bisa digunakan oleh **pemilik bot**!', flags: 1 << 6 });
         const modal = new ModalBuilder().setCustomId('admpnl_modal_blacklist_add').setTitle('🚫 Blacklist User');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User (tag, ID, atau username)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('@user / 123456789 / budi')),
@@ -466,6 +467,7 @@ async function handleAdminButton(interaction) {
         return interaction.showModal(modal);
     }
     if (customId === 'admpnl_blacklist_remove') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '🛑 Blacklist (GLOBAL) hanya bisa digunakan oleh **pemilik bot**!', flags: 1 << 6 });
         const modal = new ModalBuilder().setCustomId('admpnl_modal_blacklist_remove').setTitle('✅ Unblacklist User');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('123456789012345678'))
@@ -1132,6 +1134,7 @@ async function handleAdminModal(interaction) {
 
     // === BLACKLIST: Add ===
     if (customId === 'admpnl_modal_blacklist_add') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '🛑 Hanya pemilik bot yang bisa blacklist!', flags: 1 << 6 });
         try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (userId TEXT PRIMARY KEY, reason TEXT, addedAt INTEGER, addedBy TEXT)`); } catch (_) {}
         const rawTarget = interaction.fields.getTextInputValue('target').trim();
         const targetId = await resolveTargetId(interaction, rawTarget);
@@ -1143,6 +1146,7 @@ async function handleAdminModal(interaction) {
 
     // === BLACKLIST: Remove ===
     if (customId === 'admpnl_modal_blacklist_remove') {
+        if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '🛑 Hanya pemilik bot yang bisa unblacklist!', flags: 1 << 6 });
         try { db.exec(`CREATE TABLE IF NOT EXISTS blacklist (userId TEXT PRIMARY KEY, reason TEXT, addedAt INTEGER, addedBy TEXT)`); } catch (_) {}
         const targetId = interaction.fields.getTextInputValue('target').trim();
         const existing = db.prepare('SELECT 1 FROM blacklist WHERE userId = ?').get(targetId);
