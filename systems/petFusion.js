@@ -307,6 +307,7 @@ function executeFusion(guildId, userId, tier, pet1Id, pet2Id) {
         guildId, userId, chosenPet.id, fusionName, startLevel, Date.now(),
         resultClass, resultElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit
     );
+    try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(userId, chosenPet.id); } catch (_) {}
 
     const newPetRow = db.prepare('SELECT last_insert_rowid() as id').get();
     const newPetId = newPetRow.id;

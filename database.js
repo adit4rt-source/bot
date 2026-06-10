@@ -335,6 +335,21 @@ try {
         WHERE heaviest_weight = 0 OR catch_count <= 1`);
 } catch(e) { /* first run or no fish_inventory data yet — safe to ignore */ }
 
+// ================= POST-MIGRATION: Pet Pokédex (permanent discovery) =================
+db.exec(`CREATE TABLE IF NOT EXISTS pet_discovery (
+    userId TEXT,
+    petId TEXT,
+    discoveredAt INTEGER DEFAULT 0,
+    obtain_count INTEGER DEFAULT 1,
+    PRIMARY KEY(userId, petId)
+)`);
+// Backfill: register all currently owned pets as discovered
+try {
+    db.exec(`INSERT OR IGNORE INTO pet_discovery (userId, petId, discoveredAt, obtain_count)
+        SELECT userId, petId, MIN(adoptedAt), COUNT(*)
+        FROM pets GROUP BY userId, petId`);
+} catch(e) { /* safe to ignore on first run */ }
+
 // ================= HELPER FUNCTIONS =================
 
 function getOrCreateUser(guildId, userId) {
@@ -714,6 +729,20 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
     if (created > 0) console.log(`⚡ Performance indexes ready (${created}/${indexes.length})`);
 })();
 
+// ================= PET DISCOVERY (Pokédex) =================
+function registerPetDiscovery(userId, petId) {
+    try {
+        db.prepare('INSERT OR IGNORE INTO pet_discovery (userId, petId, discoveredAt, obtain_count) VALUES (?, ?, ?, 0)').run(userId, petId, Date.now());
+        db.prepare('UPDATE pet_discovery SET obtain_count = obtain_count + 1 WHERE userId = ? AND petId = ?').run(userId, petId);
+    } catch (e) { /* discovery tracking must never block pet operations */ }
+}
+
+function getPetDiscoveries(userId) {
+    try {
+        return db.prepare('SELECT * FROM pet_discovery WHERE userId = ?').all(userId);
+    } catch (e) { return []; }
+}
+
 // ================= EXPORTS (always at the very bottom) =================
 module.exports = {
     db, checkGlobalMode,
@@ -730,4 +759,5 @@ module.exports = {
     getFarmDecorations, hasFarmDecoration, addFarmDecoration,
     getFarmPlot, insertFarmPlot, deleteDeadFarmPlots,
     clearFarmStorage, upgradeFarmLevel,
+    registerPetDiscovery, getPetDiscoveries,
 };

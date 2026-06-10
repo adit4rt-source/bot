@@ -505,6 +505,7 @@ async function handleArenaSelectMenu(interaction) {
                 const elements = ['fire', 'water', 'nature', 'electric', 'dark', 'light'];
                 const element = elements[Math.floor(Math.random() * elements.length)];
                 db.prepare('INSERT INTO pets (userId, petId, name, level, exp, hp, atk, def, spd, crit, element, adoptedAt) VALUES (?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?, ?)').run(userId, pet.id, pet.name, stats.hp, stats.atk, stats.def, stats.spd, stats.crit, element, Date.now());
+                try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(userId, pet.id); } catch (_) {}
                 await interaction.reply({ content: `🥚 **Arena Egg menetas!**\n> ${pet.emoji} **${pet.name}** (${tier})\n> HP:${stats.hp} ATK:${stats.atk} DEF:${stats.def} SPD:${stats.spd}\n> -🎖️ ${shopItem.cost} AP`, ephemeral: true });
             } else {
                 await interaction.reply({ content: '❌ Gagal hatch!', ephemeral: true });

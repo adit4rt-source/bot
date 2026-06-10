@@ -700,7 +700,7 @@ async function handlePetButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // === PET DEX (Catalog semua pet per tier) ===
+    // === PET DEX (Catalog semua pet per tier — PERMANENT discovery) ===
     if (action === 'dex') {
         const tier = parts[2]; // pet_dex_TIER_userId
         const validTiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
@@ -710,24 +710,30 @@ async function handlePetButton(interaction) {
 
         // Get all pets of this tier
         const tierPets = PET_DATA.filter(p => p.tier === currentTier);
-        // Get user's owned pets
-        const ownedPets = getAllPets(guildId, userId);
-        const ownedPetIds = new Set(ownedPets.map(p => p.petId));
-        const ownedCount = tierPets.filter(p => ownedPetIds.has(p.id)).length;
+        // Use PERMANENT discovery table (persists even after release/sell)
+        const { getPetDiscoveries } = require('../database');
+        const discoveries = getPetDiscoveries(userId);
+        const discoveredPetIds = new Set(discoveries.map(d => d.petId));
+        const discoveryMap = {};
+        for (const d of discoveries) discoveryMap[d.petId] = d;
+        const discoveredCount = tierPets.filter(p => discoveredPetIds.has(p.id)).length;
 
         // Check for evolution paths
         const { PET_EVOLUTIONS } = require('../data/pets');
 
         let desc = `${tierEmojis[currentTier]} **${currentTier.toUpperCase()}** — ${tierPets.length} pet\n`;
-        desc += `> 📊 Collected: **${ownedCount}/${tierPets.length}**\n`;
+        desc += `> 📊 Discovered: **${discoveredCount}/${tierPets.length}**\n`;
+        desc += `> -# *Pet yang pernah dimiliki tetap tercatat meski di-release*\n`;
         desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
 
         tierPets.forEach(pet => {
-            const owned = ownedPetIds.has(pet.id);
-            const ownedIcon = owned ? '✅' : '🔒';
+            const discovered = discoveredPetIds.has(pet.id);
+            const discoveredIcon = discovered ? '✅' : '🔒';
             const evo = PET_EVOLUTIONS.find(e => e.from === pet.id);
+            const entry = discoveryMap[pet.id];
+            const countInfo = entry && entry.obtain_count > 1 ? ` (×${entry.obtain_count})` : '';
 
-            desc += `${ownedIcon} ${pet.emoji} **${pet.name}**\n`;
+            desc += `${discoveredIcon} ${pet.emoji} **${pet.name}**${countInfo}\n`;
             desc += `> 💰 ${pet.price > 0 ? pet.price.toLocaleString('id-ID') : 'Egg Only'} | 🎁 +${pet.bonus.value}% ${pet.bonus.type.replace(/_/g, ' ')}`;
             if (evo) {
                 const evoPet = PET_DATA.find(p => p.id === evo.to);
@@ -742,7 +748,7 @@ async function handlePetButton(interaction) {
             .setTitle(`📖 PET DEX — ${currentTier}`)
             .setColor(tierColors[currentTier] || '#FF69B4')
             .setDescription(desc)
-            .setFooter({ text: `${ownedCount}/${tierPets.length} collected | Gunakan tombol untuk ganti tier` });
+            .setFooter({ text: `${discoveredCount}/${tierPets.length} discovered | Pet yang pernah dimiliki tetap tercatat!` });
 
         // Tier navigation buttons (8 tiers across 2 rows + nav row)
         const row1 = new ActionRowBuilder().addComponents(
@@ -1160,6 +1166,8 @@ async function handlePetSelectMenu(interaction) {
         const pClass = PET_CLASSES[Math.floor(Math.random() * PET_CLASSES.length)];
         const pElement = PET_ELEMENTS[Math.floor(Math.random() * PET_ELEMENTS.length)];
         db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt, class, element, hp, atk, def, spd, crit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, wonPet.id, wonPet.name, isFirst, Date.now(), pClass, pElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit);
+        // Register in permanent Pokédex
+        try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(userId, wonPet.id); } catch (_) {}
         // Achievement: pet obtained (tier firsts + distinct-collection milestones)
         try {
             const distinctPets = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE guildId = ? AND userId = ?').get(guildId, userId).c;

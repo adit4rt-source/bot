@@ -1103,6 +1103,7 @@ async function routeInteraction(interaction) {
                 const pClass = PET_CLASSES[Math.floor(Math.random() * PET_CLASSES.length)];
                 const pElement = PET_ELEMENTS[Math.floor(Math.random() * PET_ELEMENTS.length)];
                 db.prepare('INSERT INTO pets (guildId, userId, petId, name, active, adoptedAt, class, element, hp, atk, def, spd, crit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(guildId, interaction.user.id, wonPet.id, wonPet.name, isFirst, Date.now(), pClass, pElement, stats.hp, stats.atk, stats.def, stats.spd, stats.crit);
+                try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(interaction.user.id, wonPet.id); } catch (_) {}
                 const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B' };
                 let title = '🥚 Egg Hatched!';
                 if (selectedTier === 'Mythic') title = '🌟✨ MYTHIC PET!!! ✨🌟';
