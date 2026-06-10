@@ -149,33 +149,35 @@ function getNextPrint(charId) {
     return next;
 }
 
-// ==================== CARD IMAGE GENERATOR (Sofi-style: image-focused) ====================
+// ==================== CARD IMAGE GENERATOR (Premium Sofi-style v3) ====================
 async function generateCardImage(charData) {
     const { name, series, rarity, imageUrl, printNumber } = charData;
     const rarityData = RARITIES[rarity] || RARITIES.Common;
 
     const cardW = 350;
     const cardH = 500;
-    const borderW = 5;
-    const radius = 14;
+    const borderW = 4;
+    const radius = 16;
     const canvas = createCanvas(cardW, cardH);
     const ctx = canvas.getContext('2d');
 
-    // === RARITY GLOW BORDER ===
-    ctx.shadowColor = rarityData.color;
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = rarityData.color;
-    roundRectPath(ctx, 1, 1, cardW - 2, cardH - 2, radius);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    // === OUTER GLOW (layered rarity strokes) ===
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, cardW, cardH);
+    for (let i = 3; i >= 1; i--) {
+        roundRectPath(ctx, i, i, cardW - i * 2, cardH - i * 2, radius);
+        ctx.strokeStyle = rarityData.color + (i === 3 ? '40' : i === 2 ? '80' : 'CC');
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
 
-    // === CARD BASE ===
-    ctx.fillStyle = '#0A0A0A';
+    // === CARD BODY ===
     roundRectPath(ctx, borderW, borderW, cardW - borderW * 2, cardH - borderW * 2, radius - 2);
+    ctx.fillStyle = '#0D0D0D';
     ctx.fill();
 
     // === CHARACTER IMAGE (full-bleed) ===
-    const imgPad = borderW + 3;
+    const imgPad = borderW + 2;
     const imgX = imgPad;
     const imgY = imgPad;
     const imgW = cardW - imgPad * 2;
@@ -184,7 +186,7 @@ async function generateCardImage(charData) {
     try {
         const img = await loadImage(imageUrl);
         ctx.save();
-        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
+        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 3);
         ctx.clip();
         const scale = Math.max(imgW / img.width, imgH / img.height);
         const sw = img.width * scale;
@@ -192,21 +194,37 @@ async function generateCardImage(charData) {
         const sx = imgX + (imgW - sw) / 2;
         const sy = imgY + (imgH - sh) / 2;
         ctx.drawImage(img, sx, sy, sw, sh);
-        ctx.restore();
 
-        // Bottom gradient for text readability
-        ctx.save();
-        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
-        ctx.clip();
-        const grad = ctx.createLinearGradient(0, cardH - 150, 0, cardH - imgPad);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.4, 'rgba(0,0,0,0.6)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.92)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(imgX, cardH - 150, imgW, 150);
+        // Top vignette
+        const topGrad = ctx.createLinearGradient(0, imgY, 0, imgY + 80);
+        topGrad.addColorStop(0, 'rgba(0,0,0,0.5)');
+        topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(imgX, imgY, imgW, 80);
+
+        // Bottom gradient
+        const botGrad = ctx.createLinearGradient(0, cardH - 180, 0, cardH - imgPad);
+        botGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        botGrad.addColorStop(0.3, 'rgba(0,0,0,0.4)');
+        botGrad.addColorStop(0.6, 'rgba(0,0,0,0.75)');
+        botGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
+        ctx.fillStyle = botGrad;
+        ctx.fillRect(imgX, cardH - 180, imgW, 180);
+
+        // Side vignettes
+        const leftGrad = ctx.createLinearGradient(imgX, 0, imgX + 40, 0);
+        leftGrad.addColorStop(0, 'rgba(0,0,0,0.3)');
+        leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = leftGrad;
+        ctx.fillRect(imgX, imgY, 40, imgH);
+        const rightGrad = ctx.createLinearGradient(imgX + imgW, 0, imgX + imgW - 40, 0);
+        rightGrad.addColorStop(0, 'rgba(0,0,0,0.3)');
+        rightGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = rightGrad;
+        ctx.fillRect(imgX + imgW - 40, imgY, 40, imgH);
         ctx.restore();
     } catch (e) {
-        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
+        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 3);
         ctx.fillStyle = '#1A1A2E';
         ctx.fill();
         ctx.fillStyle = '#FFF';
@@ -216,55 +234,90 @@ async function generateCardImage(charData) {
         ctx.fillText(name, cardW / 2, cardH / 2);
     }
 
-    // === THIN RARITY BORDER ===
-    roundRectPath(ctx, borderW, borderW, cardW - borderW * 2, cardH - borderW * 2, radius - 2);
+    // === INNER BORDER (thin rarity accent) ===
+    roundRectPath(ctx, borderW + 1, borderW + 1, cardW - (borderW + 1) * 2, cardH - (borderW + 1) * 2, radius - 2);
     ctx.strokeStyle = rarityData.color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // === PRINT # (top-right) ===
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    roundRectPath(ctx, cardW - 76, imgY + 10, 56, 22, 8);
-    ctx.fill();
-    ctx.fillStyle = '#FFF';
+    // === RARITY ACCENT LINE (separator above text) ===
+    const accentY = cardH - imgPad - 68;
+    ctx.beginPath();
+    ctx.moveTo(imgX + 14, accentY);
+    ctx.lineTo(imgX + 60, accentY);
+    ctx.strokeStyle = rarityData.color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // === PRINT # (top-right pill) ===
+    const printText = `#${String(printNumber).padStart(4, '0')}`;
     ctx.font = '11px "Poppins Bold"';
+    const printW = ctx.measureText(printText).width + 16;
+    const printX = cardW - imgPad - 8 - printW;
+    const printY = imgY + 12;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    roundRectPath(ctx, printX, printY, printW, 22, 11);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 0.5;
+    roundRectPath(ctx, printX, printY, printW, 22, 11);
+    ctx.stroke();
+    ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`#${String(printNumber).padStart(4, '0')}`, cardW - 48, imgY + 21);
+    ctx.fillText(printText, printX + printW / 2, printY + 11);
 
-    // === CHARACTER NAME (bottom overlay) ===
-    ctx.fillStyle = '#FFF';
-    ctx.font = '17px "Poppins Bold"';
+    // === CHARACTER NAME ===
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '18px "Poppins Bold"';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    const nameMaxW = imgW - 24;
+    const nameMaxW = imgW - 30;
     let displayName = name;
     while (ctx.measureText(displayName).width > nameMaxW && displayName.length > 3) displayName = displayName.slice(0, -1);
     if (displayName !== name) displayName += '…';
-    ctx.fillText(displayName, imgX + 14, cardH - imgPad - 28);
+    ctx.fillText(displayName, imgX + 14, cardH - imgPad - 32);
 
-    // === SERIES (below name) ===
-    ctx.fillStyle = '#CCC';
+    // === SERIES ===
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '11px "Poppins SemiBold"';
     ctx.textBaseline = 'bottom';
     let displaySeries = series;
-    while (ctx.measureText(displaySeries).width > nameMaxW - 80 && displaySeries.length > 3) displaySeries = displaySeries.slice(0, -1);
+    const seriesMaxW = nameMaxW - 90;
+    while (ctx.measureText(displaySeries).width > seriesMaxW && displaySeries.length > 3) displaySeries = displaySeries.slice(0, -1);
     if (displaySeries !== series) displaySeries += '…';
-    ctx.fillText(displaySeries, imgX + 14, cardH - imgPad - 10);
+    ctx.fillText(displaySeries, imgX + 14, cardH - imgPad - 12);
 
-    // === RARITY BADGE (bottom-right) ===
+    // === RARITY BADGE (bottom-right, gradient pill) ===
     const badgeText = rarity.toUpperCase();
-    ctx.font = '10px "Poppins Bold"';
-    const badgeWidth = ctx.measureText(badgeText).width + 14;
-    const badgeX = cardW - imgPad - 10 - badgeWidth;
-    const badgeY = cardH - imgPad - 26;
-    ctx.fillStyle = rarityData.color;
-    roundRectPath(ctx, badgeX, badgeY, badgeWidth, 18, 4);
+    ctx.font = '9px "Poppins Bold"';
+    const badgeTextW = ctx.measureText(badgeText).width;
+    const badgePad = 10;
+    const badgeTotalW = badgeTextW + badgePad * 2;
+    const badgeH = 20;
+    const badgeX = cardW - imgPad - 10 - badgeTotalW;
+    const badgeY = cardH - imgPad - 28;
+    const badgeGrad = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeTotalW, badgeY + badgeH);
+    badgeGrad.addColorStop(0, rarityData.color);
+    badgeGrad.addColorStop(1, rarityData.color + 'AA');
+    ctx.fillStyle = badgeGrad;
+    roundRectPath(ctx, badgeX, badgeY, badgeTotalW, badgeH, 5);
     ctx.fill();
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(badgeText, badgeX + badgeWidth / 2, badgeY + 9);
+    ctx.fillText(badgeText, badgeX + badgeTotalW / 2, badgeY + badgeH / 2);
+
+    // === FAVOURITES INDICATOR (small, below accent line) ===
+    ctx.fillStyle = rarityData.color;
+    ctx.font = '8px "Poppins Bold"';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★', imgX + 14, accentY + 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '8px "Poppins SemiBold"';
+    ctx.fillText(` ${(charData.favourites || 0).toLocaleString('id-ID')}`, imgX + 23, accentY + 12);
 
     return canvas.toBuffer('image/png');
 }
