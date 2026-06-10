@@ -62,53 +62,61 @@ async function resolveTargetId(interaction, raw) {
     return null;
 }
 
-// ============ BUILD: Main Admin Panel ============
+// ============ BUILD: Main Admin Panel (restructured for clarity) ============
 function buildAdminPanel(guildId) {
+    const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+    const levelingOn = getSetting(guildId, 'leveling_enabled', '1') !== '0';
+    const streakOn = getSetting(guildId, 'streak_enabled', '1') !== '0';
+    const loveOn = getSetting(guildId, 'love_enabled', '1') !== '0';
+
     const embed = new EmbedBuilder()
-        .setTitle('\ud83d\udee1\ufe0f ADMIN PANEL')
+        .setTitle('🛡️ ADMIN PANEL')
         .setColor('#2B2D31')
         .setDescription(
-            `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
-            `Kelola server bot dari sini:\n\n` +
-            `> \ud83d\uded2 **Shop** \u2014 Tambah role/item/voucher ke toko\n` +
-            `> \ud83d\udcb0 **Money** \u2014 Kelola uang user & banker\n` +
-            `> \ud83d\udd25 **Streak** \u2014 Set/reset/restore streak user\n` +
-            `> \u2699\ufe0f **Setting** \u2014 Atur semua konfigurasi server\n` +
-            `> \ud83d\udce2 **Notifications** \u2014 Auto-create channel notif\n` +
-            `> \ud83c\udf99\ufe0f **TempVoice** \u2014 Setup voice channel privat\n` +
-            `> 🏆 **Contest** — Fishing contest\n` +
-            `> 📊 **Analytics** — Command usage stats\n` +
-            `> 🎁 **Giveaway** — Mulai/akhiri giveaway\n` +
-            `> 👤 **User Lookup** — Cek stats & data user\n` +
-            `> 📢 **Announce** — Kirim embed ke channel\n` +
-            `> 🚫 **Blacklist** — Block user dari ekonomi\n` +
-            `> 🏷️ **Custom Embed** — Edit embed server\n` +
-            `> 🎫 **Ticket** — Setup support ticket system\n` +
-            `> 🔧 **DB Tools** — Cek & restore data (Owner)\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━`
+            `Selamat datang di panel admin! Pilih kategori:\n\n` +
+            `**🚀 QUICK SETUP** *(baru pakai bot? mulai di sini!)*\n` +
+            `> ⚙️ Setting — Channel, toggle fitur, streak\n` +
+            `> 📢 Notif — Auto-buat channel notifikasi\n` +
+            `> 🎙️ TempVoice — Setup voice privat\n` +
+            `> 🎫 Ticket — Setup support ticket\n\n` +
+            `**💰 EKONOMI & GAME**\n` +
+            `> 🛒 Shop — Tambah role/item/voucher\n` +
+            `> 💰 Money — Kelola saldo user\n` +
+            `> ${streakEmoji} Streak — Set/reset streak\n` +
+            `> 🏆 Contest — Fishing tournament\n` +
+            `> 🎁 Giveaway — Mulai/akhiri giveaway\n\n` +
+            `**🔧 SERVER TOOLS**\n` +
+            `> 📢 Announce — Kirim embed ke channel\n` +
+            `> 👤 Lookup — Cek data user\n` +
+            `> 📊 Analytics — Stats pemakaian\n` +
+            `> 🚫 Blacklist — Block user\n` +
+            `> 🔧 DB Tools — Restore data\n\n` +
+            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${loveOn ? '❤️ Love ✅' : '❤️ Love ❌'}`
         )
-        .setFooter({ text: 'Hanya Admin yang bisa menggunakan panel ini' })
+        .setFooter({ text: '💡 Baru pertama? Klik ⚙️ Setting untuk setup awal' })
         .setTimestamp();
 
+    // Row 1: Quick Setup (paling penting untuk admin baru)
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_shop').setLabel('\ud83d\uded2 Shop').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_money').setLabel('\ud83d\udcb0 Money').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_streak').setLabel('\ud83d\udd25 Streak').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_setting').setLabel('\u2699\ufe0f Setting').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('\ud83d\udce2 Notif').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId('admpnl_setting').setLabel('⚙️ Setting').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('📢 Notif Setup').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('🎙️ TempVoice').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Success)
     );
+    // Row 2: Economy & Game
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('\ud83c\udf99\ufe0f TempVoice').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83c\udfc6 Contest').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_giveaway').setLabel('🎁 Giveaway').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_userlookup').setLabel('👤 Lookup').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('admpnl_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_money').setLabel('💰 Money').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_streak').setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('🏆 Contest').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_giveaway').setLabel('🎁 Giveaway').setStyle(ButtonStyle.Primary)
     );
+    // Row 3: Server Tools
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_announce').setLabel('📢 Announce').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_announce').setLabel('📢 Announce').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_userlookup').setLabel('👤 Lookup').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_analytics').setLabel('📊 Analytics').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_blacklist').setLabel('🚫 Blacklist').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔧 DB Tools').setStyle(ButtonStyle.Danger)
     );
 
@@ -223,12 +231,12 @@ function buildSettingSubPanel(guildId) {
         .setColor('#95A5A6')
         .setDescription(
             `**📡 Channel Notifikasi:**\n` +
-            `> 📋 Quest: ${questCh ? `<#${questCh}>` : '*Belum diatur*'}\n` +
-            `> 📈 Level Up: ${levelCh ? `<#${levelCh}>` : '*Belum diatur*'}\n` +
-            `> 🏆 Achievement: ${achCh ? `<#${achCh}>` : '*Belum diatur*'}\n` +
-            `> ${streakEmoji} Streak: ${streakCh ? `<#${streakCh}>` : '*Belum diatur*'}\n` +
-            `> ❤️ Love: ${loveCh ? `<#${loveCh}>` : '*Belum diatur*'}\n` +
-            `> 📝 Log: ${logCh ? `<#${logCh}>` : '*Belum diatur*'}\n\n` +
+            `> 📋 Quest: ${questCh ? `<#${questCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 📈 Level Up: ${levelCh ? `<#${levelCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 🏆 Achievement: ${achCh ? `<#${achCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> ${streakEmoji} Streak: ${streakCh ? `<#${streakCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> ❤️ Love: ${loveCh ? `<#${loveCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 📝 Log: ${logCh ? `<#${logCh}>` : '⚠️ *Belum diatur*'}\n\n` +
             `**🎛️ Fitur Toggle:**\n` +
             `> 📊 Leveling: ${levelingEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
             `> ${streakEmoji} Streak: ${streakEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
@@ -237,7 +245,9 @@ function buildSettingSubPanel(guildId) {
             `> 🎵 TikTok Convert: ${tiktokEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n\n` +
             `**📈 XP & Level:**\n` +
             `> ⚡ XP Multiplier: **${xpMult}x**\n` +
-            `> 🎯 Max Level: **${getSetting(guildId, 'max_level', '200')}**`
+            `> 🎯 Max Level: **${getSetting(guildId, 'max_level', '200')}**\n\n` +
+            `-# 💡 Klik "📡 Channels" untuk set channel notifikasi.\n` +
+            `-# 💡 Klik "🎛️ Toggle" untuk ON/OFF fitur (isi 1 atau 0).`
         );
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -249,6 +259,7 @@ function buildSettingSubPanel(guildId) {
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
