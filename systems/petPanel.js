@@ -114,11 +114,26 @@ function buildRelicPanel(guildId, userId) {
             ? `> ${_SLOT_EMOJI[slot]} **${r.name}** +${r.refine_level} — ${_STAT_EMOJI[r.stat_type]}+${relicEffective(r)}${unit}\n`
             : `> ${_SLOT_EMOJI[slot]} *(kosong)*\n`;
     }
-    desc += `\n**📊 Total Bonus:**\n`;
-    desc += `> ⚔️ ATK: +${bonus.atk}${bonus.percent.atk ? ` (+${bonus.percent.atk}%)` : ''}\n`;
-    desc += `> 🛡️ DEF: +${bonus.def}${bonus.percent.def ? ` (+${bonus.percent.def}%)` : ''}\n`;
-    desc += `> 💨 SPD: +${bonus.spd}${bonus.percent.spd ? ` (+${bonus.percent.spd}%)` : ''}\n`;
-    desc += `> 🎯 CRIT: +${bonus.crit}%${bonus.percent.crit ? ` (+${bonus.percent.crit}%)` : ''}\n`;
+    // Calculate effective stats (base + flat, then apply percent)
+    const baseAtk = pet.atk || 0, baseDef = pet.def || 0, baseSpd = pet.spd || 0, baseCrit = pet.crit || 0;
+    const finalAtk = Math.floor((baseAtk + bonus.atk) * (1 + (bonus.percent.atk || 0) / 100));
+    const finalDef = Math.floor((baseDef + bonus.def) * (1 + (bonus.percent.def || 0) / 100));
+    const finalSpd = Math.floor((baseSpd + bonus.spd) * (1 + (bonus.percent.spd || 0) / 100));
+    const finalCrit = Math.floor((baseCrit + bonus.crit) * (1 + (bonus.percent.crit || 0) / 100));
+
+    desc += `\n**📊 Effective Stats:**\n`;
+    desc += bonus.percent.atk
+        ? `> ⚔️ ATK: ${baseAtk} + ${bonus.percent.atk}% = **${finalAtk}**\n`
+        : `> ⚔️ ATK: ${baseAtk}${bonus.atk ? ` + ${bonus.atk}` : ''} = **${finalAtk}**\n`;
+    desc += bonus.percent.def
+        ? `> 🛡️ DEF: ${baseDef} + ${bonus.percent.def}% = **${finalDef}**\n`
+        : `> 🛡️ DEF: ${baseDef}${bonus.def ? ` + ${bonus.def}` : ''} = **${finalDef}**\n`;
+    desc += bonus.percent.spd
+        ? `> 💨 SPD: ${baseSpd} + ${bonus.percent.spd}% = **${finalSpd}**\n`
+        : `> 💨 SPD: ${baseSpd}${bonus.spd ? ` + ${bonus.spd}` : ''} = **${finalSpd}**\n`;
+    desc += bonus.percent.crit
+        ? `> 🎯 CRIT: ${baseCrit}% + ${bonus.percent.crit}% = **${finalCrit}%**\n`
+        : `> 🎯 CRIT: ${baseCrit}%${bonus.crit ? ` + ${bonus.crit}%` : ''} = **${finalCrit}%**\n`;
     desc += `🪨 Refine Stone: **${stones}** | 📿 Total relic: **${all.length}** (${equipped.length} terpasang)\n`;
     desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih relic untuk **dipasang**, atau **lebur** relic tak terpakai jadi Refine Stone.`;
 
@@ -285,8 +300,10 @@ function buildMainPanel(guildId, userId, username) {
 
     // Effective stats including equipped/owned relic bonuses (from Refine).
     const eff = getEffectiveStats(pet);
-    const statFmt = (base, bonus) => bonus > 0 ? `**${base + bonus}** (+${bonus})` : `**${base}**`;
-    const hasRelic = eff.bonus.atk || eff.bonus.def || eff.bonus.spd || eff.bonus.crit;
+    const hasRelic = eff.bonus.atk || eff.bonus.def || eff.bonus.spd || eff.bonus.crit ||
+        (eff.bonus.percent && (eff.bonus.percent.atk || eff.bonus.percent.def || eff.bonus.percent.spd || eff.bonus.percent.crit));
+    // Show effective total (already includes percent calc from getEffectiveStats)
+    const statFmt = (effective, base) => effective !== base ? `**${effective}** (base ${base})` : `**${base}**`;
 
     const embed = new EmbedBuilder()
         .setTitle(ui.title('🐾', 'PET', `${pet.name} (Lv.${pet.level})`))
@@ -296,9 +313,9 @@ function buildMainPanel(guildId, userId, username) {
             `❤️ Senang: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
             `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
             `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
-            `⚔️ ATK: ${statFmt(pet.atk, eff.bonus.atk)} | 🛡️ DEF: ${statFmt(pet.def, eff.bonus.def)} | 💨 SPD: ${statFmt(pet.spd, eff.bonus.spd)}\n` +
-            `❤️ HP: **${pet.hp}** | 🎯 CRIT: ${eff.bonus.crit > 0 ? `**${pet.crit + eff.bonus.crit}%** (+${eff.bonus.crit})` : `**${pet.crit}%**`}\n` +
-            (hasRelic ? `📿 *Bonus relic aktif (Refine) — naikkan dengan 📿 Refine!*\n` : '') +
+            `⚔️ ATK: ${statFmt(eff.atk, pet.atk)} | 🛡️ DEF: ${statFmt(eff.def, pet.def)} | 💨 SPD: ${statFmt(eff.spd, pet.spd)}\n` +
+            `❤️ HP: **${pet.hp}** | 🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (base ${pet.crit}%)` : `**${pet.crit}%**`}\n` +
+            (hasRelic ? `📿 *Bonus relic aktif — naikkan dengan 📿 Refine!*\n` : '') +
             `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` +
             huntInfo + evoInfo
         )
