@@ -109,14 +109,17 @@ function meltRelic(guildId, userId, relicId) {
 // Base pet stats + EQUIPPED relic bonuses (used for display and battle).
 function getEffectiveStats(pet) {
     const b = getRelicBonus(pet && pet.userId, pet && pet.id);
-    return {
-        hp: pet.hp,
-        atk: pet.atk + b.atk,
-        def: pet.def + b.def,
-        spd: pet.spd + b.spd,
-        crit: pet.crit + b.crit,
-        bonus: b,
-    };
+    let atk = (pet.atk || 0) + b.atk;
+    let def = (pet.def || 0) + b.def;
+    let spd = (pet.spd || 0) + b.spd;
+    let crit = (pet.crit || 0) + b.crit;
+    if (b.percent) {
+        atk = Math.floor(atk * (1 + b.percent.atk / 100));
+        def = Math.floor(def * (1 + b.percent.def / 100));
+        spd = Math.floor(spd * (1 + b.percent.spd / 100));
+        crit = Math.floor(crit * (1 + b.percent.crit / 100));
+    }
+    return { hp: pet.hp, atk, def, spd, crit, bonus: b };
 }
 
 // Returns a shallow copy of the pet row with relic bonuses folded into the
