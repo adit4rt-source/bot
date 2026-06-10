@@ -83,6 +83,7 @@ function buildAdminPanel(guildId) {
             `> 📢 **Announce** — Kirim embed ke channel\n` +
             `> 🚫 **Blacklist** — Block user dari ekonomi\n` +
             `> 🏷️ **Custom Embed** — Edit embed server\n` +
+            `> 🎫 **Ticket** — Setup support ticket system\n` +
             `> 🔧 **DB Tools** — Cek & restore data (Owner)\n` +
             `━━━━━━━━━━━━━━━━━━━━━━`
         )
@@ -107,6 +108,7 @@ function buildAdminPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_announce').setLabel('📢 Announce').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_blacklist').setLabel('🚫 Blacklist').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_dbtools').setLabel('🔧 DB Tools').setStyle(ButtonStyle.Danger)
     );
 
@@ -417,6 +419,21 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
     if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
+
+    // === TICKET SUB-PANEL ===
+    if (customId === 'admpnl_ticket') {
+        const embed = new EmbedBuilder().setTitle('🎫 TICKET SETUP').setColor('#5865F2')
+            .setDescription('Setup sistem tiket support:\n\nAkan membuat:\n> 📁 **TICKETS** (kategori)\n> ├ 🎫 #open-ticket (panel)\n> └ 📋 #ticket-logs (transcript)\n\n⚠️ Ini akan membuat channel baru!');
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admpnl_ticket_setup').setLabel('🎫 Setup Ticket').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+    if (customId === 'admpnl_ticket_setup') {
+        const { setupTicketSystem } = require('./ticket');
+        return setupTicketSystem(interaction);
+    }
 
     // === NEW PANELS ===
     if (customId === 'admpnl_giveaway') return interaction.update(buildGiveawaySubPanel(guildId));
@@ -741,9 +758,11 @@ async function handleAdminButton(interaction) {
         try {
             const category = await interaction.guild.channels.create({ name: '\ud83d\udcac PRIVATE ROOMS', type: ChannelType.GuildCategory });
             const interfaceChannel = await interaction.guild.channels.create({ name: '\u2699\ufe0f-interface', type: ChannelType.GuildText, parent: category.id });
+            const jtcVoice = await interaction.guild.channels.create({ name: '➕ Join to Create', type: ChannelType.GuildVoice, parent: category.id });
             db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'jtc_category', category.id);
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'jtc_channel', jtcVoice.id);
             const tvEmbed = new EmbedBuilder().setTitle('\ud83d\udd0a TEMP VOICE CONTROL PANEL').setColor('#2B2D31')
-                .setDescription('Selamat datang di sistem Private Voice!\n\n**\u2728 CARA MEMBUAT CHANNEL:**\nKlik tombol biru untuk membuat channel.\n\n**\u2699\ufe0f CARA MENGATUR:**\nGunakan tombol abu-abu/merah.');
+                .setDescription('Selamat datang di sistem Private Voice!\n\n**\u2728 CARA MEMBUAT CHANNEL:**\nKlik tombol biru untuk membuat channel, atau join voice channel **➕ Join to Create** untuk auto-create.\n\n**\u2699\ufe0f CARA MENGATUR:**\nGunakan tombol abu-abu/merah.');
             const rowCreate = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tv_create_private').setLabel('Private \ud83d\udd12').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('tv_create_duo').setLabel('Duo \ud83d\udc65 (2)').setStyle(ButtonStyle.Primary),
@@ -766,7 +785,7 @@ async function handleAdminButton(interaction) {
             );
             await interfaceChannel.send({ embeds: [tvEmbed], components: [rowCreate, rowManage1, rowManage2] });
             const embed = new EmbedBuilder().setTitle('\u2705 TempVoice Created!').setColor('#9B59B6')
-                .setDescription(`\ud83d\udcc1 **${category.name}**\n> \u2699\ufe0f <#${interfaceChannel.id}>`);
+                .setDescription(`\ud83d\udcc1 **${category.name}**\n> \u2699\ufe0f <#${interfaceChannel.id}>\n> 🔊 <#${jtcVoice.id}> (Join to Create)`);
             const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_back').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
             return interaction.editReply({ embeds: [embed], components: [row] });
         } catch (err) {

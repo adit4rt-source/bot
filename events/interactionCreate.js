@@ -42,6 +42,7 @@ const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handl
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotChannelSelect, isAiBotButton, isAiBotChannelSelect } = require('../systems/aiBotPanel');
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
+const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
@@ -1149,6 +1150,11 @@ async function routeInteraction(interaction) {
             return handleFarmButton(interaction);
         }
 
+        // --- TICKET BUTTONS ---
+        if (isTicketButton(interaction.customId)) {
+            return handleTicketButton(interaction);
+        }
+
         // --- PET PANEL BUTTONS ---
         if (isPetPanelButton(interaction.customId)) {
             return handlePetButton(interaction);
@@ -1626,6 +1632,11 @@ async function routeInteraction(interaction) {
         // --- GIVEAWAY PANEL MODALS ---
         if (isGiveawayPanelModal(interaction.customId)) {
             return handleGiveawayModal(interaction);
+        }
+
+        // --- TICKET MODAL ---
+        if (isTicketModal(interaction.customId)) {
+            return handleTicketModal(interaction);
         }
 
         if (interaction.customId === 'tv_modal_custom_create') { const vcName = interaction.fields.getTextInputValue('tv_input_custom_name'); let limit = parseInt(interaction.fields.getTextInputValue('tv_input_custom_limit')); if (isNaN(limit)) limit = 0; const jtcCategoryId = getSetting(guildId, 'jtc_category', null); if (!jtcCategoryId) return interaction.reply({content: '❌ Belum setup!', ephemeral: true}); await interaction.deferReply({ephemeral: true}); try { const newVc = await interaction.guild.channels.create({ name: vcName, type: ChannelType.GuildVoice, parent: jtcCategoryId, userLimit: limit, permissionOverwrites: [{id: guildId, allow: [PermissionsBitField.Flags.ViewChannel]}, {id: interaction.user.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect]}] }); db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(newVc.id, guildId, interaction.user.id); interaction.editReply(`✅ <#${newVc.id}> (60 detik)`); setTimeout(async()=>{const ch=interaction.guild.channels.cache.get(newVc.id);if(ch&&ch.members.size===0){await ch.delete().catch(()=>{});db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(newVc.id);}},60000); } catch(e) { interaction.editReply('❌ Gagal.'); } return; }
