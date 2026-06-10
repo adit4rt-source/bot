@@ -8,10 +8,10 @@ const state = require('../state');
 
 // ==================== GACHA PACKS ====================
 const PACKS = {
-    basic:   { name: '🟢 Basic Pack',   price: 10000,  count: 3,  pool: ['Common','Uncommon','Rare'] },
-    premium: { name: '🔵 Premium Pack',  price: 50000,  count: 3,  pool: ['Rare','Rare Holo','Rare Holo EX','Rare Holo GX','Rare Holo V'] },
-    ultra:   { name: '🟣 Ultra Pack',    price: 100000, count: 3,  pool: ['Rare Holo','Rare Ultra','Rare Rainbow','Rare Secret'] },
-    master:  { name: '💎 Master Pack',   price: 500000, count: 10, pool: ['Rare','Rare Holo','Rare Holo EX','Rare Holo GX','Rare Holo V','Rare Ultra','Rare Rainbow','Rare Secret','Illustration Rare','Special Art Rare'], guaranteed: 'Rare Ultra' },
+    basic:   { name: '🟢 Basic Pack',   price: 15000,   count: 3,  pool: ['Common','Uncommon','Rare'] },
+    premium: { name: '🔵 Premium Pack',  price: 75000,   count: 3,  pool: ['Rare','Rare Holo','Rare Holo EX','Rare Holo GX','Rare Holo V'] },
+    ultra:   { name: '🟣 Ultra Pack',    price: 200000,  count: 3,  pool: ['Rare Holo','Rare Ultra','Rare Rainbow','Rare Secret'] },
+    master:  { name: '💎 Master Pack',   price: 750000,  count: 10, pool: ['Rare','Rare Holo','Rare Holo EX','Rare Holo GX','Rare Holo V','Rare Ultra','Rare Rainbow','Rare Secret','Illustration Rare'], guaranteed: 'Rare Ultra' },
 };
 
 // ==================== DATABASE ====================
@@ -226,10 +226,10 @@ function buildPanel(userId) {
             `> 💫 Stardust: **${dust}**\n\n` +
             `**🏆 Top Cards:**\n${topDesc}\n\n` +
             `**🎴 Gacha Packs:**\n` +
-            `> 🟢 **Basic** — 3 kartu (💰 10.000)\n` +
-            `> 🔵 **Premium** — 3 kartu (💰 50.000)\n` +
-            `> 🟣 **Ultra** — 3 kartu (💰 100.000)\n` +
-            `> 💎 **Master** — 10 kartu (💰 500.000)\n\n` +
+            `> 🟢 **Basic** — 3 kartu (💰 15.000)\n` +
+            `> 🔵 **Premium** — 3 kartu (💰 75.000)\n` +
+            `> 🟣 **Ultra** — 3 kartu (💰 200.000)\n` +
+            `> 💎 **Master** — 10 kartu (💰 750.000)\n\n` +
             `**📋 Menu:**\n` +
             `> 📖 **Collection** — Gallery kartumu\n` +
             `> 🔥 **Burn** — Hancurkan kartu → Stardust\n` +
@@ -242,10 +242,10 @@ function buildPanel(userId) {
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`card_gacha_basic_${userId}`).setLabel('🟢 Basic (💰10k)').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`card_gacha_premium_${userId}`).setLabel('🔵 Premium (💰50k)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`card_gacha_ultra_${userId}`).setLabel('🟣 Ultra (💰100k)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`card_gacha_master_${userId}`).setLabel('💎 Master (💰500k)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`card_gacha_basic_${userId}`).setLabel('🟢 Basic (💰15k)').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`card_gacha_premium_${userId}`).setLabel('🔵 Premium (💰75k)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`card_gacha_ultra_${userId}`).setLabel('🟣 Ultra (💰200k)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`card_gacha_master_${userId}`).setLabel('💎 Master (💰750k)').setStyle(ButtonStyle.Danger),
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
