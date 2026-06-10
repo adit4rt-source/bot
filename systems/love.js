@@ -136,7 +136,11 @@ function stripTags(name, emojis) {
 async function refreshMemberNick(member) {
     try {
         if (!member || !member.user || member.user.bot) return;
+        // Re-fetch member for fresh data (stale cache → manageable=false)
+        try { member = await member.guild.members.fetch(member.id); } catch (_) {}
         try { if (!member.guild.members.me) await member.guild.members.fetchMe(); } catch (_) {}
+        // Server owner can never have nickname changed by anyone
+        if (member.id === member.guild.ownerId) return;
         let manageable = false;
         try { manageable = member.manageable; } catch (_) { manageable = false; }
         if (!manageable) return;
@@ -146,7 +150,7 @@ async function refreshMemberNick(member) {
         const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
         const loveEmoji = getEmoji(guildId);
 
-        const current = member.nickname || member.user.username;
+        const current = member.nickname || member.user.displayName || member.user.username;
         let base = stripTags(current, [streakEmoji, loveEmoji]);
 
         // --- streak suffix (respects the existing streak_* settings) ---
