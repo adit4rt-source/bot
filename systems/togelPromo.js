@@ -15,9 +15,9 @@ const state = require('../state');
 const { getSetting } = require('../database');
 const { buildTogelPromo } = require('./lottery');
 
-const MESSAGES_PER_PROMO = 140;       // ~non-spam messages between candidate drops
-const DEFAULT_GAP_MIN = 60;           // minimum minutes between drops per guild
-const AUTO_DELETE_MS = 5 * 60 * 1000; // remove the card after 5 minutes
+const MESSAGES_PER_PROMO = 30;        // ~non-spam messages between candidate drops (was 140)
+const DEFAULT_GAP_MIN = 15;           // minimum minutes between drops per guild (was 60)
+const AUTO_DELETE_MS = 3 * 60 * 1000; // remove the card after 3 minutes (was 5)
 
 function isEnabled(guildId) {
     return getSetting(guildId, 'togel_promo_enabled', '1') !== '0';
