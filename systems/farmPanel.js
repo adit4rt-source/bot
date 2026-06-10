@@ -1530,37 +1530,42 @@ async function handleFarmSelectMenu(interaction) {
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
-    // === CRAFT SELECT ===
+    // === CRAFT SELECT (show quantity modal) ===
     if (customId.startsWith('farm_craftselect_') || customId.startsWith('farm_craftselect2_') || customId.startsWith('farm_craftselect3_')) {
-        await interaction.deferUpdate();
         const recipeId = interaction.values[0];
         const recipe = FARM_RECIPES.find(r => r.id === recipeId);
-        if (!recipe) return interaction.followUp({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
         const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
-        const missing = [];
+
+        // Calculate max craftable based on ingredients in storage
+        let maxCraft = 999;
         for (const ing of recipe.ingredients) {
             const have = getStorageQty(guildId, userId, ing.id);
-            if (have < ing.qty) { const crop = ALL_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
+            maxCraft = Math.min(maxCraft, Math.floor(have / ing.qty));
         }
-        if (missing.length > 0) {
-            return interaction.followUp({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], ephemeral: true });
+        if (maxCraft <= 0) {
+            const missing = [];
+            for (const ing of recipe.ingredients) {
+                const have = getStorageQty(guildId, userId, ing.id);
+                if (have < ing.qty) { const crop = ALL_CROPS.find(c => c.id === ing.id); missing.push(`> ${crop ? crop.emoji : '📦'} **${crop ? crop.name : ing.id}** — butuh ${ing.qty}, punya ${have}`); }
+            }
+            return interaction.reply({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`❌ Bahan Kurang: ${recipe.emoji} ${recipe.name}`).setDescription(`**Kurang:**\n${missing.join('\n')}`)], ephemeral: true });
         }
-        for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty); }
-        addUserBalance(guildId, userId, recipe.sellPrice);
-        incrementUserStat(guildId, userId, 'total_crafts');
-        addIncome(guildId, userId, 'farming', recipe.sellPrice);
-        updateQuestProgress(guildId, userId, 'craft', 1);
-        addComboFeature(guildId, userId, 'farming');
-        await checkAchievements(interaction.guild, userId, { type: 'farm_craft' });
-        const freshData = getOrCreateUser(guildId, userId);
-        const ingredients = recipe.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty}`; }).join(' + ');
-        const embed = new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} Crafted!`)
-            .setDescription(`> Bahan: ${ingredients}\n> 💰 Dijual: 🪙 **${recipe.sellPrice.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`);
-        const backRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft Lagi').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
+
+        // Show modal to input quantity
+        const modal = new ModalBuilder().setCustomId(`farm_craftqty_modal_${recipeId}_${userId}`).setTitle(`Craft ${recipe.name}`.slice(0, 45));
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('qty')
+                    .setLabel(`Berapa kali? (max ${maxCraft}) | 🪙${recipe.sellPrice}/craft`)
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+                    .setPlaceholder(`${maxCraft}`)
+                    .setMaxLength(3)
+            )
         );
-        return interaction.editReply({ embeds: [embed], components: [backRow] });
+        return interaction.showModal(modal);
     }
 
     // === BUY DECORATION ===
@@ -1695,6 +1700,58 @@ async function handleFarmModal(interaction) {
         return interaction.reply({ embeds: [embed], components: [backRow] });
     }
 
+    // === CRAFT QUANTITY MODAL (craft X times at once) ===
+    if (customId.startsWith('farm_craftqty_modal_')) {
+        const remaining = customId.replace('farm_craftqty_modal_', '');
+        const lastUnderscore = remaining.lastIndexOf('_');
+        const recipeId = remaining.substring(0, lastUnderscore);
+        const userId = remaining.substring(lastUnderscore + 1);
+        if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Bukan milikmu!', ephemeral: true });
+
+        const recipe = FARM_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        const input = interaction.fields.getTextInputValue('qty');
+        const qty = parseInt(input);
+        if (isNaN(qty) || qty < 1) return interaction.reply({ content: '❌ Masukkan angka valid (minimal 1)!', ephemeral: true });
+
+        const ALL_CROPS = [...FARM_CROPS, ...PRESTIGE_CROPS];
+
+        // Calculate max craftable
+        let maxCraft = 999;
+        for (const ing of recipe.ingredients) {
+            const have = getStorageQty(guildId, userId, ing.id);
+            maxCraft = Math.min(maxCraft, Math.floor(have / ing.qty));
+        }
+        const toCraft = Math.min(qty, maxCraft);
+        if (toCraft <= 0) return interaction.reply({ content: '❌ Bahan tidak cukup!', ephemeral: true });
+
+        // Deduct ingredients × toCraft
+        for (const ing of recipe.ingredients) { removeStorage(guildId, userId, ing.id, ing.qty * toCraft); }
+        const totalMoney = recipe.sellPrice * toCraft;
+        addUserBalance(guildId, userId, totalMoney);
+        incrementUserStat(guildId, userId, 'total_crafts', toCraft);
+        addIncome(guildId, userId, 'farming', totalMoney);
+        updateQuestProgress(guildId, userId, 'craft', toCraft);
+        addComboFeature(guildId, userId, 'farming');
+        try { await checkAchievements(interaction.guild, userId, { type: 'farm_craft' }); } catch (_) {}
+
+        const freshData = getOrCreateUser(guildId, userId);
+        const ingredients = recipe.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty * toCraft}`; }).join(' + ');
+        const embed = new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} x${toCraft} Crafted!`)
+            .setDescription(
+                `> Bahan: ${ingredients}\n` +
+                `> 💰 Total: 🪙 **${totalMoney.toLocaleString('id-ID')}** (${recipe.sellPrice.toLocaleString('id-ID')} × ${toCraft})\n` +
+                `> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**` +
+                (qty > toCraft ? `\n\n> ⚠️ Diminta ${qty}×, tapi bahan hanya cukup untuk ${toCraft}×` : '')
+            );
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`farm_craft_${userId}`).setLabel('🧪 Craft Lagi').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.reply({ embeds: [embed], components: [backRow] });
+    }
+
     // === SEED QUANTITY MODAL ===
     if (customId.startsWith('farm_seedqty_')) {
         const remaining = customId.replace('farm_seedqty_', '');
@@ -1772,7 +1829,7 @@ function isFarmPanelSelectMenu(customId) {
 }
 
 function isFarmPanelModal(customId) {
-    return customId.startsWith('farm_seedqty_') || customId.startsWith('farm_fertqty_') || customId.startsWith('farm_coop_modal_') || customId.startsWith('farm_barn_modal_') || customId.startsWith('farm_plantqty_modal_') || customId.startsWith('farm_ghplantqty_modal_');
+    return customId.startsWith('farm_seedqty_') || customId.startsWith('farm_fertqty_') || customId.startsWith('farm_coop_modal_') || customId.startsWith('farm_barn_modal_') || customId.startsWith('farm_plantqty_modal_') || customId.startsWith('farm_ghplantqty_modal_') || customId.startsWith('farm_craftqty_modal_');
 }
 
 module.exports = {
