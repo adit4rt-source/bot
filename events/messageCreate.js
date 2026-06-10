@@ -215,6 +215,17 @@ module.exports = async function handleMessageCreate(message) {
         } else state.guildFishEventCounters.set(guildId, fishCount);
     }
 
+    // Social Interactions (GIF roleplay)
+    if (!spam && message.mentions.users.size > 0) {
+        try {
+            const { detectInteraction, handleSocialInteraction } = require('../systems/socialInteraction');
+            const detected = detectInteraction(message);
+            if (detected) {
+                handleSocialInteraction(message, detected.type, detected.targetId);
+            }
+        } catch (_) {}
+    }
+
     // Streak
     const streakActivated = await checkAndUpdateStreak(message);
     if (streakActivated) message.reply({ content: `🔥 **Berhasil!** Kamu telah mengaktifkan streak api hari ini!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 5000); }).catch(() => {});
