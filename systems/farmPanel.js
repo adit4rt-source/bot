@@ -1400,7 +1400,7 @@ async function handleFarmSelectMenu(interaction) {
         const fertId = interaction.values[0];
         const fert = FARM_FERTILIZERS.find(f => f.id === fertId);
         if (!fert) return interaction.reply({ content: '❌ Pupuk tidak ditemukan!', ephemeral: true });
-        const modal = new ModalBuilder().setCustomId(`farm_fertqty_${fertId}_${userId}`).setTitle(`Beli ${fert.emoji} ${fert.name}`);
+        const modal = new ModalBuilder().setCustomId(`farm_fertqty_${fertId}_${userId}`).setTitle(`Beli ${fert.name}`.slice(0, 45));
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder().setCustomId('farm_fert_qty_input').setLabel(`Berapa? (🪙${fert.cost}/pupuk)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 5')
         ));
