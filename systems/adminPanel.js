@@ -675,7 +675,7 @@ async function handleAdminButton(interaction) {
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('level_ch').setLabel('Level Up Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'level_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ach_ch').setLabel('Achievement Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'achievement_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('streak_ch').setLabel('Streak Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'streak_channel', '') || 'Channel ID')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('love_ch').setLabel('Love Announce Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_announce_channel', '') || 'Channel ID'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('invite_ch').setLabel('Invite Log Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Channel ID untuk log invite'))
         );
         return interaction.showModal(modal);
     }
@@ -987,12 +987,22 @@ async function handleAdminModal(interaction) {
 
     // === SETTING: Channels (new multi-field) ===
     if (customId === 'admpnl_modal_channels') {
-        const fields = ['quest_ch', 'level_ch', 'ach_ch', 'streak_ch', 'love_ch'];
-        const keys = ['quest_channel', 'level_channel', 'achievement_channel', 'streak_channel', 'love_announce_channel'];
+        const fields = ['quest_ch', 'level_ch', 'ach_ch', 'streak_ch', 'invite_ch'];
+        const keys = ['quest_channel', 'level_channel', 'achievement_channel', 'streak_channel', null];
         const updated = [];
         for (let i = 0; i < fields.length; i++) {
             const val = (interaction.fields.getTextInputValue(fields[i]) || '').trim();
-            if (val) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, keys[i], val); updated.push(keys[i]); }
+            if (val) {
+                if (fields[i] === 'invite_ch') {
+                    // invite_channel stored in invite_settings table (not server_settings)
+                    const { setInviteSetting } = require('./inviteTracker');
+                    setInviteSetting(guildId, 'invite_channel', val);
+                    updated.push('invite_channel');
+                } else {
+                    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, keys[i], val);
+                    updated.push(keys[i]);
+                }
+            }
         }
         return interaction.reply({ content: updated.length > 0 ? `✅ Channel updated: ${updated.join(', ')}` : '⚠️ Tidak ada perubahan (semua kosong).', ephemeral: true });
     }
