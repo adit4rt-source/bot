@@ -67,8 +67,8 @@ function rollRelicDrop(guildId, userId, chance, rareBonus) {
     const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
     const r = Math.random();
     let rarity;
-    if (rareBonus) rarity = r < 0.005 ? 'God' : r < 0.055 ? 'Mythic' : r < 0.25 ? 'Legendary' : r < 0.60 ? 'Epic' : 'Rare';
-    else rarity = r < 0.02 ? 'Mythic' : r < 0.10 ? 'Legendary' : r < 0.30 ? 'Epic' : 'Rare';
+    if (rareBonus) rarity = r < 0.001 ? 'God' : r < 0.011 ? 'Mythic' : r < 0.20 ? 'Legendary' : r < 0.55 ? 'Epic' : 'Rare';
+    else rarity = r < 0.005 ? 'Mythic' : r < 0.08 ? 'Legendary' : r < 0.28 ? 'Epic' : 'Rare';
     let nameList;
     if (rarity === 'God') nameList = RELIC_GOD_NAMES[slot];
     else if (rarity === 'Mythic') nameList = RELIC_MYTHIC_NAMES[slot];
