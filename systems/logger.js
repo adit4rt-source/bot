@@ -145,6 +145,14 @@ function wrapHandler(handlerName, handler) {
                 if (firstArg.commandName) context.command = `/${firstArg.commandName}`;
                 else if (firstArg.customId) context.command = firstArg.customId;
             }
+            // Discord error 10062 = "Unknown interaction" (expired after 3s timeout)
+            // This is NOT a bug — just means the bot was slow or user clicked a stale button.
+            // Downgrade to WARN to avoid log spam.
+            if (err.code === 10062 || err.code === 'InteractionNotReplied' || (err.message && err.message.includes('Unknown interaction'))) {
+                log('WARN', `${handlerName}: interaction expired (${context.command || 'unknown'})`, null, context);
+                return;
+            }
+
             log('ERROR', `${handlerName}: ${err.message}`, err, context);
 
             // Try to respond to user if it's an interaction
