@@ -5,7 +5,7 @@ const { db } = require('../database');
 // Giphy API
 const GIPHY_API_KEY = process.env.GIPHY_API_KEY || '9oW7wjv3hYKQnkNIOwA19Ccdbp1enB4S';
 
-// ==================== INTERACTION TYPES (42 total) ====================
+// ==================== INTERACTION TYPES (60+ total) ====================
 const INTERACTIONS = [
     // Romantis
     { id: 'kiss', name: 'Kiss', emoji: '💋', search: 'anime kiss', verb: 'mencium', selfVerb: 'mencium diri sendiri', color: '#FF69B4' },
@@ -42,7 +42,7 @@ const INTERACTIONS = [
     { id: 'hide', name: 'Hide', emoji: '🙈', search: 'anime hide shy', verb: 'bersembunyi dari', selfVerb: 'bersembunyi sendirian', color: '#8FBC8F' },
     { id: 'stare', name: 'Stare', emoji: '👀', search: 'anime stare', verb: 'menatap', selfVerb: 'menatap ke langit', color: '#4B0082' },
     { id: 'lick', name: 'Lick', emoji: '👅', search: 'anime lick', verb: 'menjilat', selfVerb: 'menjilat diri sendiri', color: '#FF69B4' },
-    // Bahasa Indonesia (alias — bisa pakai kata Indo langsung!)
+    // Bahasa Indonesia formal
     { id: 'cium', name: 'Cium', emoji: '💋', search: 'anime kiss', verb: 'mencium', selfVerb: 'mencium diri sendiri', color: '#FF69B4' },
     { id: 'peluk', name: 'Peluk', emoji: '🤗', search: 'anime hug', verb: 'memeluk', selfVerb: 'memeluk diri sendiri', color: '#FFB6C1' },
     { id: 'tampar', name: 'Tampar', emoji: '👋', search: 'anime slap', verb: 'menampar', selfVerb: 'menampar diri sendiri', color: '#FF4500' },
@@ -55,6 +55,28 @@ const INTERACTIONS = [
     { id: 'cubit', name: 'Cubit', emoji: '🤏', search: 'anime pinch', verb: 'mencubit', selfVerb: 'mencubit diri sendiri', color: '#FF6347' },
     { id: 'gendong', name: 'Gendong', emoji: '🫂', search: 'anime carry', verb: 'menggendong', selfVerb: 'menggendong diri sendiri??', color: '#DDA0DD' },
     { id: 'colek', name: 'Colek', emoji: '👉', search: 'anime poke', verb: 'menyolek', selfVerb: 'menyolek diri sendiri', color: '#FFA500' },
+    // Slang / Kasar / Informal Indonesia
+    { id: 'gampar', name: 'Gampar', emoji: '🤚', search: 'anime slap hard', verb: 'menggampar', selfVerb: 'menggampar muka sendiri', color: '#FF0000' },
+    { id: 'gaplok', name: 'Gaplok', emoji: '✋', search: 'anime slap', verb: 'menggaplok', selfVerb: 'menggaplok diri sendiri', color: '#FF4500' },
+    { id: 'jitak', name: 'Jitak', emoji: '👊', search: 'anime hit head', verb: 'menjitak', selfVerb: 'menjitak kepala sendiri', color: '#DC143C' },
+    { id: 'toyor', name: 'Toyor', emoji: '🤜', search: 'anime flick forehead', verb: 'menoyor', selfVerb: 'menoyor jidat sendiri', color: '#B22222' },
+    { id: 'jewer', name: 'Jewer', emoji: '👂', search: 'anime pull ear', verb: 'menjewer telinga', selfVerb: 'menjewer telinga sendiri', color: '#8B4513' },
+    { id: 'tabok', name: 'Tabok', emoji: '🫲', search: 'anime slap', verb: 'menabok', selfVerb: 'menabok diri sendiri', color: '#B22222' },
+    { id: 'lempar', name: 'Lempar', emoji: '🪨', search: 'anime throw', verb: 'ngelempar sandal ke', selfVerb: 'ngelempar sandal ke tembok', color: '#696969' },
+    { id: 'dorong', name: 'Dorong', emoji: '🫸', search: 'anime push', verb: 'mendorong', selfVerb: 'mendorong angin', color: '#808080' },
+    { id: 'injek', name: 'Injek', emoji: '🦶', search: 'anime stomp', verb: 'menginjak kaki', selfVerb: 'menginjak kaki sendiri', color: '#2F4F4F' },
+    { id: 'cekik', name: 'Cekik', emoji: '😈', search: 'anime choke', verb: 'nyekik', selfVerb: 'nyekik diri sendiri??', color: '#4B0082' },
+    { id: 'kentut', name: 'Kentut', emoji: '💨', search: 'anime fart', verb: 'kentut di depan', selfVerb: 'kentut sendirian', color: '#9ACD32' },
+    { id: 'jedotin', name: 'Jedotin', emoji: '💥', search: 'anime headbutt', verb: 'menjedotkan kepala', selfVerb: 'menjedotkan kepala ke tembok', color: '#FF6347' },
+    { id: 'ciee', name: 'Ciee', emoji: '😏', search: 'anime tease', verb: 'nge-ciee-in', selfVerb: 'ciee sama diri sendiri', color: '#FF69B4' },
+    { id: 'gombal', name: 'Gombal', emoji: '🥴', search: 'anime flirt', verb: 'menggombal ke', selfVerb: 'menggombal ke cermin', color: '#FF1493' },
+    { id: 'nangis', name: 'Nangis', emoji: '😭', search: 'anime cry hard', verb: 'nangis di depan', selfVerb: 'nangis sendirian di pojokan', color: '#4682B4' },
+    { id: 'ngambek', name: 'Ngambek', emoji: '😤', search: 'anime pout angry', verb: 'ngambek ke', selfVerb: 'ngambek sendirian', color: '#FF6B6B' },
+    { id: 'kepo', name: 'Kepo', emoji: '🧐', search: 'anime curious spy', verb: 'kepo-in', selfVerb: 'kepo sama diri sendiri', color: '#4169E1' },
+    { id: 'bully', name: 'Bully', emoji: '😈', search: 'anime bully tease', verb: 'nge-bully', selfVerb: 'nge-bully diri sendiri', color: '#8B0000' },
+    { id: 'bacot', name: 'Bacot', emoji: '🗣️', search: 'anime yell scream', verb: 'teriak ke', selfVerb: 'teriak sendiri', color: '#FF4500' },
+    { id: 'kabur', name: 'Kabur', emoji: '🏃💨', search: 'anime run away', verb: 'kabur dari', selfVerb: 'kabur entah kemana', color: '#00CED1' },
+    { id: 'manja', name: 'Manja', emoji: '🥺', search: 'anime clingy cute', verb: 'bermanja ke', selfVerb: 'manja sendirian', color: '#FFB6C1' },
 ];
 
 // ==================== GIPHY API ====================
