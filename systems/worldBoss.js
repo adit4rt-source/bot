@@ -124,11 +124,11 @@ function attackWorldBoss(guildId, userId, username) {
         return { success: false, error: '❌ Kamu butuh pet aktif untuk menyerang World Boss!' };
     }
 
-    // Check cooldown (30 seconds between attacks)
+    // Check cooldown (5 seconds between attacks)
     const weekId = getWeekId();
     const userDmg = getUserDamage(weekId, userId);
-    if (userDmg && (Date.now() - userDmg.lastAttack) < 30000) {
-        const remaining = Math.ceil((30000 - (Date.now() - userDmg.lastAttack)) / 1000);
+    if (userDmg && (Date.now() - userDmg.lastAttack) < 5000) {
+        const remaining = Math.ceil((5000 - (Date.now() - userDmg.lastAttack)) / 1000);
         return { success: false, error: `⏳ Tunggu **${remaining} detik** sebelum menyerang lagi!` };
     }
 
@@ -365,7 +365,7 @@ async function handleWorldBossButton(interaction) {
             .setTitle(result.defeated ? '☠️ BOSS DEFEATED!' : '⚔️ Attack!')
             .setColor(result.defeated ? '#FFD700' : (result.isCrit ? '#FF6B00' : '#E74C3C'))
             .setDescription(desc)
-            .setFooter({ text: 'Cooldown: 30 detik' });
+            .setFooter({ text: 'Cooldown: 5 detik' });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`wb_attack_${userId}`).setLabel('⚔️ Attack Again!').setStyle(ButtonStyle.Danger).setDisabled(result.defeated),
@@ -464,7 +464,7 @@ async function handleWorldBossButton(interaction) {
         });
         desc += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
         desc += `> ⚔️ **Cara main:** Klik Attack untuk damage boss\n`;
-        desc += `> ⏱️ **Cooldown:** 30 detik per attack\n`;
+        desc += `> ⏱️ **Cooldown:** 5 detik per attack\n`;
         desc += `> 🐾 **Butuh pet aktif** untuk menyerang\n`;
         desc += `> 📅 **Reset:** Setiap hari Senin 00:00 WIB\n`;
         desc += `> 🎁 **Claim:** Setelah boss dikalahkan`;
