@@ -21,6 +21,7 @@ const ITEMS = [
     { id: 'thunder_coating', name: 'Thunder Rod Coating', emoji: '<:thunder_coating:1514055302322983132>', menuEmoji: '⚡', desc: 'Monster langsung kabur + DROP loot! (3 cast)', price: 50000, category: 'Fishing' },
     // Farming - Pesticide items (1 per use, player pilih plot mana)
     { id: 'pesticide', name: 'Pestisida', emoji: '<:pesticide:1514055310208401469>', menuEmoji: '🧴', desc: 'Basmi 1 hama di 1 plot — pilih yang mau diselamatkan (sekali pakai)', price: 2000, category: 'Farming' },
+    { id: 'premium_feed', name: 'Pakan Premium', emoji: '⭐', menuEmoji: '⭐', desc: 'Material untuk evolve hewan ternak', price: 1200, category: 'Farming' },
     { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '<:pesticide_shield:1514055510058602618>', menuEmoji: '🌿', desc: 'Preventif — lindungi farm dari hama selama 6 jam (sekali pakai)', price: 8000, category: 'Farming' },
     // Awakening materials (not buyable)
     { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '<:mythic_fragment:1514055768733909064>', menuEmoji: '🌟', desc: 'Material langka Awakening (World Boss/Expedition)', price: 0, category: 'Special' },
