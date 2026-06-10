@@ -17,70 +17,167 @@ function isValidUrl(str) {
     }
 }
 
-// Generate QR code as PNG buffer with optional logo in center
-async function generateQrCode(url, size = 400) {
-    // Generate QR code as data URL then draw on canvas
+// Load fonts
+try {
+    GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'fonts', 'Poppins-Bold.ttf'), 'Poppins Bold');
+    GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'fonts', 'Poppins-SemiBold.ttf'), 'Poppins SemiBold');
+} catch (_) {}
+
+// Helper: draw rounded rectangle
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// Generate QR code as PNG buffer with premium frame + logo
+async function generateQrCode(url, size = 380) {
+    // Generate QR code as data URL
     const qrDataUrl = await QRCode.toDataURL(url, {
-        errorCorrectionLevel: 'H', // High error correction (needed for logo overlay)
-        margin: 2,
+        errorCorrectionLevel: 'H', // High error correction for logo overlay
+        margin: 1,
         width: size,
-        color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-        }
+        color: { dark: '#1A1A1A', light: '#FFFFFF' }
     });
 
-    // Create canvas
-    const padding = 40;
-    const totalSize = size + padding * 2;
-    const canvas = createCanvas(totalSize, totalSize);
+    // Canvas dimensions
+    const frameWidth = 18;
+    const innerPad = 24;
+    const headerHeight = 50;
+    const footerHeight = 44;
+    const totalWidth = size + (frameWidth + innerPad) * 2;
+    const totalHeight = size + (frameWidth + innerPad) * 2 + headerHeight + footerHeight;
+
+    const canvas = createCanvas(totalWidth, totalHeight);
     const ctx = canvas.getContext('2d');
 
-    // White background with rounded corners
+    // === OUTER FRAME (black rounded rectangle) ===
+    roundRect(ctx, 0, 0, totalWidth, totalHeight, 20);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fill();
+
+    // === RED ACCENT BORDER (inner glow line) ===
+    roundRect(ctx, frameWidth / 2, frameWidth / 2, totalWidth - frameWidth, totalHeight - frameWidth, 16);
+    ctx.strokeStyle = '#E74C3C';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // === WHITE INNER AREA ===
+    const innerX = frameWidth + 6;
+    const innerY = frameWidth + 6 + headerHeight;
+    const innerW = totalWidth - (frameWidth + 6) * 2;
+    const innerH = size + innerPad * 2;
+    roundRect(ctx, innerX, innerY, innerW, innerH, 12);
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, totalSize, totalSize);
+    ctx.fill();
 
-    // Draw QR code
+    // === HEADER (title area) ===
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '18px "Poppins Bold", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SCAN QR CODE', totalWidth / 2, frameWidth + 6 + headerHeight / 2);
+
+    // Red accent line under header
+    const lineY = frameWidth + 6 + headerHeight - 4;
+    ctx.beginPath();
+    ctx.moveTo(frameWidth + 30, lineY);
+    ctx.lineTo(totalWidth - frameWidth - 30, lineY);
+    ctx.strokeStyle = '#E74C3C';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // === DRAW QR CODE ===
+    const qrX = innerX + innerPad;
+    const qrY = innerY + innerPad;
     const qrImage = await loadImage(Buffer.from(qrDataUrl.split(',')[1], 'base64'));
-    ctx.drawImage(qrImage, padding, padding, size, size);
+    ctx.drawImage(qrImage, qrX, qrY, size, size);
 
-    // Draw logo in center (if exists)
+    // === RED CORNER ACCENTS on QR (scanning targets) ===
+    const cornerLen = 28;
+    const cornerThick = 4;
+    const cOffset = qrX - 4;
+    const cOffsetY = qrY - 4;
+    const qrEnd = qrX + size + 4;
+    const qrEndY = qrY + size + 4;
+    ctx.fillStyle = '#E74C3C';
+    // Top-left
+    ctx.fillRect(cOffset, cOffsetY, cornerLen, cornerThick);
+    ctx.fillRect(cOffset, cOffsetY, cornerThick, cornerLen);
+    // Top-right
+    ctx.fillRect(qrEnd - cornerLen, cOffsetY, cornerLen, cornerThick);
+    ctx.fillRect(qrEnd - cornerThick, cOffsetY, cornerThick, cornerLen);
+    // Bottom-left
+    ctx.fillRect(cOffset, qrEndY - cornerThick, cornerLen, cornerThick);
+    ctx.fillRect(cOffset, qrEndY - cornerLen, cornerThick, cornerLen);
+    // Bottom-right
+    ctx.fillRect(qrEnd - cornerLen, qrEndY - cornerThick, cornerLen, cornerThick);
+    ctx.fillRect(qrEnd - cornerThick, qrEndY - cornerLen, cornerThick, cornerLen);
+
+    // === LOGO IN CENTER ===
     try {
         const logo = await loadImage(LOGO_PATH);
-        const logoSize = Math.floor(size * 0.22); // 22% of QR size
-        const logoX = padding + (size - logoSize) / 2;
-        const logoY = padding + (size - logoSize) / 2;
+        const logoSize = Math.floor(size * 0.22);
+        const logoCenterX = qrX + size / 2;
+        const logoCenterY = qrY + size / 2;
+        const logoX = logoCenterX - logoSize / 2;
+        const logoY = logoCenterY - logoSize / 2;
 
-        // White background circle behind logo
-        const circleRadius = logoSize / 2 + 6;
+        // White circle background
         ctx.beginPath();
-        ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, circleRadius, 0, Math.PI * 2);
+        ctx.arc(logoCenterX, logoCenterY, logoSize / 2 + 8, 0, Math.PI * 2);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
 
-        // Draw logo
-        ctx.save();
+        // Red ring border
         ctx.beginPath();
-        ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-        ctx.restore();
-
-        // Logo border
-        ctx.beginPath();
-        ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 2, 0, Math.PI * 2);
+        ctx.arc(logoCenterX, logoCenterY, logoSize / 2 + 8, 0, Math.PI * 2);
         ctx.strokeStyle = '#E74C3C';
         ctx.lineWidth = 3;
         ctx.stroke();
+
+        // Black inner ring
+        ctx.beginPath();
+        ctx.arc(logoCenterX, logoCenterY, logoSize / 2 + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = '#1A1A1A';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Clip logo to circle
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(logoCenterX, logoCenterY, logoSize / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+        ctx.restore();
     } catch (e) {
-        // No logo file — QR code still works fine without it
+        // No logo — still works fine
     }
 
-    // Bottom text
-    ctx.fillStyle = '#666666';
-    ctx.font = '12px sans-serif';
+    // === FOOTER ===
+    const footerY = innerY + innerH + 8;
+    ctx.fillStyle = '#AAAAAA';
+    ctx.font = '13px "Poppins SemiBold", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Scan untuk buka link', totalSize / 2, totalSize - 12);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Scan untuk buka link', totalWidth / 2, footerY + footerHeight / 2 - 2);
+
+    // Small red dot accents on footer sides
+    ctx.fillStyle = '#E74C3C';
+    ctx.beginPath();
+    ctx.arc(frameWidth + 24, footerY + footerHeight / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(totalWidth - frameWidth - 24, footerY + footerHeight / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
 
     return canvas.toBuffer('image/png');
 }
