@@ -946,7 +946,7 @@ async function handleAdminModal(interaction) {
     }
 
     // === STREAK: Set/Reset/Restore ===
-    if (customId.startsWith('admpnl_modal_streak_')) {
+    if (customId.startsWith('admpnl_modal_streak_') && customId !== 'admpnl_modal_streak_cfg') {
         const act = customId.replace('admpnl_modal_streak_', '');
         const rawTarget = interaction.fields.getTextInputValue('target_user_id').trim();
         const targetId = await resolveTargetId(interaction, rawTarget);

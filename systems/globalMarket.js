@@ -83,7 +83,7 @@ function getGlobalSellableItems(guildId, userId) {
     }
 
     // Fish (rare+ only, not locked)
-    const fish = db.prepare("SELECT fi.*, fc.fishId as fishType FROM fish_inventory fi LEFT JOIN fish_collection fc ON fi.fishId = fc.fishId WHERE fi.guildId = ? AND fi.userId = ? AND fi.locked = 0 ORDER BY fi.weight DESC LIMIT 20").all(guildId, userId);
+    const fish = db.prepare("SELECT fi.*, fc.fishId as fishType FROM fish_inventory fi LEFT JOIN fish_collection fc ON fi.fishId = fc.fishId WHERE fi.userId = ? AND fi.locked = 0 ORDER BY fi.weight DESC LIMIT 20").all(userId);
     for (const f of fish) {
         const fd = FISH_DATA.find(x => x.id === f.fishId);
         if (!fd) continue;
@@ -205,9 +205,11 @@ function buildGlobalBrowse(guildId, userId, filter, page) {
     }
 
     const filterPrefix = filter || 'all';
+    const prevPage = Math.max(0, safePage - 1);
+    const nextPage = Math.min(maxPage, safePage + 1);
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`gm_browse_${filterPrefix}_${userId}_${Math.max(0, safePage - 1)}`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
-        new ButtonBuilder().setCustomId(`gm_browse_${filterPrefix}_${userId}_${Math.min(maxPage, safePage + 1)}`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= maxPage),
+        new ButtonBuilder().setCustomId(`gm_browse_${filterPrefix}_${userId}_${prevPage}`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
+        new ButtonBuilder().setCustomId(`gm_browsenxt_${filterPrefix}_${userId}_${nextPage}`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= maxPage),
         new ButtonBuilder().setCustomId(`gm_main_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
     components.push(navRow);
@@ -436,6 +438,12 @@ async function handleGlobalMarketButton(interaction) {
             userId = parts[2];
             extra = { filter: 'all', page: parseInt(parts[3]) || 0 };
         }
+    } else if (parts[1] === 'browsenxt') {
+        // gm_browsenxt_filter_userId_page (next page button)
+        action = 'browse';
+        const filter = parts[2];
+        userId = parts[3];
+        extra = { filter, page: parseInt(parts[4]) || 0 };
     } else if (parts[1] === 'buyconfirm') {
         // gm_buyconfirm_userId_listingId
         action = 'buyconfirm';
