@@ -75,7 +75,7 @@ function rollRelicDrop(guildId, userId, chance, rareBonus) {
     else nameList = RELIC_NAMES[slot];
     const name = nameList[Math.floor(Math.random() * nameList.length)];
     const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
-    const statVal = rarity === 'God' ? getRandomInt(120, 180) : rarity === 'Mythic' ? getRandomInt(80, 120) : rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
+    const statVal = rarity === 'God' ? getRandomInt(25, 50) : rarity === 'Mythic' ? getRandomInt(15, 30) : rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
     db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, name, slot, rarity, statType, statVal);
     return `\n> 📿 **RELIC DROP:** ${name} (${rarity})`;
 }
