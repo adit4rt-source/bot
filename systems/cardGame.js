@@ -363,6 +363,117 @@ async function generateDropImage(cards) {
     return canvas.toBuffer('image/png');
 }
 
+// ==================== CARD PANEL (Main Hub) ====================
+function buildCardPanel(userId) {
+    const totalCards = db.prepare('SELECT COUNT(*) as c FROM anime_cards WHERE userId = ?').get(userId);
+    const uniqueChars = db.prepare('SELECT COUNT(DISTINCT charId) as c FROM anime_cards WHERE userId = ?').get(userId);
+    const stardust = getStardust(userId);
+
+    // Top cards by rarity
+    const topCards = db.prepare("SELECT * FROM anime_cards WHERE userId = ? ORDER BY CASE rarity WHEN 'God' THEN 0 WHEN 'Mythic' THEN 1 WHEN 'Legendary' THEN 2 WHEN 'Epic' THEN 3 ELSE 9 END LIMIT 3").all(userId);
+    let topDesc = topCards.length > 0
+        ? topCards.map(c => `> ${(RARITIES[c.rarity] || RARITIES.Common).emoji} **${c.charName}** — *${c.series}* (${c.rarity})`).join('\n')
+        : '> *Belum ada kartu! Klik 🎴 Drop untuk mulai.*';
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎴 ANIME CARD PANEL')
+        .setColor('#E74C3C')
+        .setDescription(
+            `**📊 Stats:**\n` +
+            `> 🎴 Kartu: **${totalCards.c}** | 👤 Karakter Unik: **${uniqueChars.c}**\n` +
+            `> 💫 Stardust: **${stardust}**\n\n` +
+            `**🏆 Top Cards:**\n${topDesc}\n\n` +
+            `**📋 Menu:**\n` +
+            `> 🎴 **Drop** — Drop 3 kartu random (8 min CD)\n` +
+            `> 📦 **Collection** — Lihat semua kartumu\n` +
+            `> 🔥 **Burn** — Hancurkan kartu → Stardust\n` +
+            `> 🔄 **Trade** — Tukar kartu dengan player lain\n` +
+            `> 🎨 **Dye** — Beri warna custom\n` +
+            `> ❤️ **Wishlist** — Karakter incaran\n` +
+            `> 📦 **Album** — Set bonus per series\n` +
+            `> 📊 **Leaderboard** — Top collectors`
+        )
+        .setFooter({ text: 'Klik tombol di bawah untuk aksi!' })
+        .setTimestamp();
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`card_drop_${userId}`).setLabel('🎴 Drop').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('📦 Collection').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('📦 Album').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_wishlist_${userId}`).setLabel('❤️ Wishlist').setStyle(ButtonStyle.Secondary)
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`card_leaderboard_${userId}`).setLabel('📊 Leaderboard').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_stardust_${userId}`).setLabel('💫 Stardust').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
+}
+
+// ==================== CARD PANEL COMMAND ====================
+async function handleCardPanelCommand(interaction) {
+    const panel = buildCardPanel(interaction.user.id);
+    return interaction.reply(panel);
+}
+
+// ==================== CARD PANEL BUTTON HANDLER ====================
+async function handleCardPanelButton(interaction) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1];
+    const userId = parts[2];
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Ini bukan panel kartu kamu!', ephemeral: true });
+    }
+
+    if (action === 'drop') {
+        // Redirect to drop logic
+        return handleDropCommand(interaction);
+    }
+
+    if (action === 'collection') {
+        return handleCardsCommand(interaction);
+    }
+
+    if (action === 'album') {
+        return handleCardAlbum(interaction);
+    }
+
+    if (action === 'wishlist') {
+        // Show wishlist
+        const wishes = db.prepare('SELECT * FROM card_wishlist WHERE userId = ?').all(userId);
+        let desc = wishes.length > 0
+            ? wishes.map((w, i) => `> **${i + 1}.** ❤️ ${w.charName}`).join('\n')
+            : '> *Wishlist kosong! Ketik `/wishlist add karakter:Gojo` untuk menambah.*';
+        const embed = new EmbedBuilder()
+            .setTitle('❤️ Card Wishlist')
+            .setColor('#FF69B4')
+            .setDescription(`${desc}\n\n-# Kamu akan di-ping kalau karakter wishlist muncul di drop!\n-# Gunakan /wishlist add/remove untuk manage.`)
+            .setFooter({ text: `${wishes.length}/10 slot` });
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`card_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    }
+
+    if (action === 'leaderboard') {
+        return handleCardLeaderboard(interaction);
+    }
+
+    if (action === 'stardust') {
+        return handleStardustCommand(interaction);
+    }
+
+    if (action === 'back') {
+        const panel = buildCardPanel(userId);
+        return interaction.update(panel);
+    }
+}
+
+function isCardPanelButton(customId) {
+    return typeof customId === 'string' && customId.startsWith('card_') && !customId.startsWith('cardgrab_') && !customId.startsWith('cardtrade_');
+}
+
 // ==================== DROP COMMAND ====================
 async function handleDropCommand(interaction) {
     const guildId = interaction.guild.id;
@@ -945,6 +1056,8 @@ function isCardTradeButton(customId) {
 }
 
 module.exports = {
+    handleCardPanelCommand,
+    handleCardPanelButton,
     handleDropCommand,
     handleCardGrab,
     handleCardsCommand,
@@ -960,6 +1073,7 @@ module.exports = {
     checkWishlistNotify,
     isCardGrabButton,
     isCardTradeButton,
+    isCardPanelButton,
     generateCardImage,
     generateDropImage,
     fetchRandomCharacters,

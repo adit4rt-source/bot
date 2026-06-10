@@ -797,6 +797,10 @@ async function routeInteraction(interaction) {
         }
 
         // ================= ANIME CARDS =================
+        if (command === 'card') {
+            const { handleCardPanelCommand } = require('../systems/cardGame');
+            return handleCardPanelCommand(interaction);
+        }
         if (command === 'drop') {
             const { handleDropCommand } = require('../systems/cardGame');
             return handleDropCommand(interaction);
@@ -1193,6 +1197,14 @@ async function routeInteraction(interaction) {
             const { isCardTradeButton, handleCardTradeButton } = require('../systems/cardGame');
             if (isCardTradeButton(interaction.customId)) {
                 return handleCardTradeButton(interaction);
+            }
+        }
+
+        // --- ANIME CARD PANEL BUTTONS ---
+        if (interaction.customId.startsWith('card_')) {
+            const { isCardPanelButton, handleCardPanelButton } = require('../systems/cardGame');
+            if (isCardPanelButton(interaction.customId)) {
+                return handleCardPanelButton(interaction);
             }
         }
 
