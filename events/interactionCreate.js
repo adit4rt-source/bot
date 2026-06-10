@@ -790,6 +790,18 @@ async function routeInteraction(interaction) {
             return handleQrCommand(interaction);
         }
 
+        // ================= AFK =================
+        if (command === 'afk') {
+            const { handleAfkCommand } = require('../systems/afk');
+            return handleAfkCommand(interaction);
+        }
+
+        // ================= STARBOARD =================
+        if (command === 'starboard') {
+            const { handleStarboardCommand } = require('../systems/starboard');
+            return handleStarboardCommand(interaction);
+        }
+
         // ================= TEMPVOICE PANEL =================
         if (command === 'tempvoice') {
             return handleTempvoiceCommand(interaction);

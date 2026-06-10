@@ -109,6 +109,27 @@ const commands = [
         .addSubcommand(sub => sub.setName('stats').setDescription('📊 Lihat statistik scan QR code kamu')
             .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
 
+    // ================= AFK =================
+    new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')
+        .addStringOption(opt => opt.setName('alasan').setDescription('Alasan AFK (opsional)').setRequired(false)),
+
+    // ================= STARBOARD =================
+    new SlashCommandBuilder()
+        .setName('starboard')
+        .setDescription('⭐ Starboard — Pesan populer di-highlight otomatis')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild)
+        .addSubcommand(sub => sub.setName('setup').setDescription('⭐ Set channel starboard')
+            .addChannelOption(opt => opt.setName('channel').setDescription('Channel untuk starboard').setRequired(true).addChannelTypes(ChannelType.GuildText)))
+        .addSubcommand(sub => sub.setName('threshold').setDescription('⭐ Set minimum star untuk masuk starboard')
+            .addIntegerOption(opt => opt.setName('jumlah').setDescription('Minimum jumlah star (default: 3)').setRequired(true).setMinValue(1).setMaxValue(50)))
+        .addSubcommand(sub => sub.setName('emoji').setDescription('⭐ Ganti emoji starboard')
+            .addStringOption(opt => opt.setName('emoji').setDescription('Emoji yang dipakai (default: ⭐)').setRequired(true)))
+        .addSubcommand(sub => sub.setName('selfstar').setDescription('⭐ Bolehkan star pesan sendiri?')
+            .addStringOption(opt => opt.setName('allow').setDescription('Bolehkan?').setRequired(true)
+                .addChoices({ name: 'Ya', value: '1' }, { name: 'Tidak', value: '0' })))
+        .addSubcommand(sub => sub.setName('disable').setDescription('⭐ Nonaktifkan starboard'))
+        .addSubcommand(sub => sub.setName('status').setDescription('⭐ Lihat status starboard saat ini')),
+
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
         .setName('admin')

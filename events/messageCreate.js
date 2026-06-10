@@ -215,6 +215,12 @@ module.exports = async function handleMessageCreate(message) {
         } else state.guildFishEventCounters.set(guildId, fishCount);
     }
 
+    // === AFK SYSTEM (check mentions + remove on chat) ===
+    try {
+        const { handleAfkMessage } = require('../systems/afk');
+        await handleAfkMessage(message);
+    } catch (_) {}
+
     // Social Interactions (GIF roleplay)
     if (!spam && message.mentions.users.size > 0) {
         try {

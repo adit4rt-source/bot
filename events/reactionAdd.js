@@ -10,6 +10,13 @@ module.exports = async function handleReactionAdd(reaction, user) {
     if (isMaintenance()) return; // fitur reaction reward dimatikan sementara
     if (reaction.partial) await reaction.fetch().catch(() => {});
     const guildId = reaction.message.guild.id;
+
+    // === STARBOARD ===
+    try {
+        const { handleStarReaction } = require('../systems/starboard');
+        await handleStarReaction(reaction, user);
+    } catch (_) {}
+
     const awardSetting = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'reaction_award_to');
     const awardTo = awardSetting ? awardSetting.value : 'both';
     if (awardTo === 'none') return;
