@@ -209,6 +209,10 @@ client.once(Events.ClientReady, async c => {
     startBackupSchedule(client);
     console.log('💾 Auto-backup: setiap 6 jam → Discord channel');
 
+    // Send update announcement (once per version)
+    const { sendUpdateAnnouncement } = require('./systems/updateAnnounce');
+    sendUpdateAnnouncement(client);
+
     // Start auto-harvest notifier (DMs users with the Auto-Harvest Pass when crops are ready)
     startAutoHarvestSchedule(client);
     console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
