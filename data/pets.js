@@ -123,11 +123,11 @@ const PET_DATA = [
 ];
 
 const PET_FOODS = [
-    { id: 'snack', name: 'Snack Biasa', emoji: '🍖', price: 30, hunger: 15, happiness: 5 },
-    { id: 'premium_meat', name: 'Daging Premium', emoji: '🥩', price: 100, hunger: 30, happiness: 10 },
-    { id: 'cake', name: 'Kue Spesial', emoji: '🎂', price: 200, hunger: 20, happiness: 25 },
-    { id: 'feast', name: 'Feast Mewah', emoji: '🍗', price: 500, hunger: 50, happiness: 30 },
-    { id: 'mythic_food', name: 'Makanan Mitik', emoji: '⭐', price: 1500, hunger: 100, happiness: 50 }
+    { id: 'snack', name: 'Snack Biasa', emoji: '<:snack:1514061299003166741>', price: 30, hunger: 15, happiness: 5 },
+    { id: 'premium_meat', name: 'Daging Premium', emoji: '<:premium_meat:1514061297325572216>', price: 100, hunger: 30, happiness: 10 },
+    { id: 'cake', name: 'Kue Spesial', emoji: '<:cake:1514061295337345034>', price: 200, hunger: 20, happiness: 25 },
+    { id: 'feast', name: 'Feast Mewah', emoji: '<:feast:1514061293454233760>', price: 500, hunger: 50, happiness: 30 },
+    { id: 'mythic_food', name: 'Makanan Mitik', emoji: '<:mythic_food:1514061291382247474>', price: 1500, hunger: 100, happiness: 50 }
 ];
 
 const PET_EGGS = [

@@ -28,7 +28,7 @@ const BARN_LEVELS = [
 // Hasil random per collect (1-3 base, tier tinggi bisa 1-5)
 const ANIMALS = {
     chicken: {
-        id: 'chicken', name: 'Ayam', emoji: '🐔',
+        id: 'chicken', name: 'Ayam', emoji: '<:chicken:1514062471248216154>',
         price: 3000,
         product: { id: 'egg', name: 'Telur', emoji: '🥚' },
         baseProduceTime: 10 * 60 * 1000, // 10 menit base (lv1 tier0)
@@ -41,7 +41,7 @@ const ANIMALS = {
         daysToSick: 5, daysTodie: 3, // 5 days no food → sick, 3 more days → dead (8 total)
     },
     cow: {
-        id: 'cow', name: 'Sapi', emoji: '🐄',
+        id: 'cow', name: 'Sapi', emoji: '<:cow:1514062469276893356>',
         price: 10000,
         product: { id: 'milk', name: 'Susu', emoji: '🥛' },
         baseProduceTime: 15 * 60 * 1000, // 15 menit base
@@ -54,7 +54,7 @@ const ANIMALS = {
         daysToSick: 5, daysTodie: 3,
     },
     sheep: {
-        id: 'sheep', name: 'Domba', emoji: '🐑',
+        id: 'sheep', name: 'Domba', emoji: '<:sheep:1514062467393781792>',
         price: 8000,
         product: { id: 'wool', name: 'Bulu', emoji: '🧶' },
         baseProduceTime: 20 * 60 * 1000, // 20 menit base

@@ -90,21 +90,21 @@ const FARM_RECIPES = [
 
 const FARM_FERTILIZERS = [
     { id: 'none', name: 'Tanpa Pupuk', emoji: '❌', cost: 0, speedBonus: 0, yieldBonus: 0 },
-    { id: 'pupuk_biasa', name: 'Pupuk Biasa', emoji: '💩', cost: 50, speedBonus: 0.20, yieldBonus: 0 },
-    { id: 'pupuk_premium', name: 'Pupuk Premium', emoji: '✨', cost: 200, speedBonus: 0.40, yieldBonus: 0.20 },
-    { id: 'pupuk_ajaib', name: 'Pupuk Ajaib', emoji: '🧪', cost: 500, speedBonus: 0.60, yieldBonus: 0.30 },
-    { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '🌟', cost: 3000, speedBonus: 0.65, yieldBonus: 0.50 }
+    { id: 'pupuk_biasa', name: 'Pupuk Biasa', emoji: '<:pupuk_biasa:1514056400559407134>', cost: 50, speedBonus: 0.20, yieldBonus: 0 },
+    { id: 'pupuk_premium', name: 'Pupuk Premium', emoji: '<:pupuk_premium:1514057149334950039>', cost: 200, speedBonus: 0.40, yieldBonus: 0.20 },
+    { id: 'pupuk_ajaib', name: 'Pupuk Ajaib', emoji: '<:pupuk_ajaib:1514057147405566064>', cost: 500, speedBonus: 0.60, yieldBonus: 0.30 },
+    { id: 'pupuk_legenda', name: 'Pupuk Legenda', emoji: '<:pupuk_legenda:1514057358240776322>', cost: 3000, speedBonus: 0.65, yieldBonus: 0.50 }
 ];
 
 const FARM_DECORATIONS = [
-    { id: 'scarecrow', name: 'Orang-orangan Sawah', emoji: '🧑‍🌾', price: 5000, desc: 'Melindungi tanaman dari hama' },
-    { id: 'fountain', name: 'Air Mancur', emoji: '⛲', price: 10000, desc: 'Dekorasi mewah' },
-    { id: 'windmill', name: 'Kincir Angin', emoji: '🏗️', price: 15000, desc: 'Menambah estetika kebun' },
-    { id: 'flower_bed', name: 'Taman Bunga', emoji: '🌷', price: 8000, desc: 'Taman bunga cantik' },
-    { id: 'bee_hive', name: 'Sarang Lebah', emoji: '🐝', price: 12000, desc: 'Menarik lebah penyerbuk' },
-    { id: 'pond', name: 'Kolam Ikan', emoji: '🐟', price: 20000, desc: 'Kolam mini di kebun' },
-    { id: 'greenhouse', name: 'Rumah Kaca', emoji: '🏠', price: 50000, desc: 'Rumah kaca premium' },
-    { id: 'golden_statue', name: 'Patung Emas', emoji: '🗽', price: 100000, desc: 'Simbol kemewahan!' },
+    { id: 'scarecrow', name: 'Orang-orangan Sawah', emoji: '<:scarecrow:1514057625204162570>', price: 5000, desc: 'Melindungi tanaman dari hama' },
+    { id: 'fountain', name: 'Air Mancur', emoji: '<:fountain:1514059282490982432>', price: 10000, desc: 'Dekorasi mewah' },
+    { id: 'windmill', name: 'Kincir Angin', emoji: '<:windmill:1514059280674852874>', price: 15000, desc: 'Menambah estetika kebun' },
+    { id: 'flower_bed', name: 'Taman Bunga', emoji: '<:flower_bed:1514059278841942136>', price: 8000, desc: 'Taman bunga cantik' },
+    { id: 'bee_hive', name: 'Sarang Lebah', emoji: '<:bee_hive:1514059276811894965>', price: 12000, desc: 'Menarik lebah penyerbuk' },
+    { id: 'pond', name: 'Kolam Ikan', emoji: '<:pond:1514059274983182448>', price: 20000, desc: 'Kolam mini di kebun' },
+    { id: 'greenhouse', name: 'Rumah Kaca', emoji: '<:greenhouse:1514059633784786964>', price: 50000, desc: 'Rumah kaca premium' },
+    { id: 'golden_statue', name: 'Patung Emas', emoji: '<:golden_statue:1514059984411955242>', price: 100000, desc: 'Simbol kemewahan!' },
 ];
 
 // ==================== FARM TOOLS (craftable gear) ====================
