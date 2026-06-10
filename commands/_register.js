@@ -91,6 +91,8 @@ const commands = [
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
+    new SlashCommandBuilder().setName('qr').setDescription('📱 Generate QR Code dari link')
+        .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true)),
 
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()

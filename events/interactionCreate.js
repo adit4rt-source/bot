@@ -784,6 +784,12 @@ async function routeInteraction(interaction) {
             return handleAiBotCommand(interaction);
         }
 
+        // ================= QR CODE GENERATOR =================
+        if (command === 'qr') {
+            const { handleQrCommand } = require('../systems/qrcode');
+            return handleQrCommand(interaction);
+        }
+
         // ================= TEMPVOICE PANEL =================
         if (command === 'tempvoice') {
             return handleTempvoiceCommand(interaction);
@@ -1111,6 +1117,14 @@ async function routeInteraction(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // --- QR CODE SIZE BUTTONS ---
+        if (interaction.customId.startsWith('qr_')) {
+            const { isQrButton, handleQrButton } = require('../systems/qrcode');
+            if (isQrButton(interaction.customId)) {
+                return handleQrButton(interaction);
+            }
+        }
+
         // --- WELCOME HELP BUTTON ---
         if (interaction.customId === 'welcome_help') {
             return interaction.reply({ content: '📖 Gunakan `/help` untuk panduan lengkap, atau `/menu` untuk navigasi cepat!', ephemeral: true });
