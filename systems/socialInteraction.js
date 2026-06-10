@@ -1,10 +1,9 @@
-// systems/socialInteraction.js — Social Interaction / Roleplay with Tenor GIFs
+// systems/socialInteraction.js — Social Interaction / Roleplay with Giphy GIFs
 const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
-// Tenor API v2 (free tier — needs API key from Google Cloud)
-const TENOR_API_KEY = process.env.TENOR_API_KEY || '';
-const TENOR_CLIENT_KEY = 'id_bot';
+// Giphy API
+const GIPHY_API_KEY = process.env.GIPHY_API_KEY || '9oW7wjv3hYKQnkNIOwA19Ccdbp1enB4S';
 
 // ==================== INTERACTION TYPES ====================
 const INTERACTIONS = [
@@ -28,20 +27,19 @@ const INTERACTIONS = [
     { id: 'handhold', name: 'Handhold', emoji: '🤝', search: 'anime hand holding', verb: 'menggenggam tangan', selfVerb: 'menggenggam tangan sendiri', color: '#FFD700' },
 ];
 
-// ==================== TENOR API ====================
+// ==================== GIPHY API ====================
 async function fetchTenorGif(searchTerm) {
-    if (!TENOR_API_KEY) return null;
+    if (!GIPHY_API_KEY) return null;
     try {
-        const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=20&media_filter=gif`;
+        const url = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchTerm)}&limit=25&rating=pg-13&lang=en`;
         const response = await fetch(url);
         if (!response.ok) return null;
         const data = await response.json();
-        if (!data.results || data.results.length === 0) return null;
-        // Pick random GIF from results
-        const gif = data.results[Math.floor(Math.random() * data.results.length)];
-        return gif.media_formats?.gif?.url || gif.media_formats?.mediumgif?.url || null;
+        if (!data.data || data.data.length === 0) return null;
+        const gif = data.data[Math.floor(Math.random() * data.data.length)];
+        return gif.images?.original?.url || gif.images?.downsized_medium?.url || null;
     } catch (e) {
-        console.error('[social] Tenor API error:', e.message);
+        console.error('[social] Giphy API error:', e.message);
         return null;
     }
 }
@@ -72,7 +70,6 @@ async function buildInteractionEmbed(interactionType, userId, targetId, guildNam
 }
 
 // ==================== MESSAGE-BASED DETECTION ====================
-// Detects patterns like "@user kiss" or "kiss @user" in messages
 function detectInteraction(message) {
     if (!message.mentions.users.size) return null;
     const content = message.content.toLowerCase().replace(/<@!?\d+>/g, '').trim();
