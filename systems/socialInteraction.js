@@ -2,8 +2,9 @@
 const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
-// Giphy API
-const GIPHY_API_KEY = process.env.GIPHY_API_KEY || '9oW7wjv3hYKQnkNIOwA19Ccdbp1enB4S';
+// Tenor API v2 (Google) — more relevant results than Giphy
+const TENOR_API_KEY = process.env.TENOR_API_KEY || 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ';
+const TENOR_CLIENT_KEY = process.env.TENOR_CLIENT_KEY || 'idcommunity_bot';
 
 // ==================== INTERACTION TYPES (60+ total) ====================
 const INTERACTIONS = [
@@ -79,19 +80,20 @@ const INTERACTIONS = [
     { id: 'manja', name: 'Manja', emoji: '🥺', search: 'anime clingy cute', verb: 'bermanja ke', selfVerb: 'manja sendirian', color: '#FFB6C1' },
 ];
 
-// ==================== GIPHY API ====================
+// ==================== TENOR API v2 ====================
 async function fetchTenorGif(searchTerm) {
-    if (!GIPHY_API_KEY) return null;
+    if (!TENOR_API_KEY) return null;
     try {
-        const url = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchTerm)}&limit=25&rating=pg-13&lang=en`;
+        const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=20&media_filter=gif&contentfilter=medium`;
         const response = await fetch(url);
         if (!response.ok) return null;
         const data = await response.json();
-        if (!data.data || data.data.length === 0) return null;
-        const gif = data.data[Math.floor(Math.random() * data.data.length)];
-        return gif.images?.original?.url || gif.images?.downsized_medium?.url || null;
+        if (!data.results || data.results.length === 0) return null;
+        const gif = data.results[Math.floor(Math.random() * data.results.length)];
+        // Prefer mediumgif (smaller) → gif (full) → tinygif (fallback)
+        return gif.media_formats?.mediumgif?.url || gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url || null;
     } catch (e) {
-        console.error('[social] Giphy API error:', e.message);
+        console.error('[social] Tenor API error:', e.message);
         return null;
     }
 }
