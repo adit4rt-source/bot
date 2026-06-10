@@ -208,7 +208,7 @@ const PRODUCT_QUALITY = {
 
 // ==================== SHOP ITEMS ====================
 const COOP_SHOP = [
-    { id: 'chicken', name: '🐔 Ayam', price: 3000, desc: 'Beli ayam baru', type: 'animal' },
+    { id: 'chicken', name: '<:chicken:1514062471248216154> Ayam', price: 3000, desc: 'Beli ayam baru', type: 'animal' },
     { id: 'chicken_feed', name: '🌾 Pakan Ayam (x10)', price: 600, qty: 10, desc: '1 pack = 1 hari/ayam', type: 'feed' },
     { id: 'chicken_feed_bulk', name: '🌾 Pakan Ayam (x50)', price: 2500, qty: 50, desc: 'Bulk discount', type: 'feed' },
     { id: 'chicken_medicine', name: '💊 Obat Ayam', price: 250, qty: 1, desc: 'Menyembuhkan 1 ayam sakit', type: 'medicine' },
@@ -217,8 +217,8 @@ const COOP_SHOP = [
 ];
 
 const BARN_SHOP = [
-    { id: 'cow', name: '🐄 Sapi', price: 10000, desc: 'Beli sapi baru', type: 'animal' },
-    { id: 'sheep', name: '🐑 Domba', price: 8000, desc: 'Beli domba baru', type: 'animal' },
+    { id: 'cow', name: '<:cow:1514062469276893356> Sapi', price: 10000, desc: 'Beli sapi baru', type: 'animal' },
+    { id: 'sheep', name: '<:sheep:1514062467393781792> Domba', price: 8000, desc: 'Beli domba baru', type: 'animal' },
     { id: 'cow_feed', name: '🌾 Pakan Sapi (x10)', price: 900, qty: 10, desc: '1 pack = 1 hari/sapi', type: 'feed' },
     { id: 'cow_feed_bulk', name: '🌾 Pakan Sapi (x50)', price: 3800, qty: 50, desc: 'Bulk discount', type: 'feed' },
     { id: 'sheep_feed', name: '🌾 Pakan Domba (x10)', price: 700, qty: 10, desc: '1 pack = 1 hari/domba', type: 'feed' },
