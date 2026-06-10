@@ -5,6 +5,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getUserStat, setUserStat, incrementUserStat, addUserBalance, addIncome, addItem } = require('../database');
 const { simulatePvP, getPetData } = require('./pets');
 const { PET_DATA } = require('../data/pets');
+const { getRandomInt } = require('../utils');
 const cooldowns = require('./cooldowns');
 
 const BASE_RATING = 1000;
@@ -485,13 +486,11 @@ async function handleArenaSelectMenu(interaction) {
         if (itemId === 'arena_relic_box') {
             // Generate random arena relic
             const slots = ['weapon', 'armor', 'accessory'];
-            const statTypes = ['atk', 'def', 'spd', 'crit'];
-            const rarities = ['Rare', 'Epic', 'Legendary'];
-            const rarity = rarities[Math.floor(Math.random() * rarities.length)];
-            const baseValue = rarity === 'Legendary' ? 15 : rarity === 'Epic' ? 10 : 6;
+            const rarityRoll = Math.random();
+            const rarity = rarityRoll < 0.02 ? 'Mythic' : rarityRoll < 0.15 ? 'Legendary' : rarityRoll < 0.45 ? 'Epic' : 'Rare';
             const slot = slots[Math.floor(Math.random() * slots.length)];
-            const statType = statTypes[Math.floor(Math.random() * statTypes.length)];
-            const value = baseValue + Math.floor(Math.random() * 5);
+            const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
+            const value = rarity === 'Mythic' ? getRandomInt(80, 120) : rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
             db.prepare('INSERT INTO relics (userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?)').run(userId, `Arena ${rarity} ${slot}`, slot, rarity, statType, value);
             await interaction.reply({ content: `🗡️ **Arena Relic Box dibuka!**\n> ${rarity} ${slot}: +${value} ${statType}\n> -🎖️ ${shopItem.cost} AP`, ephemeral: true });
         } else if (itemId === 'arena_egg') {

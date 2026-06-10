@@ -183,6 +183,16 @@ const RELIC_NAMES = {
     armor: ['Leather Armor', 'Iron Shield', 'Crystal Armor', 'Shadow Cloak', 'Void Barrier', 'Divine Plate'],
     accessory: ['Speed Ring', 'Crit Necklace', 'Power Gem', 'Shadow Pendant', 'Void Orb', 'Divine Crown']
 };
+const RELIC_MYTHIC_NAMES = {
+    weapon: ['Blade of Eternity', 'Void Slasher', 'Starforged Katana', 'Time Render', 'Chaos Edge'],
+    armor: ['Celestial Plate', 'Void Shell', 'Astral Guard', 'Time Barrier', 'Chaos Shield'],
+    accessory: ['Ring of Infinity', 'Void Pendant', 'Star Crown', 'Time Locket', 'Chaos Gem'],
+};
+const RELIC_GOD_NAMES = {
+    weapon: ['Divine Excalibur', 'The Creator\'s Blade', 'Omega Sword', 'Genesis Edge'],
+    armor: ['Armor of the Gods', 'The Creator\'s Shield', 'Omega Plate', 'Genesis Guard'],
+    accessory: ['Eye of God', 'The Creator\'s Ring', 'Omega Crown', 'Genesis Heart'],
+};
 
 const PET_SKILLS = [
     // Tier 1 (unlocked at pet level 10)
@@ -206,4 +216,4 @@ const PET_SKILLS = [
     { id: 'omega_heal', name: 'Omega Heal', emoji: '💖', tier: 4, level: 100, type: 'heal', amount: 0.5, cooldown: 8, desc: 'Heal 50% max HP' },
 ];
 
-module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS };
+module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS };

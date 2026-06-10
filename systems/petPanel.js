@@ -2,8 +2,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus } = require('./pets');
-const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, PET_SKILLS } = require('../data/pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic } = require('./pets');
+const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS } = require('../data/items');
 const { checkAchievements } = require('./achievements');
@@ -67,12 +67,15 @@ function rollRelicDrop(guildId, userId, chance, rareBonus) {
     const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
     const r = Math.random();
     let rarity;
-    if (rareBonus) rarity = r < 0.25 ? 'Legendary' : r < 0.60 ? 'Epic' : 'Rare';
-    else rarity = r < 0.10 ? 'Legendary' : r < 0.30 ? 'Epic' : 'Rare';
-    const names = RELIC_NAMES[slot];
-    const name = names[Math.floor(Math.random() * names.length)];
+    if (rareBonus) rarity = r < 0.005 ? 'God' : r < 0.055 ? 'Mythic' : r < 0.25 ? 'Legendary' : r < 0.60 ? 'Epic' : 'Rare';
+    else rarity = r < 0.02 ? 'Mythic' : r < 0.10 ? 'Legendary' : r < 0.30 ? 'Epic' : 'Rare';
+    let nameList;
+    if (rarity === 'God') nameList = RELIC_GOD_NAMES[slot];
+    else if (rarity === 'Mythic') nameList = RELIC_MYTHIC_NAMES[slot];
+    else nameList = RELIC_NAMES[slot];
+    const name = nameList[Math.floor(Math.random() * nameList.length)];
     const statType = slot === 'weapon' ? 'atk' : slot === 'armor' ? 'def' : (Math.random() < 0.5 ? 'spd' : 'crit');
-    const statVal = rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
+    const statVal = rarity === 'God' ? getRandomInt(120, 180) : rarity === 'Mythic' ? getRandomInt(80, 120) : rarity === 'Legendary' ? getRandomInt(50, 80) : rarity === 'Epic' ? getRandomInt(35, 50) : getRandomInt(20, 35);
     db.prepare('INSERT INTO relics (guildId, userId, name, slot, rarity, stat_type, stat_value) VALUES (?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, name, slot, rarity, statType, statVal);
     return `\n> 📿 **RELIC DROP:** ${name} (${rarity})`;
 }
@@ -112,6 +115,9 @@ function buildRelicPanel(guildId, userId) {
             : `> ${_SLOT_EMOJI[slot]} *(kosong)*\n`;
     }
     desc += `\n**📊 Total Bonus:** ⚔️+${bonus.atk} | 🛡️+${bonus.def} | 💨+${bonus.spd} | 🎯+${bonus.crit}%\n`;
+    if (bonus.percent && (bonus.percent.atk || bonus.percent.def || bonus.percent.spd || bonus.percent.crit)) {
+        desc += `**📈 % Bonus (Mythic/God):** ⚔️+${bonus.percent.atk}% | 🛡️+${bonus.percent.def}% | 💨+${bonus.percent.spd}% | 🎯+${bonus.percent.crit}%\n`;
+    }
     desc += `🪨 Refine Stone: **${stones}** | 📿 Total relic: **${all.length}** (${equipped.length} terpasang)\n`;
     desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih relic untuk **dipasang**, atau **lebur** relic tak terpakai jadi Refine Stone.`;
 
@@ -142,7 +148,7 @@ function buildRelicPanel(guildId, userId) {
             .setPlaceholder('🔥 Lebur relic jadi Refine Stone...')
             .setMinValues(1).setMaxValues(Math.min(meltable.length, 25));
         for (const r of meltable) {
-            const yield_ = (r.rarity === 'Legendary' ? 3 : r.rarity === 'Epic' ? 2 : 1) + Math.floor((r.refine_level || 0) / 3);
+            const yield_ = (r.rarity === 'God' ? 10 : r.rarity === 'Mythic' ? 6 : r.rarity === 'Legendary' ? 3 : r.rarity === 'Epic' ? 2 : 1) + Math.floor((r.refine_level || 0) / 3);
             meltMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(_relicLabel(r).slice(0, 100))
                 .setValue(String(r.id))

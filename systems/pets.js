@@ -33,7 +33,13 @@ function generatePetStats(tier) {
 const RELIC_SLOTS = ['weapon', 'armor', 'accessory'];
 
 function relicEffective(relic) {
-    return Math.floor((relic.stat_value || 0) * (1 + (relic.refine_level || 0) * 0.05));
+    const base = (relic.stat_value || 0) * (1 + (relic.refine_level || 0) * 0.05);
+    return Math.floor(base);
+}
+
+// For Mythic/God relics, the bonus is percentage-based (applied differently in battle)
+function isPercentRelic(relic) {
+    return relic && (relic.rarity === 'Mythic' || relic.rarity === 'God');
 }
 
 function getUserRelics(userId) {
@@ -51,12 +57,17 @@ function getEquippedRelics(petId) {
 // Sum of EQUIPPED relic bonuses for a pet (per stat type).
 function getRelicBonus(userId, petId) {
     const bonus = { atk: 0, def: 0, spd: 0, crit: 0 };
-    if (!petId) return bonus;
+    const percentBonus = { atk: 0, def: 0, spd: 0, crit: 0 };
+    if (!petId) return { ...bonus, percent: percentBonus };
     for (const r of getEquippedRelics(petId)) {
         if (!(r.stat_type in bonus)) continue;
-        bonus[r.stat_type] += relicEffective(r);
+        if (isPercentRelic(r)) {
+            percentBonus[r.stat_type] += relicEffective(r);
+        } else {
+            bonus[r.stat_type] += relicEffective(r);
+        }
     }
-    return bonus;
+    return { ...bonus, percent: percentBonus };
 }
 
 // Equip a relic to a pet, auto-unequipping any relic in the same slot.
@@ -85,7 +96,8 @@ function unequipAll(userId, petId) {
 function meltRelic(guildId, userId, relicId) {
     const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
     if (!relic) return { success: false, error: 'Relic tidak ditemukan.' };
-    const base = relic.rarity === 'Legendary' ? 3 : relic.rarity === 'Epic' ? 2 : 1;
+    const rarity = relic.rarity;
+    const base = rarity === 'God' ? 10 : rarity === 'Mythic' ? 6 : rarity === 'Legendary' ? 3 : rarity === 'Epic' ? 2 : 1;
     const stones = base + Math.floor((relic.refine_level || 0) / 3);
     db.prepare('DELETE FROM relics WHERE id = ?').run(relicId);
     const { addItem } = require('../database');
@@ -112,7 +124,18 @@ function getEffectiveStats(pet) {
 function withRelics(pet) {
     if (!pet) return pet;
     const b = getRelicBonus(pet.userId, pet.id);
-    return { ...pet, atk: (pet.atk || 0) + b.atk, def: (pet.def || 0) + b.def, spd: (pet.spd || 0) + b.spd, crit: (pet.crit || 0) + b.crit };
+    let atk = (pet.atk || 0) + b.atk;
+    let def = (pet.def || 0) + b.def;
+    let spd = (pet.spd || 0) + b.spd;
+    let crit = (pet.crit || 0) + b.crit;
+    // Apply percentage bonuses from Mythic/God relics
+    if (b.percent) {
+        atk = Math.floor(atk * (1 + b.percent.atk / 100));
+        def = Math.floor(def * (1 + b.percent.def / 100));
+        spd = Math.floor(spd * (1 + b.percent.spd / 100));
+        crit = Math.floor(crit * (1 + b.percent.crit / 100));
+    }
+    return { ...pet, atk, def, spd, crit };
 }
 
 function simulateBattle(pet, petDef, enemies) {
@@ -458,4 +481,4 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic };
+module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic, isPercentRelic };
