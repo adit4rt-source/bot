@@ -796,6 +796,20 @@ async function routeInteraction(interaction) {
             return handleAfkCommand(interaction);
         }
 
+        // ================= ANIME CARDS =================
+        if (command === 'drop') {
+            const { handleDropCommand } = require('../systems/cardGame');
+            return handleDropCommand(interaction);
+        }
+        if (command === 'cards') {
+            const { handleCardsCommand } = require('../systems/cardGame');
+            return handleCardsCommand(interaction);
+        }
+        if (command === 'cardview') {
+            const { handleCardViewCommand } = require('../systems/cardGame');
+            return handleCardViewCommand(interaction);
+        }
+
         // ================= STARBOARD =================
         if (command === 'starboard') {
             const { handleStarboardCommand } = require('../systems/starboard');
@@ -1135,6 +1149,14 @@ async function routeInteraction(interaction) {
             const { isQrButton, handleQrButton } = require('../systems/qrcode');
             if (isQrButton(interaction.customId)) {
                 return handleQrButton(interaction);
+            }
+        }
+
+        // --- ANIME CARD GRAB BUTTONS ---
+        if (interaction.customId.startsWith('cardgrab_')) {
+            const { isCardGrabButton, handleCardGrab } = require('../systems/cardGame');
+            if (isCardGrabButton(interaction.customId)) {
+                return handleCardGrab(interaction);
             }
         }
 
