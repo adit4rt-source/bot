@@ -6,6 +6,8 @@ const { db, getSetting } = require('../database');
 // ==================== DATABASE SETUP ====================
 db.exec(`CREATE TABLE IF NOT EXISTS invites (guildId TEXT, inviterId TEXT, invitedId TEXT, code TEXT, joinedAt INTEGER, leftAt INTEGER, fake INTEGER DEFAULT 0, PRIMARY KEY(guildId, invitedId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS invite_settings (guildId TEXT, key TEXT, value TEXT, PRIMARY KEY(guildId, key))`);
+db.exec(`CREATE TABLE IF NOT EXISTS invite_bonus (guildId TEXT, userId TEXT, bonus INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId))`);
+db.exec(`CREATE TABLE IF NOT EXISTS invite_blacklist (guildId TEXT, userId TEXT, reason TEXT, addedAt INTEGER, PRIMARY KEY(guildId, userId))`);
 
 // In-memory invite cache: guildId -> Map<code, uses>
 const inviteCache = new Map();
@@ -86,7 +88,47 @@ async function handleMemberJoin(member) {
         return;
     }
 
-    if (!inviterUserId) return;
+    if (!inviterUserId) {
+        // Check if joined via vanity URL
+        try {
+            const vanityData = await member.guild.fetchVanityData().catch(() => null);
+            if (vanityData && vanityData.code) {
+                // Vanity invite — log it
+                const channelId = getInviteSetting(guildId, 'invite_channel', '');
+                if (channelId) {
+                    const channel = member.guild.channels.cache.get(channelId);
+                    if (channel) {
+                        const embed = new EmbedBuilder()
+                            .setColor('#7289DA')
+                            .setDescription(`**${member.user.username}** joined using a vanity invite. (discord.gg/${vanityData.code})`)
+                            .setTimestamp();
+                        channel.send({ embeds: [embed] }).catch(() => {});
+                    }
+                }
+            }
+        } catch (_) {}
+        return;
+    }
+
+    // Check if inviter is blacklisted
+    if (isInviteBlacklisted(guildId, inviterUserId)) {
+        // Log as blacklisted invite (not counted)
+        const channelId = getInviteSetting(guildId, 'invite_channel', '');
+        if (channelId) {
+            const channel = member.guild.channels.cache.get(channelId);
+            if (channel) {
+                const embed = new EmbedBuilder()
+                    .setColor('#808080')
+                    .setDescription(`**${member.user.username}** joined. Inviter <@${inviterUserId}> is blacklisted — invite not counted.`)
+                    .setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
+        }
+        // Still store the record but mark as fake so it doesn't count
+        db.prepare('INSERT OR REPLACE INTO invites (guildId, inviterId, invitedId, code, joinedAt, leftAt, fake) VALUES (?, ?, ?, ?, ?, NULL, 1)').run(guildId, inviterUserId, member.id, usedCode, Date.now());
+        // Update cache
+        return;
+    }
 
     // Check if fake (account age)
     const fakeThreshold = parseInt(getInviteSetting(guildId, 'invite_fake_threshold', '7')) || 7;
@@ -115,21 +157,19 @@ async function handleMemberJoin(member) {
         const channel = member.guild.channels.cache.get(channelId);
         if (channel) {
             const stats = getInviterStats(guildId, inviterUserId);
-            let message = getInviteSetting(guildId, 'invite_message', '{inviter.mention} mengundang {user.mention}! (Total: **{inviter.total}** invites)');
-            message = message
-                .replace(/{user\.mention}/g, `<@${member.id}>`)
-                .replace(/{user\.name}/g, member.user.username)
-                .replace(/{inviter\.mention}/g, `<@${inviterUserId}>`)
-                .replace(/{inviter\.name}/g, inviterUserId)
-                .replace(/{inviter\.total}/g, String(stats.total))
-                .replace(/{inviter\.real}/g, String(stats.real))
-                .replace(/{inviter\.fake}/g, String(stats.fake))
-                .replace(/{inviter\.left}/g, String(stats.left));
-
+            const inviterMember = member.guild.members.cache.get(inviterUserId);
+            const inviterName = inviterMember ? inviterMember.user.username : inviterUserId;
+            
             const embed = new EmbedBuilder()
                 .setColor(isFake ? '#FF6B6B' : '#43B581')
-                .setDescription(message)
-                .setFooter({ text: isFake ? '⚠️ Possible fake invite (new account)' : `Code: ${usedCode}` })
+                .setDescription(
+                    `**Name :** <@${member.id}>\n` +
+                    `**Inviter :** ${inviterName}\n` +
+                    `**Total Invite :** ${stats.total}\n` +
+                    `**Total Member :** ${member.guild.memberCount} Member\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+                    (isFake ? `\n⚠️ *Possible fake invite (akun baru < ${fakeThreshold} hari)*` : '')
+                )
                 .setTimestamp();
 
             channel.send({ embeds: [embed] }).catch(() => {});
@@ -168,14 +208,44 @@ async function handleMemberLeave(member) {
     }
 }
 
+// ==================== BONUS INVITES ====================
+function getBonusInvites(guildId, userId) {
+    const row = db.prepare('SELECT bonus FROM invite_bonus WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    return row ? row.bonus : 0;
+}
+
+function addBonusInvites(guildId, userId, amount) {
+    const current = getBonusInvites(guildId, userId);
+    db.prepare('INSERT OR REPLACE INTO invite_bonus (guildId, userId, bonus) VALUES (?, ?, ?)').run(guildId, userId, current + amount);
+    return current + amount;
+}
+
+// ==================== INVITE BLACKLIST ====================
+function isInviteBlacklisted(guildId, userId) {
+    return !!db.prepare('SELECT 1 FROM invite_blacklist WHERE guildId = ? AND userId = ?').get(guildId, userId);
+}
+
+function addInviteBlacklist(guildId, userId, reason = '') {
+    db.prepare('INSERT OR REPLACE INTO invite_blacklist (guildId, userId, reason, addedAt) VALUES (?, ?, ?, ?)').run(guildId, userId, reason, Date.now());
+}
+
+function removeInviteBlacklist(guildId, userId) {
+    db.prepare('DELETE FROM invite_blacklist WHERE guildId = ? AND userId = ?').run(guildId, userId);
+}
+
+function getInviteBlacklist(guildId) {
+    return db.prepare('SELECT * FROM invite_blacklist WHERE guildId = ? ORDER BY addedAt DESC').all(guildId);
+}
+
 // ==================== STATS HELPERS ====================
 function getInviterStats(guildId, userId) {
-    const total = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND fake = 0 AND leftAt IS NULL').get(guildId, userId)?.count || 0;
+    const valid = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND fake = 0 AND leftAt IS NULL').get(guildId, userId)?.count || 0;
     const fake = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND fake = 1').get(guildId, userId)?.count || 0;
     const left = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ? AND leftAt IS NOT NULL AND fake = 0').get(guildId, userId)?.count || 0;
-    const real = total;
+    const bonus = getBonusInvites(guildId, userId);
+    const total = valid + bonus;
     const totalAll = db.prepare('SELECT COUNT(*) as count FROM invites WHERE guildId = ? AND inviterId = ?').get(guildId, userId)?.count || 0;
-    return { total, real, fake, left, totalAll };
+    return { total, real: valid, fake, left, bonus, totalAll };
 }
 
 function getInviteLeaderboard(guildId, limit = 20) {
@@ -222,4 +292,10 @@ module.exports = {
     getInviteSetting,
     setInviteSetting,
     inviteCache,
+    getBonusInvites,
+    addBonusInvites,
+    isInviteBlacklisted,
+    addInviteBlacklist,
+    removeInviteBlacklist,
+    getInviteBlacklist,
 };

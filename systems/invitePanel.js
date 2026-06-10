@@ -190,10 +190,12 @@ async function handleInviteButton(interaction) {
                 `**📈 Ranking:**\n` +
                 `> 🏆 Rank: #${rank || 'N/A'}\n\n` +
                 `**📊 Statistik:**\n` +
-                `> ✅ Valid Invites: **${stats.total}**\n` +
+                `> ✅ Valid Invites: **${stats.real}**\n` +
+                `> 🎁 Bonus Invites: **${stats.bonus}**\n` +
                 `> 👻 Fake Invites: **${stats.fake}**\n` +
                 `> 👋 Left Server: **${stats.left}**\n` +
-                `> 📋 All-time Total: **${stats.totalAll}**\n\n` +
+                `> 📋 All-time Total: **${stats.totalAll}**\n` +
+                `> 🏆 Total (valid+bonus): **${stats.total}**\n\n` +
                 `**📨 Siapa yang mengundangmu:**\n` +
                 `> ${invitedByData ? `<@${invitedByData.inviterId}> (code: \`${invitedByData.code}\`)` : '*Tidak diketahui*'}`
             );
@@ -218,14 +220,52 @@ async function handleInviteButton(interaction) {
                 `**Fake Threshold:** ${settings.invite_fake_threshold} hari\n` +
                 `**Deduct on Leave:** ${settings.invite_leave_deduct === '1' ? '✅ Ya' : '❌ Tidak'}\n\n` +
                 (isAdmin
-                    ? '💡 Gunakan **Dashboard** untuk mengubah pengaturan invite tracker.'
+                    ? '💡 Gunakan tombol di bawah untuk admin controls.'
                     : '🔒 Hanya admin yang dapat mengubah pengaturan.')
             );
 
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`invpnl_bonus_${userId}`).setLabel('🎁 Bonus').setStyle(ButtonStyle.Primary).setDisabled(!isAdmin),
+            new ButtonBuilder().setCustomId(`invpnl_blacklist_${userId}`).setLabel('🚫 Blacklist').setStyle(ButtonStyle.Danger).setDisabled(!isAdmin),
+            new ButtonBuilder().setCustomId(`invpnl_reset_${userId}`).setLabel('🔄 Reset').setStyle(ButtonStyle.Danger).setDisabled(!isAdmin),
             new ButtonBuilder().setCustomId(`invpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === BONUS (Admin modal) ===
+    if (action === 'bonus') {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`invpnl_modal_bonus_${userId}`).setTitle('🎁 Add/Remove Bonus Invites');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID atau @mention').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('123456789')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('amount').setLabel('Jumlah (negatif untuk kurangi)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('5 atau -3'))
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === BLACKLIST (Admin modal) ===
+    if (action === 'blacklist') {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`invpnl_modal_blacklist_${userId}`).setTitle('🚫 Invite Blacklist');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID (add/remove)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('123456789')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('action').setLabel('Action: add / remove / list').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('add'))
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === RESET (Admin modal) ===
+    if (action === 'reset') {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`invpnl_modal_reset_${userId}`).setTitle('🔄 Reset Invites');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('target').setLabel('User ID (kosong = reset semua)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('123456789 atau kosong'))
+        );
+        return interaction.showModal(modal);
     }
 }
 
@@ -234,9 +274,69 @@ function isInvitePanelButton(customId) {
     return customId.startsWith('invpnl_');
 }
 
+// ============ MODAL HANDLERS ============
+async function handleInviteModal(interaction) {
+    const guildId = interaction.guild.id;
+    const customId = interaction.customId;
+
+    if (customId.startsWith('invpnl_modal_bonus_')) {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { addBonusInvites, getInviterStats } = require('./inviteTracker');
+        const targetId = interaction.fields.getTextInputValue('target').replace(/[<@!>]/g, '').trim();
+        const amount = parseInt(interaction.fields.getTextInputValue('amount'));
+        if (!targetId || isNaN(amount)) return interaction.reply({ content: '❌ Input tidak valid!', ephemeral: true });
+        const newBonus = addBonusInvites(guildId, targetId, amount);
+        const stats = getInviterStats(guildId, targetId);
+        return interaction.reply({ content: `✅ Bonus invite <@${targetId}> ${amount >= 0 ? '+' : ''}${amount}\n> Bonus: **${newBonus}** | Total: **${stats.total}**`, ephemeral: true });
+    }
+
+    if (customId.startsWith('invpnl_modal_blacklist_')) {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { addInviteBlacklist, removeInviteBlacklist, getInviteBlacklist } = require('./inviteTracker');
+        const targetId = interaction.fields.getTextInputValue('target').replace(/[<@!>]/g, '').trim();
+        const action = interaction.fields.getTextInputValue('action').toLowerCase().trim();
+        
+        if (action === 'list') {
+            const list = getInviteBlacklist(guildId);
+            const desc = list.length > 0 ? list.map((b, i) => `> ${i+1}. <@${b.userId}>${b.reason ? ` — ${b.reason}` : ''}`).join('\n') : '*Kosong*';
+            return interaction.reply({ content: `🚫 **Invite Blacklist:**\n${desc}`, ephemeral: true });
+        }
+        if (action === 'add') {
+            addInviteBlacklist(guildId, targetId, 'Admin blacklist');
+            return interaction.reply({ content: `🚫 <@${targetId}> ditambahkan ke invite blacklist. Invite mereka tidak akan dihitung.`, ephemeral: true });
+        }
+        if (action === 'remove') {
+            removeInviteBlacklist(guildId, targetId);
+            return interaction.reply({ content: `✅ <@${targetId}> dihapus dari invite blacklist.`, ephemeral: true });
+        }
+        return interaction.reply({ content: '❌ Action harus: add / remove / list', ephemeral: true });
+    }
+
+    if (customId.startsWith('invpnl_modal_reset_')) {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        const { resetInvites } = require('./inviteTracker');
+        const targetId = (interaction.fields.getTextInputValue('target') || '').trim();
+        if (targetId) {
+            resetInvites(guildId, targetId);
+            return interaction.reply({ content: `🔄 Invites <@${targetId}> di-reset!`, ephemeral: true });
+        } else {
+            resetInvites(guildId, null);
+            return interaction.reply({ content: `🔄 SEMUA invites di server ini di-reset!`, ephemeral: true });
+        }
+    }
+
+    return false;
+}
+
+function isInvitePanelModal(customId) {
+    return customId.startsWith('invpnl_modal_');
+}
+
 module.exports = {
     buildInvitePanel,
     handleInviteCommand,
     handleInviteButton,
-    isInvitePanelButton
+    isInvitePanelButton,
+    handleInviteModal,
+    isInvitePanelModal
 };
