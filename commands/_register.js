@@ -115,6 +115,43 @@ const commands = [
         .addUserOption(opt => opt.setName('user').setDescription('Lihat koleksi user lain (opsional)').setRequired(false)),
     new SlashCommandBuilder().setName('cardview').setDescription('🎴 Lihat detail kartu anime')
         .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu (dari /cards)').setRequired(true)),
+    new SlashCommandBuilder().setName('cardburn').setDescription('🔥 Burn kartu → dapat Stardust')
+        .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu yang mau di-burn').setRequired(true)),
+    new SlashCommandBuilder().setName('cardtrade').setDescription('🔄 Trade kartu ke player lain')
+        .addUserOption(opt => opt.setName('user').setDescription('Siapa yang mau dikasih').setRequired(true))
+        .addIntegerOption(opt => opt.setName('kartu_kamu').setDescription('ID kartu kamu').setRequired(true)),
+    new SlashCommandBuilder().setName('carddye').setDescription('🎨 Beri warna custom ke border kartu')
+        .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu').setRequired(true))
+        .addStringOption(opt => opt.setName('warna').setDescription('Warna dye').setRequired(true)
+            .addChoices(
+                { name: '❤️ Crimson (50✨)', value: 'crimson' },
+                { name: '🌊 Ocean Blue (50✨)', value: 'ocean' },
+                { name: '🍀 Emerald (50✨)', value: 'emerald' },
+                { name: '👑 Royal Purple (50✨)', value: 'royal' },
+                { name: '🌅 Sunset Orange (50✨)', value: 'sunset' },
+                { name: '⭐ Gold (100✨)', value: 'gold' },
+                { name: '🌸 Sakura Pink (75✨)', value: 'sakura' },
+                { name: '🌙 Midnight (75✨)', value: 'midnight' },
+                { name: '❄️ Ice Blue (75✨)', value: 'ice' },
+                { name: '🩸 Blood Red (100✨)', value: 'blood' },
+            )),
+    new SlashCommandBuilder().setName('wishlist').setDescription('❤️ Wishlist karakter — dapat notif saat muncul di drop')
+        .addSubcommand(sub => sub.setName('add').setDescription('Tambah karakter ke wishlist')
+            .addStringOption(opt => opt.setName('karakter').setDescription('Nama karakter (misal: Gojo)').setRequired(true)))
+        .addSubcommand(sub => sub.setName('remove').setDescription('Hapus karakter dari wishlist')
+            .addStringOption(opt => opt.setName('karakter').setDescription('Nama karakter').setRequired(true)))
+        .addSubcommand(sub => sub.setName('list').setDescription('Lihat wishlist kamu')),
+    new SlashCommandBuilder().setName('album').setDescription('📦 Card Album — lihat set series yang terkumpul')
+        .addUserOption(opt => opt.setName('user').setDescription('Lihat album user lain').setRequired(false)),
+    new SlashCommandBuilder().setName('cardlb').setDescription('📊 Card Leaderboard')
+        .addStringOption(opt => opt.setName('tipe').setDescription('Tipe leaderboard').setRequired(false)
+            .addChoices(
+                { name: '🎴 Total Cards', value: 'total' },
+                { name: '👑 Most Rare+', value: 'rare' },
+                { name: '💫 Most Stardust', value: 'stardust' },
+                { name: '🏷️ Lowest Prints', value: 'prints' },
+            )),
+    new SlashCommandBuilder().setName('stardust').setDescription('💫 Cek saldo Stardust kamu'),
 
     // ================= AFK =================
     new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')

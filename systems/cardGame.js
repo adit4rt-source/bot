@@ -602,9 +602,346 @@ async function handleCardViewCommand(interaction) {
     }
 }
 
+// ==================== NEW DB TABLES (Burn, Trade, Wishlist, Dye, Album) ====================
+db.exec(`CREATE TABLE IF NOT EXISTS card_stardust (userId TEXT PRIMARY KEY, amount INTEGER DEFAULT 0)`);
+db.exec(`CREATE TABLE IF NOT EXISTS card_wishlist (userId TEXT, charName TEXT, PRIMARY KEY(userId, charName))`);
+db.exec(`CREATE TABLE IF NOT EXISTS card_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    senderId TEXT, receiverId TEXT,
+    senderCardId INTEGER, receiverCardId INTEGER,
+    status TEXT DEFAULT 'pending', createdAt INTEGER
+)`);
+try { db.exec(`ALTER TABLE anime_cards ADD COLUMN dye TEXT DEFAULT ''`); } catch (_) {}
+
+// ==================== STARDUST HELPERS ====================
+const BURN_VALUES = { Common: 1, Uncommon: 3, Rare: 10, Epic: 30, Legendary: 100, Mythic: 300, God: 1000 };
+
+function getStardust(userId) {
+    const row = db.prepare('SELECT amount FROM card_stardust WHERE userId = ?').get(userId);
+    return row ? row.amount : 0;
+}
+function addStardust(userId, amount) {
+    db.prepare('INSERT OR IGNORE INTO card_stardust (userId, amount) VALUES (?, 0)').run(userId);
+    db.prepare('UPDATE card_stardust SET amount = amount + ? WHERE userId = ?').run(amount, userId);
+}
+
+// ==================== 🔥 BURN (SALVAGE) ====================
+async function handleCardBurn(interaction) {
+    const cardId = interaction.options.getInteger('id');
+    const userId = interaction.user.id;
+    const card = db.prepare('SELECT * FROM anime_cards WHERE id = ? AND userId = ?').get(cardId, userId);
+    if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan atau bukan milikmu!', ephemeral: true });
+    if (card.locked) return interaction.reply({ content: '❌ Kartu ini di-lock! Unlock dulu sebelum burn.', ephemeral: true });
+
+    const value = BURN_VALUES[card.rarity] || 1;
+    db.prepare('DELETE FROM anime_cards WHERE id = ?').run(cardId);
+    addStardust(userId, value);
+    const total = getStardust(userId);
+
+    const rd = RARITIES[card.rarity];
+    const embed = new EmbedBuilder()
+        .setColor('#FF6B35')
+        .setTitle('🔥 Card Burned!')
+        .setDescription(
+            `${rd.emoji} **${card.charName}** — *${card.series}*\n` +
+            `> Rarity: ${card.rarity} | Print #${String(card.printNumber).padStart(4, '0')}\n\n` +
+            `✨ **+${value} Stardust** earned!\n` +
+            `> 💫 Total Stardust: **${total}**`
+        )
+        .setFooter({ text: 'Stardust bisa dipakai beli dye, extra drop, dll' });
+    return interaction.reply({ embeds: [embed] });
+}
+
+// ==================== 🔄 TRADE ====================
+async function handleCardTrade(interaction) {
+    const targetUser = interaction.options.getUser('user');
+    const cardId = interaction.options.getInteger('kartu_kamu');
+    const userId = interaction.user.id;
+
+    if (targetUser.id === userId) return interaction.reply({ content: '❌ Tidak bisa trade dengan diri sendiri!', ephemeral: true });
+    if (targetUser.bot) return interaction.reply({ content: '❌ Tidak bisa trade dengan bot!', ephemeral: true });
+
+    const card = db.prepare('SELECT * FROM anime_cards WHERE id = ? AND userId = ?').get(cardId, userId);
+    if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan atau bukan milikmu!', ephemeral: true });
+    if (card.locked) return interaction.reply({ content: '❌ Kartu ini di-lock!', ephemeral: true });
+
+    // Create trade offer
+    db.prepare('INSERT INTO card_trades (senderId, receiverId, senderCardId, status, createdAt) VALUES (?, ?, ?, ?, ?)').run(userId, targetUser.id, cardId, 'pending', Date.now());
+    const tradeId = db.prepare('SELECT last_insert_rowid() as id').get().id;
+
+    const rd = RARITIES[card.rarity];
+    const embed = new EmbedBuilder()
+        .setColor('#3498DB')
+        .setTitle('🔄 Trade Offer!')
+        .setDescription(
+            `<@${userId}> ingin memberikan kartu ke <@${targetUser.id}>:\n\n` +
+            `${rd.emoji} **${card.charName}** — *${card.series}*\n` +
+            `> ${card.rarity} | Print #${String(card.printNumber).padStart(4, '0')}\n\n` +
+            `> <@${targetUser.id}> klik **Accept** untuk menerima!`
+        )
+        .setFooter({ text: `Trade ID: ${tradeId} • Expires in 5 min` });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`cardtrade_accept_${tradeId}_${targetUser.id}`).setLabel('✅ Accept').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`cardtrade_deny_${tradeId}_${targetUser.id}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row] });
+
+    // Auto-expire
+    setTimeout(() => {
+        const trade = db.prepare('SELECT * FROM card_trades WHERE id = ? AND status = ?').get(tradeId, 'pending');
+        if (trade) db.prepare('UPDATE card_trades SET status = ? WHERE id = ?').run('expired', tradeId);
+    }, 5 * 60 * 1000);
+}
+
+async function handleCardTradeButton(interaction) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1]; // accept or deny
+    const tradeId = parseInt(parts[2]);
+    const allowedUser = parts[3];
+
+    if (interaction.user.id !== allowedUser) {
+        return interaction.reply({ content: '❌ Trade ini bukan untukmu!', ephemeral: true });
+    }
+
+    const trade = db.prepare('SELECT * FROM card_trades WHERE id = ?').get(tradeId);
+    if (!trade) return interaction.reply({ content: '❌ Trade tidak ditemukan!', ephemeral: true });
+    if (trade.status !== 'pending') return interaction.reply({ content: '❌ Trade sudah expired/selesai!', ephemeral: true });
+
+    if (action === 'deny') {
+        db.prepare('UPDATE card_trades SET status = ? WHERE id = ?').run('denied', tradeId);
+        return interaction.update({ content: '❌ Trade ditolak.', embeds: [], components: [] });
+    }
+
+    // Accept: transfer card
+    const card = db.prepare('SELECT * FROM anime_cards WHERE id = ?').get(trade.senderCardId);
+    if (!card || card.userId !== trade.senderId) {
+        db.prepare('UPDATE card_trades SET status = ? WHERE id = ?').run('failed', tradeId);
+        return interaction.update({ content: '❌ Kartu sudah tidak ada di sender!', embeds: [], components: [] });
+    }
+
+    db.prepare('UPDATE anime_cards SET userId = ? WHERE id = ?').run(trade.receiverId, trade.senderCardId);
+    db.prepare('UPDATE card_trades SET status = ? WHERE id = ?').run('completed', tradeId);
+
+    const rd = RARITIES[card.rarity];
+    return interaction.update({
+        content: `✅ Trade berhasil! ${rd.emoji} **${card.charName}** sekarang milik <@${trade.receiverId}>!`,
+        embeds: [], components: []
+    });
+}
+
+// ==================== ❤️ WISHLIST ====================
+async function handleCardWishlist(interaction) {
+    const sub = interaction.options.getSubcommand();
+    const userId = interaction.user.id;
+
+    if (sub === 'add') {
+        const charName = interaction.options.getString('karakter');
+        const existing = db.prepare('SELECT COUNT(*) as c FROM card_wishlist WHERE userId = ?').get(userId);
+        if (existing.c >= 10) return interaction.reply({ content: '❌ Wishlist penuh! (maks 10). Hapus dulu pakai `/wishlist remove`.', ephemeral: true });
+        db.prepare('INSERT OR IGNORE INTO card_wishlist (userId, charName) VALUES (?, ?)').run(userId, charName.toLowerCase());
+        return interaction.reply({ content: `❤️ **${charName}** ditambahkan ke wishlist!`, ephemeral: true });
+    }
+
+    if (sub === 'remove') {
+        const charName = interaction.options.getString('karakter');
+        db.prepare('DELETE FROM card_wishlist WHERE userId = ? AND charName = ?').run(userId, charName.toLowerCase());
+        return interaction.reply({ content: `🗑️ **${charName}** dihapus dari wishlist.`, ephemeral: true });
+    }
+
+    if (sub === 'list') {
+        const wishes = db.prepare('SELECT * FROM card_wishlist WHERE userId = ?').all(userId);
+        if (wishes.length === 0) return interaction.reply({ content: '📭 Wishlist kosong! Tambah dengan `/wishlist add`.', ephemeral: true });
+        const list = wishes.map((w, i) => `> **${i + 1}.** ❤️ ${w.charName}`).join('\n');
+        const embed = new EmbedBuilder()
+            .setTitle('❤️ Card Wishlist')
+            .setColor('#FF69B4')
+            .setDescription(`${list}\n\n-# Kamu akan di-ping kalau karakter wishlist muncul di drop!`)
+            .setFooter({ text: `${wishes.length}/10 slot` });
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+}
+
+// Check wishlist during drop (called from drop handler)
+function checkWishlistNotify(guildId, cards, channelId) {
+    try {
+        const allWishes = db.prepare('SELECT * FROM card_wishlist').all();
+        const notifications = [];
+        for (const card of cards) {
+            const nameLower = card.name.toLowerCase();
+            for (const wish of allWishes) {
+                if (nameLower.includes(wish.charName) || wish.charName.includes(nameLower)) {
+                    notifications.push({ userId: wish.userId, charName: card.name });
+                }
+            }
+        }
+        return notifications;
+    } catch (_) { return []; }
+}
+
+// ==================== 🎨 DYE / TINT ====================
+const DYE_COLORS = {
+    crimson: { name: 'Crimson', hex: '#DC143C', cost: 50 },
+    ocean: { name: 'Ocean Blue', hex: '#006994', cost: 50 },
+    emerald: { name: 'Emerald', hex: '#50C878', cost: 50 },
+    royal: { name: 'Royal Purple', hex: '#7851A9', cost: 50 },
+    sunset: { name: 'Sunset Orange', hex: '#FF4500', cost: 50 },
+    gold: { name: 'Gold', hex: '#FFD700', cost: 100 },
+    sakura: { name: 'Sakura Pink', hex: '#FFB7C5', cost: 75 },
+    midnight: { name: 'Midnight', hex: '#191970', cost: 75 },
+    ice: { name: 'Ice Blue', hex: '#99FFFF', cost: 75 },
+    blood: { name: 'Blood Red', hex: '#8B0000', cost: 100 },
+};
+
+async function handleCardDye(interaction) {
+    const cardId = interaction.options.getInteger('id');
+    const dyeId = interaction.options.getString('warna');
+    const userId = interaction.user.id;
+
+    const card = db.prepare('SELECT * FROM anime_cards WHERE id = ? AND userId = ?').get(cardId, userId);
+    if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan atau bukan milikmu!', ephemeral: true });
+
+    const dye = DYE_COLORS[dyeId];
+    if (!dye) return interaction.reply({ content: '❌ Warna tidak valid!', ephemeral: true });
+
+    const stardust = getStardust(userId);
+    if (stardust < dye.cost) return interaction.reply({ content: `❌ Stardust tidak cukup! Butuh **${dye.cost}**, kamu punya **${stardust}**.\n> Burn kartu untuk dapat Stardust!`, ephemeral: true });
+
+    addStardust(userId, -dye.cost);
+    db.prepare('UPDATE anime_cards SET dye = ? WHERE id = ?').run(dyeId, cardId);
+
+    const embed = new EmbedBuilder()
+        .setColor(dye.hex)
+        .setTitle('🎨 Card Dyed!')
+        .setDescription(
+            `${RARITIES[card.rarity]?.emoji || '⚪'} **${card.charName}** sekarang punya border **${dye.name}**!\n\n` +
+            `> 💫 -${dye.cost} Stardust | Sisa: **${getStardust(userId)}**\n\n` +
+            `-# Gunakan /cardview untuk melihat hasilnya!`
+        );
+    return interaction.reply({ embeds: [embed] });
+}
+
+// ==================== 📦 ALBUM / SET BONUS ====================
+function getSeriesCompletion(userId) {
+    // Group user's cards by series, find how many unique chars per series
+    const cards = db.prepare('SELECT DISTINCT charId, series FROM anime_cards WHERE userId = ?').all(userId);
+    const seriesMap = {};
+    for (const c of cards) {
+        if (!seriesMap[c.series]) seriesMap[c.series] = 0;
+        seriesMap[c.series]++;
+    }
+    return seriesMap;
+}
+
+async function handleCardAlbum(interaction) {
+    const userId = interaction.options.getUser('user')?.id || interaction.user.id;
+    const seriesMap = getSeriesCompletion(userId);
+
+    const sorted = Object.entries(seriesMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    if (sorted.length === 0) {
+        return interaction.reply({ content: '📭 Belum punya kartu! Gunakan `/drop` untuk mulai.', ephemeral: true });
+    }
+
+    let desc = `📦 **Card Album** — Top Series\n\n`;
+    for (const [series, count] of sorted) {
+        const bonus = count >= 5 ? ' 🏆 SET BONUS!' : count >= 3 ? ' ⭐' : '';
+        desc += `> **${series}** — ${count} kartu${bonus}\n`;
+    }
+    desc += `\n-# 🏆 Set Bonus: 5+ kartu dari seri yang sama = bonus Stardust harian!`;
+
+    // Award set bonus for 5+ card series (once per day)
+    const today = new Date().toLocaleDateString('sv-SE');
+    const claimedToday = db.prepare('SELECT 1 FROM card_stardust WHERE userId = ? AND amount >= 0').get(userId); // always true but check
+    let bonusMsg = '';
+    const setsOf5 = sorted.filter(([_, c]) => c >= 5).length;
+    if (setsOf5 > 0 && interaction.user.id === userId) {
+        const cdKey = `album_bonus_${userId}_${today}`;
+        if (!state.fishCooldowns.has(cdKey)) {
+            const bonusAmount = setsOf5 * 5;
+            addStardust(userId, bonusAmount);
+            state.fishCooldowns.set(cdKey, Date.now() + 86400000);
+            bonusMsg = `\n\n🏆 **Set Bonus claimed!** +${bonusAmount} Stardust (${setsOf5} sets × 5)`;
+        }
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('📦 Card Album')
+        .setColor('#9B59B6')
+        .setDescription(desc + bonusMsg)
+        .setFooter({ text: `Total: ${Object.values(seriesMap).reduce((a, b) => a + b, 0)} kartu | ${Object.keys(seriesMap).length} series` });
+    return interaction.reply({ embeds: [embed] });
+}
+
+// ==================== 📊 CARD LEADERBOARD ====================
+async function handleCardLeaderboard(interaction) {
+    const type = interaction.options.getString('tipe') || 'total';
+
+    let title, rows;
+    if (type === 'total') {
+        title = '🎴 Most Cards';
+        rows = db.prepare('SELECT userId, COUNT(*) as cnt FROM anime_cards GROUP BY userId ORDER BY cnt DESC LIMIT 10').all();
+    } else if (type === 'rare') {
+        title = '👑 Most Rare+ Cards';
+        rows = db.prepare("SELECT userId, COUNT(*) as cnt FROM anime_cards WHERE rarity IN ('Legendary','Mythic','God') GROUP BY userId ORDER BY cnt DESC LIMIT 10").all();
+    } else if (type === 'stardust') {
+        title = '💫 Most Stardust';
+        rows = db.prepare('SELECT userId, amount as cnt FROM card_stardust ORDER BY amount DESC LIMIT 10').all();
+    } else if (type === 'prints') {
+        title = '🏷️ Lowest Prints (Rarest Cards)';
+        rows = db.prepare('SELECT userId, charName, printNumber as cnt, rarity FROM anime_cards WHERE printNumber <= 10 ORDER BY printNumber ASC LIMIT 10').all();
+    }
+
+    if (!rows || rows.length === 0) {
+        return interaction.reply({ content: '📭 Belum ada data leaderboard!', ephemeral: true });
+    }
+
+    let desc = '';
+    const medals = ['🥇', '🥈', '🥉'];
+    rows.forEach((r, i) => {
+        const medal = medals[i] || `**${i + 1}.**`;
+        if (type === 'prints') {
+            const rd = RARITIES[r.rarity] || RARITIES.Common;
+            desc += `${medal} ${rd.emoji} **${r.charName}** #${String(r.cnt).padStart(4, '0')} — <@${r.userId}>\n`;
+        } else {
+            desc += `${medal} <@${r.userId}> — **${r.cnt.toLocaleString('id-ID')}**\n`;
+        }
+    });
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📊 Card Leaderboard — ${title}`)
+        .setColor('#FFD700')
+        .setDescription(desc)
+        .setTimestamp();
+    return interaction.reply({ embeds: [embed] });
+}
+
+// ==================== STARDUST BALANCE COMMAND ====================
+async function handleStardustCommand(interaction) {
+    const userId = interaction.user.id;
+    const amount = getStardust(userId);
+    const totalBurned = db.prepare('SELECT SUM(amount) as total FROM card_stardust WHERE userId = ?').get(userId);
+
+    let desc = `💫 **Stardust Balance**\n\n> 💎 Kamu punya: **${amount}** Stardust\n\n`;
+    desc += `**🛒 Stardust Shop:**\n`;
+    desc += `> 🎨 Card Dye — 50-100 ✨\n`;
+    desc += `> 🎴 Extra Drop (skip cooldown) — 200 ✨\n\n`;
+    desc += `-# Burn kartu untuk dapat Stardust! /cardburn id:<card_id>`;
+
+    const embed = new EmbedBuilder()
+        .setTitle('💫 Stardust')
+        .setColor('#FFD700')
+        .setDescription(desc);
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
 // ==================== DETECTORS ====================
 function isCardGrabButton(customId) {
     return typeof customId === 'string' && customId.startsWith('cardgrab_') && !customId.startsWith('cardgrab_expired') && !customId.startsWith('cardgrab_claimed');
+}
+
+function isCardTradeButton(customId) {
+    return typeof customId === 'string' && customId.startsWith('cardtrade_');
 }
 
 module.exports = {
@@ -612,7 +949,17 @@ module.exports = {
     handleCardGrab,
     handleCardsCommand,
     handleCardViewCommand,
+    handleCardBurn,
+    handleCardTrade,
+    handleCardTradeButton,
+    handleCardWishlist,
+    handleCardDye,
+    handleCardAlbum,
+    handleCardLeaderboard,
+    handleStardustCommand,
+    checkWishlistNotify,
     isCardGrabButton,
+    isCardTradeButton,
     generateCardImage,
     generateDropImage,
     fetchRandomCharacters,
