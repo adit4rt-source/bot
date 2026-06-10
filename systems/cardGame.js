@@ -10,9 +10,20 @@ const state = require('../state');
 const GACHA_PRICE = 10000;
 
 // ==================== DATABASE SETUP ====================
-// Drop old incompatible tables
+// Drop old incompatible tables from previous versions
 try { db.exec(`DROP TABLE IF EXISTS card_prints`); } catch (_) {}
 try { db.exec(`DROP TABLE IF EXISTS anime_cards`); } catch (_) {}
+
+// Migrate: if pokemon_cards exists with old schema (cardId instead of cardApiId), drop it
+try {
+    const cols = db.prepare("PRAGMA table_info(pokemon_cards)").all();
+    if (cols.length > 0) {
+        const hasCardApiId = cols.some(c => c.name === 'cardApiId');
+        if (!hasCardApiId) {
+            db.exec(`DROP TABLE pokemon_cards`);
+        }
+    }
+} catch (_) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,11 +46,27 @@ db.exec(`CREATE TABLE IF NOT EXISTS card_stardust (
     amount INTEGER DEFAULT 0
 )`);
 
+// Migrate card_wishlist: old had charName, new has name
+try {
+    const cols = db.prepare("PRAGMA table_info(card_wishlist)").all();
+    if (cols.length > 0 && !cols.some(c => c.name === 'name')) {
+        db.exec(`DROP TABLE card_wishlist`);
+    }
+} catch (_) {}
+
 db.exec(`CREATE TABLE IF NOT EXISTS card_wishlist (
     userId TEXT,
     name TEXT,
     PRIMARY KEY(userId, name)
 )`);
+
+// Migrate card_trades: old had senderCardId, new has cardRowId
+try {
+    const cols = db.prepare("PRAGMA table_info(card_trades)").all();
+    if (cols.length > 0 && !cols.some(c => c.name === 'cardRowId')) {
+        db.exec(`DROP TABLE card_trades`);
+    }
+} catch (_) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS card_trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
