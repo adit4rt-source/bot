@@ -91,8 +91,23 @@ const commands = [
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
-    new SlashCommandBuilder().setName('qr').setDescription('📱 Generate QR Code dari link')
-        .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true)),
+    new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
+        .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
+            .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
+            .addStringOption(opt => opt.setName('warna').setDescription('Tema warna QR code').setRequired(false)
+                .addChoices(
+                    { name: '🔴 Merah', value: 'red' },
+                    { name: '🔵 Biru', value: 'blue' },
+                    { name: '🟢 Hijau', value: 'green' },
+                    { name: '🟣 Ungu', value: 'purple' },
+                    { name: '🟡 Emas', value: 'gold' },
+                    { name: '⚫ Hitam', value: 'black' },
+                    { name: '🩷 Pink', value: 'pink' },
+                ))
+            .addAttachmentOption(opt => opt.setName('logo').setDescription('Upload logo custom untuk ditaruh di tengah QR').setRequired(false)))
+        .addSubcommand(sub => sub.setName('invite').setDescription('📨 Generate QR Code untuk invite server'))
+        .addSubcommand(sub => sub.setName('stats').setDescription('📊 Lihat statistik scan QR code kamu')
+            .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
 
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
