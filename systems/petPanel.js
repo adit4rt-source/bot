@@ -114,10 +114,11 @@ function buildRelicPanel(guildId, userId) {
             ? `> ${_SLOT_EMOJI[slot]} **${r.name}** +${r.refine_level} — ${_STAT_EMOJI[r.stat_type]}+${relicEffective(r)}${unit}\n`
             : `> ${_SLOT_EMOJI[slot]} *(kosong)*\n`;
     }
-    desc += `\n**📊 Total Bonus:** ⚔️+${bonus.atk} | 🛡️+${bonus.def} | 💨+${bonus.spd} | 🎯+${bonus.crit}%\n`;
-    if (bonus.percent && (bonus.percent.atk || bonus.percent.def || bonus.percent.spd || bonus.percent.crit)) {
-        desc += `**📈 % Bonus (Mythic/God):** ⚔️+${bonus.percent.atk}% | 🛡️+${bonus.percent.def}% | 💨+${bonus.percent.spd}% | 🎯+${bonus.percent.crit}%\n`;
-    }
+    desc += `\n**📊 Total Bonus:**\n`;
+    desc += `> ⚔️ ATK: +${bonus.atk}${bonus.percent.atk ? ` (+${bonus.percent.atk}%)` : ''}\n`;
+    desc += `> 🛡️ DEF: +${bonus.def}${bonus.percent.def ? ` (+${bonus.percent.def}%)` : ''}\n`;
+    desc += `> 💨 SPD: +${bonus.spd}${bonus.percent.spd ? ` (+${bonus.percent.spd}%)` : ''}\n`;
+    desc += `> 🎯 CRIT: +${bonus.crit}%${bonus.percent.crit ? ` (+${bonus.percent.crit}%)` : ''}\n`;
     desc += `🪨 Refine Stone: **${stones}** | 📿 Total relic: **${all.length}** (${equipped.length} terpasang)\n`;
     desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih relic untuk **dipasang**, atau **lebur** relic tak terpakai jadi Refine Stone.`;
 
