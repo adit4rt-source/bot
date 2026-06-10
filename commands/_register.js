@@ -109,8 +109,8 @@ const commands = [
         .addSubcommand(sub => sub.setName('stats').setDescription('📊 Lihat statistik scan QR code kamu')
             .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
 
-    // ================= ANIME CARDS =================
-    new SlashCommandBuilder().setName('card').setDescription('🎴 Card Panel — Drop, collect, trade, burn anime cards'),
+    // ================= POKEMON TCG CARDS =================
+    new SlashCommandBuilder().setName('card').setDescription('🃏 Pokemon TCG Panel — Drop, collect, trade, burn Pokemon cards'),
 
     // ================= AFK =================
     new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')
