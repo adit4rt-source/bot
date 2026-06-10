@@ -399,7 +399,9 @@ function catchFish(guildId, userId) {
 
     // Save to DB
     db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish.id, weight, Date.now());
-    db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId) VALUES (?, ?, ?)').run(guildId, userId, fish.id);
+    // Persistent pokedex: register discovery (never deleted on sell)
+    db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId, caughtAt, catch_count, heaviest_weight) VALUES (?, ?, ?, ?, 0, 0)').run(guildId, userId, fish.id, Date.now());
+    db.prepare('UPDATE fish_collection SET catch_count = catch_count + 1, heaviest_weight = MAX(heaviest_weight, ?) WHERE guildId = ? AND userId = ? AND fishId = ?').run(weight, guildId, userId, fish.id);
 
     // Rod Part drop chance (8% base)
     let droppedPart = false;

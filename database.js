@@ -318,6 +318,23 @@ try {
     console.error('⚠️  Migration warning:', e.message);
 }
 
+// ================= POST-MIGRATION: Fish Pokédex columns =================
+// These run AFTER global migration so they apply to the final fish_collection table
+try { db.exec(`ALTER TABLE fish_collection ADD COLUMN caughtAt INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE fish_collection ADD COLUMN catch_count INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE fish_collection ADD COLUMN heaviest_weight REAL DEFAULT 0`); } catch(e) {}
+// Backfill: sync any fish_inventory entries into fish_collection for missing discoveries
+try {
+    db.exec(`INSERT OR IGNORE INTO fish_collection (userId, fishId, caughtAt, catch_count, heaviest_weight)
+        SELECT userId, fishId, MIN(caughtAt), COUNT(*), MAX(weight)
+        FROM fish_inventory GROUP BY userId, fishId`);
+    // Update heaviest_weight/catch_count for existing entries that are still at defaults
+    db.exec(`UPDATE fish_collection SET
+        heaviest_weight = COALESCE((SELECT MAX(weight) FROM fish_inventory fi WHERE fi.userId = fish_collection.userId AND fi.fishId = fish_collection.fishId), heaviest_weight),
+        catch_count = COALESCE((SELECT COUNT(*) FROM fish_inventory fi WHERE fi.userId = fish_collection.userId AND fi.fishId = fish_collection.fishId), catch_count)
+        WHERE heaviest_weight = 0 OR catch_count <= 1`);
+} catch(e) { /* first run or no fish_inventory data yet — safe to ignore */ }
+
 // ================= HELPER FUNCTIONS =================
 
 function getOrCreateUser(guildId, userId) {

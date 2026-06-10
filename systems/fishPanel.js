@@ -35,7 +35,7 @@ function buildFishingPanel(guildId, userId, username) {
             ui.statBlock([
                 `📍 Lokasi: **${location.name}** — *${location.desc}*`,
                 `🎋 Joran: **${rod.emoji} ${rod.name}**  •  🪱 Umpan: **${bait.emoji} ${bait.name}** (sisa ${eq.bait !== 'none' ? eq.bait_count : 0})`,
-                `🐟 Tertangkap: **${totalCaught}**  •  📖 Koleksi: **${collected.c}/${totalFish}** jenis`,
+                `🐟 Tertangkap: **${totalCaught}**  •  📖 Pokédex: **${collected.c}/${totalFish}** spesies`,
                 `⏱️ Jeda lempar: ${rod.cooldown}s  •  Peluang langka: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
                 `${ui.money(userData.balance)}`,
             ]) +
@@ -51,7 +51,7 @@ function buildFishingPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('🏆 Contest').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('📖 Pokédex').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('🔒 Lock').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('🔓 Unlock').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
@@ -522,17 +522,22 @@ async function handleFishingButton(interaction) {
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
-    // === COLLECTION ===
+    // === COLLECTION (Pokedex — permanent discovery history, NOT inventory) ===
     if (action === 'collection') {
         const collected = db.prepare('SELECT * FROM fish_collection WHERE guildId = ? AND userId = ?').all(guildId, userId);
         const collectedIds = collected.map(c => c.fishId);
         const totalFish = FISH_DATA.length;
         const totalCollected = collectedIds.length;
+        const totalCatchCount = collected.reduce((sum, c) => sum + (c.catch_count || 1), 0);
         const percentDex = Math.floor((totalCollected / totalFish) * 100);
-        const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
-        let desc = `📖 **Fish Collection**\n> 🐟 **${totalCollected}** / **${totalFish}** (**${percentDex}%**)\n\n`;
+        const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
+        let desc = `📖 **Fish Pokédex** *(Koleksi Permanen)*\n`;
+        desc += `> 🐟 Spesies: **${totalCollected}** / **${totalFish}** (**${percentDex}%**)\n`;
+        desc += `> 🎣 Total tangkapan: **${totalCatchCount}**\n`;
+        desc += `> -# *Ikan yang pernah tertangkap tetap tercatat meski dijual*\n\n`;
         for (const tier of tiers) {
             const tierFish = FISH_DATA.filter(f => f.tier === tier);
+            if (tierFish.length === 0) continue;
             const tierEmoji = (FISH_TIERS.find(t => t.tier === tier) || { emoji: '🐟' }).emoji;
             const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
             const progress = tierFish.length > 0 ? Math.floor((tierCollected / tierFish.length) * 10) : 0;
@@ -551,9 +556,10 @@ async function handleFishingButton(interaction) {
             new ButtonBuilder().setCustomId(`fcol_Secret_${userId}_0`).setLabel('🔮 Secret').setStyle(ButtonStyle.Danger)
         );
         const row3 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fcol_God_${userId}_0`).setLabel('👑 God').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(desc)], components: [row1, row2, row3] });
+        return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Pokédex').setColor('#3498DB').setDescription(desc).setFooter({ text: '💡 Koleksi ini permanen — menjual ikan TIDAK menghapus catatan Pokédex!' })], components: [row1, row2, row3] });
     }
 
 

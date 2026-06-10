@@ -1397,32 +1397,35 @@ async function routeInteraction(interaction) {
             return;
         }
 
-        // --- FISH COLLECTION BUTTONS ---
+        // --- FISH COLLECTION BUTTONS (Pokédex — permanent discovery) ---
         if (interaction.customId.startsWith('fcol_')) {
             const parts = interaction.customId.split('_');
             const tier = parts[1];
             const targetUserId = parts[2];
             const page = parseInt(parts[3]) || 0;
-            const perPage = 15;
+            const perPage = 12;
             const collected = db.prepare('SELECT * FROM fish_collection WHERE guildId = ? AND userId = ?').all(guildId, targetUserId);
             const collectedIds = collected.map(c => c.fishId);
+            const collectedMap = {};
+            for (const c of collected) collectedMap[c.fishId] = c;
 
             if (tier === 'back') {
                 // Go back to main collection view
                 const totalFish = FISH_DATA.length;
                 const totalCollectedAll = collectedIds.length;
+                const totalCatchCount = collected.reduce((sum, c) => sum + (c.catch_count || 1), 0);
                 const percentDex = Math.floor((totalCollectedAll / totalFish) * 100);
-                const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
-                let mainDesc = `📖 **Fish Collection / Pokedex**\n> 🐟 **${totalCollectedAll}** / **${totalFish}** spesies ditemukan (**${percentDex}%**)\n\n`;
-                for (const t of tiers) { const tf = FISH_DATA.filter(f => f.tier === t); const tc = tf.filter(f => collectedIds.includes(f.id)).length; const te = (FISH_TIERS.find(x => x.tier === t)||{emoji:'🐟'}).emoji; const p = tf.length > 0 ? Math.floor((tc/tf.length)*10) : 0; mainDesc += `${te} **${t}** — ${tc}/${tf.length}\n> \`${'▰'.repeat(p)}${'▱'.repeat(10-p)}\`\n`; }
-                mainDesc += `\n> 🎯 *Pilih rarity untuk detail! Setiap ikan menampilkan lokasi mancingnya.*`;
+                const tiers = ['Trash', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
+                let mainDesc = `📖 **Fish Pokédex** *(Koleksi Permanen)*\n> 🐟 Spesies: **${totalCollectedAll}** / **${totalFish}** (**${percentDex}%**)\n> 🎣 Total tangkapan: **${totalCatchCount}**\n> -# *Ikan yang pernah tertangkap tetap tercatat meski dijual*\n\n`;
+                for (const t of tiers) { const tf = FISH_DATA.filter(f => f.tier === t); if (tf.length === 0) continue; const tc = tf.filter(f => collectedIds.includes(f.id)).length; const te = (FISH_TIERS.find(x => x.tier === t)||{emoji:'🐟'}).emoji; const p = tf.length > 0 ? Math.floor((tc/tf.length)*10) : 0; mainDesc += `${te} **${t}** — ${tc}/${tf.length} \`${'▰'.repeat(p)}${'▱'.repeat(10-p)}\`\n`; }
+                mainDesc += `\n> 🎯 *Pilih rarity untuk detail!*`;
                 const row1 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Trash_${targetUserId}_0`).setLabel('🗑️ Trash').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Common_${targetUserId}_0`).setLabel('🐟 Common').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`fcol_Uncommon_${targetUserId}_0`).setLabel('🐠 Uncommon').setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId(`fcol_Rare_${targetUserId}_0`).setLabel('🐡 Rare').setStyle(ButtonStyle.Primary));
                 const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_Epic_${targetUserId}_0`).setLabel('🦈 Epic').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`fcol_Legendary_${targetUserId}_0`).setLabel('🐉 Legend').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Mythic_${targetUserId}_0`).setLabel('🌈 Mythic').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fcol_Secret_${targetUserId}_0`).setLabel('🔮 Secret').setStyle(ButtonStyle.Danger));
-                const row3 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Kembali ke Panel').setStyle(ButtonStyle.Primary));
-                return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Collection').setColor('#3498DB').setDescription(mainDesc).setFooter({ text: `${totalCollectedAll}/${totalFish} ditemukan` })], components: [row1, row2, row3] });
+                const row3 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fcol_God_${targetUserId}_0`).setLabel('👑 God').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Kembali ke Panel').setStyle(ButtonStyle.Primary));
+                return interaction.update({ embeds: [new EmbedBuilder().setTitle('📖 Fish Pokédex').setColor('#3498DB').setDescription(mainDesc).setFooter({ text: `💡 Koleksi permanen — menjual ikan TIDAK menghapus catatan!` })], components: [row1, row2, row3] });
             }
 
-            // Tier detail view — show fish WITH location
+            // Tier detail view — show fish WITH location + discovery stats
             const tierFish = FISH_DATA.filter(f => f.tier === tier);
             const tierCollected = tierFish.filter(f => collectedIds.includes(f.id)).length;
             const totalPages = Math.ceil(tierFish.length / perPage) || 1;
@@ -1434,7 +1437,10 @@ async function routeInteraction(interaction) {
                 const loc = FISHING_LOCATIONS.find(l => l.id === f.location);
                 const locName = loc ? loc.name : '???';
                 if (collectedIds.includes(f.id)) {
-                    desc += `> ${f.emoji} **${f.name}** ✅ — 📍 ${locName}\n`;
+                    const entry = collectedMap[f.id];
+                    const countInfo = entry && entry.catch_count > 1 ? ` (×${entry.catch_count})` : '';
+                    const weightInfo = entry && entry.heaviest_weight ? ` ⚖️${entry.heaviest_weight}kg` : '';
+                    desc += `> ${f.emoji} **${f.name}** ✅${countInfo}${weightInfo} — 📍 ${locName}\n`;
                 } else {
                     desc += `> ▪️ ??? 🔒 — 📍 ${locName}\n`;
                 }
@@ -1445,7 +1451,7 @@ async function routeInteraction(interaction) {
             navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_back_${targetUserId}_0`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Primary));
             if (page < totalPages - 1) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page+1}`).setLabel('▶').setStyle(ButtonStyle.Secondary));
             navRow.addComponents(new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Panel').setStyle(ButtonStyle.Success));
-            return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Collection`).setColor('#3498DB').setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan` })], components: [navRow] });
+            return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Pokédex`).setColor('#3498DB').setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan | Koleksi permanen` })], components: [navRow] });
         }
 
         // --- MENU HUB BUTTONS ---
