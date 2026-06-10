@@ -200,11 +200,11 @@ function buildFarmHub(guildId, userId, username) {
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`farm_crops_${userId}`).setLabel('🌱 Tanaman').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel(`<:chicken:1514062471248216154> Kandang Ayam`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel(`<:cow:1514062469276893356> Peternakan`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('🧪 Crafting').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`farm_allstorage_${userId}`).setLabel('📦 Storage').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`farm_crops_${userId}`).setLabel('Tanaman').setEmoji('🌱').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_coop_${userId}`).setLabel('Kandang Ayam').setEmoji('1514062471248216154').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_barn_${userId}`).setLabel('Peternakan').setEmoji('1514062469276893356').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('Crafting').setEmoji('🧪').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`farm_allstorage_${userId}`).setLabel('Storage').setEmoji('📦').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
