@@ -1450,10 +1450,10 @@ async function handlePetSelectMenu(interaction) {
         const slot = interaction.values[0];
         const pet = getPetData(guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
-        const relic = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ? AND slot = ? AND equipped_pet_id = ?').get(guildId, userId, slot, pet.id);
+        const relic = db.prepare('SELECT * FROM relics WHERE userId = ? AND slot = ? AND equipped_pet_id = ?').get(userId, slot, pet.id);
         if (!relic) {
             // Check unequipped relics
-            const unequipped = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ? AND slot = ?').get(guildId, userId, slot);
+            const unequipped = db.prepare('SELECT * FROM relics WHERE userId = ? AND slot = ?').get(userId, slot);
             if (!unequipped) return interaction.reply({ content: `❌ Tidak punya relic di slot **${slot}**! Dapatkan dari dungeon/boss.`, ephemeral: true });
             // Use any relic the user owns for that slot
             return handleRefineAction(interaction, guildId, userId, slot, unequipped);
