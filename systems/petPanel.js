@@ -1435,6 +1435,7 @@ async function handlePetSelectMenu(interaction) {
         }
         if (melted === 0) return interaction.reply({ content: '❌ Tidak ada relic yang dilebur.', ephemeral: true });
         await interaction.update(buildRelicPanel(guildId, userId)).catch(() => {});
+        try { const { checkAchievements } = require("./achievements"); await checkAchievements(interaction.guild, userId, { type: "relic_melt" }); } catch (_) {}
         return interaction.followUp({ content: `🔥 Melebur **${melted} relic** → 🪨 **${totalStones} Refine Stone**!\n-# ${names.slice(0, 8).join(', ')}${names.length > 8 ? '…' : ''}`, ephemeral: true }).catch(() => {});
     }
 

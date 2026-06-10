@@ -375,7 +375,7 @@ async function handleWorldBossButton(interaction) {
 
         // Achievements are a side-effect: never let them block acknowledging the
         // interaction (a throw here previously left it unacknowledged -> "failed").
-        try { await checkAchievements(interaction.guild, userId, {}); } catch (e) { /* non-fatal */ }
+        try { await checkAchievements(interaction.guild, userId, { type: 'world_boss' }); } catch (e) { /* non-fatal */ }
         return interaction.update({ embeds: [embed], components: [row] });
     }
 

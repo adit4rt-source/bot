@@ -3,7 +3,8 @@
 // or <:name:id>), so tests catch the "two-emoji" class of bug.
 function validateEmoji(v) {
   if (typeof v !== 'string' || v.length === 0) throw new Error('UnionValidator: invalid emoji (empty)');
-  if (/^<a?:\w+:\d+>$/.test(v)) return; // custom emoji
+  if (/^<a?:\w+:\d+>$/.test(v)) return; // custom emoji format
+  if (/^\d{15,22}$/.test(v)) return; // custom emoji ID only (for .setEmoji)
   let n;
   try { n = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(v)].length; }
   catch (e) { n = Array.from(v).length; }

@@ -662,7 +662,7 @@ async function handleExpeditionButton(interaction) {
         );
 
         // Check achievements
-        checkAchievements(interaction.guild, userId, {});
+        checkAchievements(interaction.guild, userId, { type: 'expedition' });
 
         return interaction.update({ embeds: [embed], components: [row] });
     }

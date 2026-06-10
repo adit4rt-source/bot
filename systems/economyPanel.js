@@ -266,6 +266,7 @@ async function handleEconomyModal(interaction) {
         const userData = getOrCreateUser(guildId, userId);
         userData.balance += voucher.reward;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
+        try { const { checkAchievements } = require("./achievements"); await checkAchievements(interaction.guild, userId, { type: "redeem" }); } catch (_) {}
         return interaction.reply({ content: `\u2705 Voucher **${code}** berhasil! Dapat \ud83e\ude99 **${voucher.reward.toLocaleString('id-ID')}**\n> Saldo: \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**` });
     }
 }
