@@ -149,34 +149,43 @@ function getNextPrint(charId) {
     return next;
 }
 
-// ==================== CARD IMAGE GENERATOR ====================
+// ==================== CARD IMAGE GENERATOR (Sofi-style: image-focused) ====================
 async function generateCardImage(charData) {
     const { name, series, rarity, imageUrl, printNumber } = charData;
     const rarityData = RARITIES[rarity] || RARITIES.Common;
 
-    // Card dimensions
-    const cardW = 320;
-    const cardH = 450;
+    const cardW = 350;
+    const cardH = 500;
+    const borderW = 5;
+    const radius = 14;
     const canvas = createCanvas(cardW, cardH);
     const ctx = canvas.getContext('2d');
 
-    // === BACKGROUND (dark) ===
-    ctx.fillStyle = '#0D0D0D';
-    ctx.fillRect(0, 0, cardW, cardH);
+    // === RARITY GLOW BORDER ===
+    ctx.shadowColor = rarityData.color;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = rarityData.color;
+    roundRectPath(ctx, 1, 1, cardW - 2, cardH - 2, radius);
+    ctx.fill();
+    ctx.shadowBlur = 0;
 
-    // === CHARACTER IMAGE ===
+    // === CARD BASE ===
+    ctx.fillStyle = '#0A0A0A';
+    roundRectPath(ctx, borderW, borderW, cardW - borderW * 2, cardH - borderW * 2, radius - 2);
+    ctx.fill();
+
+    // === CHARACTER IMAGE (full-bleed) ===
+    const imgPad = borderW + 3;
+    const imgX = imgPad;
+    const imgY = imgPad;
+    const imgW = cardW - imgPad * 2;
+    const imgH = cardH - imgPad * 2;
+
     try {
         const img = await loadImage(imageUrl);
-        const imgW = cardW - 24;
-        const imgH = 300;
-        const imgX = 12;
-        const imgY = 12;
-
-        // Draw image (cover fit)
         ctx.save();
-        roundRectPath(ctx, imgX, imgY, imgW, imgH, 8);
+        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
         ctx.clip();
-        // Calculate cover dimensions
         const scale = Math.max(imgW / img.width, imgH / img.height);
         const sw = img.width * scale;
         const sh = img.height * scale;
@@ -185,95 +194,77 @@ async function generateCardImage(charData) {
         ctx.drawImage(img, sx, sy, sw, sh);
         ctx.restore();
 
-        // Gradient overlay at bottom of image
-        const grad = ctx.createLinearGradient(0, imgY + imgH - 80, 0, imgY + imgH);
-        grad.addColorStop(0, 'rgba(13,13,13,0)');
-        grad.addColorStop(1, 'rgba(13,13,13,0.9)');
+        // Bottom gradient for text readability
+        ctx.save();
+        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
+        ctx.clip();
+        const grad = ctx.createLinearGradient(0, cardH - 150, 0, cardH - imgPad);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.4, 'rgba(0,0,0,0.6)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.92)');
         ctx.fillStyle = grad;
-        roundRectPath(ctx, imgX, imgY, imgW, imgH, 8);
-        ctx.fill();
+        ctx.fillRect(imgX, cardH - 150, imgW, 150);
+        ctx.restore();
     } catch (e) {
-        // Fallback: solid color if image fails
+        roundRectPath(ctx, imgX, imgY, imgW, imgH, radius - 4);
         ctx.fillStyle = '#1A1A2E';
-        roundRectPath(ctx, 12, 12, cardW - 24, 300, 8);
         ctx.fill();
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = '#FFF';
         ctx.font = '14px "Poppins SemiBold"';
         ctx.textAlign = 'center';
-        ctx.fillText('Image unavailable', cardW / 2, 160);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(name, cardW / 2, cardH / 2);
     }
 
-    // === RARITY BORDER (accent) ===
-    roundRectPath(ctx, 3, 3, cardW - 6, cardH - 6, 12);
+    // === THIN RARITY BORDER ===
+    roundRectPath(ctx, borderW, borderW, cardW - borderW * 2, cardH - borderW * 2, radius - 2);
     ctx.strokeStyle = rarityData.color;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // === OUTER BORDER ===
-    roundRectPath(ctx, 0, 0, cardW, cardH, 14);
-    ctx.strokeStyle = '#1A1A1A';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // === RARITY BADGE (top-left) ===
-    const badgeW = 90;
-    const badgeH = 22;
-    ctx.fillStyle = rarityData.color;
-    roundRectPath(ctx, 16, 18, badgeW, badgeH, 4);
+    // === PRINT # (top-right) ===
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRectPath(ctx, cardW - 76, imgY + 10, 56, 22, 8);
     ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = '#FFF';
     ctx.font = '11px "Poppins Bold"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${rarityData.emoji} ${rarity.toUpperCase()}`, 16 + badgeW / 2, 18 + badgeH / 2);
+    ctx.fillText(`#${String(printNumber).padStart(4, '0')}`, cardW - 48, imgY + 21);
 
-    // === PRINT NUMBER (top-right) ===
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    roundRectPath(ctx, cardW - 70, 18, 54, 22, 4);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '11px "Poppins SemiBold"';
-    ctx.textAlign = 'center';
-    ctx.fillText(`#${String(printNumber).padStart(4, '0')}`, cardW - 43, 29);
-
-    // === CHARACTER NAME ===
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '16px "Poppins Bold"';
+    // === CHARACTER NAME (bottom overlay) ===
+    ctx.fillStyle = '#FFF';
+    ctx.font = '17px "Poppins Bold"';
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    const nameY = 325;
-    const maxNameW = cardW - 30;
+    ctx.textBaseline = 'bottom';
+    const nameMaxW = imgW - 24;
     let displayName = name;
-    while (ctx.measureText(displayName).width > maxNameW && displayName.length > 3) {
-        displayName = displayName.slice(0, -1);
-    }
+    while (ctx.measureText(displayName).width > nameMaxW && displayName.length > 3) displayName = displayName.slice(0, -1);
     if (displayName !== name) displayName += '…';
-    ctx.fillText(displayName, 15, nameY);
+    ctx.fillText(displayName, imgX + 14, cardH - imgPad - 28);
 
-    // === SERIES NAME ===
-    ctx.fillStyle = '#999999';
-    ctx.font = '12px "Poppins SemiBold"';
+    // === SERIES (below name) ===
+    ctx.fillStyle = '#CCC';
+    ctx.font = '11px "Poppins SemiBold"';
+    ctx.textBaseline = 'bottom';
     let displaySeries = series;
-    while (ctx.measureText(displaySeries).width > maxNameW && displaySeries.length > 3) {
-        displaySeries = displaySeries.slice(0, -1);
-    }
+    while (ctx.measureText(displaySeries).width > nameMaxW - 80 && displaySeries.length > 3) displaySeries = displaySeries.slice(0, -1);
     if (displaySeries !== series) displaySeries += '…';
-    ctx.fillText(displaySeries, 15, nameY + 22);
+    ctx.fillText(displaySeries, imgX + 14, cardH - imgPad - 10);
 
-    // === BOTTOM ACCENT BAR ===
+    // === RARITY BADGE (bottom-right) ===
+    const badgeText = rarity.toUpperCase();
+    ctx.font = '10px "Poppins Bold"';
+    const badgeWidth = ctx.measureText(badgeText).width + 14;
+    const badgeX = cardW - imgPad - 10 - badgeWidth;
+    const badgeY = cardH - imgPad - 26;
     ctx.fillStyle = rarityData.color;
-    roundRectPath(ctx, 12, cardH - 38, cardW - 24, 4, 2);
+    roundRectPath(ctx, badgeX, badgeY, badgeWidth, 18, 4);
     ctx.fill();
-
-    // === FAVOURITES / STATS ===
-    ctx.fillStyle = '#666666';
-    ctx.font = '10px "Poppins SemiBold"';
-    ctx.textAlign = 'left';
-    ctx.fillText(`❤️ ${(charData.favourites || 0).toLocaleString('id-ID')} fans`, 15, cardH - 22);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = rarityData.color;
-    ctx.fillText(`★ ${rarity}`, cardW - 15, cardH - 22);
+    ctx.fillStyle = '#FFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, badgeX + badgeWidth / 2, badgeY + 9);
 
     return canvas.toBuffer('image/png');
 }
@@ -295,25 +286,24 @@ function roundRectPath(ctx, x, y, w, h, r) {
 
 // ==================== GENERATE DROP IMAGE (3 cards side by side) ====================
 async function generateDropImage(cards) {
-    const cardW = 320;
-    const cardH = 450;
-    const gap = 15;
-    const totalW = cardW * 3 + gap * 2 + 30;
-    const totalH = cardH + 30;
+    const cardW = 350;
+    const cardH = 500;
+    const gap = 12;
+    const padding = 15;
+    const totalW = cardW * 3 + gap * 2 + padding * 2;
+    const totalH = cardH + padding * 2;
 
     const canvas = createCanvas(totalW, totalH);
     const ctx = canvas.getContext('2d');
 
-    // Dark background
-    ctx.fillStyle = '#0D0D0D';
+    ctx.fillStyle = '#0A0A0A';
     ctx.fillRect(0, 0, totalW, totalH);
 
-    // Generate each card and composite
     for (let i = 0; i < cards.length; i++) {
         const cardBuffer = await generateCardImage(cards[i]);
         const cardImg = await loadImage(cardBuffer);
-        const x = 15 + i * (cardW + gap);
-        const y = 15;
+        const x = padding + i * (cardW + gap);
+        const y = padding;
         ctx.drawImage(cardImg, x, y, cardW, cardH);
     }
 
