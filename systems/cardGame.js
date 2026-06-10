@@ -77,6 +77,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS card_trades (
     createdAt INTEGER
 )`);
 
+// Migrate pokemon_card_cache: old had cardId/cardName columns
+try {
+    const cols = db.prepare("PRAGMA table_info(pokemon_card_cache)").all();
+    if (cols.length > 0 && !cols.some(c => c.name === 'cardApiId')) {
+        db.exec(`DROP TABLE pokemon_card_cache`);
+    }
+} catch (_) {}
+
 db.exec(`CREATE TABLE IF NOT EXISTS pokemon_card_cache (
     cardApiId TEXT PRIMARY KEY,
     name TEXT,
@@ -151,6 +159,7 @@ async function apiFetch(rarity) {
         const cards = json.data || [];
         if (cards.length === 0) return null;
         const pick = cards[Math.floor(Math.random() * cards.length)];
+        if (!pick.id || !pick.name) return null;  // skip broken entries
         return {
             cardApiId: pick.id,
             name: pick.name,
@@ -186,24 +195,40 @@ async function pullCards(count = 3) {
     const results = [];
     for (let i = 0; i < count; i++) {
         const rarity = rollRarity();
+        let card = null;
+
         // 30% cache hit for speed
         if (Math.random() < 0.3) {
             const cached = getFromCache(rarity);
-            if (cached) {
-                results.push({ cardApiId: cached.cardApiId, name: cached.name, setName: cached.setName,
-                    rarity: cached.rarity, imageUrl: cached.imageUrl, types: cached.types, hp: cached.hp, artist: cached.artist });
-                continue;
+            if (cached && cached.cardApiId && cached.name) {
+                card = { cardApiId: cached.cardApiId, name: cached.name, setName: cached.setName || '',
+                    rarity: cached.rarity || rarity, imageUrl: cached.imageUrl || '', types: cached.types || '', hp: cached.hp || '', artist: cached.artist || '' };
             }
         }
-        const card = await apiFetch(rarity);
-        if (card) { cacheCard(card); results.push(card); }
-        else {
-            // fallback: try Common or cache
-            const fb = await apiFetch('Common') || getFromCache('Common');
-            if (fb) { if (fb.cardApiId) { cacheCard(fb); results.push(fb); } else {
-                results.push({ cardApiId: fb.cardApiId || fb.cardApiId, name: fb.name, setName: fb.setName,
-                    rarity: fb.rarity || 'Common', imageUrl: fb.imageUrl, types: fb.types || '', hp: fb.hp || '', artist: fb.artist || '' });
-            }}
+
+        // Fetch from API if no cache hit
+        if (!card) {
+            card = await apiFetch(rarity);
+        }
+
+        // Fallback: try Common
+        if (!card || !card.cardApiId || !card.name) {
+            card = await apiFetch('Common');
+        }
+
+        // Final fallback: cache
+        if (!card || !card.cardApiId || !card.name) {
+            const cached = getFromCache('Common') || getFromCache(rarity);
+            if (cached && cached.cardApiId && cached.name) {
+                card = { cardApiId: cached.cardApiId, name: cached.name, setName: cached.setName || '',
+                    rarity: cached.rarity || 'Common', imageUrl: cached.imageUrl || '', types: cached.types || '', hp: cached.hp || '', artist: cached.artist || '' };
+            }
+        }
+
+        // Only push valid cards
+        if (card && card.cardApiId && card.name) {
+            cacheCard(card);
+            results.push(card);
         }
     }
     return results;
