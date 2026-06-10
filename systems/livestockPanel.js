@@ -105,7 +105,7 @@ function buildCoopPanel(userId, username) {
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`farm_coop_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`farm_coop_sell_${userId}`).setLabel('💰 Sell Telur').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`farm_coop_sellbird_${userId}`).setLabel('<:chicken:1514062471248216154> Jual Ayam').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`farm_coop_sellbird_${userId}`).setLabel('Jual Ayam').setEmoji('1514062471248216154').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`farm_coop_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_coop_upgrade_${userId}`).setLabel('⬆️ Upgrade').setStyle(ButtonStyle.Secondary)
     );
@@ -535,7 +535,7 @@ async function handleLivestockButton(interaction) {
         desc += `> ⭐ Pakan Premium — 🪙 1,200/pc (untuk evolve)\n`;
         const embed = new EmbedBuilder().setTitle('🛒 Shop Kandang Ayam').setColor('#FFA500').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('<:chicken:1514062471248216154> Beli Ayam').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_coop_buyhen_${userId}`).setLabel('Beli Ayam').setEmoji('1514062471248216154').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_coop_buyfeed_input_${userId}`).setLabel('🌾 Beli Pakan').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_coop_buymeds_input_${userId}`).setLabel('💊 Beli Obat').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_coop_buypremium_input_${userId}`).setLabel('⭐ Beli Premium').setStyle(ButtonStyle.Secondary)
@@ -780,8 +780,8 @@ async function handleLivestockButton(interaction) {
         desc += `> ⭐ Pakan Premium — 🪙 1,200/pc\n`;
         const embed = new EmbedBuilder().setTitle('🛒 Shop Peternakan').setColor('#8B4513').setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('<:cow:1514062469276893356> Sapi (10K)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('<:sheep:1514062467393781792> Domba (8K)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buycow_${userId}`).setLabel('Sapi (10K)').setEmoji('1514062469276893356').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`farm_barn_buysheep_${userId}`).setLabel('Domba (8K)').setEmoji('1514062467393781792').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_barn_buycowfeed_input_${userId}`).setLabel('🌾 Pakan Sapi').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`farm_barn_buysheepfeed_input_${userId}`).setLabel('🌾 Pakan Domba').setStyle(ButtonStyle.Success)
         );
