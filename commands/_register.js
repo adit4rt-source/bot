@@ -110,12 +110,7 @@ const commands = [
             .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
 
     // ================= ANIME CARDS =================
-    new SlashCommandBuilder().setName('drop').setDescription('🎴 Drop 3 kartu random — grab sebelum orang lain!')
-        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori kartu').setRequired(false)
-            .addChoices(
-                { name: '🎌 Anime', value: 'anime' },
-                { name: '🎤 K-pop', value: 'kpop' },
-            )),
+    new SlashCommandBuilder().setName('drop').setDescription('🎴 Drop 3 kartu anime random — grab sebelum orang lain!'),
     new SlashCommandBuilder().setName('cards').setDescription('🎴 Lihat koleksi kartu anime')
         .addUserOption(opt => opt.setName('user').setDescription('Lihat koleksi user lain (opsional)').setRequired(false)),
     new SlashCommandBuilder().setName('cardview').setDescription('🎴 Lihat detail kartu anime')

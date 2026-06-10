@@ -5,7 +5,6 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
 const path = require('path');
 const state = require('../state');
-const { KPOP_IDOLS } = require('../data/kpop');
 
 // Load fonts
 try {
@@ -364,44 +363,10 @@ async function generateDropImage(cards) {
     return canvas.toBuffer('image/png');
 }
 
-// ==================== KPOP CHARACTERS ====================
-function fetchKpopCharacters(count = 3) {
-    const characters = [];
-    for (let i = 0; i < count; i++) {
-        const rarity = rollRarity();
-        const rarityData = RARITIES[rarity];
-        // Filter idols by popularity matching rarity
-        let pool;
-        if (rarity === 'God' || rarity === 'Mythic') pool = KPOP_IDOLS.filter(k => k.popularity >= 35000);
-        else if (rarity === 'Legendary') pool = KPOP_IDOLS.filter(k => k.popularity >= 20000 && k.popularity < 40000);
-        else if (rarity === 'Epic') pool = KPOP_IDOLS.filter(k => k.popularity >= 12000 && k.popularity < 25000);
-        else if (rarity === 'Rare') pool = KPOP_IDOLS.filter(k => k.popularity >= 5000 && k.popularity < 15000);
-        else if (rarity === 'Uncommon') pool = KPOP_IDOLS.filter(k => k.popularity >= 2000 && k.popularity < 8000);
-        else pool = KPOP_IDOLS.filter(k => k.popularity < 5000);
-
-        // Fallback to any idol if pool is empty
-        if (!pool || pool.length === 0) pool = KPOP_IDOLS;
-
-        const idol = pool[Math.floor(Math.random() * pool.length)];
-        characters.push({
-            charId: idol.id.hashCode ? idol.id.hashCode() : Math.abs(idol.id.split('').reduce((a, c) => ((a << 5) - a) + c.charCodeAt(0), 0)),
-            name: idol.name,
-            nameNative: '',
-            series: idol.group,
-            imageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(idol.name)}&size=400&background=${rarityData.color.replace('#', '')}&color=fff&bold=true&format=png`,
-            favourites: idol.popularity,
-            rarity,
-            category: 'kpop',
-        });
-    }
-    return characters;
-}
-
 // ==================== DROP COMMAND ====================
 async function handleDropCommand(interaction) {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const category = interaction.options.getString('kategori') || 'anime';
 
     // Cooldown: 8 minutes between drops
     const cdKey = `card_drop_${userId}`;
@@ -417,16 +382,11 @@ async function handleDropCommand(interaction) {
     await interaction.deferReply();
 
     try {
-        // Fetch 3 random characters based on category
-        let characters;
-        if (category === 'kpop') {
-            characters = fetchKpopCharacters(3);
-        } else {
-            characters = await fetchRandomCharacters(3);
-        }
+        // Fetch 3 random anime characters
+        const characters = await fetchRandomCharacters(3);
         if (!characters || characters.length < 3) {
             state.fishCooldowns.delete(cdKey);
-            return interaction.editReply({ content: '❌ Gagal fetch karakter. Coba lagi!' });
+            return interaction.editReply({ content: '❌ Gagal fetch karakter dari AniList. Coba lagi!' });
         }
 
         // Assign print numbers
@@ -459,15 +419,12 @@ async function handleDropCommand(interaction) {
             return `**${i + 1}.** ${rd.emoji} ${c.name} — *${c.series}*`;
         }).join('\n');
 
-        const categoryEmoji = category === 'kpop' ? '🎤' : '🎌';
-        const categoryLabel = category === 'kpop' ? 'K-POP' : 'ANIME';
-
         const embed = new EmbedBuilder()
-            .setColor(category === 'kpop' ? '#FF69B4' : '#E74C3C')
-            .setTitle(`🎴 ${categoryEmoji} ${categoryLabel} DROP!`)
+            .setColor('#E74C3C')
+            .setTitle('🎴 ANIME CARD DROP!')
             .setDescription(`${rarityLine}\n\n> Klik tombol di bawah untuk grab kartu!\n> ⏱️ Hilang dalam 60 detik`)
             .setImage('attachment://drop.png')
-            .setFooter({ text: `Dropped by ${interaction.user.username} • ${categoryLabel} • Grab cooldown: 4 min` })
+            .setFooter({ text: `Dropped by ${interaction.user.username} • Grab cooldown: 4 min` })
             .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
