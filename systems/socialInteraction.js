@@ -128,8 +128,12 @@ function detectInteraction(message) {
     if (!message.mentions.users.size) return null;
     const content = message.content.toLowerCase().replace(/<@!?\d+>/g, '').trim();
     
+    // Deteksi dari kata pertama saja (sebelum spasi)
+    const firstWord = content.split(/\s+/)[0];
+    if (!firstWord) return null;
+
     for (const type of INTERACTIONS) {
-        if (content === type.id || content === type.name.toLowerCase()) {
+        if (firstWord === type.id || firstWord === type.name.toLowerCase()) {
             const target = message.mentions.users.first();
             return { type: type.id, targetId: target.id };
         }
