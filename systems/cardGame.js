@@ -150,21 +150,49 @@ function getUserOwnedCardIds(userId) {
     } catch(_){ return new Set(); }
 }
 
+// CACHE_ONLY mode: if pre-fetch has been done, skip API entirely
+const CACHE_ONLY = process.env.POKEMON_TCG_CACHE_ONLY === '1';
+
+function getCacheCount() {
+    try { return db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c; } catch(_){ return 0; }
+}
+
 async function pullCards(pool, count, userId) {
     const results = [];
     const ownedIds = userId ? getUserOwnedCardIds(userId) : new Set();
+    const cacheSize = getCacheCount();
+    // If cache has 1000+ cards, prefer cache heavily (90%). If CACHE_ONLY, use 100% cache.
+    const cacheChance = CACHE_ONLY ? 1.0 : (cacheSize >= 1000 ? 0.9 : 0.5);
 
     for (let i = 0; i < count; i++) {
         const rarity = pool[Math.floor(Math.random() * pool.length)];
         let card = null;
-        // Try cache 50% to reduce API calls
-        if (Math.random() < 0.5) {
+
+        // Try cache first
+        if (Math.random() < cacheChance || CACHE_ONLY) {
             const c = fromCache(rarity, ownedIds);
             if (c?.cardApiId && c?.name) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||rarity, imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'' };
+            // If cache miss on specific rarity, try any rarity from pool
+            if (!card && CACHE_ONLY) {
+                for (const fallbackRarity of pool) {
+                    const fc = fromCache(fallbackRarity, ownedIds);
+                    if (fc?.cardApiId && fc?.name) { card = { cardApiId:fc.cardApiId, name:fc.name, setName:fc.setName||'', rarity:fc.rarity||fallbackRarity, imageUrl:fc.imageUrl||'', types:fc.types||'', hp:fc.hp||'', artist:fc.artist||'' }; break; }
+                }
+            }
         }
-        if (!card) card = await apiFetch(rarity);
-        if (!card?.cardApiId) card = await apiFetch('Common');
-        if (!card?.cardApiId) { const c = fromCache('Common', ownedIds); if (c?.cardApiId) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||'Common', imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'' }; }
+
+        // API fetch if no cache hit (and not CACHE_ONLY)
+        if (!card && !CACHE_ONLY) {
+            card = await apiFetch(rarity);
+            if (!card?.cardApiId) card = await apiFetch('Common');
+        }
+
+        // Final fallback: any cache
+        if (!card?.cardApiId) {
+            const c = fromCache('Common', ownedIds) || fromCache(rarity, new Set());
+            if (c?.cardApiId) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||'Common', imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'' };
+        }
+
         if (card?.cardApiId && card?.name) { cache(card); results.push(card); }
     }
     return results;
