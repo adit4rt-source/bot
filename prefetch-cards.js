@@ -19,8 +19,10 @@ db.pragma('journal_mode = WAL');
 // Ensure cache table exists
 db.exec(`CREATE TABLE IF NOT EXISTS pokemon_card_cache (
     cardApiId TEXT PRIMARY KEY, name TEXT, setName TEXT, rarity TEXT,
-    imageUrl TEXT, types TEXT DEFAULT '', hp TEXT DEFAULT '', artist TEXT DEFAULT '', cachedAt INTEGER
+    imageUrl TEXT, types TEXT DEFAULT '', hp TEXT DEFAULT '', artist TEXT DEFAULT '', cachedAt INTEGER,
+    marketPrice REAL DEFAULT 0
 )`);
+try { db.exec(`ALTER TABLE pokemon_card_cache ADD COLUMN marketPrice REAL DEFAULT 0`); } catch(_) {}
 
 const API = 'https://api.pokemontcg.io/v2/cards';
 const PAGE_SIZE = 250; // max allowed by API
@@ -32,12 +34,12 @@ function getHeaders() {
 }
 
 const insertStmt = db.prepare(`INSERT OR REPLACE INTO pokemon_card_cache
-    (cardApiId, name, setName, rarity, imageUrl, types, hp, artist, cachedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    (cardApiId, name, setName, rarity, imageUrl, types, hp, artist, cachedAt, marketPrice)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
 const insertMany = db.transaction((cards) => {
     for (const c of cards) {
-        insertStmt.run(c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+        insertStmt.run(c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice);
     }
 });
 
@@ -87,16 +89,43 @@ async function main() {
 
             const parsed = cards
                 .filter(p => p.id && p.name)
-                .map(p => ({
-                    cardApiId: p.id,
-                    name: p.name,
-                    setName: p.set?.name || 'Unknown',
-                    rarity: p.rarity || 'Common',
-                    imageUrl: p.images?.large || p.images?.small || '',
-                    types: (p.types || []).join('/'),
-                    hp: p.hp || '',
-                    artist: p.artist || '',
-                }));
+                .map(p => {
+                    // Extract market price: prefer tcgplayer USD, fallback to cardmarket EUR
+                    let marketPrice = 0;
+                    if (p.tcgplayer?.prices) {
+                        const priceVariants = p.tcgplayer.prices;
+                        // Try variants in order of preference
+                        for (const variant of ['holofoil', 'reverseHolofoil', '1stEditionHolofoil', 'normal', '1stEditionNormal', 'unlimitedHolofoil']) {
+                            if (priceVariants[variant]?.market) {
+                                marketPrice = priceVariants[variant].market;
+                                break;
+                            }
+                        }
+                        // If no market price found, try mid price
+                        if (!marketPrice) {
+                            for (const variant of Object.keys(priceVariants)) {
+                                if (priceVariants[variant]?.market) { marketPrice = priceVariants[variant].market; break; }
+                                if (!marketPrice && priceVariants[variant]?.mid) { marketPrice = priceVariants[variant].mid; }
+                            }
+                        }
+                    }
+                    // Fallback to cardmarket average sell price (EUR → approximate USD)
+                    if (!marketPrice && p.cardmarket?.prices?.averageSellPrice) {
+                        marketPrice = Math.round(p.cardmarket.prices.averageSellPrice * 1.1 * 100) / 100; // ~EUR to USD
+                    }
+
+                    return {
+                        cardApiId: p.id,
+                        name: p.name,
+                        setName: p.set?.name || 'Unknown',
+                        rarity: p.rarity || 'Common',
+                        imageUrl: p.images?.large || p.images?.small || '',
+                        types: (p.types || []).join('/'),
+                        hp: p.hp || '',
+                        artist: p.artist || '',
+                        marketPrice: marketPrice || 0,
+                    };
+                });
 
             insertMany(parsed);
             saved += parsed.length;

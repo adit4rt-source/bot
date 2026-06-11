@@ -37,8 +37,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
     artist TEXT DEFAULT '',
     obtainedAt INTEGER DEFAULT 0,
     locked INTEGER DEFAULT 0,
-    dye TEXT DEFAULT ''
+    dye TEXT DEFAULT '',
+    marketPrice REAL DEFAULT 0
 )`);
+try { db.exec(`ALTER TABLE pokemon_cards ADD COLUMN marketPrice REAL DEFAULT 0`); } catch(_) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS card_stardust (userId TEXT PRIMARY KEY, amount INTEGER DEFAULT 0)`);
 
@@ -63,8 +65,10 @@ try {
 } catch (_) {}
 db.exec(`CREATE TABLE IF NOT EXISTS pokemon_card_cache (
     cardApiId TEXT PRIMARY KEY, name TEXT, setName TEXT, rarity TEXT,
-    imageUrl TEXT, types TEXT DEFAULT '', hp TEXT DEFAULT '', artist TEXT DEFAULT '', cachedAt INTEGER
+    imageUrl TEXT, types TEXT DEFAULT '', hp TEXT DEFAULT '', artist TEXT DEFAULT '', cachedAt INTEGER,
+    marketPrice REAL DEFAULT 0
 )`);
+try { db.exec(`ALTER TABLE pokemon_card_cache ADD COLUMN marketPrice REAL DEFAULT 0`); } catch(_) {}
 
 // Stats table for tracking total spent
 db.exec(`CREATE TABLE IF NOT EXISTS card_stats (userId TEXT PRIMARY KEY, totalSpent INTEGER DEFAULT 0)`);
@@ -122,14 +126,33 @@ async function apiFetch(rarity) {
         if (!cards.length) return null;
         const p = cards[Math.floor(Math.random() * cards.length)];
         if (!p.id || !p.name) return null;
+
+        // Extract market price from API response
+        let marketPrice = 0;
+        if (p.tcgplayer?.prices) {
+            const priceVariants = p.tcgplayer.prices;
+            for (const variant of ['holofoil', 'reverseHolofoil', '1stEditionHolofoil', 'normal', '1stEditionNormal', 'unlimitedHolofoil']) {
+                if (priceVariants[variant]?.market) { marketPrice = priceVariants[variant].market; break; }
+            }
+            if (!marketPrice) {
+                for (const variant of Object.keys(priceVariants)) {
+                    if (priceVariants[variant]?.market) { marketPrice = priceVariants[variant].market; break; }
+                    if (!marketPrice && priceVariants[variant]?.mid) { marketPrice = priceVariants[variant].mid; }
+                }
+            }
+        }
+        if (!marketPrice && p.cardmarket?.prices?.averageSellPrice) {
+            marketPrice = Math.round(p.cardmarket.prices.averageSellPrice * 1.1 * 100) / 100;
+        }
+
         return { cardApiId: p.id, name: p.name, setName: p.set?.name || 'Unknown', rarity: p.rarity || rarity,
-            imageUrl: p.images?.large || p.images?.small || '', types: (p.types||[]).join('/'), hp: p.hp||'', artist: p.artist||'' };
+            imageUrl: p.images?.large || p.images?.small || '', types: (p.types||[]).join('/'), hp: p.hp||'', artist: p.artist||'', marketPrice: marketPrice || 0 };
     } catch (e) { console.error('[TCG] API:', e.message); return null; }
 }
 
 function cache(c) {
-    try { db.prepare(`INSERT OR REPLACE INTO pokemon_card_cache (cardApiId,name,setName,rarity,imageUrl,types,hp,artist,cachedAt) VALUES(?,?,?,?,?,?,?,?,?)`).run(
-        c.cardApiId,c.name,c.setName,c.rarity,c.imageUrl,c.types,c.hp,c.artist,Date.now()); } catch(_){}
+    try { db.prepare(`INSERT OR REPLACE INTO pokemon_card_cache (cardApiId,name,setName,rarity,imageUrl,types,hp,artist,cachedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
+        c.cardApiId,c.name,c.setName,c.rarity,c.imageUrl,c.types,c.hp,c.artist,Date.now(),c.marketPrice||0); } catch(_){}
 }
 
 function fromCache(rarity, excludeIds) {
@@ -171,12 +194,12 @@ async function pullCards(pool, count, userId) {
         // Try cache first
         if (Math.random() < cacheChance || CACHE_ONLY) {
             const c = fromCache(rarity, ownedIds);
-            if (c?.cardApiId && c?.name) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||rarity, imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'' };
+            if (c?.cardApiId && c?.name) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||rarity, imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'', marketPrice:c.marketPrice||0 };
             // If cache miss on specific rarity, try any rarity from pool
             if (!card && CACHE_ONLY) {
                 for (const fallbackRarity of pool) {
                     const fc = fromCache(fallbackRarity, ownedIds);
-                    if (fc?.cardApiId && fc?.name) { card = { cardApiId:fc.cardApiId, name:fc.name, setName:fc.setName||'', rarity:fc.rarity||fallbackRarity, imageUrl:fc.imageUrl||'', types:fc.types||'', hp:fc.hp||'', artist:fc.artist||'' }; break; }
+                    if (fc?.cardApiId && fc?.name) { card = { cardApiId:fc.cardApiId, name:fc.name, setName:fc.setName||'', rarity:fc.rarity||fallbackRarity, imageUrl:fc.imageUrl||'', types:fc.types||'', hp:fc.hp||'', artist:fc.artist||'', marketPrice:fc.marketPrice||0 }; break; }
                 }
             }
         }
@@ -190,7 +213,7 @@ async function pullCards(pool, count, userId) {
         // Final fallback: any cache
         if (!card?.cardApiId) {
             const c = fromCache('Common', ownedIds) || fromCache(rarity, new Set());
-            if (c?.cardApiId) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||'Common', imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'' };
+            if (c?.cardApiId) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||'Common', imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'', marketPrice:c.marketPrice||0 };
         }
 
         if (card?.cardApiId && card?.name) { cache(card); results.push(card); }
@@ -464,8 +487,8 @@ async function handleGacha(interaction, packId, userId) {
 
         // Save all to collection
         for (const c of cards) {
-            db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
-                userId, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+            db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
+                userId, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
         }
         incrementUserStat(guildId, userId, 'cards_grabbed');
 
@@ -476,7 +499,8 @@ async function handleGacha(interaction, packId, userId) {
             const r = rdata(c.rarity);
             const isDupe = ownedIds.has(c.cardApiId);
             const dupeTag = isDupe ? ' 🔄 **DUPE**' : '';
-            return `**${i+1}.** ${r.emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${dupeTag}`;
+            const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
+            return `**${i+1}.** ${r.emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${priceTag}${dupeTag}`;
         }).join('\n');
 
         const pings = checkWishlist(cards);
@@ -532,7 +556,10 @@ async function handleCardsCommand(interaction, page = 0) {
     const img = await generateGalleryImage(cards);
     const att = new AttachmentBuilder(img, { name: 'collection.png' });
 
-    const list = cards.map(c => `${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* \`ID:${c.id}\``).join('\n');
+    const list = cards.map(c => {
+        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
+        return `${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}*${priceTag} \`ID:${c.id}\``;
+    }).join('\n');
 
     const embed = new EmbedBuilder()
         .setTitle(`📖 ${target.username}'s Pokemon Collection`)
@@ -575,7 +602,10 @@ async function handleCardPageButton(interaction) {
 
     const img = await generateGalleryImage(cards);
     const att = new AttachmentBuilder(img, { name: 'collection.png' });
-    const list = cards.map(c => `${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* \`ID:${c.id}\``).join('\n');
+    const list = cards.map(c => {
+        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
+        return `${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}*${priceTag} \`ID:${c.id}\``;
+    }).join('\n');
     const member = interaction.guild.members.cache.get(targetId);
     const uname = member?.user?.username || 'User';
 
@@ -602,6 +632,7 @@ async function handleCardViewCommand(interaction) {
     if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan!', ephemeral: true });
 
     const r = rdata(card.rarity);
+    const priceDisplay = card.marketPrice > 0 ? `\n💰 **Market Value: $${card.marketPrice.toFixed(2)}**` : '';
     const embed = new EmbedBuilder()
         .setColor(r.color)
         .setTitle(`${r.emoji} ${card.name}`)
@@ -610,7 +641,8 @@ async function handleCardViewCommand(interaction) {
             (card.types ? `**Type:** ${card.types}\n` : '') +
             (card.hp ? `**HP:** ${card.hp}\n` : '') +
             (card.artist ? `**Artist:** ${card.artist}\n` : '') +
-            `**Owner:** <@${card.userId}>\n**Obtained:** <t:${Math.floor(card.obtainedAt/1000)}:R>`
+            `**Owner:** <@${card.userId}>\n**Obtained:** <t:${Math.floor(card.obtainedAt/1000)}:R>` +
+            priceDisplay
         )
         .setImage(card.imageUrl || null)
         .setFooter({ text: `ID: ${card.id} • ${card.cardApiId}` });
@@ -652,13 +684,17 @@ function checkWishlist(cards) {
 // ==================== LEADERBOARD ====================
 async function handleCardLeaderboard(interaction) {
     const type = interaction.options?.getString?.('tipe') || 'total';
-    let title, rows;
+    let title, rows, valueMode = false;
     if (type === 'rare') {
         title = '👑 Most Rare+ (Pokemon)';
         rows = db.prepare(`SELECT userId, COUNT(*) as cnt FROM pokemon_cards WHERE rarity IN ('Rare Ultra','Rare Rainbow','Rare Secret','Illustration Rare','Special Art Rare') GROUP BY userId ORDER BY cnt DESC LIMIT 10`).all();
     } else if (type === 'unique') {
         title = '🎴 Most Unique (Pokemon)';
         rows = db.prepare('SELECT userId, COUNT(DISTINCT cardApiId) as cnt FROM pokemon_cards GROUP BY userId ORDER BY cnt DESC LIMIT 10').all();
+    } else if (type === 'value') {
+        title = '💰 Most Valuable Collection';
+        rows = db.prepare('SELECT userId, SUM(marketPrice) as cnt FROM pokemon_cards WHERE marketPrice > 0 GROUP BY userId ORDER BY cnt DESC LIMIT 10').all();
+        valueMode = true;
     } else {
         // total: pokemon_cards only
         title = '🃏 Most Cards (Pokemon)';
@@ -667,7 +703,10 @@ async function handleCardLeaderboard(interaction) {
     if (!rows?.length) return interaction.reply({ content: '📭 Belum ada data!', ephemeral: true });
     const m = ['🥇','🥈','🥉'];
     const embed = new EmbedBuilder().setTitle(`📊 ${title}`).setColor('#FFD700').setTimestamp()
-        .setDescription(rows.map((r,i) => `${m[i]||`**${i+1}.**`} <@${r.userId}> — **${r.cnt.toLocaleString('id-ID')}**`).join('\n'));
+        .setDescription(rows.map((r,i) => {
+            const display = valueMode ? `$${Number(r.cnt).toFixed(2)}` : r.cnt.toLocaleString('id-ID');
+            return `${m[i]||`**${i+1}.**`} <@${r.userId}> — **${display}**`;
+        }).join('\n'));
     return interaction.reply({ embeds: [embed] });
 }
 
