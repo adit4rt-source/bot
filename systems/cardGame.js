@@ -73,6 +73,14 @@ try { db.exec(`ALTER TABLE pokemon_card_cache ADD COLUMN marketPrice REAL DEFAUL
 // Stats table for tracking total spent
 db.exec(`CREATE TABLE IF NOT EXISTS card_stats (userId TEXT PRIMARY KEY, totalSpent INTEGER DEFAULT 0)`);
 
+// Backfill: sync marketPrice from cache to pokemon_cards for cards that have price=0
+try {
+    db.exec(`UPDATE pokemon_cards SET marketPrice = (
+        SELECT pokemon_card_cache.marketPrice FROM pokemon_card_cache
+        WHERE pokemon_card_cache.cardApiId = pokemon_cards.cardApiId AND pokemon_card_cache.marketPrice > 0
+    ) WHERE marketPrice = 0 AND cardApiId IN (SELECT cardApiId FROM pokemon_card_cache WHERE marketPrice > 0)`);
+} catch(_) {}
+
 // ==================== POKEMON RARITY ====================
 const RARITIES = {
     'Common':            { emoji: '⚪', color: '#AAAAAA', tier: 0, dust: 1 },
@@ -631,8 +639,60 @@ async function handleCardViewCommand(interaction) {
     const card = db.prepare('SELECT * FROM pokemon_cards WHERE id=?').get(id);
     if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan!', ephemeral: true });
 
+    // Lazy backfill: if card has no price, try cache first, then API
+    let price = card.marketPrice || 0;
+    let needsApiFetch = false;
+    if (!price && card.cardApiId) {
+        try {
+            const cached = db.prepare('SELECT marketPrice FROM pokemon_card_cache WHERE cardApiId=?').get(card.cardApiId);
+            if (cached?.marketPrice > 0) {
+                price = cached.marketPrice;
+            }
+        } catch(_){}
+
+        if (!price && !CACHE_ONLY) needsApiFetch = true;
+    }
+
+    // Defer if we need to fetch from API (takes time)
+    if (needsApiFetch) {
+        await interaction.deferReply();
+        try {
+            const headers = getApiHeaders();
+            const res = await fetch(`${API}/${encodeURIComponent(card.cardApiId)}`, { headers });
+            if (res.ok) {
+                const json = await res.json();
+                const p = json.data;
+                if (p?.tcgplayer?.prices) {
+                    const priceVariants = p.tcgplayer.prices;
+                    for (const variant of ['holofoil', 'reverseHolofoil', '1stEditionHolofoil', 'normal', '1stEditionNormal', 'unlimitedHolofoil']) {
+                        if (priceVariants[variant]?.market) { price = priceVariants[variant].market; break; }
+                    }
+                    if (!price) {
+                        for (const variant of Object.keys(priceVariants)) {
+                            if (priceVariants[variant]?.market) { price = priceVariants[variant].market; break; }
+                            if (!price && priceVariants[variant]?.mid) { price = priceVariants[variant].mid; }
+                        }
+                    }
+                }
+                if (!price && p?.cardmarket?.prices?.averageSellPrice) {
+                    price = Math.round(p.cardmarket.prices.averageSellPrice * 1.1 * 100) / 100;
+                }
+            }
+        } catch(_){}
+    }
+
+    // Save price back to both tables for future lookups
+    if (price > 0 && !card.marketPrice) {
+        try {
+            db.prepare('UPDATE pokemon_cards SET marketPrice=? WHERE id=?').run(price, card.id);
+            db.prepare('UPDATE pokemon_card_cache SET marketPrice=? WHERE cardApiId=?').run(price, card.cardApiId);
+            // Also update all other copies of this card owned by anyone
+            db.prepare('UPDATE pokemon_cards SET marketPrice=? WHERE cardApiId=? AND marketPrice=0').run(price, card.cardApiId);
+        } catch(_){}
+    }
+
     const r = rdata(card.rarity);
-    const priceDisplay = card.marketPrice > 0 ? `\n💰 **Market Value: $${card.marketPrice.toFixed(2)}**` : '';
+    const priceDisplay = price > 0 ? `\n💰 **Market Value: $${price.toFixed(2)}**` : '';
     const embed = new EmbedBuilder()
         .setColor(r.color)
         .setTitle(`${r.emoji} ${card.name}`)
@@ -646,6 +706,10 @@ async function handleCardViewCommand(interaction) {
         )
         .setImage(card.imageUrl || null)
         .setFooter({ text: `ID: ${card.id} • ${card.cardApiId}` });
+
+    if (needsApiFetch) {
+        return interaction.editReply({ embeds: [embed] });
+    }
     return interaction.reply({ embeds: [embed] });
 }
 
