@@ -830,7 +830,7 @@ async function handleTradeModal(interaction) {
 
     // === CARD RESPOND SUBMISSION: receiver chose their card ===
     if (action === 'cardrespond') {
-        const sessionId = parseInt(parts[2]);
+        const sessionId = parseInt(parts[3]);
         const cardIdStr = interaction.fields.getTextInputValue('card_id').trim();
         const cardId = parseInt(cardIdStr);
         if (isNaN(cardId)) return interaction.reply({ content: '❌ ID harus angka!', ephemeral: true });
