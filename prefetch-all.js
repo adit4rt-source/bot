@@ -2,9 +2,6 @@
 // prefetch-all.js — Download SEMUA kartu (Pokemon + One Piece) ke SQLite cache
 // Jalankan 1x: node prefetch-all.js
 // Setelah selesai, gacha 100% offline (0 API calls)
-//
-// Pokemon: ~20,000 kartu dari pokemontcg.io (masih gratis)
-// One Piece: ~2,500 kartu dari GitHub JSON + Bandai CDN (gratis)
 
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -24,6 +21,34 @@ db.exec(`CREATE TABLE IF NOT EXISTS onepiece_card_cache (
     color TEXT DEFAULT '', power TEXT DEFAULT '', cost TEXT DEFAULT '',
     attribute TEXT DEFAULT '', cardSet TEXT DEFAULT '', effect TEXT DEFAULT '', cachedAt INTEGER
 )`);
+
+// ==================== PROGRESS BAR ====================
+function formatTime(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rs = s % 60;
+    if (m < 60) return `${m}m ${rs}s`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}h ${rm}m`;
+}
+
+function progressBar(current, total, startTime, width = 30) {
+    const pct = Math.round((current / total) * 100);
+    const filled = Math.round((current / total) * width);
+    const empty = width - filled;
+    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+
+    const elapsed = Date.now() - startTime;
+    const speed = current > 0 ? elapsed / current : 0;
+    const remaining = (total - current) * speed;
+    const eta = current > 0 ? formatTime(remaining) : '...';
+    const elapsedStr = formatTime(elapsed);
+
+    return `   [${bar}] ${pct}% (${current}/${total}) | ⏱️ ${elapsedStr} | ETA: ${eta}`;
+}
 
 // ==================== HELPERS ====================
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -49,25 +74,31 @@ async function fetchPokemonPage(page) {
     const url = `${POKEMON_API}?pageSize=${PAGE_SIZE}&page=${page}`;
     const res = await fetch(url, { headers: getPokemonHeaders() });
     if (!res.ok) {
-        if (res.status === 429) { console.log('  ⏳ Rate limit! Waiting 60s...'); await sleep(60000); return fetchPokemonPage(page); }
+        if (res.status === 429) { console.log('\n   ⏳ Rate limited! Waiting 60s...'); await sleep(60000); return fetchPokemonPage(page); }
         throw new Error(`HTTP ${res.status}`);
     }
     return res.json();
 }
 
 async function prefetchPokemon() {
-    console.log('🎴 ═══ POKEMON TCG ═══');
-    console.log(`   API Key: ${process.env.POKEMON_TCG_API_KEY ? '✅' : '❌ (slower)'}`);
+    console.log('');
+    console.log('🎴 ═══════════════════════════════════');
+    console.log('   POKEMON TCG — Downloading...');
+    console.log('═══════════════════════════════════════');
+    console.log(`   API Key: ${process.env.POKEMON_TCG_API_KEY ? '✅ Set (fast mode)' : '❌ Not set (slow mode ~2-3 min)'}`);
 
     const existing = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-    console.log(`   💾 Already cached: ${existing}`);
+    console.log(`   💾 Already in cache: ${existing.toLocaleString()} cards`);
 
     const first = await fetchPokemonPage(1);
     const total = first.totalCount;
     const pages = Math.ceil(total / PAGE_SIZE);
-    console.log(`   📊 Total: ${total.toLocaleString()} cards (${pages} pages)`);
+    console.log(`   📊 Total available: ${total.toLocaleString()} cards (${pages} pages)`);
+    console.log('');
 
     let saved = 0;
+    const startTime = Date.now();
+
     for (let page = 1; page <= pages; page++) {
         try {
             const data = page === 1 ? first : await fetchPokemonPage(page);
@@ -78,17 +109,22 @@ async function prefetchPokemon() {
             }));
             pokemonBatch(cards);
             saved += cards.length;
-            const pct = Math.round((page / pages) * 100);
-            process.stdout.write(`\r   [${pct}%] Page ${page}/${pages} — ${saved.toLocaleString()} saved`);
+
+            process.stdout.write(`\r${progressBar(page, pages, startTime)}`);
+
             await sleep(process.env.POKEMON_TCG_API_KEY ? 200 : 1500);
         } catch (e) {
-            console.log(`\n   ❌ Error page ${page}: ${e.message}. Retrying...`);
+            console.log(`\n   ❌ Error page ${page}: ${e.message}. Retry in 10s...`);
             await sleep(10000);
             page--;
         }
     }
+
     const finalCount = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-    console.log(`\n   ✅ Pokemon done! ${finalCount.toLocaleString()} cards cached\n`);
+    const elapsed = formatTime(Date.now() - startTime);
+    console.log('');
+    console.log(`   ✅ DONE! ${finalCount.toLocaleString()} cards | Waktu: ${elapsed}`);
+    console.log('');
 }
 
 // ==================== ONE PIECE TCG ====================
@@ -102,11 +138,16 @@ const opBatch = db.transaction((cards) => {
 });
 
 async function prefetchOnePiece() {
-    console.log('🏴‍☠️ ═══ ONE PIECE TCG ═══');
-    const existing = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-    console.log(`   💾 Already cached: ${existing}`);
-    console.log('   📥 Downloading from GitHub...');
+    console.log('');
+    console.log('🏴‍☠️ ═══════════════════════════════════');
+    console.log('   ONE PIECE TCG — Downloading...');
+    console.log('═══════════════════════════════════════');
 
+    const existing = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
+    console.log(`   💾 Already in cache: ${existing.toLocaleString()} cards`);
+    console.log('   📥 Fetching from GitHub (instant)...');
+
+    const startTime = Date.now();
     const res = await fetch(OP_SOURCE);
     if (!res.ok) throw new Error(`Failed: HTTP ${res.status}`);
     const json = await res.json();
@@ -118,19 +159,32 @@ async function prefetchOnePiece() {
         effect: (c.Effect || '').substring(0, 500),
     }));
 
-    opBatch(cards);
+    // Batch insert with progress
+    const batchSize = 100;
+    for (let i = 0; i < cards.length; i += batchSize) {
+        const batch = cards.slice(i, i + batchSize);
+        opBatch(batch);
+        process.stdout.write(`\r${progressBar(Math.min(i + batchSize, cards.length), cards.length, startTime)}`);
+    }
+
     const finalCount = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-    console.log(`   ✅ One Piece done! ${finalCount.toLocaleString()} cards cached\n`);
+    const elapsed = formatTime(Date.now() - startTime);
+    console.log('');
+    console.log(`   ✅ DONE! ${finalCount.toLocaleString()} cards | Waktu: ${elapsed}`);
+    console.log('');
 }
 
 // ==================== MAIN ====================
 async function main() {
+    console.clear();
     console.log('');
-    console.log('╔══════════════════════════════════════╗');
-    console.log('║  🃏 CARD GACHA — PRE-FETCH ALL      ║');
-    console.log('║  Download Pokemon + One Piece cards  ║');
-    console.log('╚══════════════════════════════════════╝');
-    console.log('');
+    console.log('╔══════════════════════════════════════════╗');
+    console.log('║                                          ║');
+    console.log('║   🃏 CARD GACHA — PRE-FETCH ALL CARDS   ║');
+    console.log('║                                          ║');
+    console.log('║   Pokemon TCG + One Piece TCG            ║');
+    console.log('║                                          ║');
+    console.log('╚══════════════════════════════════════════╝');
 
     // One Piece first (instant)
     await prefetchOnePiece();
@@ -141,17 +195,34 @@ async function main() {
     // Final summary
     const pkm = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
     const op = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-    console.log('╔══════════════════════════════════════╗');
-    console.log('║  ✅ ALL DONE!                        ║');
-    console.log(`║  🎴 Pokemon: ${String(pkm).padEnd(6)} cards            ║`);
-    console.log(`║  🏴‍☠️ One Piece: ${String(op).padEnd(5)} cards            ║`);
-    console.log(`║  📊 Total: ${String(pkm + op).padEnd(7)} cards            ║`);
-    console.log('║                                      ║');
-    console.log('║  Set POKEMON_TCG_CACHE_ONLY=1        ║');
-    console.log('║  di .env untuk full offline mode!    ║');
-    console.log('╚══════════════════════════════════════╝');
+
+    // Rarity breakdown
+    const pkmRarity = db.prepare('SELECT rarity, COUNT(*) as c FROM pokemon_card_cache GROUP BY rarity ORDER BY c DESC LIMIT 8').all();
+    const opRarity = db.prepare('SELECT rarity, COUNT(*) as c FROM onepiece_card_cache GROUP BY rarity ORDER BY c DESC LIMIT 8').all();
+
+    console.log('');
+    console.log('╔══════════════════════════════════════════╗');
+    console.log('║            ✅ ALL COMPLETE!              ║');
+    console.log('╠══════════════════════════════════════════╣');
+    console.log(`║  🎴 Pokemon TCG:   ${String(pkm.toLocaleString()).padEnd(8)} cards       ║`);
+    console.log(`║  🏴‍☠️ One Piece TCG: ${String(op.toLocaleString()).padEnd(8)} cards       ║`);
+    console.log(`║  📊 TOTAL:         ${String((pkm + op).toLocaleString()).padEnd(8)} cards       ║`);
+    console.log('╠══════════════════════════════════════════╣');
+    console.log('║                                          ║');
+    console.log('║  📋 Next steps:                          ║');
+    console.log('║  1. Set POKEMON_TCG_CACHE_ONLY=1         ║');
+    console.log('║  2. Restart bot                          ║');
+    console.log('║  3. Gacha 100% offline selamanya! 🎉     ║');
+    console.log('║                                          ║');
+    console.log('╚══════════════════════════════════════════╝');
+    console.log('');
+    console.log('📊 Pokemon Rarity Breakdown:');
+    for (const r of pkmRarity) console.log(`   ${r.rarity.padEnd(20)} ${r.c.toLocaleString()}`);
+    console.log('');
+    console.log('📊 One Piece Rarity Breakdown:');
+    for (const r of opRarity) console.log(`   ${r.rarity.padEnd(20)} ${r.c.toLocaleString()}`);
 
     db.close();
 }
 
-main().catch(e => { console.error('Fatal:', e); process.exit(1); });
+main().catch(e => { console.error('\n❌ Fatal Error:', e.message); process.exit(1); });
