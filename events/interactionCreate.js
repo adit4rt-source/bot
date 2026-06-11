@@ -262,13 +262,16 @@ async function routeInteraction(interaction) {
                 if (cards && cards.length > 0) {
                     // Save to collection
                     for (const c of cards) {
-                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
-                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
+                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
                     }
                     const img = await generateGachaImage(cards);
                     const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
                     const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
-                    const cardList = cards.map((c, i) => `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]`).join('\n');
+                    const cardList = cards.map((c, i) => {
+                        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
+                        return `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${priceTag}`;
+                    }).join('\n');
                     const cardEmbed = new EmbedBuilder()
                         .setColor('#FF6B35')
                         .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
@@ -1272,13 +1275,16 @@ async function routeInteraction(interaction) {
                 const cards = await pullCards(dailyPool, 3, interaction.user.id);
                 if (cards && cards.length > 0) {
                     for (const c of cards) {
-                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
-                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
+                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
                     }
                     const img = await generateGachaImage(cards);
                     const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
                     const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
-                    const cardList = cards.map((c, i) => `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]`).join('\n');
+                    const cardList = cards.map((c, i) => {
+                        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
+                        return `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${priceTag}`;
+                    }).join('\n');
                     const cardEmbed = new EmbedBuilder()
                         .setColor('#FF6B35')
                         .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
