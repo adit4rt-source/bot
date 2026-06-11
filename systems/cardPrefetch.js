@@ -19,13 +19,17 @@ function getPokemonHeaders() {
 // ==================== ONE PIECE (instant) ====================
 async function prefetchOnePiece() {
     try {
+        // Always refresh OP cache to ensure clean images (no SAMPLE watermark)
         const existing = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-        if (existing >= 2400) {
+        const hasBadUrls = existing > 0 && db.prepare("SELECT 1 FROM onepiece_card_cache WHERE imageUrl LIKE '%onepiece-cardgame.com%' LIMIT 1").get();
+
+        if (existing >= 2400 && !hasBadUrls) {
             console.log(`🏴‍☠️ Card cache: One Piece sudah lengkap (${existing} cards)`);
             return;
         }
 
-        console.log('🏴‍☠️ Card cache: Downloading One Piece cards...');
+        if (hasBadUrls) console.log('🏴‍☠️ Card cache: Replacing SAMPLE watermark URLs...');
+        else console.log('🏴‍☠️ Card cache: Downloading One Piece cards...');
         const res = await fetch(OP_SOURCE);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
@@ -36,13 +40,19 @@ async function prefetchOnePiece() {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const batch = db.transaction((items) => { for (const c of items) stmt.run(c.cardId, c.name, c.rarity, c.cardType, c.imageUrl, c.color, c.power, c.cost, c.attribute, c.cardSet, c.effect, Date.now()); });
 
-        const parsed = cards.map(c => ({
-            cardId: c.CardNum.replace('#', ''), name: c.Name, rarity: c.Rarity || 'C',
-            cardType: c.CardType || 'CHARACTER', imageUrl: c.Img || (c.Images?.[0]) || '',
-            color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
-            attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
-            effect: (c.Effect || '').substring(0, 500),
-        }));
+        const parsed = cards.map(c => {
+            const cardId = c.CardNum.replace('#', '');
+            const setCode = cardId.split('-')[0]; // OP01-001 → OP01
+            // Use limitlesstcg CDN (clean HD images, no SAMPLE watermark)
+            const cleanImageUrl = `https://limitlesstcg.nyc3.digitaloceanspaces.com/one-piece/${setCode}/${cardId}_EN.webp`;
+            return {
+                cardId, name: c.Name, rarity: c.Rarity || 'C',
+                cardType: c.CardType || 'CHARACTER', imageUrl: cleanImageUrl,
+                color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
+                attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
+                effect: (c.Effect || '').substring(0, 500),
+            };
+        });
         batch(parsed);
 
         const total = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;

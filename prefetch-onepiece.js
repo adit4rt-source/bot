@@ -58,19 +58,19 @@ async function main() {
     console.log(`📊 Found: ${cards.length} cards`);
 
     // Parse and insert
-    const parsed = cards.filter(c => c.Name && c.CardNum).map(c => ({
-        cardId: c.CardNum.replace('#', ''),
-        name: c.Name,
-        rarity: c.Rarity || 'C',
-        cardType: c.CardType || 'CHARACTER',
-        imageUrl: c.Img || (c.Images && c.Images[0]) || '',
-        color: c.Color || '',
-        power: c.Power || '',
-        cost: c.Cost || '',
-        attribute: c.Attribute || '',
-        cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
-        effect: (c.Effect || '').substring(0, 500),
-    }));
+    const parsed = cards.filter(c => c.Name && c.CardNum).map(c => {
+        const cardId = c.CardNum.replace('#', '');
+        const setCode = cardId.split('-')[0];
+        // Use limitlesstcg CDN (clean HD images, no SAMPLE watermark)
+        const cleanImageUrl = `https://limitlesstcg.nyc3.digitaloceanspaces.com/one-piece/${setCode}/${cardId}_EN.webp`;
+        return {
+            cardId, name: c.Name, rarity: c.Rarity || 'C',
+            cardType: c.CardType || 'CHARACTER', imageUrl: cleanImageUrl,
+            color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
+            attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
+            effect: (c.Effect || '').substring(0, 500),
+        };
+    });
 
     console.log(`✅ Valid cards: ${parsed.length}`);
     console.log('💾 Saving to database...');

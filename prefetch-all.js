@@ -156,13 +156,19 @@ async function prefetchOnePiece() {
     const res = await fetch(OP_SOURCE);
     if (!res.ok) throw new Error(`Failed: HTTP ${res.status}`);
     const json = await res.json();
-    const cards = (json.Cards || []).filter(c => c.Name && c.CardNum).map(c => ({
-        cardId: c.CardNum.replace('#', ''), name: c.Name, rarity: c.Rarity || 'C',
-        cardType: c.CardType || 'CHARACTER', imageUrl: c.Img || (c.Images?.[0]) || '',
-        color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
-        attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
-        effect: (c.Effect || '').substring(0, 500),
-    }));
+    const parsed = (json.Cards || []).filter(c => c.Name && c.CardNum).map(c => {
+        const cardId = c.CardNum.replace('#', '');
+        const setCode = cardId.split('-')[0]; // OP01-001 → OP01
+        // Use limitlesstcg CDN (clean HD images, no SAMPLE watermark)
+        const cleanImageUrl = `https://limitlesstcg.nyc3.digitaloceanspaces.com/one-piece/${setCode}/${cardId}_EN.webp`;
+        return {
+            cardId, name: c.Name, rarity: c.Rarity || 'C',
+            cardType: c.CardType || 'CHARACTER', imageUrl: cleanImageUrl,
+            color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
+            attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
+            effect: (c.Effect || '').substring(0, 500),
+        };
+    });
 
     console.log(`   \u{1F4CA} Ditemukan: ${cards.length} cards`);
 
