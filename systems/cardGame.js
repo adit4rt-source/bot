@@ -235,32 +235,98 @@ async function generateGachaImage(cards) {
     return canvas.toBuffer('image/png');
 }
 
-// Gallery image for collection (5 per row, up to 10 cards)
+// Gallery image for collection — Card Book / Binder style
 async function generateGalleryImage(cards) {
     const cols = Math.min(cards.length, 5);
     const rows = Math.ceil(cards.length / 5);
-    const cw = 160, ch = 224, gap = 6, pad = 8;
-    const w = cols * cw + (cols-1) * gap + pad * 2;
-    const h = rows * ch + (rows-1) * gap + pad * 2;
+    const cw = 150, ch = 210; // card size
+    const slotPad = 6;       // padding inside each slot
+    const slotW = cw + slotPad * 2, slotH = ch + slotPad * 2;
+    const gapX = 12, gapY = 14;
+    const marginX = 24, marginY = 24;
+    const w = cols * slotW + (cols - 1) * gapX + marginX * 2;
+    const h = rows * slotH + (rows - 1) * gapY + marginY * 2;
     const canvas = createCanvas(w, h);
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#121225';
-    ctx.fillRect(0, 0, w, h);
 
+    // === BINDER BACKGROUND (dark leather texture) ===
+    ctx.fillStyle = '#1a1520';
+    ctx.fillRect(0, 0, w, h);
+    // Subtle grid pattern
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx < w; gx += 20) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (let gy = 0; gy < h; gy += 20) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    // === OUTER BORDER (gold accent) ===
+    ctx.strokeStyle = 'rgba(218,165,32,0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, w - 16, h - 16);
+    ctx.strokeStyle = 'rgba(218,165,32,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(12, 12, w - 24, h - 24);
+
+    // === CARD SLOTS ===
     for (let i = 0; i < cards.length; i++) {
         const col = i % 5, row = Math.floor(i / 5);
-        const x = pad + col * (cw + gap), y = pad + row * (ch + gap);
+        const slotX = marginX + col * (slotW + gapX);
+        const slotY = marginY + row * (slotH + gapY);
+
+        // Slot background (recessed look)
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(slotX, slotY, slotW, slotH);
+
+        // Slot inner border
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(slotX, slotY, slotW, slotH);
+
+        // Card image
+        const cardX = slotX + slotPad;
+        const cardY = slotY + slotPad;
         try {
-            if (cards[i].imageUrl) { const img = await loadImageWithTimeout(cards[i].imageUrl); ctx.drawImage(img, x, y, cw, ch); }
-            else throw new Error('no url');
+            if (cards[i].imageUrl) {
+                const img = await loadImageWithTimeout(cards[i].imageUrl);
+                ctx.drawImage(img, cardX, cardY, cw, ch);
+            } else throw new Error('no url');
         } catch (_) {
-            ctx.fillStyle = '#1e1e3a'; ctx.fillRect(x, y, cw, ch);
-            ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText(cards[i].name, x+cw/2, y+ch/2);
+            // Empty slot placeholder
+            ctx.fillStyle = '#2a2035';
+            ctx.fillRect(cardX, cardY, cw, ch);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cards[i].name, cardX + cw / 2, cardY + ch / 2);
         }
+
+        // Rarity glow border around card
         const rarityColor = rdata(cards[i].rarity).color;
-        ctx.strokeStyle = rarityColor; ctx.lineWidth = 2; ctx.strokeRect(x, y, cw, ch);
+        ctx.strokeStyle = rarityColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cardX - 1, cardY - 1, cw + 2, ch + 2);
+
+        // Subtle shadow below card
+        const shadowGrad = ctx.createLinearGradient(cardX, cardY + ch, cardX, cardY + ch + 4);
+        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.4)');
+        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = shadowGrad;
+        ctx.fillRect(cardX, cardY + ch, cw, 4);
     }
+
+    // === EMPTY SLOTS (if less than 10 cards, show empty slots) ===
+    const totalSlots = cols * rows;
+    for (let i = cards.length; i < totalSlots; i++) {
+        const col = i % 5, row = Math.floor(i / 5);
+        const slotX = marginX + col * (slotW + gapX);
+        const slotY = marginY + row * (slotH + gapY);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(slotX, slotY, slotW, slotH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(slotX, slotY, slotW, slotH);
+    }
+
     return canvas.toBuffer('image/png');
 }
 
