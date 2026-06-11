@@ -105,6 +105,7 @@ function buildTradePanel(guildId, userId, username) {
             `\n**Apa yang mau kamu lakukan?**\n` +
             ui.menuList([
                 { emoji: '📤', label: 'Offer', desc: 'Tawarkan itemmu ke pemain lain' },
+                { emoji: '🃏', label: 'Kartu', desc: 'Trade kartu Pokemon TCG (masukkan ID)' },
                 { emoji: '📋', label: 'List', desc: 'Lihat semua tawaran yang masih berjalan' },
                 { emoji: '✅', label: 'Accept', desc: 'Setujui tawaran yang masuk ke kamu' },
                 { emoji: '❌', label: 'Reject', desc: 'Tolak tawaran masuk / batalkan punyamu' },
@@ -115,6 +116,7 @@ function buildTradePanel(guildId, userId, username) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`trade_offer_${userId}`).setLabel('📤 Offer').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`trade_card_${userId}`).setLabel('🃏 Kartu').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`trade_list_${userId}`).setLabel('📋 List').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`trade_accept_${userId}`).setLabel('✅ Accept').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`trade_reject_${userId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
@@ -261,6 +263,61 @@ async function handleTradeButton(interaction) {
     // === OFFER: show giveable items select menu ===
     if (action === 'offer') {
         return interaction.update(buildGiveMenu(guildId, userId, interaction.user.username));
+    }
+
+    // === CARD TRADE: show modal asking for card ID ===
+    if (action === 'card') {
+        const modal = new ModalBuilder()
+            .setCustomId(`trade_modal_card_${userId}`)
+            .setTitle('🃏 Trade Kartu Pokemon');
+        const idInput = new TextInputBuilder()
+            .setCustomId('card_id')
+            .setLabel('Masukkan ID kartu yang ingin di-trade')
+            .setPlaceholder('Contoh: 15 (lihat ID di /card → Collection)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(10);
+        modal.addComponents(new ActionRowBuilder().addComponents(idInput));
+        return interaction.showModal(modal);
+    }
+
+    // === CARD CONFIRM: user confirmed the card trade ===
+    if (action === 'cardconfirm') {
+        const cardId = parseInt(parts[2]);
+        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
+        if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan atau bukan milikmu!', ephemeral: true });
+
+        // Store card in pending and show user picker
+        pendingTradeGive.set(`${guildId}_${userId}`, { type: 'card', id: String(cardId) });
+
+        const RARITIES = require('./cardGame').RARITIES;
+        const r = RARITIES[card.rarity] || { emoji: '⚪' };
+        const embed = new EmbedBuilder()
+            .setTitle('🃏 Trade Kartu — Pilih Lawan Trade')
+            .setColor('#E74C3C')
+            .setDescription(
+                `Kamu akan trade:\n\n` +
+                `> ${r.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]\n\n` +
+                `Sekarang pilih **siapa** yang mau diajak trade 👇`
+            )
+            .setThumbnail(card.imageUrl || null)
+            .setFooter({ text: 'Pilih user, lalu isi apa yang kamu minta' });
+
+        const pickRow = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId(`trade_targetpick_${userId}`)
+                .setPlaceholder('🤝 Pilih lawan trade...')
+                .setMinValues(1).setMaxValues(1)
+        );
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`trade_back_${userId}`).setLabel('🔙 Batal').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [pickRow, backRow] });
+    }
+
+    // === CARD CANCEL: user cancelled card trade ===
+    if (action === 'cardcancel') {
+        return interaction.update(buildTradePanel(guildId, userId, interaction.user.username));
     }
 
     // === LIST: Show pending trades ===
@@ -608,6 +665,42 @@ async function handleTradeModal(interaction) {
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan modal kamu!', ephemeral: true });
+    }
+
+    // === CARD ID SUBMISSION: show preview + confirm ===
+    if (action === 'card') {
+        const cardIdStr = interaction.fields.getTextInputValue('card_id').trim();
+        const cardId = parseInt(cardIdStr);
+        if (isNaN(cardId)) return interaction.reply({ content: '❌ ID harus berupa angka!', ephemeral: true });
+
+        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
+        if (!card) return interaction.reply({ content: `❌ Kartu dengan ID **${cardId}** tidak ditemukan di koleksimu!\n> Cek ID di /card → Collection.`, ephemeral: true });
+
+        const RARITIES = require('./cardGame').RARITIES;
+        const r = RARITIES[card.rarity] || { emoji: '⚪', color: '#AAA' };
+
+        const embed = new EmbedBuilder()
+            .setTitle('🃏 Konfirmasi Trade Kartu')
+            .setColor(r.color || '#E74C3C')
+            .setDescription(
+                `Apakah kamu yakin ingin **trade** kartu ini?\n\n` +
+                `> ${r.emoji} **${card.name}**\n` +
+                `> 📦 Set: *${card.setName}*\n` +
+                `> ⭐ Rarity: ${card.rarity}\n` +
+                (card.types ? `> 🔥 Type: ${card.types}\n` : '') +
+                (card.hp ? `> ❤️ HP: ${card.hp}\n` : '') +
+                `> 🆔 ID: \`${card.id}\`\n\n` +
+                `⚠️ Kartu akan **hilang** dari koleksimu setelah trade berhasil!`
+            )
+            .setImage(card.imageUrl || null)
+            .setFooter({ text: 'Klik Confirm untuk lanjut pilih lawan trade' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`trade_cardconfirm_${cardId}_${userId}`).setLabel('✅ Confirm').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`trade_cardcancel_0_${userId}`).setLabel('❌ Batal').setStyle(ButtonStyle.Danger),
+        );
+
+        return interaction.reply({ embeds: [embed], components: [row], ephemeral: false });
     }
 
     // === OFFER SUBMISSION ===
