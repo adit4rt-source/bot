@@ -206,7 +206,6 @@ function addStardust(uid, n) { db.prepare('INSERT OR IGNORE INTO card_stardust(u
 function buildPanel(userId) {
     const total = db.prepare('SELECT COUNT(*) as c FROM pokemon_cards WHERE userId=?').get(userId).c;
     const unique = db.prepare('SELECT COUNT(DISTINCT cardApiId) as c FROM pokemon_cards WHERE userId=?').get(userId).c;
-    const dust = getStardust(userId);
 
     const top = db.prepare(`SELECT * FROM pokemon_cards WHERE userId=? ORDER BY
         CASE rarity WHEN 'Special Art Rare' THEN 0 WHEN 'Illustration Rare' THEN 1 WHEN 'Rare Secret' THEN 2
@@ -222,8 +221,7 @@ function buildPanel(userId) {
         .setColor('#E74C3C')
         .setDescription(
             `**📊 Stats:**\n` +
-            `> 🃏 Kartu: **${total}** | 🎴 Unique: **${unique}**\n` +
-            `> 💫 Stardust: **${dust}**\n\n` +
+            `> 🃏 Kartu: **${total}** | 🎴 Unique: **${unique}**\n\n` +
             `**🏆 Top Cards:**\n${topDesc}\n\n` +
             `**🎴 Gacha Packs:**\n` +
             `> 🟢 **Basic** — 3 kartu (💰 15.000)\n` +
@@ -232,13 +230,11 @@ function buildPanel(userId) {
             `> 💎 **Master** — 10 kartu (💰 750.000)\n\n` +
             `**📋 Menu:**\n` +
             `> 📖 **Collection** — Gallery kartu milikmu (paginated)\n` +
-            `> 🔥 **Burn** — Hancurkan kartu → Stardust\n` +
             `> 🔄 **Trade** — Tukar kartu duplikat\n` +
             `> ❤️ **Wishlist** — Pokemon incaran\n` +
-            `> 📦 **By Set** — Lihat koleksi per Set\n` +
             `> 📊 **Leaderboard** — Top collectors`
         )
-        .setFooter({ text: 'Fan-made • Not affiliated with Nintendo/The Pokemon Company • Today at ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) })
+        .setFooter({ text: 'Fan-made • Not affiliated with Nintendo/The Pokemon Company' })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -249,14 +245,10 @@ function buildPanel(userId) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('📦 By Set').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`card_wishlist_${userId}`).setLabel('❤️ Wishlist').setStyle(ButtonStyle.Secondary),
-    );
-    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`card_leaderboard_${userId}`).setLabel('📊 Leaderboard').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_stardust_${userId}`).setLabel('💫 Stardust').setStyle(ButtonStyle.Secondary),
     );
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 async function handleCardPanelCommand(interaction) { return interaction.reply(buildPanel(interaction.user.id)); }
@@ -611,9 +603,7 @@ async function handleCardPanelButton(interaction) {
 
     const action = parts[1];
     if (action === 'collection') return handleCardsCommand(interaction);
-    if (action === 'album') return handleCardAlbum(interaction);
     if (action === 'leaderboard') return handleCardLeaderboard(interaction);
-    if (action === 'stardust') return handleStardustCommand(interaction);
     if (action === 'drop') return handleGacha(interaction, 'basic', userId);
     if (action === 'back') return interaction.update(buildPanel(userId));
     if (action === 'wishlist') {
@@ -621,6 +611,9 @@ async function handleCardPanelButton(interaction) {
         const desc = list.length ? list.map((w,i) => `**${i+1}.** ❤️ ${w.name}`).join('\n') : '*Kosong!*';
         return interaction.reply({ embeds: [new EmbedBuilder().setTitle('❤️ Wishlist').setColor('#FF69B4').setDescription(desc+'\n\n-# /wishlist add/remove').setFooter({text:`${list.length}/10`})], ephemeral: true });
     }
+    // Legacy handlers for old buttons still in chat
+    if (action === 'album') return handleCardAlbum(interaction);
+    if (action === 'stardust') return handleStardustCommand(interaction);
 }
 
 function isCardPanelButton(id) { return typeof id === 'string' && (id.startsWith('card_') || id.startsWith('cardpage_')) && !id.startsWith('cardgrab_') && !id.startsWith('cardtrade_'); }
