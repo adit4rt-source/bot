@@ -13,7 +13,7 @@ function parseTradeItem(str) {
     const parts = str.split(':');
     if (parts.length !== 2) return null;
     const [type, id] = parts;
-    if (!['fish', 'relic', 'money', 'pet'].includes(type)) return null;
+    if (!['fish', 'relic', 'money', 'pet', 'card'].includes(type)) return null;
     return { type, id };
 }
 
@@ -36,6 +36,13 @@ function getItemDisplayName(type, id, guildId) {
         if (!pet) return `🐾 Pet #${id} (tidak ditemukan)`;
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         return petDef ? `${petDef.emoji} **${pet.name}** (Lv.${pet.level})` : `🐾 Pet #${id}`;
+    }
+    if (type === 'card') {
+        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ?').get(parseInt(id));
+        if (!card) return `🃏 Card #${id} (tidak ditemukan)`;
+        const RARITIES = require('./cardGame').RARITIES;
+        const r = RARITIES[card.rarity] || { emoji: '⚪' };
+        return `${r.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]`;
     }
     return `❓ Unknown`;
 }
@@ -70,6 +77,15 @@ function getGiveableItems(guildId, userId) {
         const fd = FISH_DATA.find(x => x.id === f.fishId);
         out.push({ type: 'fish', id: String(f.id), label: `${fd ? fd.emoji : '🐟'} ${fd ? fd.name : 'Fish'} (${f.weight}kg)`, desc: fd ? fd.tier : 'Fish' });
     }
+    // Pokemon Cards
+    try {
+        const cards = db.prepare('SELECT * FROM pokemon_cards WHERE userId = ? AND locked = 0 ORDER BY id DESC').all(userId);
+        for (const c of cards) {
+            const RARITIES = require('./cardGame').RARITIES;
+            const r = RARITIES[c.rarity] || { emoji: '⚪' };
+            out.push({ type: 'card', id: String(c.id), label: `${r.emoji} ${c.name} [${c.rarity}]`.substring(0, 100), desc: c.setName || 'Pokemon TCG' });
+        }
+    } catch (_) {}
     return out;
 }
 
@@ -338,6 +354,9 @@ async function handleTradeSelectMenu(interaction) {
         } else if (type === 'pet') {
             const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(id), guildId, userId);
             if (!pet) return interaction.reply({ content: '❌ Pet itu sudah tidak ada!', ephemeral: true });
+        } else if (type === 'card') {
+            const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(id), userId);
+            if (!card) return interaction.reply({ content: '❌ Kartu Pokemon itu sudah tidak ada!', ephemeral: true });
         }
 
         // Store the chosen give-item, then ask WHO to trade with via a user-picker
@@ -478,6 +497,10 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
         const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(senderGive.id), guildId, trade.senderId);
         if (!pet) return interaction.reply({ content: '❌ Sender sudah tidak punya pet tersebut!', ephemeral: true });
     }
+    if (senderGive.type === 'card') {
+        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(senderGive.id), trade.senderId);
+        if (!card) return interaction.reply({ content: '❌ Sender sudah tidak punya kartu tersebut!', ephemeral: true });
+    }
 
     // Validate receiver (current user) has what sender wants
     const receiverData = getOrCreateUser(guildId, userId);
@@ -496,18 +519,24 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
         const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(senderWant.id), guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Kamu tidak punya pet yang diminta!', ephemeral: true });
     }
+    if (senderWant.type === 'card') {
+        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(senderWant.id), userId);
+        if (!card) return interaction.reply({ content: '❌ Kamu tidak punya kartu yang diminta!', ephemeral: true });
+    }
 
     // Execute trade: sender's offer -> receiver
     if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
     if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
     if (senderGive.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, userId); }
     if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+    if (senderGive.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(userId, parseInt(senderGive.id)); }
 
     // receiver's offer -> sender
     if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
     if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
     if (senderWant.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, userId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId); }
     if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+    if (senderWant.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(trade.senderId, parseInt(senderWant.id)); }
 
     db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
 

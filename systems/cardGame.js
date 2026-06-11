@@ -230,7 +230,7 @@ function buildPanel(userId) {
             `> 💎 **Master** — 10 kartu (💰 750.000)\n\n` +
             `**📋 Menu:**\n` +
             `> 📖 **Collection** — Gallery kartu milikmu (paginated)\n` +
-            `> 🔄 **Trade** — Tukar kartu duplikat\n` +
+            `> 🔄 **Trade** — Gunakan /trade untuk tukar kartu\n` +
             `> ❤️ **Wishlist** — Pokemon incaran\n` +
             `> 📊 **Leaderboard** — Top collectors`
         )
