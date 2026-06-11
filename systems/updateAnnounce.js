@@ -37,7 +37,7 @@ async function sendUpdateAnnouncement(client) {
             .setTitle(`🎉 MAJOR UPDATE — v${CURRENT_VERSION}`)
             .setDescription(
                 `**Release ${CURRENT_VERSION}** — ${RELEASE_DATE}\n\n` +
-                `🃏 **Pokemon TCG Card Gacha** + 🎣 **Fishing Rod Inventory**!\n` +
+                `Update besar! Sistem kartu Pokemon TCG & perbaikan fishing.\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp();
@@ -46,53 +46,52 @@ async function sendUpdateAnnouncement(client) {
             .setColor('#E74C3C')
             .setTitle('🃏 Pokemon TCG Card System (BARU!)')
             .setDescription(
-                `Sistem gacha kartu Pokemon dengan 20,000+ kartu asli!\n\n` +
-                `**🎴 Gacha Packs:**\n` +
-                `> 🟢 Basic — 3 kartu (💰 15.000) ⏱️ 5m\n` +
-                `> 🔵 Premium — 3 kartu (💰 75.000) ⏱️ 15m\n` +
-                `> 🟣 Ultra — 3 kartu (💰 200.000) ⏱️ 30m\n` +
-                `> 💎 Master — 10 kartu (💰 750.000) ⏱️ 60m\n\n` +
-                `**✨ Fitur:**\n` +
-                `> 📖 Collection Gallery — 10 kartu/page, style card book\n` +
-                `> 🔄 Dupe Detection — Tandai kartu duplikat\n` +
-                `> ❤️ Wishlist — Ping saat Pokemon incaran muncul\n` +
-                `> 📊 Leaderboard — Most Cards / Rare / Unique\n` +
-                `> 💸 Total Spent tracking\n` +
-                `> 🔄 Trade via /trade → 🃏 Kartu (2-way confirm)\n\n` +
-                `**⚡ Command:** \`/card\``
+                `Koleksi kartu Pokemon asli dari database **20,359 kartu** HD!\nDari generasi pertama sampai terbaru — semua ada.\n\n` +
+                `**🎴 Gacha Packs (beli dari /card):**\n` +
+                `> 🟢 **Basic Pack** — 3 kartu (💰 15.000) ⏱️ 5m CD\n` +
+                `>    Pool: Common, Uncommon, Rare\n` +
+                `> 🔵 **Premium Pack** — 3 kartu (💰 75.000) ⏱️ 15m CD\n` +
+                `>    Pool: Rare, Rare Holo, Holo EX/GX/V\n` +
+                `> 🟣 **Ultra Pack** — 3 kartu (💰 200.000) ⏱️ 30m CD\n` +
+                `>    Pool: Rare Holo, Ultra, Rainbow, Secret\n` +
+                `> 💎 **Master Pack** — **10 kartu** (💰 750.000) ⏱️ 60m CD\n` +
+                `>    Pool: SEMUA rarity + guaranteed 1 Ultra+!\n\n` +
+                `**📊 Rarity (jumlah kartu):**\n` +
+                `> ⚪ Common (5,289) | 🟢 Uncommon (4,862)\n` +
+                `> 🔵 Rare (8,600) | 🟣 Rare Holo (2,695)\n` +
+                `> 🟡 Holo EX/GX/V (764) | 🔴 Ultra (798)\n` +
+                `> 🌈 Rainbow (324) | 👑 Secret (325) | 🎨 Illustration (697)`
             );
 
         const embed3 = new EmbedBuilder()
-            .setColor('#3498DB')
-            .setTitle('🎣 Fishing — Rod Inventory System')
+            .setColor('#FFD700')
+            .setTitle('✨ Fitur Card System')
             .setDescription(
-                `Joran sekarang **permanen** dan bisa di-equip/unequip!\n\n` +
-                `**🆕 Yang Berubah:**\n` +
-                `> 🎋 Joran yang dibeli masuk **inventory** (tidak hilang!)\n` +
-                `> ❌ Tidak bisa beli joran yang sudah dimiliki\n` +
-                `> 🔄 **Equip/Unequip** — Ganti joran kapan saja\n` +
-                `> ✅ Shop tampilkan status "Owned" per joran\n\n` +
-                `**💡 Cara Pakai:**\n` +
-                `> \`/fishing\` → 🎋 **Equip Rod** → Pilih joran\n\n` +
-                `-# *Joran yang sudah dimiliki sebelum update otomatis masuk inventory.*`
+                `**📖 Collection Gallery:**\n` +
+                `> Tampilan card book premium (10 kartu/page)\n` +
+                `> Background gelap + gold border + rarity glow\n` +
+                `> Pagination ◀️ ▶️ untuk browse\n\n` +
+                `**🔄 Dupe Detection:** Kartu duplikat ditandai 🔄 DUPE\n` +
+                `**❤️ Wishlist:** Max 10 Pokemon, auto-ping saat muncul\n` +
+                `**🔄 Trade:** /trade → 🃏 Kartu (2-way, kedua setuju)\n` +
+                `**📊 Leaderboard:** Most Cards / Rare / Unique\n` +
+                `**💸 Total Spent:** Track pengeluaran di panel\n` +
+                `**⏱️ Cooldown:** 5m - 60m per pack tier`
             );
 
         const embed4 = new EmbedBuilder()
-            .setColor('#9B59B6')
-            .setTitle('📋 Detail Lainnya')
+            .setColor('#3498DB')
+            .setTitle('🎣 Fishing — Rod Inventory & Equip')
             .setDescription(
-                `**🃏 Card System Tech:**\n` +
-                `> 🌐 Data: pokemontcg.io (20,359 kartu)\n` +
-                `> 💾 Cache offline — gacha instant tanpa internet\n` +
-                `> 🖼️ Gambar HD langsung dari API\n` +
-                `> ⏱️ Cooldown per pack tier\n\n` +
-                `**🎣 Fishing Fix:**\n` +
-                `> 🐛 Fix: beli joran 2x uang hilang → SOLVED\n` +
-                `> 🐛 Fix: joran lama hilang saat beli baru → SOLVED\n\n` +
-                `**🔧 Infrastructure:**\n` +
-                `> Background card prefetch saat bot start\n` +
-                `> Image timeout protection (8s)\n` +
-                `> Smart cache scaling (90% cache saat penuh)\n`
+                `**🐛 Bug Fixed:**\n` +
+                `> ❌ Beli joran 2x → uang hilang — **SOLVED!**\n` +
+                `> ❌ Joran lama hilang saat beli baru — **SOLVED!**\n\n` +
+                `**🆕 Sistem Baru:**\n` +
+                `> 🎋 **Rod Inventory** — Joran tersimpan permanen\n` +
+                `> 🔄 **Equip/Unequip** — Ganti joran via /fishing → 🎋 Equip\n` +
+                `> ✅ Shop tampilkan "Owned" per joran\n` +
+                `> 🚫 Tidak bisa beli joran yang sudah punya\n\n` +
+                `-# Joran lama otomatis masuk inventory.`
             )
             .setFooter({ text: `Update oleh Peko • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
             .setTimestamp();
