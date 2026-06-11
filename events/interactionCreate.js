@@ -217,6 +217,8 @@ async function routeInteraction(interaction) {
             const r = claimDaily(guildId, interaction.user.id, { today });
             if (r.alreadyClaimed) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
 
+            await interaction.deferReply();
+
             updateQuestProgress(guildId, interaction.user.id, 'daily', 1);
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'daily' });
 
@@ -265,8 +267,13 @@ async function routeInteraction(interaction) {
                         db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
                             interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
                     }
-                    const img = await generateGachaImage(cards);
-                    const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    let att;
+                    try {
+                        const img = await generateGachaImage(cards);
+                        att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    } catch(imgErr) {
+                        console.error('[Daily] Card image gen failed:', imgErr.message);
+                    }
                     const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
                     const cardList = cards.map((c, i) => {
                         const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
@@ -276,13 +283,18 @@ async function routeInteraction(interaction) {
                         .setColor('#FF6B35')
                         .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
                         .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
-                        .setImage('attachment://daily_cards.png')
                         .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
-                    return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                    if (att) {
+                        cardEmbed.setImage('attachment://daily_cards.png');
+                        return interaction.editReply({ embeds: [embed, cardEmbed], files: [att] });
+                    }
+                    return interaction.editReply({ embeds: [embed, cardEmbed] });
+                } else {
+                    console.error('[Daily] pullCards returned empty — cache likely empty. Run: node prefetch-cards.js');
                 }
-            } catch (e) { console.error('[Daily] Card bonus error:', e.message); }
+            } catch (e) { console.error('[Daily] Card bonus FULL error:', e.message, e.stack); }
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         // ================= FISHING COMMANDS =================
@@ -1278,8 +1290,13 @@ async function routeInteraction(interaction) {
                         db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
                             interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
                     }
-                    const img = await generateGachaImage(cards);
-                    const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    let att;
+                    try {
+                        const img = await generateGachaImage(cards);
+                        att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    } catch(imgErr) {
+                        console.error('[Daily-Btn] Card image gen failed:', imgErr.message);
+                    }
                     const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
                     const cardList = cards.map((c, i) => {
                         const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
@@ -1289,11 +1306,16 @@ async function routeInteraction(interaction) {
                         .setColor('#FF6B35')
                         .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
                         .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
-                        .setImage('attachment://daily_cards.png')
                         .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
-                    return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                    if (att) {
+                        cardEmbed.setImage('attachment://daily_cards.png');
+                        return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                    }
+                    return interaction.reply({ embeds: [embed, cardEmbed] });
+                } else {
+                    console.error('[Daily-Btn] pullCards returned empty — cache likely empty');
                 }
-            } catch (e) { console.error('[Daily] Card bonus error:', e.message); }
+            } catch (e) { console.error('[Daily-Btn] Card bonus FULL error:', e.message, e.stack); }
 
             return interaction.reply({ embeds: [embed] });
         }
