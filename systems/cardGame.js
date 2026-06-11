@@ -650,7 +650,8 @@ async function handleCardViewCommand(interaction) {
             }
         } catch(_){}
 
-        if (!price && !CACHE_ONLY) needsApiFetch = true;
+        // Always allow single-card API fetch for price (even in CACHE_ONLY mode)
+        if (!price) needsApiFetch = true;
     }
 
     // Defer if we need to fetch from API (takes time)
