@@ -111,6 +111,18 @@ const commands = [
 
     // ================= POKEMON TCG CARDS =================
     new SlashCommandBuilder().setName('card').setDescription('🃏 Pokemon TCG Panel — Drop, collect, trade, burn Pokemon cards'),
+    new SlashCommandBuilder().setName('cardview').setDescription('🔍 Lihat detail kartu Pokemon')
+        .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu (dari koleksi)').setRequired(true)),
+    new SlashCommandBuilder().setName('cards').setDescription('📖 Koleksi kartu Pokemon')
+        .addUserOption(opt => opt.setName('user').setDescription('Lihat koleksi user lain').setRequired(false)),
+    new SlashCommandBuilder().setName('cardlb').setDescription('📊 Card Leaderboard — Top collectors')
+        .addStringOption(opt => opt.setName('tipe').setDescription('Tipe leaderboard').setRequired(false)
+            .addChoices(
+                { name: '🃏 Total Cards', value: 'total' },
+                { name: '🎴 Unique Cards', value: 'unique' },
+                { name: '👑 Rare+ Cards', value: 'rare' },
+                { name: '💰 Most Valuable', value: 'value' },
+            )),
 
     // ================= AFK =================
     new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')
