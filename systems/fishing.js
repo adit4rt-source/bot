@@ -19,6 +19,30 @@ function setPlayerLocation(guildId, userId, locationId) {
     db.prepare('UPDATE fish_equipment SET location = ? WHERE userId = ?').run(locationId, userId);
 }
 
+function getOwnedRods(userId) {
+    try {
+        const rows = db.prepare('SELECT rodId FROM rod_inventory WHERE userId=?').all(userId);
+        const ids = rows.map(r => r.rodId);
+        if (!ids.includes('basic')) ids.unshift('basic'); // everyone owns basic
+        return ids;
+    } catch(_) { return ['basic']; }
+}
+
+function ownsRod(userId, rodId) {
+    if (rodId === 'basic') return true;
+    try {
+        return !!db.prepare('SELECT 1 FROM rod_inventory WHERE userId=? AND rodId=?').get(userId, rodId);
+    } catch(_) { return false; }
+}
+
+function addRodToInventory(userId, rodId) {
+    try { db.prepare('INSERT OR IGNORE INTO rod_inventory (userId, rodId) VALUES (?, ?)').run(userId, rodId); } catch(_) {}
+}
+
+function equipRod(userId, rodId) {
+    db.prepare('UPDATE fish_equipment SET rod=? WHERE userId=?').run(rodId, userId);
+}
+
 // ==================== MONSTER LOOT DROPS ====================
 // Monsters have a chance to drop loot when encountered
 const MONSTER_LOOT = [
@@ -414,4 +438,4 @@ function catchFish(guildId, userId) {
     return { fish, tier: selectedTier, weight, value, location, luckPenalty: luckPenaltyApplied, droppedPart, activeWeather };
 }
 
-module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER };
+module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getOwnedRods, ownsRod, addRodToInventory, equipRod, rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER };

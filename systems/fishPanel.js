@@ -58,7 +58,8 @@ function buildFishingPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('💰 Sell All').setStyle(ButtonStyle.Danger)
     );
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('🔧 Upgrade Rod').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('🔧 Upgrade Rod').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('🎋 Equip Rod').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2, row3] };
 }
@@ -467,10 +468,12 @@ async function handleFishingButton(interaction) {
     // === SHOP ===
     if (action === 'shop') {
         const eq = getEquipment(guildId, userId);
+        const { getOwnedRods } = require('./fishing');
+        const ownedRods = getOwnedRods(userId);
         let desc = '**🎋 JORAN**\n';
         ROD_TYPES.forEach(r => {
-            const owned = eq.rod === r.id || r.id === 'basic';
-            desc += `> ${r.emoji} **${r.name}** ${owned ? '✅' : `🪙 ${r.price.toLocaleString('id-ID')}`} | CD:${r.cooldown}s +${r.rareBonus}%\n`;
+            const owned = ownedRods.includes(r.id);
+            desc += `> ${r.emoji} **${r.name}** ${owned ? '✅ Owned' : `🪙 ${r.price.toLocaleString('id-ID')}`} | CD:${r.cooldown}s +${r.rareBonus}%\n`;
         });
         desc += '\n**🪱 UMPAN (x10)**\n';
         BAIT_TYPES.filter(b => b.id !== 'none').forEach(b => {
@@ -479,7 +482,7 @@ async function handleFishingButton(interaction) {
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '...';
 
         const rodMenu = new StringSelectMenuBuilder().setCustomId(`fish_shoprod_${userId}`).setPlaceholder('🎋 Beli Joran...').setMinValues(1).setMaxValues(1);
-        ROD_TYPES.filter(r => r.id !== 'basic' && r.id !== eq.rod).forEach(r => {
+        ROD_TYPES.filter(r => r.id !== 'basic' && !ownedRods.includes(r.id)).forEach(r => {
             rodMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${r.name} (🪙${r.price.toLocaleString('id-ID')})`).setValue(r.id).setDescription(`CD:${r.cooldown}s | +${r.rareBonus}% rare`));
         });
         const baitMenu = new StringSelectMenuBuilder().setCustomId(`fish_shopbait_${userId}`).setPlaceholder('🪱 Beli Umpan x10...').setMinValues(1).setMaxValues(1);
@@ -490,7 +493,7 @@ async function handleFishingButton(interaction) {
         const embed = new EmbedBuilder().setTitle('🛒 Fishing Shop').setColor('#2B2D31').setDescription(desc)
             .setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')}` });
         const components = [];
-        if (ROD_TYPES.filter(r => r.id !== 'basic' && r.id !== eq.rod).length > 0) components.push(new ActionRowBuilder().addComponents(rodMenu));
+        if (ROD_TYPES.filter(r => r.id !== 'basic' && !ownedRods.includes(r.id)).length > 0) components.push(new ActionRowBuilder().addComponents(rodMenu));
         components.push(new ActionRowBuilder().addComponents(baitMenu));
         components.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)));
         return interaction.update({ embeds: [embed], components });
@@ -692,6 +695,8 @@ async function handleFishingButton(interaction) {
         let embed;
         if (success) {
             db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(nextRod.id, guildId, userId);
+            const { addRodToInventory } = require('./fishing');
+            addRodToInventory(userId, nextRod.id);
             embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎉 UPGRADE BERHASIL!')
                 .setDescription(
                     `${currentRod.emoji} ${currentRod.name} → ${nextRod.emoji} **${nextRod.name}**\n\n` +
@@ -717,6 +722,34 @@ async function handleFishingButton(interaction) {
             new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Panel').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === EQUIP ROD ===
+    if (action === 'equip') {
+        const { getOwnedRods } = require('./fishing');
+        const ownedRods = getOwnedRods(userId);
+        if (ownedRods.length <= 1) {
+            return interaction.reply({ content: '❌ Kamu hanya punya Joran Bambu. Beli joran lain dulu!', ephemeral: true });
+        }
+        const eq = getEquipment(guildId, userId);
+        let desc = '**🎋 Pilih joran yang mau dipakai:**\n\n';
+        ownedRods.forEach(rodId => {
+            const r = ROD_TYPES.find(x => x.id === rodId);
+            if (!r) return;
+            const isEquipped = eq.rod === rodId;
+            desc += `> ${r.emoji} **${r.name}** ${isEquipped ? '⚡ *EQUIPPED*' : ''} | CD:${r.cooldown}s +${r.rareBonus}%\n`;
+        });
+        const menu = new StringSelectMenuBuilder().setCustomId(`fish_equiprod_${userId}`).setPlaceholder('🎋 Pilih joran...').setMinValues(1).setMaxValues(1);
+        ownedRods.forEach(rodId => {
+            const r = ROD_TYPES.find(x => x.id === rodId);
+            if (r) menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(r.name).setValue(r.id).setDescription(`CD:${r.cooldown}s | +${r.rareBonus}% rare`));
+        });
+        const embed = new EmbedBuilder().setTitle('🎋 Equip Rod').setColor('#2B2D31').setDescription(desc);
+        const components = [
+            new ActionRowBuilder().addComponents(menu),
+            new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary))
+        ];
+        return interaction.update({ embeds: [embed], components });
     }
 
     return null;
@@ -759,14 +792,32 @@ async function handleFishingSelectMenu(interaction) {
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
+    // === EQUIP ROD SELECT ===
+    if (customId.startsWith('fish_equiprod_')) {
+        const rodId = interaction.values[0];
+        const { ownsRod, equipRod } = require('./fishing');
+        if (!ownsRod(userId, rodId) && rodId !== 'basic') return interaction.reply({ content: '❌ Kamu tidak punya joran ini!', ephemeral: true });
+        equipRod(userId, rodId);
+        const rodDef = ROD_TYPES.find(r => r.id === rodId);
+        const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✅ Joran Dipasang!')
+            .setDescription(`${rodDef.emoji} **${rodDef.name}** sekarang terpasang!\n> CD: ${rodDef.cooldown}s | Rare+: +${rodDef.rareBonus}%`);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
     // === SHOP ROD ===
     if (customId.startsWith('fish_shoprod_')) {
         const rodId = interaction.values[0];
         const rodDef = ROD_TYPES.find(r => r.id === rodId);
         if (!rodDef) return interaction.reply({ content: '❌ Joran tidak ditemukan!', ephemeral: true });
+        const { ownsRod, addRodToInventory, equipRod } = require('./fishing');
+        if (ownsRod(userId, rodId)) return interaction.reply({ content: `❌ Kamu sudah punya ${rodDef.emoji} **${rodDef.name}**! Gunakan Equip untuk memasangnya.`, ephemeral: true });
         if (userData.balance < rodDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${rodDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(rodDef.price, guildId, userId);
-        db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(rodId, guildId, userId);
+        addRodToInventory(userId, rodId);
+        equipRod(userId, rodId);
         await checkAchievements(interaction.guild, userId, { type: 'fish_rod', rod: rodId });
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✅ Joran Dibeli!')
             .setDescription(`${rodDef.emoji} **${rodDef.name}** terpasang!\n> CD: ${rodDef.cooldown}s | Rare+: +${rodDef.rareBonus}%\n> 💰 Saldo: 🪙 **${(userData.balance - rodDef.price).toLocaleString('id-ID')}**`);
@@ -842,7 +893,7 @@ function isFishingPanelButton(customId) {
 }
 
 function isFishingPanelSelectMenu(customId) {
-    return customId.startsWith('fish_shop') || customId.startsWith('fish_setloc_');
+    return customId.startsWith('fish_shop') || customId.startsWith('fish_setloc_') || customId.startsWith('fish_equiprod_');
 }
 
 function isFishingPanelModal(customId) {

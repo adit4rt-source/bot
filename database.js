@@ -24,7 +24,7 @@ try {
 const GLOBAL_TABLES = new Set([
     'users', 'user_stats', 'achievements', 'pets', 'relics',
     'item_inventory', 'pet_food_inventory', 'seed_inventory', 'fertilizer_inventory',
-    'fish_inventory', 'fish_collection', 'fish_equipment',
+    'fish_inventory', 'fish_collection', 'fish_equipment', 'rod_inventory',
     'farm_plots', 'farm_storage', 'farm_data', 'farm_decorations',
     'auto_harvest', 'combo_tracker', 'trades', 'market_listings',
     'command_summary', 'pet_evolution_history',
@@ -266,6 +266,15 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId TEXT, fishId TEXT, PRIMARY KEY(guildId, userId, fishId));
   CREATE TABLE IF NOT EXISTS fish_equipment (guildId TEXT, userId TEXT, rod TEXT DEFAULT 'basic', bait TEXT DEFAULT 'none', bait_count INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId));
 `);
+
+db.exec(`CREATE TABLE IF NOT EXISTS rod_inventory (userId TEXT, rodId TEXT, PRIMARY KEY(userId, rodId))`);
+
+// Migrate: give all existing players their currently equipped rod in rod_inventory
+try {
+    const equipped = db.prepare("SELECT userId, rod FROM fish_equipment WHERE rod != 'basic'").all();
+    const insertRod = db.prepare('INSERT OR IGNORE INTO rod_inventory (userId, rodId) VALUES (?, ?)');
+    for (const e of equipped) insertRod.run(e.userId, e.rod);
+} catch(_) {}
 
 // ================= MIGRATIONS =================
 try { db.exec(`ALTER TABLE fish_inventory ADD COLUMN locked INTEGER DEFAULT 0`); } catch(e) {}

@@ -1043,10 +1043,13 @@ async function routeInteraction(interaction) {
             if (selected.startsWith('rod_')) {
                 const rodId = selected.substring(4), rodDef = ROD_TYPES.find(r => r.id === rodId);
                 if (!rodDef) return interaction.reply({ content: '❌ Joran tidak ditemukan!', ephemeral: true });
+                const { ownsRod, addRodToInventory, equipRod } = require('../systems/fishing');
+                if (ownsRod(interaction.user.id, rodId)) return interaction.reply({ content: `❌ Kamu sudah punya ${rodDef.emoji} **${rodDef.name}**!`, ephemeral: true });
                 if (userData.balance < rodDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${rodDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
                 userData.balance -= rodDef.price;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
-                db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(rodId, guildId, interaction.user.id);
+                addRodToInventory(interaction.user.id, rodId);
+                equipRod(interaction.user.id, rodId);
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'fish_rod', rod: rodId });
                 return interaction.reply({ content: `✅ Berhasil membeli ${rodDef.emoji} **${rodDef.name}**! Joran langsung terpasang.\n> Cooldown: ${rodDef.cooldown}s | Rare Bonus: +${rodDef.rareBonus}%` });
             }
