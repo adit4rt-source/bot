@@ -19,16 +19,32 @@ function getPokemonHeaders() {
 // ==================== ONE PIECE (instant) ====================
 async function prefetchOnePiece() {
     try {
-        // Always refresh OP cache to ensure clean images (no SAMPLE watermark)
         const existing = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-        const hasBadUrls = existing > 0 && db.prepare("SELECT 1 FROM onepiece_card_cache WHERE imageUrl LIKE '%onepiece-cardgame.com%' LIMIT 1").get();
+        const hasBadCacheUrls = existing > 0 && db.prepare("SELECT 1 FROM onepiece_card_cache WHERE imageUrl LIKE '%onepiece-cardgame.com%' LIMIT 1").get();
 
-        if (existing >= 2400 && !hasBadUrls) {
+        // Also fix user-owned cards that have SAMPLE URLs
+        try {
+            const badOwned = db.prepare("SELECT COUNT(*) as c FROM onepiece_cards WHERE imageUrl LIKE '%onepiece-cardgame.com%'").get().c;
+            if (badOwned > 0) {
+                console.log(`🏴‍☠️ Card cache: Fixing ${badOwned} owned cards with SAMPLE URLs...`);
+                // Update all owned cards: generate clean URL from cardId
+                const ownedCards = db.prepare("SELECT id, cardId FROM onepiece_cards WHERE imageUrl LIKE '%onepiece-cardgame.com%'").all();
+                const updateStmt = db.prepare('UPDATE onepiece_cards SET imageUrl = ? WHERE id = ?');
+                for (const c of ownedCards) {
+                    const setCode = c.cardId.split('-')[0];
+                    const cleanUrl = `https://limitlesstcg.nyc3.digitaloceanspaces.com/one-piece/${setCode}/${c.cardId}_EN.webp`;
+                    updateStmt.run(cleanUrl, c.id);
+                }
+                console.log(`🏴‍☠️ Card cache: ${badOwned} owned cards fixed! ✅`);
+            }
+        } catch (_) {}
+
+        if (existing >= 2400 && !hasBadCacheUrls) {
             console.log(`🏴‍☠️ Card cache: One Piece sudah lengkap (${existing} cards)`);
             return;
         }
 
-        if (hasBadUrls) console.log('🏴‍☠️ Card cache: Replacing SAMPLE watermark URLs...');
+        if (hasBadCacheUrls) console.log('🏴‍☠️ Card cache: Replacing SAMPLE watermark URLs in cache...');
         else console.log('🏴‍☠️ Card cache: Downloading One Piece cards...');
         const res = await fetch(OP_SOURCE);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
