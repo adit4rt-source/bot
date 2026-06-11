@@ -78,6 +78,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS pokemon_card_cache (
 db.exec(`CREATE TABLE IF NOT EXISTS card_stats (userId TEXT PRIMARY KEY, totalSpent INTEGER DEFAULT 0)`);
 
 // ==================== ONE PIECE DATABASE ====================
+// Force reset: clear old SAMPLE watermark data
+try { db.exec(`DROP TABLE IF EXISTS onepiece_cards`); } catch (_) {}
+try { db.exec(`DROP TABLE IF EXISTS onepiece_card_cache`); } catch (_) {}
+
 db.exec(`CREATE TABLE IF NOT EXISTS onepiece_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId TEXT NOT NULL,
