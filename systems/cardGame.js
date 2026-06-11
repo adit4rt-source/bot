@@ -239,11 +239,11 @@ async function generateGachaImage(cards) {
 async function generateGalleryImage(cards) {
     const cols = Math.min(cards.length, 5);
     const rows = Math.ceil(cards.length / 5);
-    const cw = 150, ch = 210; // card size
-    const slotPad = 6;       // padding inside each slot
+    const cw = 220, ch = 308; // bigger cards for clarity
+    const slotPad = 8;
     const slotW = cw + slotPad * 2, slotH = ch + slotPad * 2;
-    const gapX = 12, gapY = 14;
-    const marginX = 24, marginY = 24;
+    const gapX = 16, gapY = 18;
+    const marginX = 30, marginY = 30;
     const w = cols * slotW + (cols - 1) * gapX + marginX * 2;
     const h = rows * slotH + (rows - 1) * gapY + marginY * 2;
     const canvas = createCanvas(w, h);
