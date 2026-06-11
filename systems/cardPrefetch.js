@@ -1,10 +1,9 @@
 // systems/cardPrefetch.js — Background card cache downloader
 // Runs in background during bot operation — does NOT block the bot
-// Downloads Pokemon TCG + One Piece TCG cards into SQLite cache
+// Downloads Pokemon TCG cards into SQLite cache
 const { db } = require('../database');
 
 const POKEMON_API = 'https://api.pokemontcg.io/v2/cards';
-const OP_SOURCE = 'https://raw.githubusercontent.com/nemesis312/OnePieceTCGEngCardList/master/CardDb3.json';
 const PAGE_SIZE = 250;
 const DELAY_PER_PAGE = 2000; // 2s between pages (gentle on API)
 
@@ -14,45 +13,6 @@ function getPokemonHeaders() {
     const h = { Accept: 'application/json' };
     if (process.env.POKEMON_TCG_API_KEY) h['X-Api-Key'] = process.env.POKEMON_TCG_API_KEY;
     return h;
-}
-
-// ==================== ONE PIECE (instant) ====================
-async function prefetchOnePiece() {
-    try {
-        // Always force re-download to ensure clean URLs (fixes SAMPLE watermark issue)
-        console.log('🏴‍☠️ Card cache: Force re-downloading One Piece cards (clean images)...');
-        try { db.exec('DELETE FROM onepiece_card_cache'); } catch(_) {}
-        try { db.exec('DELETE FROM onepiece_cards'); } catch(_) {}
-        const res = await fetch(OP_SOURCE);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const cards = (json.Cards || []).filter(c => c.Name && c.CardNum);
-
-        const stmt = db.prepare(`INSERT OR REPLACE INTO onepiece_card_cache
-            (cardId, name, rarity, cardType, imageUrl, color, power, cost, attribute, cardSet, effect, cachedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        const batch = db.transaction((items) => { for (const c of items) stmt.run(c.cardId, c.name, c.rarity, c.cardType, c.imageUrl, c.color, c.power, c.cost, c.attribute, c.cardSet, c.effect, Date.now()); });
-
-        const parsed = cards.map(c => {
-            const cardId = c.CardNum.replace('#', '');
-            const setCode = cardId.split('-')[0]; // OP01-001 → OP01
-            // Use limitlesstcg CDN (clean HD images, no SAMPLE watermark)
-            const cleanImageUrl = `https://limitlesstcg.nyc3.digitaloceanspaces.com/one-piece/${setCode}/${cardId}_EN.webp`;
-            return {
-                cardId, name: c.Name, rarity: c.Rarity || 'C',
-                cardType: c.CardType || 'CHARACTER', imageUrl: cleanImageUrl,
-                color: c.Color || '', power: c.Power || '', cost: c.Cost || '',
-                attribute: c.Attribute || '', cardSet: (c.CardSets || '').replace('Card Set(s)', '').trim(),
-                effect: (c.Effect || '').substring(0, 500),
-            };
-        });
-        batch(parsed);
-
-        const total = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-        console.log(`🏴‍☠️ Card cache: One Piece selesai! ${total} cards ✅`);
-    } catch (e) {
-        console.error('🏴‍☠️ Card cache One Piece error:', e.message);
-    }
 }
 
 // ==================== POKEMON (background, slow) ====================
@@ -123,7 +83,6 @@ function startBackgroundPrefetch() {
     // Delay 10 seconds after bot start, then run in background
     setTimeout(async () => {
         console.log('🃏 Card cache: Background prefetch starting...');
-        await prefetchOnePiece();
         await prefetchPokemon();
         console.log('🃏 Card cache: Background prefetch complete!');
     }, 10000);

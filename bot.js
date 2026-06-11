@@ -259,7 +259,7 @@ client.once(Events.ClientReady, async c => {
         console.log(`🗓️ Seasonal leaderboard: season ${info.seasonId} (sisa ${info.daysLeft} hari)`);
     } catch (e) { console.error('Season init error:', e); }
 
-    // Background card prefetch (downloads Pokemon + One Piece cards while bot runs)
+    // Background card prefetch (downloads Pokemon cards while bot runs)
     try {
         const { startBackgroundPrefetch } = require('./systems/cardPrefetch');
         startBackgroundPrefetch();
