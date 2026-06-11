@@ -170,11 +170,11 @@ async function generateGachaImage(cards) {
     return canvas.toBuffer('image/png');
 }
 
-// Gallery image for collection
+// Gallery image for collection (5 per row, up to 10 cards)
 async function generateGalleryImage(cards) {
-    const cols = Math.min(cards.length, 4);
-    const rows = Math.ceil(cards.length / 4);
-    const cw = 180, ch = 252, gap = 6, pad = 8;
+    const cols = Math.min(cards.length, 5);
+    const rows = Math.ceil(cards.length / 5);
+    const cw = 160, ch = 224, gap = 6, pad = 8;
     const w = cols * cw + (cols-1) * gap + pad * 2;
     const h = rows * ch + (rows-1) * gap + pad * 2;
     const canvas = createCanvas(w, h);
@@ -183,7 +183,7 @@ async function generateGalleryImage(cards) {
     ctx.fillRect(0, 0, w, h);
 
     for (let i = 0; i < cards.length; i++) {
-        const col = i % 4, row = Math.floor(i / 4);
+        const col = i % 5, row = Math.floor(i / 5);
         const x = pad + col * (cw + gap), y = pad + row * (ch + gap);
         try {
             if (cards[i].imageUrl) { const img = await loadImage(cards[i].imageUrl); ctx.drawImage(img, x, y, cw, ch); }
@@ -231,11 +231,11 @@ function buildPanel(userId) {
             `> 🟣 **Ultra** — 3 kartu (💰 200.000)\n` +
             `> 💎 **Master** — 10 kartu (💰 750.000)\n\n` +
             `**📋 Menu:**\n` +
-            `> 📖 **Collection** — Gallery kartumu\n` +
+            `> 📖 **Collection** — Gallery kartu milikmu (paginated)\n` +
             `> 🔥 **Burn** — Hancurkan kartu → Stardust\n` +
-            `> 🔄 **Trade** — Tukar kartu\n` +
+            `> 🔄 **Trade** — Tukar kartu duplikat\n` +
             `> ❤️ **Wishlist** — Pokemon incaran\n` +
-            `> 📦 **Album** — Koleksi per Set\n` +
+            `> 📦 **By Set** — Lihat koleksi per Set\n` +
             `> 📊 **Leaderboard** — Top collectors`
         )
         .setFooter({ text: 'Fan-made • Not affiliated with Nintendo/The Pokemon Company • Today at ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) })
@@ -249,7 +249,7 @@ function buildPanel(userId) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`card_collection_${userId}`).setLabel('📖 Collection').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('📦 Album').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`card_album_${userId}`).setLabel('📦 By Set').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`card_wishlist_${userId}`).setLabel('❤️ Wishlist').setStyle(ButtonStyle.Secondary),
     );
     const row3 = new ActionRowBuilder().addComponents(
@@ -336,21 +336,26 @@ async function handleDropCommand(interaction) {
     return handleGacha(interaction, 'basic', interaction.user.id);
 }
 
-// ==================== COLLECTION (Gallery Book) ====================
-async function handleCardsCommand(interaction) {
+// ==================== COLLECTION (Paginated Gallery — 10 cards per page) ====================
+async function handleCardsCommand(interaction, page = 0) {
     const target = interaction.options?.getUser?.('user') || interaction.user;
     const total = db.prepare('SELECT COUNT(*) as c FROM pokemon_cards WHERE userId=?').get(target.id).c;
     const unique = db.prepare('SELECT COUNT(DISTINCT cardApiId) as c FROM pokemon_cards WHERE userId=?').get(target.id).c;
 
     if (total === 0) return interaction.reply({ content: `📭 ${target.username} belum punya kartu!`, ephemeral: true });
 
+    const perPage = 10;
+    const maxPage = Math.ceil(total / perPage) - 1;
+    page = Math.max(0, Math.min(page, maxPage));
+    const offset = page * perPage;
+
     await interaction.deferReply();
 
-    // Get top 8 cards for gallery image
     const cards = db.prepare(`SELECT * FROM pokemon_cards WHERE userId=? ORDER BY
         CASE rarity WHEN 'Special Art Rare' THEN 0 WHEN 'Illustration Rare' THEN 1 WHEN 'Rare Secret' THEN 2
         WHEN 'Rare Rainbow' THEN 3 WHEN 'Rare Ultra' THEN 4 WHEN 'Rare Holo V' THEN 5
-        WHEN 'Rare Holo GX' THEN 5 WHEN 'Rare Holo EX' THEN 5 WHEN 'Rare Holo' THEN 6 ELSE 9 END LIMIT 8`).all(target.id);
+        WHEN 'Rare Holo GX' THEN 5 WHEN 'Rare Holo EX' THEN 5 WHEN 'Rare Holo' THEN 6 ELSE 9 END
+        LIMIT ? OFFSET ?`).all(target.id, perPage, offset);
 
     const img = await generateGalleryImage(cards);
     const att = new AttachmentBuilder(img, { name: 'collection.png' });
@@ -360,14 +365,62 @@ async function handleCardsCommand(interaction) {
     const embed = new EmbedBuilder()
         .setTitle(`📖 ${target.username}'s Collection`)
         .setColor('#E74C3C')
-        .setDescription(
-            `> 🃏 **${total}** kartu | 🎴 **${unique}** unique\n\n` +
-            `${list}\n` +
-            (total > 8 ? `\n*...dan ${total - 8} kartu lainnya*` : '')
-        )
+        .setDescription(`> 🃏 **${total}** kartu | 🎴 **${unique}** unique\n\n${list}`)
         .setImage('attachment://collection.png')
-        .setFooter({ text: '/cardview id:<num> untuk detail • pokemontcg.io' });
-    return interaction.editReply({ embeds: [embed], files: [att] });
+        .setFooter({ text: `Page ${page+1}/${maxPage+1} • /cardview id:<num> untuk detail` });
+
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`cardpage_prev_${target.id}_${page}`).setLabel('◀️').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
+        new ButtonBuilder().setCustomId(`cardpage_info_${target.id}`).setLabel(`📖 ${page+1}/${maxPage+1}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`cardpage_next_${target.id}_${page}`).setLabel('▶️').setStyle(ButtonStyle.Secondary).setDisabled(page >= maxPage),
+    );
+
+    return interaction.editReply({ embeds: [embed], files: [att], components: [navRow] });
+}
+
+// Pagination button handler
+async function handleCardPageButton(interaction) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1]; // prev or next
+    const targetId = parts[2];
+    const currentPage = parseInt(parts[3]);
+    const newPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+
+    const total = db.prepare('SELECT COUNT(*) as c FROM pokemon_cards WHERE userId=?').get(targetId).c;
+    const unique = db.prepare('SELECT COUNT(DISTINCT cardApiId) as c FROM pokemon_cards WHERE userId=?').get(targetId).c;
+    const perPage = 10;
+    const maxPage = Math.ceil(total / perPage) - 1;
+    const page = Math.max(0, Math.min(newPage, maxPage));
+    const offset = page * perPage;
+
+    await interaction.deferUpdate();
+
+    const cards = db.prepare(`SELECT * FROM pokemon_cards WHERE userId=? ORDER BY
+        CASE rarity WHEN 'Special Art Rare' THEN 0 WHEN 'Illustration Rare' THEN 1 WHEN 'Rare Secret' THEN 2
+        WHEN 'Rare Rainbow' THEN 3 WHEN 'Rare Ultra' THEN 4 WHEN 'Rare Holo V' THEN 5
+        WHEN 'Rare Holo GX' THEN 5 WHEN 'Rare Holo EX' THEN 5 WHEN 'Rare Holo' THEN 6 ELSE 9 END
+        LIMIT ? OFFSET ?`).all(targetId, perPage, offset);
+
+    const img = await generateGalleryImage(cards);
+    const att = new AttachmentBuilder(img, { name: 'collection.png' });
+    const list = cards.map(c => `${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* \`ID:${c.id}\``).join('\n');
+    const member = interaction.guild.members.cache.get(targetId);
+    const uname = member?.user?.username || 'User';
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📖 ${uname}'s Collection`)
+        .setColor('#E74C3C')
+        .setDescription(`> 🃏 **${total}** kartu | 🎴 **${unique}** unique\n\n${list}`)
+        .setImage('attachment://collection.png')
+        .setFooter({ text: `Page ${page+1}/${maxPage+1} • /cardview id:<num> untuk detail` });
+
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`cardpage_prev_${targetId}_${page}`).setLabel('◀️').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
+        new ButtonBuilder().setCustomId(`cardpage_info_${targetId}`).setLabel(`📖 ${page+1}/${maxPage+1}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`cardpage_next_${targetId}_${page}`).setLabel('▶️').setStyle(ButtonStyle.Secondary).setDisabled(page >= maxPage),
+    );
+
+    return interaction.editReply({ embeds: [embed], files: [att], components: [navRow] });
 }
 
 // ==================== CARD VIEW ====================
@@ -538,7 +591,14 @@ async function handleStardustCommand(interaction) {
 
 // ==================== PANEL BUTTONS ====================
 async function handleCardPanelButton(interaction) {
-    const parts = interaction.customId.split('_');
+    const id = interaction.customId;
+
+    // Pagination buttons: cardpage_prev_userId_page or cardpage_next_userId_page
+    if (id.startsWith('cardpage_')) {
+        return handleCardPageButton(interaction);
+    }
+
+    const parts = id.split('_');
     // card_gacha_<packId>_<userId> OR card_<action>_<userId>
     const userId = parts[parts.length - 1];
     if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Bukan panel kamu!', ephemeral: true });
@@ -563,7 +623,7 @@ async function handleCardPanelButton(interaction) {
     }
 }
 
-function isCardPanelButton(id) { return typeof id === 'string' && id.startsWith('card_') && !id.startsWith('cardgrab_') && !id.startsWith('cardtrade_'); }
+function isCardPanelButton(id) { return typeof id === 'string' && (id.startsWith('card_') || id.startsWith('cardpage_')) && !id.startsWith('cardgrab_') && !id.startsWith('cardtrade_'); }
 
 // ==================== LEGACY ====================
 async function handleCardGrab(interaction) { return interaction.reply({ content: '❌ Sistem baru: beli gacha → kartu langsung masuk!', ephemeral: true }); }
@@ -573,7 +633,7 @@ function isCardTradeButton(id) { return typeof id === 'string' && id.startsWith(
 // ==================== EXPORTS ====================
 module.exports = {
     handleCardPanelCommand, handleCardPanelButton,
-    handleDropCommand, handleCardGrab,
+    handleDropCommand, handleCardGrab, handleCardPageButton,
     handleCardsCommand, handleCardViewCommand,
     handleCardBurn, handleCardTrade, handleCardTradeButton,
     handleCardWishlist, handleCardDye,
