@@ -22,36 +22,39 @@ db.exec(`CREATE TABLE IF NOT EXISTS onepiece_card_cache (
     attribute TEXT DEFAULT '', cardSet TEXT DEFAULT '', effect TEXT DEFAULT '', cachedAt INTEGER
 )`);
 
-// ==================== PROGRESS BAR ====================
+// ==================== PROGRESS DISPLAY ====================
 function formatTime(ms) {
-    if (ms < 1000) return `${ms}ms`;
     const s = Math.floor(ms / 1000);
     if (s < 60) return `${s}s`;
     const m = Math.floor(s / 60);
     const rs = s % 60;
     if (m < 60) return `${m}m ${rs}s`;
     const h = Math.floor(m / 60);
-    const rm = m % 60;
-    return `${h}h ${rm}m`;
+    return `${h}h ${m % 60}m`;
 }
 
-function progressBar(current, total, startTime, width = 30) {
+function showProgress(current, total, startTime, label) {
     const pct = Math.round((current / total) * 100);
-    const filled = Math.round((current / total) * width);
-    const empty = width - filled;
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    const barWidth = 25;
+    const filled = Math.round((current / total) * barWidth);
+    const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
 
     const elapsed = Date.now() - startTime;
-    const speed = current > 0 ? elapsed / current : 0;
-    const remaining = (total - current) * speed;
-    const eta = current > 0 ? formatTime(remaining) : '...';
-    const elapsedStr = formatTime(elapsed);
+    let eta = '---';
+    if (current > 0) {
+        const msPerItem = elapsed / current;
+        const remaining = Math.round((total - current) * msPerItem);
+        eta = formatTime(remaining);
+    }
 
-    return `   [${bar}] ${pct}% (${current}/${total}) | ⏱️ ${elapsedStr} | ETA: ${eta}`;
+    const line = `   ${label} [${bar}] ${pct}% | ${current}/${total} | ${formatTime(elapsed)} elapsed | ETA: ${eta}`;
+    process.stdout.clearLine(0);
+    process.stdout.cursorTo(0);
+    process.stdout.write(line);
 }
 
 // ==================== HELPERS ====================
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ==================== POKEMON TCG ====================
 const POKEMON_API = 'https://api.pokemontcg.io/v2/cards';
@@ -74,7 +77,11 @@ async function fetchPokemonPage(page) {
     const url = `${POKEMON_API}?pageSize=${PAGE_SIZE}&page=${page}`;
     const res = await fetch(url, { headers: getPokemonHeaders() });
     if (!res.ok) {
-        if (res.status === 429) { console.log('\n   ⏳ Rate limited! Waiting 60s...'); await sleep(60000); return fetchPokemonPage(page); }
+        if (res.status === 429) {
+            console.log('\n   \u23F3 Rate limited! Menunggu 60 detik...');
+            await sleep(60000);
+            return fetchPokemonPage(page);
+        }
         throw new Error(`HTTP ${res.status}`);
     }
     return res.json();
@@ -82,18 +89,19 @@ async function fetchPokemonPage(page) {
 
 async function prefetchPokemon() {
     console.log('');
-    console.log('🎴 ═══════════════════════════════════');
-    console.log('   POKEMON TCG — Downloading...');
-    console.log('═══════════════════════════════════════');
-    console.log(`   API Key: ${process.env.POKEMON_TCG_API_KEY ? '✅ Set (fast mode)' : '❌ Not set (slow mode ~2-3 min)'}`);
+    console.log('\u{1F3B4} \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
+    console.log('   POKEMON TCG');
+    console.log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
+    console.log(`   API Key: ${process.env.POKEMON_TCG_API_KEY ? '\u2705 Set (fast)' : '\u274C Not set (slow ~2-3 min)'}`);
 
     const existing = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-    console.log(`   💾 Already in cache: ${existing.toLocaleString()} cards`);
+    console.log(`   \u{1F4BE} Sudah di cache: ${existing.toLocaleString()} cards`);
 
+    console.log('   \u{1F4E1} Menghubungi API...');
     const first = await fetchPokemonPage(1);
     const total = first.totalCount;
     const pages = Math.ceil(total / PAGE_SIZE);
-    console.log(`   📊 Total available: ${total.toLocaleString()} cards (${pages} pages)`);
+    console.log(`   \u{1F4CA} Total: ${total.toLocaleString()} cards (${pages} halaman)`);
     console.log('');
 
     let saved = 0;
@@ -109,22 +117,19 @@ async function prefetchPokemon() {
             }));
             pokemonBatch(cards);
             saved += cards.length;
-
-            process.stdout.write(`\r${progressBar(page, pages, startTime)}`);
-
-            await sleep(process.env.POKEMON_TCG_API_KEY ? 200 : 1500);
+            showProgress(page, pages, startTime, '\u{1F3B4}');
+            await sleep(process.env.POKEMON_TCG_API_KEY ? 250 : 1500);
         } catch (e) {
-            console.log(`\n   ❌ Error page ${page}: ${e.message}. Retry in 10s...`);
+            console.log(`\n   \u274C Error page ${page}: ${e.message}`);
+            console.log('   \u{1F504} Retry dalam 10 detik...');
             await sleep(10000);
             page--;
         }
     }
 
     const finalCount = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-    const elapsed = formatTime(Date.now() - startTime);
     console.log('');
-    console.log(`   ✅ DONE! ${finalCount.toLocaleString()} cards | Waktu: ${elapsed}`);
-    console.log('');
+    console.log(`   \u2705 Selesai! ${finalCount.toLocaleString()} cards | Waktu: ${formatTime(Date.now() - startTime)}`);
 }
 
 // ==================== ONE PIECE TCG ====================
@@ -139,13 +144,13 @@ const opBatch = db.transaction((cards) => {
 
 async function prefetchOnePiece() {
     console.log('');
-    console.log('🏴‍☠️ ═══════════════════════════════════');
-    console.log('   ONE PIECE TCG — Downloading...');
-    console.log('═══════════════════════════════════════');
+    console.log('\u{1F3F4}\u200D\u2620\uFE0F \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
+    console.log('   ONE PIECE TCG');
+    console.log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
 
     const existing = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-    console.log(`   💾 Already in cache: ${existing.toLocaleString()} cards`);
-    console.log('   📥 Fetching from GitHub (instant)...');
+    console.log(`   \u{1F4BE} Sudah di cache: ${existing.toLocaleString()} cards`);
+    console.log('   \u{1F4E5} Download dari GitHub...');
 
     const startTime = Date.now();
     const res = await fetch(OP_SOURCE);
@@ -159,70 +164,67 @@ async function prefetchOnePiece() {
         effect: (c.Effect || '').substring(0, 500),
     }));
 
-    // Batch insert with progress
-    const batchSize = 100;
-    for (let i = 0; i < cards.length; i += batchSize) {
-        const batch = cards.slice(i, i + batchSize);
+    console.log(`   \u{1F4CA} Ditemukan: ${cards.length} cards`);
+
+    const batchSize = 50;
+    const totalBatches = Math.ceil(cards.length / batchSize);
+    for (let i = 0; i < totalBatches; i++) {
+        const batch = cards.slice(i * batchSize, (i + 1) * batchSize);
         opBatch(batch);
-        process.stdout.write(`\r${progressBar(Math.min(i + batchSize, cards.length), cards.length, startTime)}`);
+        showProgress(i + 1, totalBatches, startTime, '\u{1F3F4}\u200D\u2620\uFE0F');
     }
 
     const finalCount = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
-    const elapsed = formatTime(Date.now() - startTime);
     console.log('');
-    console.log(`   ✅ DONE! ${finalCount.toLocaleString()} cards | Waktu: ${elapsed}`);
-    console.log('');
+    console.log(`   \u2705 Selesai! ${finalCount.toLocaleString()} cards | Waktu: ${formatTime(Date.now() - startTime)}`);
 }
 
 // ==================== MAIN ====================
 async function main() {
     console.clear();
     console.log('');
-    console.log('╔══════════════════════════════════════════╗');
-    console.log('║                                          ║');
-    console.log('║   🃏 CARD GACHA — PRE-FETCH ALL CARDS   ║');
-    console.log('║                                          ║');
-    console.log('║   Pokemon TCG + One Piece TCG            ║');
-    console.log('║                                          ║');
-    console.log('╚══════════════════════════════════════════╝');
+    console.log('\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
+    console.log('\u2551                                          \u2551');
+    console.log('\u2551   \u{1F0CF} CARD GACHA \u2014 PRE-FETCH ALL CARDS   \u2551');
+    console.log('\u2551                                          \u2551');
+    console.log('\u2551   Pokemon TCG + One Piece TCG            \u2551');
+    console.log('\u2551                                          \u2551');
+    console.log('\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D');
 
-    // One Piece first (instant)
     await prefetchOnePiece();
-
-    // Pokemon (takes longer)
     await prefetchPokemon();
 
     // Final summary
     const pkm = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
     const op = db.prepare('SELECT COUNT(*) as c FROM onepiece_card_cache').get().c;
 
+    console.log('');
+    console.log('');
+    console.log('\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
+    console.log('\u2551           \u2705 SEMUA SELESAI!               \u2551');
+    console.log('\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563');
+    console.log(`\u2551  \u{1F3B4} Pokemon:   ${String(pkm.toLocaleString()).padEnd(10)} cards      \u2551`);
+    console.log(`\u2551  \u{1F3F4}\u200D\u2620\uFE0F One Piece: ${String(op.toLocaleString()).padEnd(10)} cards      \u2551`);
+    console.log(`\u2551  \u{1F4CA} TOTAL:     ${String((pkm + op).toLocaleString()).padEnd(10)} cards      \u2551`);
+    console.log('\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563');
+    console.log('\u2551  \u{1F4CB} Set POKEMON_TCG_CACHE_ONLY=1      \u2551');
+    console.log('\u2551  \u{1F504} Restart bot                       \u2551');
+    console.log('\u2551  \u{1F389} Gacha offline selamanya!           \u2551');
+    console.log('\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D');
+    console.log('');
+
     // Rarity breakdown
-    const pkmRarity = db.prepare('SELECT rarity, COUNT(*) as c FROM pokemon_card_cache GROUP BY rarity ORDER BY c DESC LIMIT 8').all();
-    const opRarity = db.prepare('SELECT rarity, COUNT(*) as c FROM onepiece_card_cache GROUP BY rarity ORDER BY c DESC LIMIT 8').all();
+    console.log('\u{1F4CA} Pokemon Rarity:');
+    const pkmR = db.prepare('SELECT rarity, COUNT(*) as c FROM pokemon_card_cache GROUP BY rarity ORDER BY c DESC').all();
+    for (const r of pkmR) console.log(`   ${(r.rarity || 'Unknown').padEnd(20)} ${r.c.toLocaleString()}`);
 
     console.log('');
-    console.log('╔══════════════════════════════════════════╗');
-    console.log('║            ✅ ALL COMPLETE!              ║');
-    console.log('╠══════════════════════════════════════════╣');
-    console.log(`║  🎴 Pokemon TCG:   ${String(pkm.toLocaleString()).padEnd(8)} cards       ║`);
-    console.log(`║  🏴‍☠️ One Piece TCG: ${String(op.toLocaleString()).padEnd(8)} cards       ║`);
-    console.log(`║  📊 TOTAL:         ${String((pkm + op).toLocaleString()).padEnd(8)} cards       ║`);
-    console.log('╠══════════════════════════════════════════╣');
-    console.log('║                                          ║');
-    console.log('║  📋 Next steps:                          ║');
-    console.log('║  1. Set POKEMON_TCG_CACHE_ONLY=1         ║');
-    console.log('║  2. Restart bot                          ║');
-    console.log('║  3. Gacha 100% offline selamanya! 🎉     ║');
-    console.log('║                                          ║');
-    console.log('╚══════════════════════════════════════════╝');
-    console.log('');
-    console.log('📊 Pokemon Rarity Breakdown:');
-    for (const r of pkmRarity) console.log(`   ${r.rarity.padEnd(20)} ${r.c.toLocaleString()}`);
-    console.log('');
-    console.log('📊 One Piece Rarity Breakdown:');
-    for (const r of opRarity) console.log(`   ${r.rarity.padEnd(20)} ${r.c.toLocaleString()}`);
+    console.log('\u{1F4CA} One Piece Rarity:');
+    const opR = db.prepare('SELECT rarity, COUNT(*) as c FROM onepiece_card_cache GROUP BY rarity ORDER BY c DESC').all();
+    for (const r of opR) console.log(`   ${(r.rarity || 'Unknown').padEnd(20)} ${r.c.toLocaleString()}`);
 
+    console.log('');
     db.close();
 }
 
-main().catch(e => { console.error('\n❌ Fatal Error:', e.message); process.exit(1); });
+main().catch(e => { console.error('\n\u274C Fatal Error:', e.message); process.exit(1); });
