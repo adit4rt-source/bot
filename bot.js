@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.5.0';
-const BUILD_DATE = '2026-06-08';
+const BOT_VERSION = '3.7.0';
+const BUILD_DATE = '2026-06-11';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');

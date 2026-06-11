@@ -4,8 +4,8 @@ const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
 const UPDATE_CHANNEL_ID = '1510705567944151150';
-const CURRENT_VERSION = '3.6.0';
-const RELEASE_DATE = '2026-06-10';
+const CURRENT_VERSION = '3.7.0';
+const RELEASE_DATE = '2026-06-11';
 
 // Ensure table
 try { db.exec(`CREATE TABLE IF NOT EXISTS bot_updates (version TEXT PRIMARY KEY, sentAt INTEGER)`); } catch (_) {}
@@ -33,69 +33,71 @@ async function sendUpdateAnnouncement(client) {
         if (!channel) { console.log('[update] Channel not found:', UPDATE_CHANNEL_ID); return; }
 
         const embed1 = new EmbedBuilder()
-            .setColor('#2ECC71')
-            .setTitle(`🎉 Update — v${CURRENT_VERSION}`)
+            .setColor('#FF6B35')
+            .setTitle(`🎉 MAJOR UPDATE — v${CURRENT_VERSION}`)
             .setDescription(
                 `**Release ${CURRENT_VERSION}** — ${RELEASE_DATE}\n\n` +
-                `Update besar: fitur baru, perbaikan, & penyeimbangan! 🎊\n` +
+                `🃏 **Pokemon TCG Card Gacha** + 🎣 **Fishing Rod Inventory**!\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp();
 
         const embed2 = new EmbedBuilder()
-            .setColor('#3498DB')
-            .setTitle('✨ Fitur Baru')
+            .setColor('#E74C3C')
+            .setTitle('🃏 Pokemon TCG Card System (BARU!)')
             .setDescription(
-                `🌤️ **Season Compatibility** — Tanaman punya musim ideal!\n` +
-                `> 🌈 Musim Ideal = -20% waktu, +30% hasil\n` +
-                `> ❌ Tidak Cocok = +50% waktu, -30% hasil, 15% mati!\n\n` +
-                `🏠 **Greenhouse** — Lahan baru anti-penalty musim!\n` +
-                `> Lv.1: 6 slot (🪙 150K) → Lv.4: 15 slot (🪙 1.2M)\n` +
-                `> Kebal season, auto-water, bisa dipupuk\n\n` +
-                `🏪 **NPC Market** — Jual crop ke pedagang harga 2.5-3.5x!\n` +
-                `> Refresh tiap hari, fokus crop in-season\n\n` +
-                `⚔️ **Arena Overhaul:**\n` +
-                `> 🔥 Win Streak (x1.5 - x3) | 🏅 Tier Rewards\n` +
-                `> 🎖️ Arena Points + Shop | 📅 Monthly Seasons\n\n` +
-                `🌊 **5 Zona Expedition Baru:**\n` +
-                `> ❄️ Frozen Abyss | 🌋 Volcanic Core | 👻 Spirit World\n` +
-                `> 🌀 Dimension Rift | 🕳️ Void Realm (SECRET!)\n` +
-                `> 💰 Reward 3-4x lipat | 🌟 Rare Events (10%)\n\n` +
-                `🃏 **Blackjack Upgrade:**\n` +
-                `> Max bet 🪙 100K | 🎰 Side Bets (Pair bonus!)\n` +
-                `> 📊 Stats | Terintegrasi ke /casino\n\n` +
-                `🛡️ **Admin Panel +5 Fitur:**\n` +
-                `> 🎁 Giveaway | 👤 Lookup | 📢 Announce | 🚫 Blacklist | 🏷️ Embed`
+                `Sistem gacha kartu Pokemon dengan 20,000+ kartu asli!\n\n` +
+                `**🎴 Gacha Packs:**\n` +
+                `> 🟢 Basic — 3 kartu (💰 15.000) ⏱️ 5m\n` +
+                `> 🔵 Premium — 3 kartu (💰 75.000) ⏱️ 15m\n` +
+                `> 🟣 Ultra — 3 kartu (💰 200.000) ⏱️ 30m\n` +
+                `> 💎 Master — 10 kartu (💰 750.000) ⏱️ 60m\n\n` +
+                `**✨ Fitur:**\n` +
+                `> 📖 Collection Gallery — 10 kartu/page, style card book\n` +
+                `> 🔄 Dupe Detection — Tandai kartu duplikat\n` +
+                `> ❤️ Wishlist — Ping saat Pokemon incaran muncul\n` +
+                `> 📊 Leaderboard — Most Cards / Rare / Unique\n` +
+                `> 💸 Total Spent tracking\n` +
+                `> 🔄 Trade via /trade → 🃏 Kartu (2-way confirm)\n\n` +
+                `**⚡ Command:** \`/card\``
             );
 
         const embed3 = new EmbedBuilder()
-            .setColor('#E74C3C')
-            .setTitle('⚖️ Penyeimbangan & Perbaikan')
+            .setColor('#3498DB')
+            .setTitle('🎣 Fishing — Rod Inventory System')
             .setDescription(
-                `🎁 **Daily Reward Naik Drastis:**\n` +
-                `> Base 🪙 500 → **🪙 3.000** (+400/hari)\n` +
-                `> Milestone: Hari 7/14/30/60/100 (hingga 🪙 500K!)\n` +
-                `> 🔔 Reminder otomatis muncul saat chat pertama\n\n` +
-                `🎣 **Fishing Tournament Reward:**\n` +
-                `> first_legendary: 🪙 3K → **🪙 500K** + 5× Mystery Box\n` +
-                `> heaviest/most_fish: → **🪙 250-350K** + Mystery Box\n\n` +
-                `🐔 **Peternakan:**\n` +
-                `> Evolve sekarang BERFUNGSI! + Biaya naik\n` +
-                `> Bulk plant + bulk pupuk (tanam banyak sekaligus!)\n\n` +
-                `🏛️ **Auction:** Filter by Pet/Relic/Item/Fish\n` +
-                `❤️ **Love:** Sekarang global (1 orang = 1 love max)\n` +
-                `🌈 **Mutasi:** Multiplier diturunkan (max 10x), chance ~1.9%\n\n` +
-                `🔧 **Bug Fixes:**\n` +
-                `> ✅ Fix "Unknown interaction" error\n` +
-                `> ✅ Fix streak 🔥 tidak muncul di nickname\n` +
-                `> ✅ Auto-backup ke Discord setiap 6 jam\n` +
-                `> ✅ Custom artwork untuk crops, items, hewan\n\n` +
-                `🎨 **Custom Emoji:** Legendary crops, prestige, items, pupuk, dekorasi, dan hewan sekarang pakai gambar custom!`
+                `Joran sekarang **permanen** dan bisa di-equip/unequip!\n\n` +
+                `**🆕 Yang Berubah:**\n` +
+                `> 🎋 Joran yang dibeli masuk **inventory** (tidak hilang!)\n` +
+                `> ❌ Tidak bisa beli joran yang sudah dimiliki\n` +
+                `> 🔄 **Equip/Unequip** — Ganti joran kapan saja\n` +
+                `> ✅ Shop tampilkan status "Owned" per joran\n\n` +
+                `**💡 Cara Pakai:**\n` +
+                `> \`/fishing\` → 🎋 **Equip Rod** → Pilih joran\n\n` +
+                `-# *Joran yang sudah dimiliki sebelum update otomatis masuk inventory.*`
+            );
+
+        const embed4 = new EmbedBuilder()
+            .setColor('#9B59B6')
+            .setTitle('📋 Detail Lainnya')
+            .setDescription(
+                `**🃏 Card System Tech:**\n` +
+                `> 🌐 Data: pokemontcg.io (20,359 kartu)\n` +
+                `> 💾 Cache offline — gacha instant tanpa internet\n` +
+                `> 🖼️ Gambar HD langsung dari API\n` +
+                `> ⏱️ Cooldown per pack tier\n\n` +
+                `**🎣 Fishing Fix:**\n` +
+                `> 🐛 Fix: beli joran 2x uang hilang → SOLVED\n` +
+                `> 🐛 Fix: joran lama hilang saat beli baru → SOLVED\n\n` +
+                `**🔧 Infrastructure:**\n` +
+                `> Background card prefetch saat bot start\n` +
+                `> Image timeout protection (8s)\n` +
+                `> Smart cache scaling (90% cache saat penuh)\n`
             )
             .setFooter({ text: `Update oleh Peko • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
             .setTimestamp();
 
-        await channel.send({ embeds: [embed1, embed2, embed3] });
+        await channel.send({ embeds: [embed1, embed2, embed3, embed4] });
         markSent();
         console.log(`[update] Changelog v${CURRENT_VERSION} sent to #update-bot`);
     } catch (e) {
