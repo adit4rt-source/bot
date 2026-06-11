@@ -1200,8 +1200,8 @@ async function routeInteraction(interaction) {
             }
         }
 
-        // --- ANIME CARD PANEL BUTTONS ---
-        if (interaction.customId.startsWith('card_')) {
+        // --- CARD PANEL + PAGINATION BUTTONS ---
+        if (interaction.customId.startsWith('card_') || interaction.customId.startsWith('cardpage_')) {
             const { isCardPanelButton, handleCardPanelButton } = require('../systems/cardGame');
             if (isCardPanelButton(interaction.customId)) {
                 return handleCardPanelButton(interaction);
