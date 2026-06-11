@@ -253,6 +253,32 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
+            // === BONUS: 3 Pokemon Cards from daily ===
+            try {
+                const { pullCards, generateGachaImage, RARITIES } = require('../systems/cardGame');
+                const { AttachmentBuilder } = require('discord.js');
+                const dailyPool = ['Common', 'Uncommon', 'Rare'];
+                const cards = await pullCards(dailyPool, 3, interaction.user.id);
+                if (cards && cards.length > 0) {
+                    // Save to collection
+                    for (const c of cards) {
+                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
+                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+                    }
+                    const img = await generateGachaImage(cards);
+                    const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
+                    const cardList = cards.map((c, i) => `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]`).join('\n');
+                    const cardEmbed = new EmbedBuilder()
+                        .setColor('#FF6B35')
+                        .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
+                        .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
+                        .setImage('attachment://daily_cards.png')
+                        .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
+                    return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                }
+            } catch (e) { console.error('[Daily] Card bonus error:', e.message); }
+
             return interaction.reply({ embeds: [embed] });
         }
 
@@ -1237,6 +1263,32 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat, makin gede reward /daily!' });
             // Delete the reminder message
             try { interaction.message.delete().catch(() => {}); } catch (_) {}
+
+            // === BONUS: 3 Pokemon Cards from daily ===
+            try {
+                const { pullCards, generateGachaImage, RARITIES } = require('../systems/cardGame');
+                const { AttachmentBuilder } = require('discord.js');
+                const dailyPool = ['Common', 'Uncommon', 'Rare'];
+                const cards = await pullCards(dailyPool, 3, interaction.user.id);
+                if (cards && cards.length > 0) {
+                    for (const c of cards) {
+                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
+                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now());
+                    }
+                    const img = await generateGachaImage(cards);
+                    const att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
+                    const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
+                    const cardList = cards.map((c, i) => `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]`).join('\n');
+                    const cardEmbed = new EmbedBuilder()
+                        .setColor('#FF6B35')
+                        .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
+                        .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
+                        .setImage('attachment://daily_cards.png')
+                        .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
+                    return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                }
+            } catch (e) { console.error('[Daily] Card bonus error:', e.message); }
+
             return interaction.reply({ embeds: [embed] });
         }
 
