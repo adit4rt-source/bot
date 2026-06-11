@@ -440,7 +440,7 @@ async function handleFusionButton(interaction) {
 
         // Achievement: pet obtained via fusion (tier firsts + collection milestones)
         try {
-            const distinctPets = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+            const distinctPets = db.prepare('SELECT COUNT(*) AS c FROM pet_discovery WHERE userId = ?').get(userId).c;
             await checkAchievements(interaction.guild, userId, { type: 'pet_obtain', tier: result.resultTier, distinctPets });
         } catch (e) { /* never block fusion */ }
         return interaction.update({ embeds: [embed], components: [row] });

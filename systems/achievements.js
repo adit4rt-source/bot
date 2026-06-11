@@ -418,7 +418,7 @@ function getAchievementProgress(guildId, userId, achId) {
         if (p.special === 'balance') current = getOrCreateUser(guildId, userId).balance;
         else if (p.special === 'level') current = getOrCreateUser(guildId, userId).level;
         else if (p.special === 'streak') { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); current = s ? s.count : 0; }
-        else if (p.special === 'distinctPets') { const r = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE userId = ?').get(userId); current = r ? r.c : 0; }
+        else if (p.special === 'distinctPets') { const r = db.prepare('SELECT COUNT(*) AS c FROM pet_discovery WHERE userId = ?').get(userId); current = r ? r.c : 0; }
         else current = getUserStat(guildId, userId, p.stat) || 0;
     } catch (_) { current = 0; }
     return { raw: current, current: Math.min(current, p.target), target: p.target };

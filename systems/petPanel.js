@@ -1170,7 +1170,7 @@ async function handlePetSelectMenu(interaction) {
         try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(userId, wonPet.id); } catch (_) {}
         // Achievement: pet obtained (tier firsts + distinct-collection milestones)
         try {
-            const distinctPets = db.prepare('SELECT COUNT(DISTINCT petId) AS c FROM pets WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
+            const distinctPets = db.prepare('SELECT COUNT(*) AS c FROM pet_discovery WHERE userId = ?').get(userId).c;
             await checkAchievements(interaction.guild, userId, { type: 'pet_obtain', tier: selectedTier, distinctPets });
         } catch (e) { /* achievements must never block hatching */ }
         const tierColors = { Common: '#AAAAAA', Uncommon: '#2ECC71', Rare: '#3498DB', Epic: '#9B59B6', Legendary: '#FFD700', Mythic: '#FF6B6B', Secret: '#8B00FF', God: '#FF0000' };
