@@ -121,14 +121,29 @@ function getApiHeaders() {
     return headers;
 }
 
+let apiCooldownUntil = 0;
+
 async function apiFetch(rarity) {
+    if (Date.now() < apiCooldownUntil) return null;
     const q = encodeURIComponent(`rarity:"${rarity}"`);
     const pg = Math.floor(Math.random() * (MAX_PG[rarity] || 10)) + 1;
     try {
         const headers = getApiHeaders();
         let res = await fetch(`${API}?q=${q}&pageSize=20&page=${pg}`, { headers });
-        if (!res.ok) res = await fetch(`${API}?q=${q}&pageSize=20&page=1`, { headers });
-        if (!res.ok) return null;
+        if (!res.ok) {
+            if (res.status === 429) {
+                console.error('[TCG] API Rate limited! Cooling down for 5m.');
+                apiCooldownUntil = Date.now() + 5 * 60 * 1000;
+            }
+            res = await fetch(`${API}?q=${q}&pageSize=20&page=1`, { headers });
+        }
+        if (!res.ok) {
+            if (res.status === 429) {
+                console.error('[TCG] API Rate limited! Cooling down for 5m.');
+                apiCooldownUntil = Date.now() + 5 * 60 * 1000;
+            }
+            return null;
+        }
         const json = await res.json();
         const cards = json.data || [];
         if (!cards.length) return null;
@@ -192,19 +207,20 @@ async function pullCards(pool, count, userId) {
     const results = [];
     const ownedIds = userId ? getUserOwnedCardIds(userId) : new Set();
     const cacheSize = getCacheCount();
-    // If cache has 1000+ cards, prefer cache heavily (90%). If CACHE_ONLY, use 100% cache.
-    const cacheChance = CACHE_ONLY ? 1.0 : (cacheSize >= 1000 ? 0.9 : 0.5);
+    const isApiCooledDown = Date.now() < apiCooldownUntil;
+    // If cache has 1000+ cards, prefer cache heavily (90%). If CACHE_ONLY or API cooldown, use 100% cache.
+    const cacheChance = (CACHE_ONLY || isApiCooledDown) ? 1.0 : (cacheSize >= 1000 ? 0.9 : 0.5);
 
     for (let i = 0; i < count; i++) {
         const rarity = pool[Math.floor(Math.random() * pool.length)];
         let card = null;
 
         // Try cache first
-        if (Math.random() < cacheChance || CACHE_ONLY) {
+        if (Math.random() < cacheChance || CACHE_ONLY || isApiCooledDown) {
             const c = fromCache(rarity, ownedIds);
             if (c?.cardApiId && c?.name) card = { cardApiId:c.cardApiId, name:c.name, setName:c.setName||'', rarity:c.rarity||rarity, imageUrl:c.imageUrl||'', types:c.types||'', hp:c.hp||'', artist:c.artist||'', marketPrice:c.marketPrice||0 };
             // If cache miss on specific rarity, try any rarity from pool
-            if (!card && CACHE_ONLY) {
+            if (!card && (CACHE_ONLY || isApiCooledDown)) {
                 for (const fallbackRarity of pool) {
                     const fc = fromCache(fallbackRarity, ownedIds);
                     if (fc?.cardApiId && fc?.name) { card = { cardApiId:fc.cardApiId, name:fc.name, setName:fc.setName||'', rarity:fc.rarity||fallbackRarity, imageUrl:fc.imageUrl||'', types:fc.types||'', hp:fc.hp||'', artist:fc.artist||'', marketPrice:fc.marketPrice||0 }; break; }
@@ -212,8 +228,8 @@ async function pullCards(pool, count, userId) {
             }
         }
 
-        // API fetch if no cache hit (and not CACHE_ONLY)
-        if (!card && !CACHE_ONLY) {
+        // API fetch if no cache hit (and not CACHE_ONLY/cooldown)
+        if (!card && !CACHE_ONLY && !isApiCooledDown) {
             card = await apiFetch(rarity);
             if (!card?.cardApiId) card = await apiFetch('Common');
         }

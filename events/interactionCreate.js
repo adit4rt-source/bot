@@ -855,33 +855,13 @@ async function routeInteraction(interaction) {
             const { handleCardViewCommand } = require('../systems/cardGame');
             return handleCardViewCommand(interaction);
         }
-        if (command === 'cardburn') {
-            const { handleCardBurn } = require('../systems/cardGame');
-            return handleCardBurn(interaction);
-        }
-        if (command === 'cardtrade') {
-            const { handleCardTrade } = require('../systems/cardGame');
-            return handleCardTrade(interaction);
-        }
-        if (command === 'carddye') {
-            const { handleCardDye } = require('../systems/cardGame');
-            return handleCardDye(interaction);
-        }
         if (command === 'wishlist') {
             const { handleCardWishlist } = require('../systems/cardGame');
             return handleCardWishlist(interaction);
         }
-        if (command === 'album') {
-            const { handleCardAlbum } = require('../systems/cardGame');
-            return handleCardAlbum(interaction);
-        }
         if (command === 'cardlb') {
             const { handleCardLeaderboard } = require('../systems/cardGame');
             return handleCardLeaderboard(interaction);
-        }
-        if (command === 'stardust') {
-            const { handleStardustCommand } = require('../systems/cardGame');
-            return handleStardustCommand(interaction);
         }
 
         // ================= STARBOARD =================

@@ -209,6 +209,10 @@ client.once(Events.ClientReady, async c => {
 
     // Background card prefetch (downloads Pokemon cards while bot runs)
     try {
+        const { db } = require('./database');
+        const count = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
+        console.log(`🎴 TCG Cache: ${count.toLocaleString('id-ID')} cards currently cached`);
+
         const { startBackgroundPrefetch } = require('./systems/cardPrefetch');
         startBackgroundPrefetch();
     } catch (e) { console.error('Card prefetch error:', e.message); }
