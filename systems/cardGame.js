@@ -853,5 +853,6 @@ module.exports = {
     checkWishlistNotify: checkWishlist,
     isCardGrabButton, isCardTradeButton, isCardPanelButton,
     generateCardImage: generateGachaImage, generateDropImage: generateGachaImage,
+    generateGalleryImage,
     fetchRandomCards: pullCards, RARITIES,
 };

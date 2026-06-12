@@ -362,6 +362,22 @@ module.exports = function register() {
     });
   });
 
+  // ---- Pokemon card image ----
+  test('pokemon card: generates gallery and gacha image buffers', () => {
+    const cg = botRequire('systems/cardGame.js');
+    const fakeCards = [
+      { name: 'Pikachu', rarity: 'Common', imageUrl: '' },
+      { name: 'Charizard', rarity: 'Rare Holo', imageUrl: '' }
+    ];
+    return Promise.all([
+      cg.generateCardImage(fakeCards),
+      cg.generateGalleryImage(fakeCards)
+    ]).then(([buf1, buf2]) => {
+      if (!Buffer.isBuffer(buf1) || buf1.length < 1000) throw new Error('expected a PNG buffer for gacha');
+      if (!Buffer.isBuffer(buf2) || buf2.length < 1000) throw new Error('expected a PNG buffer for gallery');
+    });
+  });
+
   // ---- Pet PvP ranked arena (ELO) ----
   const arena = botRequire('systems/arena.js');
   test('arena: rating defaults to 1000 and tiers map correctly', () => {
