@@ -416,6 +416,10 @@ async function handleArenaButton(interaction) {
         if (res.error === 'daily_limit') return interaction.followUp({ content: `❌ Kamu sudah mencapai limit **${MAX_FIGHTS_PER_DAY} fight/hari**! Istirahat dulu, lanjut besok.`, ephemeral: true });
         cooldowns.setCooldown('arena', guildId, userId, FIGHT_COOLDOWN_MS);
 
+        // Quest progress + achievement check for arena fights
+        try { const { updateQuestProgress } = require('./quests'); updateQuestProgress(guildId, userId, 'arena', 1); } catch (_) {}
+        try { const { checkAchievements } = require('./achievements'); await checkAchievements(interaction.guild, userId, { type: 'arena' }); } catch (_) {}
+
         const tier = getTier(res.newRating);
         const sign = res.change >= 0 ? '+' : '';
 

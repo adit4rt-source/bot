@@ -354,6 +354,9 @@ async function handleAwakeningButton(interaction) {
             return interaction.reply({ content: result.error, ephemeral: true });
         }
 
+        // Achievement check: awakening (async context)
+        try { const { checkAchievements } = require('./achievements'); await checkAchievements(interaction.guild, userId, { type: 'awakening' }); } catch (_) {}
+
         const embed = new EmbedBuilder()
             .setTitle(`⚡✨ AWAKENING BERHASIL! ✨⚡`)
             .setColor(result.nextTier.color)

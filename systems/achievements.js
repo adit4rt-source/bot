@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 119, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 129, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -153,6 +153,20 @@ const ACHIEVEMENTS = [
     // --- EXPEDITION ---
     { id: 'expedition_first', name: 'Penjelajah', emoji: '🧭', desc: 'Selesaikan ekspedisi pertama', category: 'Pet', reward: 150 },
     { id: 'expedition_25', name: 'Master Ekspedisi', emoji: '🗺️', desc: 'Selesaikan 25 ekspedisi', category: 'Pet', reward: 2000 },
+    // --- AWAKENING ---
+    { id: 'awakening_first', name: 'Awakened', emoji: '⚡', desc: 'Awakening pertama kali', category: 'Pet', reward: 5000 },
+    // --- CARD COLLECTION ---
+    { id: 'card_first', name: 'Card Collector', emoji: '🃏', desc: 'Buka gacha kartu pertama kali', category: 'Card', reward: 100 },
+    { id: 'card_25', name: 'Card Enthusiast', emoji: '📚', desc: 'Kumpulkan 25 kartu', category: 'Card', reward: 500 },
+    { id: 'card_100', name: 'Card Master', emoji: '🏆', desc: 'Kumpulkan 100 kartu', category: 'Card', reward: 2000 },
+    { id: 'card_rare_holo', name: 'Rare Pull', emoji: '⭐', desc: 'Dapatkan kartu Rare Holo pertama', category: 'Card', reward: 300 },
+    { id: 'card_ultra', name: 'Ultra Pull', emoji: '💎', desc: 'Dapatkan kartu Rare Ultra pertama', category: 'Card', reward: 1000 },
+    // --- ARENA ---
+    { id: 'arena_first', name: 'Arena Debut', emoji: '🏟️', desc: 'Pertama kali bertarung di Arena', category: 'Battle', reward: 200 },
+    { id: 'arena_win_10', name: 'Arena Fighter', emoji: '⚔️', desc: 'Menang 10 pertarungan Arena', category: 'Battle', reward: 1000 },
+    { id: 'arena_win_50', name: 'Arena Champion', emoji: '🏆', desc: 'Menang 50 pertarungan Arena', category: 'Battle', reward: 3000 },
+    // --- LIVESTOCK ---
+    { id: 'livestock_first', name: 'Peternak Pemula', emoji: '🐄', desc: 'Punya ternak pertama', category: 'Farming', reward: 100 },
 
 ];
 
@@ -369,6 +383,14 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'relic_melt') { const c = getUserStat(guildId, userId, 'relic_melts'); if (c >= 1) checks.push('relic_melt_first'); }
     // --- EXPEDITION ---
     if (context.type === 'expedition') { const c = getUserStat(guildId, userId, 'total_expeditions'); if (c >= 1) checks.push('expedition_first'); if (c >= 25) checks.push('expedition_25'); }
+    // --- AWAKENING ---
+    if (context.type === 'awakening') { const c = getUserStat(guildId, userId, 'total_awakenings'); if (c >= 1) checks.push('awakening_first'); }
+    // --- CARD COLLECTION ---
+    if (context.type === 'card_gacha') { const c = getUserStat(guildId, userId, 'cards_grabbed'); if (c >= 1) checks.push('card_first'); const total = context.totalCards || 0; if (total >= 25) checks.push('card_25'); if (total >= 100) checks.push('card_100'); if (context.hasRareHolo) checks.push('card_rare_holo'); if (context.hasUltra) checks.push('card_ultra'); }
+    // --- ARENA ---
+    if (context.type === 'arena') { const w = getUserStat(guildId, userId, 'arena_wins'); const t = (getUserStat(guildId, userId, 'arena_wins') || 0) + (getUserStat(guildId, userId, 'arena_losses') || 0); if (t >= 1) checks.push('arena_first'); if (w >= 10) checks.push('arena_win_10'); if (w >= 50) checks.push('arena_win_50'); }
+    // --- LIVESTOCK ---
+    if (context.type === 'livestock') { checks.push('livestock_first'); }
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
@@ -407,6 +429,10 @@ const ACH_PROGRESS = {
     world_boss_first: { stat: 'world_boss_attacks', target: 1 }, world_boss_slayer: { stat: 'world_boss_last_hit', target: 1 },
     relic_melt_first: { stat: 'relic_melts', target: 1 },
     expedition_first: { stat: 'total_expeditions', target: 1 }, expedition_25: { stat: 'total_expeditions', target: 25 },
+    awakening_first: { stat: 'total_awakenings', target: 1 },
+    card_first: { stat: 'cards_grabbed', target: 1 }, card_25: { special: 'totalCards', target: 25 }, card_100: { special: 'totalCards', target: 100 },
+    arena_first: { special: 'arenaFights', target: 1 }, arena_win_10: { stat: 'arena_wins', target: 10 }, arena_win_50: { stat: 'arena_wins', target: 50 },
+    livestock_first: { special: 'livestock', target: 1 },
 };
 
 // Returns { raw, current, target } for a countable achievement, or null.
@@ -419,6 +445,9 @@ function getAchievementProgress(guildId, userId, achId) {
         else if (p.special === 'level') current = getOrCreateUser(guildId, userId).level;
         else if (p.special === 'streak') { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); current = s ? s.count : 0; }
         else if (p.special === 'distinctPets') { const r = db.prepare('SELECT COUNT(*) AS c FROM pet_discovery WHERE userId = ?').get(userId); current = r ? r.c : 0; }
+        else if (p.special === 'totalCards') { const r = db.prepare('SELECT COUNT(*) AS c FROM pokemon_cards WHERE userId = ?').get(userId); current = r ? r.c : 0; }
+        else if (p.special === 'arenaFights') { current = (getUserStat(guildId, userId, 'arena_wins') || 0) + (getUserStat(guildId, userId, 'arena_losses') || 0); }
+        else if (p.special === 'livestock') { try { const r = db.prepare('SELECT COUNT(*) AS c FROM livestock WHERE userId = ?').get(userId); current = r ? r.c : 0; } catch (_) { current = 0; } }
         else current = getUserStat(guildId, userId, p.stat) || 0;
     } catch (_) { current = 0; }
     return { raw: current, current: Math.min(current, p.target), target: p.target };

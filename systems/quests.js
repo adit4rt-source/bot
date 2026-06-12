@@ -45,6 +45,8 @@ const QUEST_POOL = [
     { type: 'refine', descFn: (q) => `🔨 Refine relic ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
     { type: 'daily', descFn: (q) => q.target > 1 ? `📅 Klaim Daily Reward ${q.target} kali` : `📅 Klaim Daily Reward hari ini`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
     { type: 'worldboss', descFn: (q) => `🗺️ Serang World Boss ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,3], hard: [3,5] } },
+    { type: 'card_gacha', descFn: (q) => `🃏 Buka ${q.target} pack kartu`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
+    { type: 'arena', descFn: (q) => `⚔️ Bertarung di Arena ${q.target} kali`, targetRange: { easy: [2,3], medium: [3,5], hard: [5,8] } },
 ];
 
 // ================= DIFFICULTY TIERS =================

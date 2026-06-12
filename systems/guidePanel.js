@@ -87,6 +87,52 @@ const SECTIONS = {
             `> Zona: 🌲nature 🏔️electric 🏛️light 🌊water 🌑dark 🗼fire\n\n` +
             `> 🎯 **Beda kunci:** Dungeon = *lawan* elemen musuh · Expedition = *samakan* elemen zona.`
     },
+    card: {
+        label: '🃏 Card TCG',
+        title: '🃏 Pokemon Card TCG — Panduan Gacha',
+        body:
+            `Kumpulkan kartu Pokemon asli dari **pokemontcg.io**! Beli pack, kumpulkan koleksi, burn duplikat jadi Stardust.\n\n` +
+            `${DIV}\n**🎴 Gacha Pack**\n` +
+            `> 🟢 **Basic** (15rb) — 3 kartu: Common/Uncommon/Rare. CD 5 mnt\n` +
+            `> 🔵 **Premium** (75rb) — 3 kartu: Rare–Holo V. CD 15 mnt\n` +
+            `> 🟣 **Ultra** (200rb) — 3 kartu: Rare Holo–Secret. CD 30 mnt\n` +
+            `> 💎 **Master** (750rb) — 10 kartu + 1 Ultra guaranteed! CD 60 mnt\n\n` +
+            `${DIV}\n**⭐ Rarity (rendah → tinggi)**\n` +
+            `> ⚪ Common · 🟢 Uncommon · 🔵 Rare · 🟣 Rare Holo\n` +
+            `> 🟡 Rare Holo EX/GX/V · 🔴 Rare Ultra · 🌈 Rare Rainbow\n` +
+            `> 👑 Rare Secret · 🎨 Illustration Rare · 💎 Special Art Rare\n\n` +
+            `${DIV}\n**✨ Stardust & Burn**\n` +
+            `> Burn duplikat → dapat ✨ Stardust sesuai rarity.\n` +
+            `> Stardust bisa dipakai untuk fitur khusus di masa depan.\n\n` +
+            `${DIV}\n**❤️ Wishlist & Fitur Lain**\n` +
+            `> \`/wishlist add [nama]\` — otomatis di-ping saat kartu muncul\n` +
+            `> 🏆 **Leaderboard** — top collector berdasar total koleksi\n` +
+            `> 🎨 **Dye** — warnai kartu favoritmu\n\n` +
+            `> -# *Fan-made • Not affiliated with Nintendo/The Pokemon Company*`
+    },
+    arena: {
+        label: '🏟️ Arena',
+        title: '🏟️ Ranked Arena — Panduan PvP',
+        body:
+            `Adu kekuatan pet di **Ranked Arena** dengan sistem **ELO matchmaking**!\n\n` +
+            `${DIV}\n**⚔️ Cara Main**\n` +
+            `> Ketik \`/arena\` → klik ⚔️ **Cari Lawan**.\n` +
+            `> Bot otomatis cari lawan rating serupa (ELO ±range).\n` +
+            `> Cooldown: 45 detik antar fight. Max 50 fight/hari.\n\n` +
+            `${DIV}\n**🏆 Tier System**\n` +
+            `> 🥉 Bronze (0+) · 🥈 Silver (1100+) · 🥇 Gold (1250+)\n` +
+            `> 💠 Platinum (1400+) · 💎 Diamond (1600+) · 👑 Master (1850+)\n` +
+            `> Naik tier = bonus money + AP + item!\n\n` +
+            `${DIV}\n**🔥 Win Streak Bonus**\n` +
+            `> 3 streak: ×1.5 · 5: ×2 · 7: ×2.5 · 10: ×3 reward!\n\n` +
+            `${DIV}\n**🎖️ Arena Points (AP) & Shop**\n` +
+            `> Menang → AP. AP bisa beli item eksklusif di Arena Shop:\n` +
+            `> 🗡️ Arena Relic Box · 🥚 Arena Egg (Epic-Mythic)\n` +
+            `> dan booster lainnya.\n\n` +
+            `${DIV}\n**📅 Monthly Season**\n` +
+            `> Tiap bulan, rating di soft-reset.\n` +
+            `> Top 10 dapat bonus besar + title eksklusif!`
+    },
     progress: {
         label: '📈 Kembang',
         title: '📈 Evolution · Fusion · Relic · Abilities · Awakening',
@@ -109,7 +155,7 @@ const SECTIONS = {
     },
 };
 
-const SECTION_ORDER = ['overview', 'care', 'battle', 'activity', 'progress'];
+const SECTION_ORDER = ['overview', 'care', 'battle', 'activity', 'progress', 'card', 'arena'];
 
 // ==================== BUILD PANEL ====================
 function buildGuidePanel(userId, section = 'overview') {
@@ -120,19 +166,23 @@ function buildGuidePanel(userId, section = 'overview') {
         .setColor(ui.COLORS.pet)
         .setTitle(sec.title)
         .setDescription(sec.body)
-        .setFooter({ text: 'Panduan Pet • Klik tombol di bawah untuk pindah bagian' });
+        .setFooter({ text: 'Panduan Bot • Klik tombol di bawah untuk pindah bagian' });
 
-    // Navigation buttons (active section highlighted)
-    const row = new ActionRowBuilder().addComponents(
-        SECTION_ORDER.map(s =>
-            new ButtonBuilder()
-                .setCustomId(`guide_${s}_${userId}`)
-                .setLabel(SECTIONS[s].label)
-                .setStyle(s === key ? ButtonStyle.Primary : ButtonStyle.Secondary)
-        )
+    // Navigation buttons (active section highlighted) — max 5 per row
+    const allButtons = SECTION_ORDER.map(s =>
+        new ButtonBuilder()
+            .setCustomId(`guide_${s}_${userId}`)
+            .setLabel(SECTIONS[s].label)
+            .setStyle(s === key ? ButtonStyle.Primary : ButtonStyle.Secondary)
     );
+    const row1 = new ActionRowBuilder().addComponents(allButtons.slice(0, 5));
+    const components = [row1];
+    if (allButtons.length > 5) {
+        const row2 = new ActionRowBuilder().addComponents(allButtons.slice(5));
+        components.push(row2);
+    }
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components };
 }
 
 // ==================== HANDLER ====================

@@ -59,6 +59,10 @@ function buildProfilePanel(guildId, userId, username, member) {
     const pvpWins = getUserStat(guildId, userId, 'pvp_wins') || 0;
     const expeditions = getUserStat(guildId, userId, 'total_expeditions') || 0;
 
+    // Card collection count
+    let totalCards = 0;
+    try { totalCards = db.prepare('SELECT COUNT(*) AS c FROM pokemon_cards WHERE userId = ?').get(userId)?.c || 0; } catch (_) {}
+
     // Ranked Arena (PvP) — MMR + tier + W/L
     let arenaLine = '';
     try {
@@ -102,7 +106,8 @@ function buildProfilePanel(guildId, userId, username, member) {
             `${arenaLine}\n` +
             `🐾 **Pet:** ${petInfo}\n\n` +
             `🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**\n` +
-            `👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**  •  🛠️ Alat Tani: **Lv.${farmToolLevel}**`
+            `👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**\n` +
+            `🛠️ Alat Tani: **Lv.${farmToolLevel}**  •  🃏 Kartu: **${totalCards}**`
         )
         .setFooter({ text: ui.footer('Klik tombol di bawah untuk Achievement, Inventory, Rank, & lainnya') })
         .setTimestamp();
@@ -116,7 +121,8 @@ function buildProfilePanel(guildId, userId, username, member) {
     );
 
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`profpnl_card_${userId}`).setLabel('🖼️ Kartu Profil').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`profpnl_card_${userId}`).setLabel('🖼️ Kartu Profil').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`profpnl_cards_${userId}`).setLabel('🃏 Koleksi Kartu').setStyle(ButtonStyle.Success)
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -151,8 +157,19 @@ async function handleProfileButton(interaction) {
         return interaction.update(buildProfilePanel(guildId, userId, interaction.user.username, member));
     }
 
+    // === CARD COLLECTION (opens card panel) ===
+    if (action === 'cards') {
+        try {
+            const { handleCardsCommand } = require('./cardGame');
+            return handleCardsCommand(interaction);
+        } catch (e) {
+            return interaction.reply({ content: '❌ Fitur kartu belum tersedia.', ephemeral: true });
+        }
+    }
+
     // === PROFILE CARD (image via @napi-rs/canvas) ===
     if (action === 'card') {
+
         const { generateProfileCard } = require('./imageRenderer');
         const { AttachmentBuilder } = require('discord.js');
         const userData = getOrCreateUser(guildId, userId);
@@ -196,7 +213,7 @@ async function handleProfileButton(interaction) {
         for (const cat of categories) {
             const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e' }[cat] || '\ud83d\udcc1';
+            const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️', Pet: '🐾', Card: '🃏' }[cat] || '📁';
             desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
         }
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n*...dan lainnya*';
@@ -213,7 +230,7 @@ async function handleProfileButton(interaction) {
         for (const cat of categories) {
             const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e' }[cat] || '\ud83d\udcc1';
+            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e', Card: '\ud83c\udccf' }[cat] || '\ud83d\udcc1';
             catMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(`${cat} (${catUnlocked}/${catAchs.length})`.slice(0, 100))
                 .setValue(cat)

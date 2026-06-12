@@ -3,7 +3,7 @@
 // Fan-made • Not affiliated with Nintendo/The Pokemon Company
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const { db, getOrCreateUser, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
 const state = require('../state');
 
 // ==================== POKEMON GACHA PACKS ====================
@@ -515,6 +515,18 @@ async function handleGacha(interaction, packId, userId) {
                 userId, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
         }
         incrementUserStat(guildId, userId, 'cards_grabbed');
+
+        // Quest progress: card_gacha
+        try { const { updateQuestProgress } = require('./quests'); updateQuestProgress(guildId, userId, 'card_gacha', 1); } catch (_) {}
+
+        // Achievement check: card collection
+        try {
+            const { checkAchievements } = require('./achievements');
+            const totalCards = db.prepare('SELECT COUNT(*) AS c FROM pokemon_cards WHERE userId = ?').get(userId)?.c || 0;
+            const hasRareHolo = cards.some(c => { const t = (RARITIES[c.rarity] || {}).tier || 0; return t >= 3; });
+            const hasUltra = cards.some(c => { const t = (RARITIES[c.rarity] || {}).tier || 0; return t >= 5; });
+            await checkAchievements(interaction.guild, userId, { type: 'card_gacha', totalCards, hasRareHolo, hasUltra });
+        } catch (_) {}
 
         const img = await require('./imageRenderer').generateCardImage(cards);
         const att = new AttachmentBuilder(img, { name: 'gacha.png' });
