@@ -257,10 +257,10 @@ async function routeInteraction(interaction) {
 
             // === BONUS: 3 Pokemon Cards from daily ===
             try {
-                const { pullCards, generateGachaImage, RARITIES } = require('../systems/cardGame');
+                const { fetchRandomCards, generateCardImage, RARITIES } = require('../systems/cardGame');
                 const { AttachmentBuilder } = require('discord.js');
                 const dailyPool = ['Common', 'Uncommon', 'Rare'];
-                const cards = await pullCards(dailyPool, 3, interaction.user.id);
+                const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);
                 if (cards && cards.length > 0) {
                     // Save to collection
                     for (const c of cards) {
@@ -269,7 +269,7 @@ async function routeInteraction(interaction) {
                     }
                     let att;
                     try {
-                        const img = await generateGachaImage(cards);
+                        const img = await generateCardImage(cards);
                         att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
                     } catch(imgErr) {
                         console.error('[Daily] Card image gen failed:', imgErr.message);
@@ -1281,10 +1281,10 @@ async function routeInteraction(interaction) {
 
             // === BONUS: 3 Pokemon Cards from daily ===
             try {
-                const { pullCards, generateGachaImage, RARITIES } = require('../systems/cardGame');
+                const { fetchRandomCards, generateCardImage, RARITIES } = require('../systems/cardGame');
                 const { AttachmentBuilder } = require('discord.js');
                 const dailyPool = ['Common', 'Uncommon', 'Rare'];
-                const cards = await pullCards(dailyPool, 3, interaction.user.id);
+                const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);
                 if (cards && cards.length > 0) {
                     for (const c of cards) {
                         db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
@@ -1292,7 +1292,7 @@ async function routeInteraction(interaction) {
                     }
                     let att;
                     try {
-                        const img = await generateGachaImage(cards);
+                        const img = await generateCardImage(cards);
                         att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
                     } catch(imgErr) {
                         console.error('[Daily-Btn] Card image gen failed:', imgErr.message);
