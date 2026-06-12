@@ -2,9 +2,7 @@
 // Sends customizable embed messages when members join/leave.
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { db } = require('../database');
-const { generateCard } = require('./welcomeCard');
-const { generateRpgCard } = require('./welcomeCardRpg');
-const { generateGlitchCard } = require('./welcomeCardGlitch');
+const { generateCard, generateRpgCard, generateGlitchCard } = require('./imageRenderer');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 

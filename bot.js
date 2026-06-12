@@ -135,14 +135,8 @@ const handleInteractionCreate = require('./events/interactionCreate');
 // Load API server (Dashboard)
 const { startApiServer, setDiscordClient } = require('./api');
 
-// Load backup system
-const { startBackupSchedule } = require('./systems/backup');
-
-// Load auto-harvest notifier
-const { startAutoHarvestSchedule } = require('./systems/autoHarvest');
-
-// Load daily + pet reminders
-const { startReminderSchedules } = require('./systems/reminders');
+// Load centralized scheduler (manages all recurring jobs)
+const scheduler = require('./systems/scheduler');
 
 // One-time data reset hook (env-gated)
 const { maybeRunStartupReset } = require('./systems/dataReset');
@@ -184,72 +178,26 @@ client.once(Events.ClientReady, async c => {
 
     log('INFO', `Bot started: v${BOT_VERSION} | ${c.guilds.cache.size} servers | ${commands.length} commands`);
 
-    // Set bot status / rich presence
+    // Set initial bot status
     const { ActivityType } = require('discord.js');
     client.user.setPresence({
         activities: [{ name: `/help | ${c.guilds.cache.size} servers`, type: ActivityType.Playing }],
         status: 'online'
     });
-    // Update presence every 10 minutes (server count may change)
-    setInterval(() => {
-        client.user.setPresence({
-            activities: [{ name: `/help | ${client.guilds.cache.size} servers`, type: ActivityType.Playing }],
-            status: 'online'
-        });
-    }, 10 * 60 * 1000);
 
     // One-time data reset (only if env RESET_DATA=<token> is set & not used before)
     try { maybeRunStartupReset(); } catch (e) { console.error('Startup reset error:', e); }
 
-    // Start API server for dashboard
+    // ================= CENTRALIZED SCHEDULER =================
+    // Start all recurring jobs (reminders, auto-harvest, backup, panel refresh,
+    // voice tick, giveaway, lottery, livestock, presence update)
     setDiscordClient(client);
     startApiServer();
-
-    // Start auto-backup schedule (every 6 hours + immediate backup + Discord upload)
-    startBackupSchedule(client);
-    console.log('💾 Auto-backup: setiap 6 jam → Discord channel');
+    scheduler.start(client);
 
     // Send update announcement (once per version)
     const { sendUpdateAnnouncement } = require('./systems/updateAnnounce');
     sendUpdateAnnouncement(client);
-
-    // Start auto-harvest notifier (DMs users with the Auto-Harvest Pass when crops are ready)
-    startAutoHarvestSchedule(client);
-    console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
-
-    // Start daily-reward + hungry-pet reminders (automatic DMs)
-    startReminderSchedules(client);
-    console.log('🔔 Reminder: daily (1 jam) + pet lapar (10 menit)');
-
-    // Start panel auto-refresh ticker (live progress bars for farm/coop/barn panels)
-    require('./systems/panelRefresh').start();
-    console.log('🔄 Panel auto-refresh: progress panel update tiap 30 detik');
-
-    // Start voice tick (periodic quest progress for users in VC)
-    const { startVoiceTickInterval } = require('./events/voiceStateUpdate');
-    startVoiceTickInterval();
-    console.log('🎙️ Voice tick: quest progress setiap 1 menit');
-
-    // Start giveaway scheduler (auto-ends & announces winners when timers expire)
-    try {
-        const { startGiveawayScheduler } = require('./systems/giveaway');
-        startGiveawayScheduler(client);
-        console.log('🎉 Giveaway scheduler: cek setiap 30 detik');
-    } catch (e) { console.error('Giveaway scheduler error:', e); }
-
-    // Start lottery/togel scheduler (auto-draws hourly rounds & announces winners)
-    try {
-        const { startLotteryScheduler } = require('./systems/lottery');
-        startLotteryScheduler(client);
-        console.log('🎟️ Lottery scheduler: undian togel otomatis tiap 1 jam');
-    } catch (e) { console.error('Lottery scheduler error:', e); }
-
-    // Start livestock daily tick (neglect sickness, seasonal illness, pests, death)
-    try {
-        const { startLivestockDailySchedule } = require('./systems/livestock');
-        startLivestockDailySchedule();
-        console.log('🐔 Livestock daily tick: cek pergantian hari WIB tiap 30 menit');
-    } catch (e) { console.error('Livestock daily tick error:', e); }
 
     // Initialize seasonal leaderboard (snapshots baselines + handles monthly rollover)
     try {

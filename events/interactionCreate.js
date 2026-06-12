@@ -257,7 +257,8 @@ async function routeInteraction(interaction) {
 
             // === BONUS: 3 Pokemon Cards from daily ===
             try {
-                const { fetchRandomCards, generateCardImage, RARITIES } = require('../systems/cardGame');
+                const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
+                const { generateCardImage } = require('../systems/imageRenderer');
                 const { AttachmentBuilder } = require('discord.js');
                 const dailyPool = ['Common', 'Uncommon', 'Rare'];
                 const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);
@@ -1281,7 +1282,8 @@ async function routeInteraction(interaction) {
 
             // === BONUS: 3 Pokemon Cards from daily ===
             try {
-                const { fetchRandomCards, generateCardImage, RARITIES } = require('../systems/cardGame');
+                const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
+                const { generateCardImage } = require('../systems/imageRenderer');
                 const { AttachmentBuilder } = require('discord.js');
                 const dailyPool = ['Common', 'Uncommon', 'Rare'];
                 const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);

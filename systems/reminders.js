@@ -434,9 +434,15 @@ module.exports = {
     runStreakReminderCheck,
     runFarmReadyCheck,
     runWorldBossReminderCheck,
+    runAbilityTickAll,
+    runPestTick,
     PET_HUNGER_THRESHOLD,
     PET_DM_COOLDOWN_MS,
     DAILY_INTERVAL_MS,
     PET_INTERVAL_MS,
-    EXPEDITION_INTERVAL_MS
+    EXPEDITION_INTERVAL_MS,
+    QUEST_CHECK_INTERVAL_MS,
+    STREAK_CHECK_INTERVAL_MS,
+    FARM_CHECK_INTERVAL_MS,
+    ABILITY_TICK_INTERVAL_MS,
 };

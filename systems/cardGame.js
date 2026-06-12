@@ -500,7 +500,7 @@ async function handleGacha(interaction, packId, userId) {
         }
         incrementUserStat(guildId, userId, 'cards_grabbed');
 
-        const img = await generateGachaImage(cards);
+        const img = await require('./imageRenderer').generateCardImage(cards);
         const att = new AttachmentBuilder(img, { name: 'gacha.png' });
 
         const desc = cards.map((c, i) => {
@@ -561,7 +561,7 @@ async function handleCardsCommand(interaction, page = 0) {
         WHEN 'Rare Holo GX' THEN 5 WHEN 'Rare Holo EX' THEN 5 WHEN 'Rare Holo' THEN 6 ELSE 9 END
         LIMIT ? OFFSET ?`).all(target.id, perPage, offset);
 
-    const img = await generateGalleryImage(cards);
+    const img = await require('./imageRenderer').generateGalleryImage(cards);
     const att = new AttachmentBuilder(img, { name: 'collection.png' });
 
     const list = cards.map(c => {
@@ -608,7 +608,7 @@ async function handleCardPageButton(interaction) {
         WHEN 'Rare Holo GX' THEN 5 WHEN 'Rare Holo EX' THEN 5 WHEN 'Rare Holo' THEN 6 ELSE 9 END
         LIMIT ? OFFSET ?`).all(targetId, perPage, offset);
 
-    const img = await generateGalleryImage(cards);
+    const img = await require('./imageRenderer').generateGalleryImage(cards);
     const att = new AttachmentBuilder(img, { name: 'collection.png' });
     const list = cards.map(c => {
         const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';

@@ -153,7 +153,7 @@ async function handleProfileButton(interaction) {
 
     // === PROFILE CARD (image via @napi-rs/canvas) ===
     if (action === 'card') {
-        const { generateProfileCard } = require('./profileCard');
+        const { generateProfileCard } = require('./imageRenderer');
         const { AttachmentBuilder } = require('discord.js');
         const userData = getOrCreateUser(guildId, userId);
         let rankTitle = null;
