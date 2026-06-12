@@ -20,7 +20,7 @@ const WORKER_PATH = path.join(__dirname, 'imageWorker.js');
 
 // ---- Pool state ----
 let workers = [];        // { worker, busy, ready }
-let taskQueue = [];      // { id, type, params, resolve, reject, timer }
+let taskQueue = [];      // { id, type, params, resolve, reject, timer, workerEntry }
 let taskIdCounter = 0;
 let pendingTasks = new Map(); // id → { resolve, reject, timer }
 let poolReady = false;
@@ -28,7 +28,7 @@ let poolReady = false;
 // ---- Create a single worker ----
 function createWorker(index) {
     const w = new Worker(WORKER_PATH, { env: process.env });
-    const entry = { worker: w, busy: false, ready: false, index };
+    const entry = { worker: w, busy: false, ready: false, index, stopping: false };
 
     w.on('message', (msg) => {
         if (msg.ready) {
@@ -45,10 +45,14 @@ function createWorker(index) {
         // Task result
         const { id, buffer, error } = msg;
         const pending = pendingTasks.get(id);
-        if (!pending) return;
+        if (!pending) {
+            entry.busy = false;
+            tryDequeue();
+            return;
+        }
 
         pendingTasks.delete(id);
-        clearTimeout(pending.timer);
+        if (pending.timer) clearTimeout(pending.timer);
         entry.busy = false;
 
         if (error) {
@@ -64,22 +68,19 @@ function createWorker(index) {
 
     w.on('error', (err) => {
         console.error(`[ImagePool] Worker ${index} error:`, err.message);
-        // Reject all pending tasks for this worker
+        // Reject only tasks assigned to this worker. Queued tasks can still run on a replacement.
         for (const [id, pending] of pendingTasks) {
-            clearTimeout(pending.timer);
-            pending.reject(new Error(`Worker crashed: ${err.message}`));
-            pendingTasks.delete(id);
+            if (pending.workerEntry === entry) {
+                if (pending.timer) clearTimeout(pending.timer);
+                pending.reject(new Error(`Worker crashed: ${err.message}`));
+                pendingTasks.delete(id);
+            }
         }
-        // Replace the dead worker
-        entry.ready = false;
-        entry.busy = false;
-        try { w.terminate(); } catch (_) {}
-        const replacement = createWorker(index);
-        workers[index] = replacement;
+        replaceWorker(entry);
     });
 
     w.on('exit', (code) => {
-        if (code !== 0) {
+        if (code !== 0 && !entry.stopping) {
             console.error(`[ImagePool] Worker ${index} exited with code ${code}`);
         }
     });
@@ -101,6 +102,38 @@ function getIdleWorker() {
     return workers.find(e => e.ready && !e.busy) || null;
 }
 
+function replaceWorker(entry) {
+    entry.ready = false;
+    entry.busy = false;
+    entry.stopping = true;
+    try { entry.worker.terminate(); } catch (_) {}
+    workers[entry.index] = createWorker(entry.index);
+    poolReady = false;
+}
+
+function dispatchTask(entry, task) {
+    entry.busy = true;
+    task.workerEntry = entry;
+    task.timer = setTimeout(() => {
+        if (!pendingTasks.has(task.id)) return;
+        pendingTasks.delete(task.id);
+        taskQueue = taskQueue.filter(t => t.id !== task.id);
+        task.reject(new Error(`Image render timed out after ${TASK_TIMEOUT_MS / 1000}s`));
+        if (task.workerEntry === entry) replaceWorker(entry);
+        tryDequeue();
+    }, TASK_TIMEOUT_MS);
+
+    try {
+        entry.worker.postMessage({ id: task.id, type: task.type, params: task.params });
+    } catch (e) {
+        clearTimeout(task.timer);
+        pendingTasks.delete(task.id);
+        entry.busy = false;
+        task.reject(e);
+        tryDequeue();
+    }
+}
+
 // ---- Try to dequeue and process a task ----
 function tryDequeue() {
     while (taskQueue.length > 0) {
@@ -108,8 +141,7 @@ function tryDequeue() {
         if (!idle) break;
 
         const task = taskQueue.shift();
-        idle.busy = true;
-        idle.worker.postMessage({ id: task.id, type: task.type, params: task.params });
+        dispatchTask(idle, task);
     }
 }
 
@@ -131,24 +163,16 @@ function renderImage(type, params) {
 
         const id = ++taskIdCounter;
 
-        // Timeout guard
-        const timer = setTimeout(() => {
-            pendingTasks.delete(id);
-            // Remove from queue if still waiting
-            taskQueue = taskQueue.filter(t => t.id !== id);
-            reject(new Error(`Image render timed out after ${TASK_TIMEOUT_MS / 1000}s`));
-        }, TASK_TIMEOUT_MS);
-
-        pendingTasks.set(id, { resolve, reject, timer });
+        const task = { id, type, params, resolve, reject, timer: null, workerEntry: null };
+        pendingTasks.set(id, task);
 
         // Try to assign directly to an idle worker
         const idle = getIdleWorker();
         if (idle) {
-            idle.busy = true;
-            idle.worker.postMessage({ id, type, params });
+            dispatchTask(idle, task);
         } else {
             // Queue it
-            taskQueue.push({ id, type, params });
+            taskQueue.push(task);
         }
     });
 }
@@ -158,6 +182,7 @@ function renderImage(type, params) {
  */
 async function shutdownPool() {
     for (const entry of workers) {
+        entry.stopping = true;
         try { await entry.worker.terminate(); } catch (_) {}
     }
     workers = [];
