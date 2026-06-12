@@ -27,7 +27,7 @@ let poolReady = false;
 
 // ---- Create a single worker ----
 function createWorker(index) {
-    const w = new Worker(WORKER_PATH);
+    const w = new Worker(WORKER_PATH, { env: process.env });
     const entry = { worker: w, busy: false, ready: false, index };
 
     w.on('message', (msg) => {

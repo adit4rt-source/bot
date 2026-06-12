@@ -4,6 +4,17 @@
 const { parentPort, workerData } = require('worker_threads');
 const path = require('path');
 
+// Redirect canvas to mock in test environment (since workers don't inherit main thread overrides)
+if (process.env.NODE_ENV === 'test') {
+    const Module = require('module');
+    const origResolve = Module._resolveFilename;
+    const MOCKS = path.join(__dirname, '..', 'test', 'mocks');
+    Module._resolveFilename = function (request, parent, isMain, options) {
+        if (request === '@napi-rs/canvas') return path.join(MOCKS, 'napi-canvas.js');
+        return origResolve.call(this, request, parent, isMain, options);
+    };
+}
+
 // ---- Register fonts once per worker ----
 const { GlobalFonts } = require('@napi-rs/canvas');
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');

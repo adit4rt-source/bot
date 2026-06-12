@@ -4,8 +4,8 @@
 class Canvas {
   constructor(w, h) { this.width = w; this.height = h; }
   getContext() { return new Context2D(); }
-  toBuffer() { return Buffer.from('mock-png'); }
-  encode() { return Buffer.from('mock-png'); }
+  toBuffer() { return Buffer.alloc(1024); }
+  encode() { return Buffer.alloc(1024); }
 }
 
 class Context2D {

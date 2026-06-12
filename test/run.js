@@ -5,6 +5,7 @@
 // Tests run in a throwaway temp working directory so the bot's
 // `new Database('economy.sqlite')` never touches real player data.
 'use strict';
+process.env.NODE_ENV = 'test';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');

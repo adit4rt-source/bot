@@ -110,7 +110,8 @@ const commands = [
             .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
 
     // ================= POKEMON TCG CARDS =================
-    new SlashCommandBuilder().setName('card').setDescription('🃏 Pokemon TCG Panel — Drop, collect, trade, burn Pokemon cards'),
+    new SlashCommandBuilder().setName('card').setDescription('🃏 Pokemon TCG Panel — Kelola koleksi kartu Pokemon'),
+    new SlashCommandBuilder().setName('drop').setDescription('🃏 Drop Basic Pack — Beli dan buka Basic Pack kartu Pokemon (💰15k)'),
     new SlashCommandBuilder().setName('cardview').setDescription('🔍 Lihat detail kartu Pokemon')
         .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu (dari koleksi)').setRequired(true)),
     new SlashCommandBuilder().setName('cards').setDescription('📖 Koleksi kartu Pokemon')
