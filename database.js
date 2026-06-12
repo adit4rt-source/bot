@@ -208,7 +208,7 @@ function checkGlobalMode() {
 
 // ================= ACTIVATE PROXY =================
 // Must be declared BEFORE any usage of `db`
-const db = checkGlobalMode() ? createGlobalProxy(_rawDb) : _rawDb;
+let db = checkGlobalMode() ? createGlobalProxy(_rawDb) : _rawDb;
 if (checkGlobalMode()) {
     console.log('🌐 Database running in GLOBAL mode (guildId proxy active)');
 }
@@ -323,6 +323,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS farm_decorations (guildId TEXT, userId TEXT,
 try {
     const { runGlobalMigration } = require('./systems/migration-global');
     runGlobalMigration(db);
+    // After migration, the schema may have changed (guildId columns removed).
+    // Reset the cached mode and reassign db with the proxy if now in global mode.
+    isGlobalMode = null;
+    if (checkGlobalMode() && db === _rawDb) {
+        db = createGlobalProxy(_rawDb);
+        console.log('🌐 Database running in GLOBAL mode (guildId proxy activated post-migration)');
+    }
 } catch (e) {
     console.error('⚠️  Migration warning:', e.message);
 }
