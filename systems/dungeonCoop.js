@@ -17,9 +17,9 @@ const ROOM_TYPES = [
 ];
 
 const COOP_DUNGEONS = [
-    { id: 'crypt', name: '🕯️ Forgotten Crypt', minLevel: 15, rooms: 4, boss: 'Crypt Warden', element: 'dark', power: 280, reward: [2500, 6500], exp: 18 },
-    { id: 'labyrinth', name: '🌀 Shifting Labyrinth', minLevel: 40, rooms: 5, boss: 'Maze Tyrant', element: 'nature', power: 620, reward: [7000, 16000], exp: 32 },
-    { id: 'abyss', name: '🌌 Abyss Gate', minLevel: 85, rooms: 6, boss: 'Abyss Herald', element: 'dark', power: 1250, reward: [18000, 42000], exp: 55 },
+    { id: 'crypt', name: '🕯️ Forgotten Crypt', minLevel: 15, rooms: 4, boss: 'Crypt Warden', element: 'dark', power: 280, reward: [2500, 6500], exp: 18, cooldown: 3 * 60 * 1000 },
+    { id: 'labyrinth', name: '🌀 Shifting Labyrinth', minLevel: 40, rooms: 5, boss: 'Maze Tyrant', element: 'nature', power: 620, reward: [7000, 16000], exp: 32, cooldown: 5 * 60 * 1000 },
+    { id: 'abyss', name: '🌌 Abyss Gate', minLevel: 85, rooms: 6, boss: 'Abyss Herald', element: 'dark', power: 1250, reward: [18000, 42000], exp: 55, cooldown: 8 * 60 * 1000 },
 ];
 
 function runKey(guildId, leaderId) {
@@ -48,6 +48,13 @@ function createRun(guildId, leaderId, dungeonId = 'crypt', channelId = null) {
     const pet = getPetData(guildId, leaderId);
     if (!pet) return { ok: false, error: '❌ Kamu butuh pet aktif untuk buka co-op dungeon!' };
     if (pet.level < dungeon.minLevel) return { ok: false, error: `❌ Pet butuh minimal Lv.${dungeon.minLevel} untuk ${dungeon.name}.` };
+    
+    const cooldowns = require('./cooldowns');
+    if (cooldowns.isOnCooldown('dngcoop', guildId, leaderId)) {
+        const remaining = cooldowns.getRemainingSec('dngcoop', guildId, leaderId);
+        return { ok: false, error: `❌ Kamu sedang cooldown Co-op Dungeon! Tunggu **${remaining} detik**.` };
+    }
+
     const key = runKey(guildId, leaderId);
     if (activeDungeonRuns.has(key)) return { ok: false, error: '❌ Kamu sudah punya dungeon run aktif.' };
     const run = {
@@ -73,6 +80,13 @@ function joinRun(guildId, leaderId, userId) {
     if (run.members.includes(userId)) return { ok: false, error: '✅ Kamu sudah join party ini.' };
     if (run.members.length >= 4) return { ok: false, error: '❌ Party penuh. Maksimal 4 player.' };
     const dungeon = COOP_DUNGEONS.find(d => d.id === run.dungeonId);
+    
+    const cooldowns = require('./cooldowns');
+    if (cooldowns.isOnCooldown('dngcoop', guildId, userId)) {
+        const remaining = cooldowns.getRemainingSec('dngcoop', guildId, userId);
+        return { ok: false, error: `❌ Kamu sedang cooldown Co-op Dungeon! Tunggu **${remaining} detik**.` };
+    }
+
     const pet = getPetData(guildId, userId);
     if (!pet) return { ok: false, error: '❌ Kamu butuh pet aktif untuk join.' };
     if (pet.level < dungeon.minLevel) return { ok: false, error: `❌ Pet kamu butuh minimal Lv.${dungeon.minLevel}.` };
@@ -152,11 +166,13 @@ function awardRun(run) {
     const memberCount = Math.max(1, run.members.length);
     const perMemberMoney = Math.floor((run.loot.money || 0) / memberCount);
     const perMemberItems = {
-        dna_shard: Math.max(1, Math.floor((run.loot.dna_shard || 0) / memberCount)),
+        dna_shard: (run.loot.dna_shard || 0) > 0 ? Math.max(1, Math.floor((run.loot.dna_shard || 0) / memberCount)) : 0,
         mutation_serum: Math.floor((run.loot.mutation_serum || 0) / memberCount),
         ancient_core: Math.floor((run.loot.ancient_core || 0) / memberCount),
         trait_stabilizer: Math.floor((run.loot.trait_stabilizer || 0) / memberCount),
     };
+    const cooldowns = require('./cooldowns');
+    const cdTime = dungeon.cooldown || 15 * 60 * 1000;
     for (const userId of run.members) {
         if (perMemberMoney > 0) {
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(perMemberMoney, run.guildId, userId);
@@ -166,6 +182,9 @@ function awardRun(run) {
         addPetExp(run.guildId, userId, run.cleared ? dungeon.exp : Math.floor(dungeon.exp * 0.35));
         incrementUserStat(run.guildId, userId, run.cleared ? 'coop_dungeon_clears' : 'coop_dungeon_runs');
         if (run.cleared) incrementUserStat(run.guildId, userId, 'dungeon_clears');
+        
+        // Set Co-op Dungeon cooldown for all participating members
+        cooldowns.setCooldown('dngcoop', run.guildId, userId, cdTime);
     }
     run.awarded = true;
     run.lastAward = { perMemberMoney, perMemberItems };
