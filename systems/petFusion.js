@@ -131,6 +131,7 @@ function buildFusionPanel(guildId, userId, username) {
     }
 
     components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`mutation_lab_${userId}`).setLabel('🧪 Mutation Lab').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`fusion_history_${userId}`).setLabel('📜 History').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Pet Panel').setStyle(ButtonStyle.Secondary)
     ));

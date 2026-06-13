@@ -13,6 +13,7 @@ const { getUserStat, incrementUserStat, addIncome } = require('../database');
 const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
 const ui = require('./ui');
+const { formatTrait } = require('./mutationLab');
 
 // ============ Release Pet: refund per tier (money) ============
 const PET_RELEASE_REFUND = { Common: 100, Uncommon: 500, Rare: 2500, Epic: 10000, Legendary: 25000, Mythic: 50000, Secret: 125000, God: 250000 };
@@ -288,6 +289,7 @@ function buildMainPanel(guildId, userId, username) {
     const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
     const isHunting = pet.hunting_until && pet.hunting_until > Date.now();
     const huntInfo = isHunting ? `\n🏹 **HUNTING** — Kembali <t:${Math.floor(pet.hunting_until / 1000)}:R>` : '';
+    const mutationLine = pet.mutation_trait ? `\n🧪 **Mutation:** ${formatTrait(pet)}` : '';
 
     // Evolution info
     let evoInfo = '';
@@ -316,7 +318,7 @@ function buildMainPanel(guildId, userId, username) {
             `⚔️ ATK: ${statFmt(eff.atk, pet.atk)} | 🛡️ DEF: ${statFmt(eff.def, pet.def)} | 💨 SPD: ${statFmt(eff.spd, pet.spd)}\n` +
             `❤️ HP: **${pet.hp}** | 🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (base ${pet.crit}%)` : `**${pet.crit}%**`}\n` +
             (hasRelic ? `📿 *Bonus relic aktif — naikkan dengan 📿 Refine!*\n` : '') +
-            `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` +
+            `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` + mutationLine +
             huntInfo + evoInfo
         )
         .setFooter({ text: ui.footer(`${ui.money(userData.balance)} • Class: ${pet.class || 'warrior'} • Element: ${pet.element || 'fire'}`) });
@@ -977,6 +979,7 @@ async function handlePetButton(interaction) {
             .setDescription(`${PET_DATA.find(p => p.id === pet.petId)?.emoji || '🐾'} **${pet.name}** (Lv.${pet.level})\n\n> ⚔️ *Combat cepat — **COUNTER** elemen musuh untuk +25% dmg. Sumber utama **relic & material gear** (ada risiko kalah).*\n\nPilih dungeon untuk masuk:`);
         const row1 = new ActionRowBuilder().addComponents(dungeonMenu);
         const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`dngcoop_panel_${userId}`).setLabel('🤝 Co-op Roguelike').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row1, row2] });

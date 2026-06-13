@@ -70,6 +70,49 @@ module.exports = function register() {
     });
   });
 
+  // ---- Mutation Lab + Co-op Dungeon ----
+  const mut = botRequire('systems/mutationLab.js');
+  const coop = botRequire('systems/dungeonCoop.js');
+  const petsData = botRequire('data/pets.js');
+  function seedActivePet(g, u, level = 30) {
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM pets WHERE guildId = ? AND userId = ?').run(g, u);
+    const petDef = petsData.PET_DATA.find(p => p.tier === 'Rare') || petsData.PET_DATA[0];
+    db.db.prepare(`INSERT INTO pets (guildId, userId, petId, name, level, active, adoptedAt, class, element, hp, atk, def, spd, crit)
+      VALUES (?, ?, ?, ?, ?, 1, ?, 'warrior', 'fire', 300, 80, 45, 35, 10)`).run(g, u, petDef.id, petDef.name, level, Date.now());
+  }
+  test('mutationLab: active pet can gain a trait with materials', () => {
+    const g = 'MUTLAB', u = 'MUTU';
+    seedActivePet(g, u, 35);
+    db.updateUserBalance(g, u, 1_000_000);
+    db.addItem(g, u, 'dna_shard', 20);
+    db.addItem(g, u, 'mutation_serum', 5);
+    db.addItem(g, u, 'ancient_core', 2);
+    const oldRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      const res = mut.executeMutation(g, u);
+      if (!res.ok || !res.success) throw new Error('mutation did not succeed');
+      const pet = db.db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(g, u);
+      if (!pet.mutation_trait || pet.mutation_power < 1) throw new Error('trait not saved');
+      if (pet.atk < 80) throw new Error('stats regressed');
+    } finally {
+      Math.random = oldRandom;
+    }
+  });
+  test('dungeonCoop: run resolves and awards mutation materials', () => {
+    const g = 'COOPDNG', u = 'COOPU';
+    seedActivePet(g, u, 50);
+    const created = coop.createRun(g, u, 'crypt');
+    if (!created.ok) throw new Error(created.error);
+    const run = created.run;
+    while (!run.finished) coop.resolveNextRoom(run);
+    const before = db.getItemCount(g, u, 'dna_shard');
+    const award = coop.awardRun(run);
+    if (award.perMemberItems.dna_shard < 1) throw new Error('no DNA reward');
+    if (db.getItemCount(g, u, 'dna_shard') <= before) throw new Error('DNA not credited');
+  });
+
   // ---- Secret Location ----
   const sl = botRequire('systems/secretLocation.js');
   test('secretLocation: progress embed builds before unlock', () => {
