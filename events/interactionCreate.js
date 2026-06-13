@@ -13,6 +13,8 @@ const ui = require('../systems/ui');
 const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
 const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
+const { handleMutationButton, isMutationButton } = require('../systems/mutationLab');
+const { handleDungeonCoopButton, isDungeonCoopButton } = require('../systems/dungeonCoop');
 const { handleWorldBossButton, isWorldBossButton, buildWorldBossPanel } = require('../systems/worldBoss');
 const { isLotteryButton, handleLotteryButton, buildLotteryPanel, placeBet, setPot, BET_PRICE, isLotteryModal, handleLotteryModal } = require('../systems/lottery');
 const love = require('../systems/love');
@@ -1322,6 +1324,11 @@ async function routeInteraction(interaction) {
             return handlePetButton(interaction);
         }
 
+        // --- CO-OP DUNGEON BUTTONS ---
+        if (isDungeonCoopButton(interaction.customId)) {
+            return handleDungeonCoopButton(interaction);
+        }
+
         // --- EXPEDITION PANEL BUTTONS ---
         // Check the more specific confirm detector first.
         if (isExpeditionConfirm(interaction.customId)) {
@@ -1334,6 +1341,11 @@ async function routeInteraction(interaction) {
         // --- FUSION PANEL BUTTONS ---
         if (isFusionButton(interaction.customId)) {
             return handleFusionButton(interaction);
+        }
+
+        // --- MUTATION LAB BUTTONS ---
+        if (isMutationButton(interaction.customId)) {
+            return handleMutationButton(interaction);
         }
 
         // --- WORLD BOSS BUTTONS ---
@@ -1876,4 +1888,3 @@ module.exports = async function handleInteractionCreate(interaction) {
         } catch (e) { /* already acknowledged or expired — nothing more to do */ }
     }
 };
-
