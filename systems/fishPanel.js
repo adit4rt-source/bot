@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getItemCount, addItem, removeItem, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
-const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster, getFishingWeather } = require('./fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster, getFishingWeather, getFishingCooldown } = require('./fishing');
 const { updateQuestProgress } = require('./quests');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
@@ -27,6 +27,7 @@ function buildFishingPanel(guildId, userId, username) {
     const collected = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE guildId = ? AND userId = ?').get(guildId, userId);
     const totalFish = FISH_DATA.length;
 
+    const finalCdSec = getFishingCooldown(userId, rod);
     const embed = new EmbedBuilder()
         .setTitle(ui.title('🎣', 'FISHING', username))
         .setColor(ui.COLORS.fishing)
@@ -36,7 +37,7 @@ function buildFishingPanel(guildId, userId, username) {
                 `📍 Lokasi: **${location.name}** — *${location.desc}*`,
                 `🎋 Joran: **${rod.emoji} ${rod.name}**  •  🪱 Umpan: **${bait.emoji} ${bait.name}** (sisa ${eq.bait !== 'none' ? eq.bait_count : 0})`,
                 `🐟 Tertangkap: **${totalCaught}**  •  📖 Pokédex: **${collected.c}/${totalFish}** spesies`,
-                `⏱️ Jeda lempar: ${rod.cooldown}s  •  Peluang langka: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
+                `⏱️ Jeda lempar: ${finalCdSec}s  •  Peluang langka: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
                 `${ui.money(userData.balance)}`,
             ]) +
             `\n> 🎣 Tekan **Cast** untuk mulai mancing. Kelola koleksi, ganti lokasi, & upgrade joran lewat tombol di bawah!`
@@ -201,7 +202,8 @@ async function handleFishingButton(interaction) {
             const remaining = Math.ceil((fishCooldowns.get(cdKey) - Date.now()) / 1000);
             return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true });
         }
-        fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
+        const finalCdSec = getFishingCooldown(userId, rod);
+        fishCooldowns.set(cdKey, Date.now() + finalCdSec * 1000);
 
         // === CHECK ACTIVE GIANT FISH ENCOUNTER ===
         const activeGiant = getActiveGiantFish(guildId, userId);

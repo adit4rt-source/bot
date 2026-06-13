@@ -32,6 +32,41 @@ function generatePetStats(tier) {
 //   effective bonus = stat_value * (1 + refine_level * 0.05)
 const RELIC_SLOTS = ['weapon', 'armor', 'accessory'];
 
+const GEM_STATS = {
+    dna_shard: {
+        name: 'DNA Shard',
+        emoji: '🧬',
+        options: [
+            { id: 'hp', display: '+15 HP', stats: { hp: 15 } },
+            { id: 'atk', display: '+3 ATK', stats: { atk: 3 } }
+        ]
+    },
+    mutation_serum: {
+        name: 'Mutation Serum',
+        emoji: '🧪',
+        options: [
+            { id: 'def', display: '+4 DEF', stats: { def: 4 } },
+            { id: 'spd', display: '+3 SPD', stats: { spd: 3 } }
+        ]
+    },
+    ancient_core: {
+        name: 'Ancient Core',
+        emoji: '🔮',
+        options: [
+            { id: 'crit', display: '+3% CRIT', percentStats: { crit: 3 } },
+            { id: 'all', display: '+5% ATK/DEF/SPD', percentStats: { atk: 5, def: 5, spd: 5 } }
+        ]
+    },
+    mythic_fragment: {
+        name: 'Mythic Fragment',
+        emoji: '✨',
+        options: [
+            { id: 'hp', display: '+8% HP', percentStats: { hp: 8 } },
+            { id: 'atk', display: '+8% ATK', percentStats: { atk: 8 } }
+        ]
+    }
+};
+
 function relicEffective(relic) {
     const base = (relic.stat_value || 0) * (1 + (relic.refine_level || 0) * 0.05);
     return Math.floor(base);
@@ -56,15 +91,36 @@ function getEquippedRelics(petId) {
 
 // Sum of EQUIPPED relic bonuses for a pet (per stat type).
 function getRelicBonus(userId, petId) {
-    const bonus = { atk: 0, def: 0, spd: 0, crit: 0 };
-    const percentBonus = { atk: 0, def: 0, spd: 0, crit: 0 };
+    const bonus = { hp: 0, atk: 0, def: 0, spd: 0, crit: 0 };
+    const percentBonus = { hp: 0, atk: 0, def: 0, spd: 0, crit: 0 };
     if (!petId) return { ...bonus, percent: percentBonus };
     for (const r of getEquippedRelics(petId)) {
-        if (!(r.stat_type in bonus)) continue;
-        if (isPercentRelic(r)) {
-            percentBonus[r.stat_type] += relicEffective(r);
-        } else {
-            bonus[r.stat_type] += relicEffective(r);
+        if (r.stat_type in bonus) {
+            if (isPercentRelic(r)) {
+                percentBonus[r.stat_type] += relicEffective(r);
+            } else {
+                bonus[r.stat_type] += relicEffective(r);
+            }
+        }
+        // Parse socketed gems
+        let gems = [];
+        try { gems = JSON.parse(r.gems || '[]'); } catch(e) { gems = []; }
+        for (const gem of gems) {
+            if (!gem) continue;
+            const gemDef = GEM_STATS[gem.gemId];
+            if (!gemDef) continue;
+            const option = gemDef.options.find(o => o.id === gem.stat);
+            if (!option) continue;
+            if (option.stats) {
+                for (const [sKey, val] of Object.entries(option.stats)) {
+                    if (sKey in bonus) bonus[sKey] += val;
+                }
+            }
+            if (option.percentStats) {
+                for (const [sKey, val] of Object.entries(option.percentStats)) {
+                    if (sKey in percentBonus) percentBonus[sKey] += val;
+                }
+            }
         }
     }
     return { ...bonus, percent: percentBonus };
@@ -109,36 +165,37 @@ function meltRelic(guildId, userId, relicId) {
 // Base pet stats + EQUIPPED relic bonuses (used for display and battle).
 function getEffectiveStats(pet) {
     const b = getRelicBonus(pet && pet.userId, pet && pet.id);
+    let hp = (pet.hp || 0) + b.hp;
     let atk = (pet.atk || 0) + b.atk;
     let def = (pet.def || 0) + b.def;
     let spd = (pet.spd || 0) + b.spd;
     let crit = (pet.crit || 0) + b.crit;
     if (b.percent) {
-        atk = Math.floor(atk * (1 + b.percent.atk / 100));
-        def = Math.floor(def * (1 + b.percent.def / 100));
-        spd = Math.floor(spd * (1 + b.percent.spd / 100));
-        crit = Math.floor(crit * (1 + b.percent.crit / 100));
+        hp = Math.floor(hp * (1 + (b.percent.hp || 0) / 100));
+        atk = Math.floor(atk * (1 + (b.percent.atk || 0) / 100));
+        def = Math.floor(def * (1 + (b.percent.def || 0) / 100));
+        spd = Math.floor(spd * (1 + (b.percent.spd || 0) / 100));
+        crit = Math.floor(crit * (1 + (b.percent.crit || 0) / 100));
     }
-    return { hp: pet.hp, atk, def, spd, crit, bonus: b };
+    // Apply Spicy Fish Soup +10% ATK buff if active
+    if (pet && pet.userId) {
+        try {
+            const { getUserStat } = require('../database');
+            const buffUntil = getUserStat(null, pet.userId, 'pet_atk_buff_until') || 0;
+            if (Date.now() < buffUntil) {
+                atk = Math.floor(atk * 1.10);
+            }
+        } catch (_) {}
+    }
+    return { hp, atk, def, spd, crit, bonus: b };
 }
 
 // Returns a shallow copy of the pet row with relic bonuses folded into the
 // stat fields, leaving the caller's object untouched.
 function withRelics(pet) {
     if (!pet) return pet;
-    const b = getRelicBonus(pet.userId, pet.id);
-    let atk = (pet.atk || 0) + b.atk;
-    let def = (pet.def || 0) + b.def;
-    let spd = (pet.spd || 0) + b.spd;
-    let crit = (pet.crit || 0) + b.crit;
-    // Apply percentage bonuses from Mythic/God relics
-    if (b.percent) {
-        atk = Math.floor(atk * (1 + b.percent.atk / 100));
-        def = Math.floor(def * (1 + b.percent.def / 100));
-        spd = Math.floor(spd * (1 + b.percent.spd / 100));
-        crit = Math.floor(crit * (1 + b.percent.crit / 100));
-    }
-    return { ...pet, atk, def, spd, crit };
+    const eff = getEffectiveStats(pet);
+    return { ...pet, hp: eff.hp, atk: eff.atk, def: eff.def, spd: eff.spd, crit: eff.crit };
 }
 
 function simulateBattle(pet, petDef, enemies) {
@@ -484,4 +541,4 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic, isPercentRelic };
+module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic, isPercentRelic, GEM_STATS };

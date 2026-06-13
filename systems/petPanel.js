@@ -1,11 +1,11 @@
 // systems/petPanel.js - Pet Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem } = require('../database');
+const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem, setUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic, GEM_STATS } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
-const { ITEMS } = require('../data/items');
+const { ITEMS, COOKING_RECIPES } = require('../data/items');
 const { checkAchievements } = require('./achievements');
 const { getComboMultiplier, addComboFeature } = require('./combo');
 const { updateQuestProgress } = require('./quests');
@@ -92,6 +92,37 @@ function _relicLabel(r) {
     return `${_SLOT_EMOJI[r.slot] || '📿'} ${r.name} (${_STAT_EMOJI[r.stat_type] || ''}+${eff}${unit})`;
 }
 
+function getRelicSocketCapacity(rarity) {
+    if (rarity === 'Epic') return 1;
+    if (rarity === 'Legendary') return 2;
+    if (rarity === 'Mythic' || rarity === 'God') return 3;
+    return 0;
+}
+
+function formatRelicGems(relic) {
+    const cap = getRelicSocketCapacity(relic.rarity);
+    if (cap === 0) return '';
+    let gems = [];
+    try { gems = JSON.parse(relic.gems || '[]'); } catch(e) { gems = []; }
+    const parts = [];
+    for (let i = 0; i < cap; i++) {
+        const gem = gems[i];
+        if (gem && gem.gemId) {
+            const gemDef = GEM_STATS[gem.gemId];
+            if (gemDef) {
+                const opt = gemDef.options.find(o => o.id === gem.stat);
+                const disp = opt ? opt.display : gem.stat;
+                parts.push(`  └ 💠 **Socket ${i+1}:** ${gemDef.emoji} ${gemDef.name} (${disp})`);
+            } else {
+                parts.push(`  └ 💠 **Socket ${i+1}:** [Error Gem]`);
+            }
+        } else {
+            parts.push(`  └ 💠 **Socket ${i+1}:** *[Kosong]*`);
+        }
+    }
+    return '\n' + parts.join('\n');
+}
+
 function buildRelicPanel(guildId, userId) {
     const pet = getPetData(guildId, userId);
     if (!pet) {
@@ -112,7 +143,7 @@ function buildRelicPanel(guildId, userId) {
         const r = equippedBySlot[slot];
         const unit = r && r.stat_type === 'crit' ? '%' : '';
         desc += r
-            ? `> ${_SLOT_EMOJI[slot]} **${r.name}** +${r.refine_level} — ${_STAT_EMOJI[r.stat_type]}+${relicEffective(r)}${unit}\n`
+            ? `> ${_SLOT_EMOJI[slot]} **${r.name}** +${r.refine_level} — ${_STAT_EMOJI[r.stat_type]}+${relicEffective(r)}${unit}${formatRelicGems(r)}\n`
             : `> ${_SLOT_EMOJI[slot]} *(kosong)*\n`;
     }
     // Calculate effective stats (base + flat, then apply percent)
@@ -176,8 +207,246 @@ function buildRelicPanel(guildId, userId) {
 
     components.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_refine_${userId}`).setLabel('Refine').setEmoji('✨').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pet_relicsocket_${userId}`).setLabel('Socket Gem').setEmoji('🧬').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`pet_relicunequipall_${userId}`).setLabel('Lepas Semua').setEmoji('🧷').setStyle(ButtonStyle.Secondary).setDisabled(equipped.length === 0),
         new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('Kembali').setEmoji('🔙').setStyle(ButtonStyle.Secondary),
+    ));
+
+    return { embeds: [embed], components };
+}
+
+// ============ SOCKET SYSTEM PANEL BUILDERS ============
+function buildRelicSocketRelicsPanel(guildId, userId) {
+    const all = getUserRelics(userId);
+    // filter only Epic, Legendary, Mythic, God
+    const socketable = all.filter(r => ['Epic', 'Legendary', 'Mythic', 'God'].includes(r.rarity));
+
+    let desc = `🧬 **Relic Gem Socketing**\nPasang Gem untuk meningkatkan stats pet secara flat atau persentase!\n\n`;
+    desc += `**Kapasitas Socket berdasarkan Rarity:**\n`;
+    desc += `> 🟣 **Epic:** 1 Socket\n`;
+    desc += `> 🟡 **Legendary:** 2 Socket\n`;
+    desc += `> 🔴 **Mythic:** 3 Socket\n`;
+    desc += `> 👑 **God:** 3 Socket\n\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+    desc += `-# Pilih relic di dropdown menu bawah untuk mengelola socket.`;
+
+    const embed = new EmbedBuilder().setTitle('🧬 Relic Gem Socketing').setColor('#9B59B6').setDescription(desc);
+    const components = [];
+
+    if (socketable.length > 0) {
+        const socketSelectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_relicsocket_select_${userId}`)
+            .setPlaceholder('🧬 Pilih relic untuk di-socket...')
+            .setMinValues(1).setMaxValues(1);
+        for (const r of socketable) {
+            let gems = [];
+            try { gems = JSON.parse(r.gems || '[]'); } catch(e) {}
+            const cap = getRelicSocketCapacity(r.rarity);
+            const occupied = gems.filter(Boolean).length;
+            const statusStr = `${occupied}/${cap} slot terisi`;
+            socketSelectMenu.addOptions(new StringSelectMenuOptionBuilder()
+                .setLabel(_relicLabel(r).slice(0, 100))
+                .setValue(String(r.id))
+                .setDescription(`${r.rarity} • ${statusStr}`.slice(0, 100)));
+        }
+        components.push(new ActionRowBuilder().addComponents(socketSelectMenu));
+    } else {
+        embed.setDescription(embed.data.description + `\n\n❌ **Kamu tidak memiliki relic socketable (Epic/Legendary/Mythic/God).**\nDapatkan relic dari Dungeon atau Boss Raid!`);
+    }
+
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_relic_${userId}`).setLabel('🔙 Kembali ke Relic').setStyle(ButtonStyle.Secondary)
+    ));
+
+    return { embeds: [embed], components };
+}
+
+function buildRelicSocketSlotsPanel(guildId, userId, relicId, successMsg) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    if (!relic) {
+        return {
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Relic tidak ditemukan!')],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_relicsocket_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            )]
+        };
+    }
+
+    const cap = getRelicSocketCapacity(relic.rarity);
+    let gems = [];
+    try { gems = JSON.parse(relic.gems || '[]'); } catch(e) { gems = []; }
+
+    let desc = ``;
+    if (successMsg) {
+        desc += `✨ **${successMsg}**\n\n`;
+    }
+    desc += `📿 **Relic:** ${relic.name} (${relic.rarity})\n`;
+    desc += ` Slot: ${_SLOT_EMOJI[relic.slot] || '📿'} ${relic.slot.toUpperCase()}\n`;
+    desc += ` Stats: ${_STAT_EMOJI[relic.stat_type] || ''} +${relicEffective(relic)} ${relic.stat_type.toUpperCase()}\n`;
+    desc += ` Sockets: **${cap} slot**\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    const slotOptions = [];
+    for (let i = 0; i < cap; i++) {
+        const gem = gems[i];
+        if (gem && gem.gemId) {
+            const gemDef = GEM_STATS[gem.gemId];
+            if (gemDef) {
+                const opt = gemDef.options.find(o => o.id === gem.stat);
+                const disp = opt ? opt.display : gem.stat;
+                desc += `> 💠 **Socket ${i+1}:** ${gemDef.emoji} ${gemDef.name} (${disp})\n`;
+                slotOptions.push(new StringSelectMenuOptionBuilder()
+                    .setLabel(`Socket ${i+1}: ${gemDef.name} (${disp})`)
+                    .setValue(String(i))
+                    .setDescription(`Kelola atau ganti gem di Socket ${i+1}`));
+            } else {
+                desc += `> 💠 **Socket ${i+1}:** [Error Gem]\n`;
+                slotOptions.push(new StringSelectMenuOptionBuilder()
+                    .setLabel(`Socket ${i+1}: [Error]`)
+                    .setValue(String(i))
+                    .setDescription(`Kelola atau ganti gem di Socket ${i+1}`));
+            }
+        } else {
+            desc += `> 💠 **Socket ${i+1}:** *[Kosong]*\n`;
+            slotOptions.push(new StringSelectMenuOptionBuilder()
+                .setLabel(`Socket ${i+1}: (Kosong)`)
+                .setValue(String(i))
+                .setDescription(`Pasang gem ke Socket ${i+1}`));
+        }
+    }
+
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih slot socket di bawah untuk memasang atau mencabut gem.`;
+
+    const embed = new EmbedBuilder().setTitle('🧬 Kelola Socket Relic').setColor('#9B59B6').setDescription(desc);
+    const components = [];
+
+    if (cap > 0) {
+        const slotSelectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_relicsocket_slot_select_${relicId}-${userId}`)
+            .setPlaceholder('💠 Pilih slot socket...')
+            .setMinValues(1).setMaxValues(1)
+            .addOptions(slotOptions);
+        components.push(new ActionRowBuilder().addComponents(slotSelectMenu));
+    }
+
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_relicsocket_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    ));
+
+    return { embeds: [embed], components };
+}
+
+function buildRelicSocketGemPanel(guildId, userId, relicId, socketIndex) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    if (!relic) {
+        return {
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Relic tidak ditemukan!')],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_relicsocket_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            )]
+        };
+    }
+
+    let gems = [];
+    try { gems = JSON.parse(relic.gems || '[]'); } catch(e) {}
+    const currentGem = gems[socketIndex];
+
+    let desc = `💠 **Kelola Socket ${socketIndex + 1}**\n`;
+    desc += `Relic: **${relic.name}**\n\n`;
+
+    if (currentGem && currentGem.gemId) {
+        const gemDef = GEM_STATS[currentGem.gemId];
+        const opt = gemDef ? gemDef.options.find(o => o.id === currentGem.stat) : null;
+        desc += `> 💎 **Gem Terpasang:** ${gemDef ? gemDef.emoji : '💠'} ${gemDef ? gemDef.name : currentGem.gemId} (${opt ? opt.display : currentGem.stat})\n\n`;
+    } else {
+        desc += `> 💎 **Gem Terpasang:** *[Kosong]*\n\n`;
+    }
+
+    desc += `Pilih gem dari inventory kamu untuk dipasang ke slot ini. Jika slot sudah terisi, gem lama akan dikembalikan ke inventory.\n\n`;
+
+    const GEM_ITEMS = [
+        { id: 'dna_shard', name: 'DNA Shard', emoji: '🧬' },
+        { id: 'mutation_serum', name: 'Mutation Serum', emoji: '🧪' },
+        { id: 'ancient_core', name: 'Ancient Core', emoji: '🔮' },
+        { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '✨' }
+    ];
+
+    const ownedGems = GEM_ITEMS.filter(g => getItemCount(guildId, userId, g.id) > 0);
+
+    const embed = new EmbedBuilder().setTitle(`💠 Socket ${socketIndex + 1}: Pilih Gem`).setColor('#9B59B6').setDescription(desc);
+    const components = [];
+
+    const options = [];
+
+    // Add removal option if currently occupied
+    if (currentGem && currentGem.gemId) {
+        options.push(new StringSelectMenuOptionBuilder()
+            .setLabel('❌ Cabut Gem')
+            .setValue('cabut')
+            .setDescription('Lepaskan gem dari socket ini dan kembalikan ke inventory'));
+    }
+
+    for (const g of ownedGems) {
+        const qty = getItemCount(guildId, userId, g.id);
+        const def = GEM_STATS[g.id];
+        options.push(new StringSelectMenuOptionBuilder()
+            .setLabel(`${g.emoji} ${g.name} (x${qty})`)
+            .setValue(g.id)
+            .setDescription(def ? def.options.map(o => o.display).join(' / ') : ''));
+    }
+
+    if (options.length > 0) {
+        const gemSelectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`pet_relicsocket_gem_select_${relicId}-${socketIndex}-${userId}`)
+            .setPlaceholder('💎 Pilih gem atau cabut...')
+            .setMinValues(1).setMaxValues(1)
+            .addOptions(options);
+        components.push(new ActionRowBuilder().addComponents(gemSelectMenu));
+    } else {
+        embed.setDescription(embed.data.description + `\n⚠️ **Kamu tidak memiliki gem di inventory yang bisa dipasang!**`);
+    }
+
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_relicsocketback_${relicId}_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    ));
+
+    return { embeds: [embed], components };
+}
+
+// Helper for building the stat selection panel
+function buildRelicSocketStatPanel(guildId, userId, relicId, socketIndex, gemId) {
+    const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicId, userId);
+    const gemDef = GEM_STATS[gemId];
+
+    if (!relic || !gemDef) {
+        return {
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Relic atau Gem tidak ditemukan!')],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_relicsocket_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            )]
+        };
+    }
+
+    let desc = `📊 **Pilih Bonus Stat untuk ${gemDef.name}**\n`;
+    desc += `Relic: **${relic.name}** | Socket: **${socketIndex + 1}**\n\n`;
+    desc += `Silakan pilih opsi peningkatan stat yang kamu inginkan dari gem ini:`;
+
+    const embed = new EmbedBuilder().setTitle('📊 Pilih Peningkatan Stat').setColor('#9B59B6').setDescription(desc);
+    const components = [];
+
+    const options = gemDef.options.map(opt => new StringSelectMenuOptionBuilder()
+        .setLabel(opt.display)
+        .setValue(opt.id)
+        .setDescription(`Gunakan opsi stat ${opt.display}`));
+
+    const statSelectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pet_relicsocket_stat_select_${relicId}-${socketIndex}-${gemId}-${userId}`)
+        .setPlaceholder('📊 Pilih stat bonus...')
+        .setMinValues(1).setMaxValues(1)
+        .addOptions(options);
+
+    components.push(new ActionRowBuilder().addComponents(statSelectMenu));
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_relicsocketgemback_${relicId}_${socketIndex}_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     ));
 
     return { embeds: [embed], components };
@@ -251,6 +520,139 @@ function buildDropRatesPanel(userId, category = 'dungeon') {
     return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), backRow] };
 }
 
+// ============ HELPER: Build the Cooking panel ============
+function buildPetCookingPanel(guildId, userId, successMsg = '') {
+    const pet = getPetData(guildId, userId);
+    if (!pet) {
+        return {
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Kamu belum memiliki pet aktif!')],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            )]
+        };
+    }
+
+    const { getStorageQty } = require('./farming');
+    const { FISH_DATA } = require('../data/fish');
+
+    // Query rare fish count
+    const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ?').all(userId);
+    const rareFishOwned = userFish.filter(f => {
+        const def = FISH_DATA.find(fd => fd.id === f.fishId);
+        return def && def.tier === 'Rare';
+    });
+
+    const gandum = getStorageQty(guildId, userId, 'gandum');
+    const wortel = getStorageQty(guildId, userId, 'wortel');
+    const kentang = getStorageQty(guildId, userId, 'kentang');
+    const egg = getStorageQty(guildId, userId, 'egg_normal');
+    const milk = getStorageQty(guildId, userId, 'milk_normal');
+    const pesticide = getItemCount(guildId, userId, 'pesticide');
+    const rareFishCount = rareFishOwned.length;
+
+    let desc = `🍳 **Cooking Hub**\n`;
+    if (successMsg) desc += `\n✨ **${successMsg}**\n`;
+    desc += `\n📦 **Bahan Tersedia:**\n`;
+    desc += `> 🌾 Gandum: **${gandum}** | 🥕 Wortel: **${wortel}** | 🥔 Kentang: **${kentang}**\n`;
+    desc += `> 🥚 Telur Normal: **${egg}** | 🥛 Susu Normal: **${milk}**\n`;
+    desc += `> 🧴 Pestisida: **${pesticide}** | 🐡 Rare Fish: **${rareFishCount}**\n\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    desc += `📜 **Resep Masakan:**\n\n`;
+
+    COOKING_RECIPES.forEach((recipe, i) => {
+        desc += `**${i+1}. ${recipe.emoji} ${recipe.name}**\n`;
+        desc += `> *Efek: ${recipe.desc}*\n`;
+        desc += `> *Bahan:* ` + recipe.ingredients.map(ing => {
+            let name = ing.id === 'gandum' ? '🌾 Gandum' :
+                       ing.id === 'egg_normal' ? '🥚 Telur Normal' :
+                       ing.id === 'milk_normal' ? '🥛 Susu Normal' :
+                       ing.id === 'rare_fish' ? '🐡 Rare Fish' :
+                       ing.id === 'pesticide' ? '🧴 Pestisida' :
+                       ing.id === 'wortel' ? '🥕 Wortel' :
+                       ing.id === 'kentang' ? '🥔 Kentang' : ing.id;
+            return `${name} x${ing.qty}`;
+        }).join(', ') + '\n\n';
+    });
+
+    const embed = new EmbedBuilder()
+        .setTitle('🍳 Cooking Hub')
+        .setColor('#E67E22')
+        .setDescription(desc);
+
+    const row = new ActionRowBuilder();
+
+    // Check recipe ingredients to enable/disable buttons
+    const canMakePancake = gandum >= 2 && egg >= 1 && milk >= 1;
+    const canMakeSoup = rareFishCount >= 1 && pesticide >= 2;
+    const canMakeSalad = wortel >= 3 && kentang >= 2;
+
+    row.addComponents(
+        new ButtonBuilder().setCustomId(`pet_docook_cooked_pancake-${userId}`).setLabel('🥞 Pancake').setStyle(ButtonStyle.Success).setDisabled(!canMakePancake),
+        new ButtonBuilder().setCustomId(`pet_docook_spicy_fish_soup-${userId}`).setLabel('🍜 Soup').setStyle(ButtonStyle.Success).setDisabled(!canMakeSoup),
+        new ButtonBuilder().setCustomId(`pet_docook_veggie_salad-${userId}`).setLabel('🥗 Salad').setStyle(ButtonStyle.Success).setDisabled(!canMakeSalad),
+        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
+// ============ HELPER: Build the Bag/Consumables panel ============
+function buildPetBagPanel(guildId, userId, successMsg = '') {
+    const pet = getPetData(guildId, userId);
+    if (!pet) {
+        return {
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Kamu belum memiliki pet aktif!')],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+            )]
+        };
+    }
+
+    const pancakeQty = getItemCount(guildId, userId, 'cooked_pancake');
+    const soupQty = getItemCount(guildId, userId, 'spicy_fish_soup');
+    const saladQty = getItemCount(guildId, userId, 'veggie_salad');
+
+    let desc = `💼 **Tas Consumables Pet**\n`;
+    if (successMsg) desc += `\n✨ **${successMsg}**\n`;
+    
+    // Check active ATK buff timer
+    const atkBuffUntil = getUserStat(guildId, userId, 'pet_atk_buff_until') || 0;
+    const isAtkBuffActive = Date.now() < atkBuffUntil;
+    const atkBuffText = isAtkBuffActive 
+        ? `\n⚔️ **Buff ATK (+10%) aktif:** Sisa waktu <t:${Math.floor(atkBuffUntil / 1000)}:R>\n` 
+        : '';
+        
+    // Check active pest shield timer
+    const shieldUntil = getUserStat(guildId, userId, 'pest_shield_until') || 0;
+    const isShieldActive = Date.now() < shieldUntil;
+    const shieldText = isShieldActive 
+        ? `🛡️ **Pestisida Shield aktif:** Sisa waktu <t:${Math.floor(shieldUntil / 1000)}:R>\n` 
+        : '';
+
+    if (atkBuffText || shieldText) {
+        desc += `\n⚡ **Buff Aktif:**\n${atkBuffText}${shieldText}`;
+    }
+
+    desc += `\n🎒 **Makanan & Ramuan yang Dimiliki:**\n\n`;
+    desc += `🥞 **Cooked Pancake**: **${pancakeQty}** buah\n> *Efek: Pulihkan 100% laper & seneng pet*\n\n`;
+    desc += `🍜 **Spicy Fish Soup**: **${soupQty}** buah\n> *Efek: Buff pet ATK +10% selama 1 jam*\n\n`;
+    desc += `🥗 **Veggie Salad**: **${saladQty}** buah\n> *Efek: Lindungi farm dari hama selama 6 jam*\n\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Klik tombol di bawah untuk mengonsumsi masakan.`;
+
+    const embed = new EmbedBuilder()
+        .setTitle('💼 Tas Consumables')
+        .setColor('#9B59B6')
+        .setDescription(desc);
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pet_use_cooked_pancake-${userId}`).setLabel('🥞 Makan Pancake').setStyle(ButtonStyle.Primary).setDisabled(pancakeQty <= 0),
+        new ButtonBuilder().setCustomId(`pet_use_spicy_fish_soup-${userId}`).setLabel('🍜 Minum Soup').setStyle(ButtonStyle.Primary).setDisabled(soupQty <= 0),
+        new ButtonBuilder().setCustomId(`pet_use_veggie_salad-${userId}`).setLabel('🥗 Makan Salad').setStyle(ButtonStyle.Primary).setDisabled(saladQty <= 0),
+        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
 
 // ============ HELPER: Build main pet panel embed + buttons ============
 function buildMainPanel(guildId, userId, username) {
@@ -327,13 +729,15 @@ function buildMainPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`pet_info_${userId}`).setLabel('📋 Info').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_feed_${userId}`).setLabel('🍖 Feed').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`pet_play_${userId}`).setLabel('🎾 Play').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`pet_hunt_${userId}`).setLabel('🏹 Hunt').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`pet_hunt_${userId}`).setLabel('🏹 Hunt').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pet_cook_${userId}`).setLabel('🍳 Cook').setStyle(ButtonStyle.Success)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('📦 Collection').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_swap_${userId}`).setLabel('🔄 Swap').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`pet_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`pet_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`pet_bag_${userId}`).setLabel('💼 Bag').setStyle(ButtonStyle.Primary)
     );
     const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon').setStyle(ButtonStyle.Danger),
@@ -361,7 +765,11 @@ async function handlePetButton(interaction) {
     const customId = interaction.customId;
     const parts = customId.split('_');
     // Format: pet_action_userId or pet_action_extra_userId
-    const userId = parts[parts.length - 1];
+    let userId = parts[parts.length - 1];
+    if (userId.includes('-')) {
+        const sub = userId.split('-');
+        userId = sub[sub.length - 1];
+    }
 
     // Validate ownership
     if (interaction.user.id !== userId) {
@@ -370,6 +778,108 @@ async function handlePetButton(interaction) {
 
     const action = parts[1];
     const userData = getOrCreateUser(guildId, userId);
+
+    // === COOK COMMAND (show cooking panel) ===
+    if (action === 'cook') {
+        return interaction.update(buildPetCookingPanel(guildId, userId));
+    }
+
+    // === BAG COMMAND (show bag/consumables panel) ===
+    if (action === 'bag') {
+        return interaction.update(buildPetBagPanel(guildId, userId));
+    }
+
+    // === COOK RECIPE ===
+    if (customId.startsWith('pet_docook_')) {
+        const payload = customId.substring('pet_docook_'.length);
+        const [recipeId, userIdTmp] = payload.split('-');
+        
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+
+        const recipe = COOKING_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        const { getStorageQty, removeStorage } = require('./farming');
+        const { FISH_DATA } = require('../data/fish');
+
+        // Query rare fish
+        const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ?').all(userId);
+        const rareFishOwned = userFish.filter(f => {
+            const def = FISH_DATA.find(fd => fd.id === f.fishId);
+            return def && def.tier === 'Rare';
+        });
+
+        // 1. Verify ingredients
+        for (const ing of recipe.ingredients) {
+            if (ing.id === 'rare_fish') {
+                if (rareFishOwned.length < ing.qty) {
+                    return interaction.reply({ content: `❌ Bahan kurang! Butuh 🐡 Rare Fish x${ing.qty}`, ephemeral: true });
+                }
+            } else if (ing.id === 'pesticide') {
+                if (getItemCount(guildId, userId, 'pesticide') < ing.qty) {
+                    return interaction.reply({ content: `❌ Bahan kurang! Butuh 🧴 Pestisida x${ing.qty}`, ephemeral: true });
+                }
+            } else {
+                const qty = getStorageQty(guildId, userId, ing.id);
+                if (qty < ing.qty) {
+                    const c = ITEMS.find(item => item.id === ing.id) || { name: ing.id };
+                    return interaction.reply({ content: `❌ Bahan kurang! Butuh ${c.name} x${ing.qty}`, ephemeral: true });
+                }
+            }
+        }
+
+        // 2. Consume ingredients
+        for (const ing of recipe.ingredients) {
+            if (ing.id === 'rare_fish') {
+                for (let i = 0; i < ing.qty; i++) {
+                    const fishToConsume = rareFishOwned[i];
+                    db.prepare('DELETE FROM fish_inventory WHERE id = ?').run(fishToConsume.id);
+                }
+            } else if (ing.id === 'pesticide') {
+                removeItem(guildId, userId, 'pesticide', ing.qty);
+            } else {
+                removeStorage(guildId, userId, ing.id, ing.qty);
+            }
+        }
+
+        // 3. Add result item
+        addItem(guildId, userId, recipeId, 1);
+
+        const msg = `Berhasil memasak ${recipe.emoji} **${recipe.name}**!`;
+        return interaction.update(buildPetCookingPanel(guildId, userId, msg));
+    }
+
+    // === CONSUME ITEM ===
+    if (customId.startsWith('pet_use_')) {
+        const payload = customId.substring('pet_use_'.length);
+        const [recipeId, userIdTmp] = payload.split('-');
+
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+
+        // 1. Verify item exists in inventory
+        const qty = getItemCount(guildId, userId, recipeId);
+        if (qty <= 0) return interaction.reply({ content: '❌ Kamu tidak memiliki masakan ini!', ephemeral: true });
+
+        // 2. Deduct item
+        removeItem(guildId, userId, recipeId, 1);
+
+        // 3. Apply effect
+        let msg = '';
+        if (recipeId === 'cooked_pancake') {
+            db.prepare('UPDATE pets SET hunger = 100, happiness = 100 WHERE id = ?').run(pet.id);
+            msg = `Pet **${pet.name}** memakan Pancake! 🥞 Hunger & Happiness pulih ke 100%!`;
+        } else if (recipeId === 'spicy_fish_soup') {
+            setUserStat(guildId, userId, 'pet_atk_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** meminum Spicy Fish Soup! 🍜 ATK meningkat 10% selama 1 jam!`;
+        } else if (recipeId === 'veggie_salad') {
+            setUserStat(guildId, userId, 'pest_shield_until', Date.now() + 6 * 3600 * 1000); // 6 jam
+            msg = `Pet **${pet.name}** memakan Veggie Salad! 🥗 Kebun terlindungi dari hama selama 6 jam!`;
+        }
+
+        return interaction.update(buildPetBagPanel(guildId, userId, msg));
+    }
 
     // === BACK TO MAIN PANEL ===
     if (action === 'back') {
@@ -1013,6 +1523,24 @@ async function handlePetButton(interaction) {
         return interaction.update(buildRelicPanel(guildId, userId));
     }
 
+    // === RELIC SOCKET SELECT RELICS ===
+    if (action === 'relicsocket') {
+        return interaction.update(buildRelicSocketRelicsPanel(guildId, userId));
+    }
+
+    // === RELIC SOCKET BACK TO SLOTS ===
+    if (action === 'relicsocketback') {
+        const relicId = parseInt(parts[2]);
+        return interaction.update(buildRelicSocketSlotsPanel(guildId, userId, relicId));
+    }
+
+    // === RELIC SOCKET BACK TO GEMS ===
+    if (action === 'relicsocketgemback') {
+        const relicId = parseInt(parts[2]);
+        const socketIndex = parseInt(parts[3]);
+        return interaction.update(buildRelicSocketGemPanel(guildId, userId, relicId, socketIndex));
+    }
+
     // === DROP RATES INFO ===
     if (action === 'droprates') {
         return interaction.update(buildDropRatesPanel(userId, 'dungeon'));
@@ -1086,7 +1614,11 @@ async function handlePetSelectMenu(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
     const parts = customId.split('_');
-    const userId = parts[parts.length - 1];
+    let userId = parts[parts.length - 1];
+    if (userId.includes('-')) {
+        const sub = userId.split('-');
+        userId = sub[sub.length - 1];
+    }
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel pet kamu!', ephemeral: true });
@@ -1442,6 +1974,101 @@ async function handlePetSelectMenu(interaction) {
         await interaction.channel.send({ embeds: [embed], components: [joinBtn] });
         setTimeout(() => { if (activeBossParties.has(partyId)) activeBossParties.delete(partyId); }, 300000);
         return;
+    }
+
+    // === RELIC SOCKET RELIC SELECT ===
+    if (customId.startsWith('pet_relicsocket_select_')) {
+        const relicId = parseInt(interaction.values[0], 10);
+        return interaction.update(buildRelicSocketSlotsPanel(guildId, userId, relicId));
+    }
+
+    // === RELIC SOCKET SLOT SELECT ===
+    if (customId.startsWith('pet_relicsocket_slot_select_')) {
+        const payload = customId.substring('pet_relicsocket_slot_select_'.length);
+        const [relicId, userIdTmp] = payload.split('-');
+        const relicIdInt = parseInt(relicId, 10);
+        const socketIndex = parseInt(interaction.values[0], 10);
+        return interaction.update(buildRelicSocketGemPanel(guildId, userId, relicIdInt, socketIndex));
+    }
+
+    // === RELIC SOCKET GEM SELECT ===
+    if (customId.startsWith('pet_relicsocket_gem_select_')) {
+        const payload = customId.substring('pet_relicsocket_gem_select_'.length);
+        const [relicId, socketIndex, userIdTmp] = payload.split('-');
+        const relicIdInt = parseInt(relicId, 10);
+        const socketIndexInt = parseInt(socketIndex, 10);
+        const choice = interaction.values[0];
+
+        const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicIdInt, userId);
+        if (!relic) return interaction.reply({ content: '❌ Relic tidak ditemukan!', ephemeral: true });
+
+        const cap = getRelicSocketCapacity(relic.rarity);
+        let gems = [];
+        try { gems = JSON.parse(relic.gems || '[]'); } catch(e) {}
+        while (gems.length < cap) gems.push(null);
+        gems = gems.slice(0, cap);
+
+        if (choice === 'cabut') {
+            const oldGem = gems[socketIndexInt];
+            if (oldGem && oldGem.gemId) {
+                addItem(guildId, userId, oldGem.gemId, 1);
+                gems[socketIndexInt] = null;
+                db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relic.id);
+                const gemDef = GEM_STATS[oldGem.gemId];
+                const opt = gemDef ? gemDef.options.find(o => o.id === oldGem.stat) : null;
+                const disp = opt ? opt.display : oldGem.stat;
+                const msg = `Berhasil mencabut ${gemDef ? gemDef.name : oldGem.gemId} (${disp}) dari Socket ${socketIndexInt + 1}!`;
+                return interaction.update(buildRelicSocketSlotsPanel(guildId, userId, relicIdInt, msg));
+            } else {
+                return interaction.update(buildRelicSocketSlotsPanel(guildId, userId, relicIdInt));
+            }
+        } else {
+            // choice is gemId
+            return interaction.update(buildRelicSocketStatPanel(guildId, userId, relicIdInt, socketIndexInt, choice));
+        }
+    }
+
+    // === RELIC SOCKET STAT SELECT ===
+    if (customId.startsWith('pet_relicsocket_stat_select_')) {
+        const payload = customId.substring('pet_relicsocket_stat_select_'.length);
+        const [relicId, socketIndex, gemId, userIdTmp] = payload.split('-');
+        const relicIdInt = parseInt(relicId, 10);
+        const socketIndexInt = parseInt(socketIndex, 10);
+        const stat = interaction.values[0];
+
+        // 1. Verify user still has the gem
+        const qty = getItemCount(guildId, userId, gemId);
+        if (qty <= 0) return interaction.reply({ content: '❌ Kamu tidak memiliki gem ini di inventory!', ephemeral: true });
+
+        // 2. Fetch relic
+        const relic = db.prepare('SELECT * FROM relics WHERE id = ? AND userId = ?').get(relicIdInt, userId);
+        if (!relic) return interaction.reply({ content: '❌ Relic tidak ditemukan!', ephemeral: true });
+
+        const cap = getRelicSocketCapacity(relic.rarity);
+        let gems = [];
+        try { gems = JSON.parse(relic.gems || '[]'); } catch(e) {}
+        while (gems.length < cap) gems.push(null);
+        gems = gems.slice(0, cap);
+
+        // 3. Refund old gem if slot occupied
+        const oldGem = gems[socketIndexInt];
+        if (oldGem && oldGem.gemId) {
+            addItem(guildId, userId, oldGem.gemId, 1);
+        }
+
+        // 4. Deduct new gem
+        removeItem(guildId, userId, gemId, 1);
+
+        // 5. Update array and DB
+        gems[socketIndexInt] = { gemId, stat };
+        db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relic.id);
+
+        const gemDef = GEM_STATS[gemId];
+        const opt = gemDef ? gemDef.options.find(o => o.id === stat) : null;
+        const disp = opt ? opt.display : stat;
+        const msg = `Berhasil memasang ${gemDef ? gemDef.name : gemId} (${disp}) ke Socket ${socketIndexInt + 1}!`;
+
+        return interaction.update(buildRelicSocketSlotsPanel(guildId, userId, relicIdInt, msg));
     }
 
     // === RELIC EQUIP SELECT ===

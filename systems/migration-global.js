@@ -88,7 +88,8 @@ function runGlobalMigration(db) {
                 stat_type TEXT,
                 stat_value INTEGER,
                 refine_level INTEGER DEFAULT 0,
-                equipped_pet_id INTEGER DEFAULT 0
+                equipped_pet_id INTEGER DEFAULT 0,
+                gems TEXT DEFAULT '[]'
             );
             
             -- Global Inventories (no guildId)
@@ -256,8 +257,8 @@ function runGlobalMigration(db) {
         // Migrate relics - keep all relics, associate with best pet
         console.log('  → Migrating relics...');
         db.exec(`
-            INSERT INTO relics_global (userId, name, slot, rarity, stat_type, stat_value, refine_level, equipped_pet_id)
-            SELECT DISTINCT userId, name, slot, rarity, stat_type, MAX(stat_value), refine_level, equipped_pet_id
+            INSERT INTO relics_global (userId, name, slot, rarity, stat_type, stat_value, refine_level, equipped_pet_id, gems)
+            SELECT DISTINCT userId, name, slot, rarity, stat_type, MAX(stat_value), refine_level, equipped_pet_id, gems
             FROM relics
             GROUP BY userId, name, slot
         `);

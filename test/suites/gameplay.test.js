@@ -236,6 +236,13 @@ module.exports = function register() {
   test('prestige crop sells for its sellPrice (regression: used to sell for 🪙0)', () => {
     const { addStorage } = botRequire('systems/farming.js');
     const farm = botRequire('systems/farmPanel.js');
+    const farmSeason = botRequire('systems/farmSeason.js');
+    const farmWeather = botRequire('systems/farmWeather.js');
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
     const g = 'PFG', u = '300000000000000077';
     db.getOrCreateUser(g, u);
     db.db.prepare('UPDATE users SET balance = 0 WHERE guildId = ? AND userId = ?').run(g, u);
@@ -243,7 +250,13 @@ module.exports = function register() {
     const it = mockInteraction({ userId: u, guildId: g, customId: `farm_sellall_${u}` });
     return Promise.resolve(farm.handleFarmButton(it)).then(() => {
       const bal = db.getOrCreateUser(g, u).balance;
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
       if (bal !== 240000) throw new Error('expected 240000 from 2x time_blossom, got ' + bal);
+    }).catch(e => {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+      throw e;
     });
   });
 
@@ -265,9 +278,17 @@ module.exports = function register() {
       if (getStorageQty(g, u, 'gandum') !== 0) throw new Error('gandum not consumed from farm_storage');
     });
   });
+
   test('storage hub sell-all: prices farm crops + livestock products (regression: sold 🪙0)', () => {
     const { addStorage } = botRequire('systems/farming.js');
     const lp = botRequire('systems/livestockPanel.js');
+    const farmSeason = botRequire('systems/farmSeason.js');
+    const farmWeather = botRequire('systems/farmWeather.js');
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
     const g = 'LVG', u = '300000000000000202';
     db.getOrCreateUser(g, u);
     db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(u);
@@ -277,9 +298,16 @@ module.exports = function register() {
     const it = mockInteraction({ userId: u, guildId: g, customId: `farm_allstorage_sellall_${u}` });
     return Promise.resolve(lp.handleLivestockButton(it)).then(() => {
       const bal = db.getOrCreateUser(g, u).balance;
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
       if (bal !== 260) throw new Error('expected 260 (gandum 60 + egg_premium 200), got ' + bal);
+    }).catch(e => {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+      throw e;
     });
   });
+
   test('livestock daily tick: starved animal becomes sick (regression: ms-timestamp parse)', () => {
     const live = botRequire('systems/livestock.js');
     const u = '300000000000000203';

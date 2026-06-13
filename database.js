@@ -302,7 +302,8 @@ try { db.exec(`ALTER TABLE pets ADD COLUMN atk INTEGER DEFAULT 20`); } catch(e) 
 try { db.exec(`ALTER TABLE pets ADD COLUMN def INTEGER DEFAULT 10`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN spd INTEGER DEFAULT 10`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN crit INTEGER DEFAULT 5`); } catch(e) {}
-db.exec(`CREATE TABLE IF NOT EXISTS relics (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, name TEXT, slot TEXT, rarity TEXT, stat_type TEXT, stat_value INTEGER, refine_level INTEGER DEFAULT 0, equipped_pet_id INTEGER DEFAULT 0)`);
+db.exec(`CREATE TABLE IF NOT EXISTS relics (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, name TEXT, slot TEXT, rarity TEXT, stat_type TEXT, stat_value INTEGER, refine_level INTEGER DEFAULT 0, equipped_pet_id INTEGER DEFAULT 0, gems TEXT DEFAULT '[]')`);
+try { db.exec(`ALTER TABLE relics ADD COLUMN gems TEXT DEFAULT '[]'`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, senderId TEXT, receiverId TEXT, status TEXT DEFAULT 'pending', createdAt INTEGER, senderOffer TEXT, receiverOffer TEXT)`);
 db.exec(`CREATE TABLE IF NOT EXISTS command_summary (guildId TEXT, command TEXT, count INTEGER DEFAULT 0, lastUsed INTEGER, PRIMARY KEY(guildId, command))`);

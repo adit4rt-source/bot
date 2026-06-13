@@ -883,7 +883,8 @@ async function handleLivestockButton(interaction) {
         for (const s of storage) {
             const crop = ALL_CROPS.find(c => c.id === s.itemId);
             if (crop) {
-                totalMoney += crop.sellPrice * s.quantity;
+                const { getDynamicPrice } = require('./farmSeason');
+                totalMoney += getDynamicPrice(crop, 'sell') * s.quantity;
             } else {
                 // Livestock product: itemId like 'egg_premium' -> price via PRODUCT_QUALITY.
                 const lastU = s.itemId.lastIndexOf('_');

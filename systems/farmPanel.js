@@ -10,7 +10,7 @@ const { addPetExp } = require('../systems/pets');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS, FARM_TOOLS } = require('../data/farming');
 const { getTodayWeather, getWeatherYieldMultiplier, getWeatherGrowMultiplier, getWeatherDeathChance, isAutoWaterWeather, formatWeatherEmbed } = require('./farmWeather');
 const { rollMutation, calculateHarvestYield, getRotationBonus, updateRotation, logMutation, PRESTIGE_CROPS, SEED_UPGRADES } = require('./farmMutation');
-const { getCropSeasonEffect, SEASON_CROP_EFFECTS } = require('./farmSeason');
+const { getCropSeasonEffect, SEASON_CROP_EFFECTS, getDynamicPrice } = require('./farmSeason');
 const { getPetData } = require('./pets');
 const { PET_DATA, PET_LEVEL_MULTIPLIERS } = require('../data/pets');
 const panelRefresh = require('./panelRefresh');
@@ -594,7 +594,7 @@ async function handleFarmButton(interaction) {
             let c = FARM_CROPS.find(cr => cr.id === inv.cropId) || PRESTIGE_CROPS.find(cr => cr.id === inv.cropId);
             if (!c) return;
             const timeDisplay = c.time >= 60 ? `${Math.floor(c.time / 60)}j` : `${c.time}m`;
-            seedMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (x${inv.quantity}) — ${c.tier} | ${timeDisplay}`).setValue(c.id).setDescription(`Jual: 🪙${c.sellPrice.toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield} | 🏠 No penalty`));
+            seedMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (x${inv.quantity}) — ${c.tier} | ${timeDisplay}`).setValue(c.id).setDescription(`Jual: 🪙${getDynamicPrice(c, 'sell').toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield} | 🏠 No penalty`));
         });
         const embed = new EmbedBuilder().setTitle('🏠 Plant di Greenhouse').setColor('#27AE60')
             .setDescription(`Slot tersedia: **${ghSlots - ghPlots.length}** dari ${ghSlots}\n> 🏠 Greenhouse: tanaman selalu In-Season!`);
@@ -720,7 +720,7 @@ async function handleFarmButton(interaction) {
             const isPrestige = c.tier === 'Prestige';
             seedMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(`${isPrestige ? '🏆 ' : ''}${c.name} (x${inv.quantity}) — ${c.tier} | ${timeDisplay}`)
-                .setValue(c.id).setDescription(`Jual: 🪙${c.sellPrice.toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield}`));
+                .setValue(c.id).setDescription(`Jual: 🪙${getDynamicPrice(c, 'sell').toLocaleString('id-ID')} | Yield: ${c.minYield}-${c.maxYield}`));
         });
         const embed = new EmbedBuilder().setTitle('🌱 Tanam Bibit').setColor('#2ECC71')
             .setDescription(`Slot tersedia: **${maxSlots - plots.length}** dari ${maxSlots}\nPilih bibit dari inventory:`);
@@ -920,7 +920,7 @@ async function handleFarmButton(interaction) {
                 if (crop.tier === 'Legendary') harvestedLegendary = true;
 
                 if (mutation) {
-                    const mutationMoney = crop.sellPrice * qty * (mutation.multiplier - 1);
+                    const mutationMoney = getDynamicPrice(crop, 'sell') * qty * (mutation.multiplier - 1);
                     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(mutationMoney, guildId, userId);
                     addIncome(guildId, userId, 'farm_mutation', mutationMoney);
                     logMutation(guildId, userId, crop.id, mutation.id);
@@ -990,13 +990,13 @@ async function handleFarmButton(interaction) {
         for (const tier of tiers) {
             const crops = FARM_CROPS.filter(c => c.tier === tier);
             desc += `\n**${tier}:**\n`;
-            crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${c.cost} | ${c.time}m\n`; });
+            crops.forEach(c => { desc += `> ${c.emoji} ${c.name} — 🪙 ${getDynamicPrice(c, 'buy')} | ${c.time}m\n`; });
         }
         // Prestige Crops section
         desc += `\n**🏆 Prestige** *(ultra-rare, long-grow)*:\n`;
         PRESTIGE_CROPS.forEach(c => { 
             const hours = Math.floor(c.time / 60);
-            desc += `> ${c.emoji} **${c.name}** — 🪙 ${c.cost.toLocaleString('id-ID')} | ⏱️${hours}j | Jual: 🪙${c.sellPrice.toLocaleString('id-ID')}\n`; 
+            desc += `> ${c.emoji} **${c.name}** — 🪙 ${getDynamicPrice(c, 'buy').toLocaleString('id-ID')} | ⏱️${hours}j | Jual: 🪙${getDynamicPrice(c, 'sell').toLocaleString('id-ID')}\n`; 
         });
 
         desc += '\n━━━━━━━━━━━━━━━━━━━━━━\n**🧪 PUPUK** *(masuk inventory)*\n\n';
@@ -1006,12 +1006,12 @@ async function handleFarmButton(interaction) {
         const cropsPage1 = FARM_CROPS.filter(c => ['Common', 'Uncommon', 'Rare'].includes(c.tier));
         const cropsPage2 = FARM_CROPS.filter(c => ['Epic', 'Legendary'].includes(c.tier));
         const seedMenu1 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed_${userId}`).setPlaceholder('🌱 Bibit Common/Uncommon/Rare...').setMinValues(1).setMaxValues(1);
-        cropsPage1.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`.slice(0, 100))); });
+        cropsPage1.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu1.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${getDynamicPrice(c, 'buy')})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${getDynamicPrice(c, 'sell')} | ${se.label}`.slice(0, 100))); });
 
         const components = [new ActionRowBuilder().addComponents(seedMenu1)];
         if (cropsPage2.length > 0) {
             const seedMenu2 = new StringSelectMenuBuilder().setCustomId(`farm_buyseed2_${userId}`).setPlaceholder('🌟 Bibit Epic/Legendary...').setMinValues(1).setMaxValues(1);
-            cropsPage2.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${c.sellPrice} | ${se.label}`.slice(0, 100))); });
+            cropsPage2.slice(0, 25).forEach(c => { const se = getCropSeasonEffect(c); seedMenu2.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${getDynamicPrice(c, 'buy')})`.slice(0, 100)).setValue(c.id).setDescription(`${c.tier} | ${c.time}m | Jual:🪙${getDynamicPrice(c, 'sell')} | ${se.label}`.slice(0, 100))); });
             components.push(new ActionRowBuilder().addComponents(seedMenu2));
         }
         // Prestige Crops menu
@@ -1019,7 +1019,7 @@ async function handleFarmButton(interaction) {
             const prestigeMenu = new StringSelectMenuBuilder().setCustomId(`farm_buyprestige_${userId}`).setPlaceholder('🏆 Bibit Prestige (24-48 jam)...').setMinValues(1).setMaxValues(1);
             PRESTIGE_CROPS.forEach(c => {
                 const hours = Math.floor(c.time / 60);
-                prestigeMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${c.cost.toLocaleString('id-ID')})`).setValue(c.id).setDescription(`🏆 Prestige | ${hours}j | Jual:🪙${c.sellPrice.toLocaleString('id-ID')}`));
+                prestigeMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙${getDynamicPrice(c, 'buy').toLocaleString('id-ID')})`).setValue(c.id).setDescription(`🏆 Prestige | ${hours}j | Jual:🪙${getDynamicPrice(c, 'sell').toLocaleString('id-ID')}`));
             });
             components.push(new ActionRowBuilder().addComponents(prestigeMenu));
         }
@@ -1052,7 +1052,7 @@ async function handleFarmButton(interaction) {
             const crop = findCrop(s.itemId);
             let value = 0;
             if (crop) {
-                value = crop.sellPrice * s.quantity;
+                value = getDynamicPrice(crop, 'sell') * s.quantity;
             } else {
                 // Check livestock product price
                 const lastU = s.itemId.lastIndexOf('_');
@@ -1083,7 +1083,7 @@ async function handleFarmButton(interaction) {
             const crop = findCrop(s.itemId);
             let price = 0;
             if (crop) {
-                price = crop.sellPrice * s.quantity;
+                price = getDynamicPrice(crop, 'sell') * s.quantity;
             } else {
                 const lastU = s.itemId.lastIndexOf('_');
                 const prodId = s.itemId.substring(0, lastU);
@@ -1364,9 +1364,10 @@ async function handleFarmSelectMenu(interaction) {
         const cropId = interaction.values[0];
         const crop = FARM_CROPS.find(c => c.id === cropId);
         if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+        const dynamicCost = getDynamicPrice(crop, 'buy');
         const modal = new ModalBuilder().setCustomId(`farm_seedqty_${cropId}_${userId}`).setTitle(`Beli ${crop.name}`.slice(0, 45));
         modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('farm_seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
+            new TextInputBuilder().setCustomId('farm_seed_qty_input').setLabel(`Berapa bibit? (🪙${dynamicCost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
         ));
         return interaction.showModal(modal);
     }
@@ -1377,16 +1378,18 @@ async function handleFarmSelectMenu(interaction) {
         const crop = PRESTIGE_CROPS.find(c => c.id === cropId);
         if (!crop) return interaction.reply({ content: '❌ Bibit prestige tidak ditemukan!', ephemeral: true });
         const userData = getOrCreateUser(guildId, userId);
-        if (userData.balance < crop.cost) {
-            return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${crop.cost.toLocaleString('id-ID')} (punya: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
+        const dynamicCost = getDynamicPrice(crop, 'buy');
+        const dynamicSell = getDynamicPrice(crop, 'sell');
+        if (userData.balance < dynamicCost) {
+            return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 ${dynamicCost.toLocaleString('id-ID')} (punya: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
         }
         // Deduct money & add seed
-        subtractUserBalance(guildId, userId, crop.cost);
+        subtractUserBalance(guildId, userId, dynamicCost);
         addSeed(guildId, userId, crop.id, 1);
         incrementUserStat(guildId, userId, 'total_buys');
         const hours = Math.floor(crop.time / 60);
         const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🏆 Prestige Seed Purchased!')
-            .setDescription(`${crop.emoji} **${crop.name}** x1 dibeli!\n\n> 💰 Harga: 🪙 ${crop.cost.toLocaleString('id-ID')}\n> ⏱️ Grow time: **${hours} jam**\n> 💵 Sell: 🪙 **${crop.sellPrice.toLocaleString('id-ID')}**\n\n> Tanam lewat 🌱 Plant!`);
+            .setDescription(`${crop.emoji} **${crop.name}** x1 dibeli!\n\n> 💰 Harga: 🪙 ${dynamicCost.toLocaleString('id-ID')}\n> ⏱️ Grow time: **${hours} jam**\n> 💵 Sell: 🪙 **${dynamicSell.toLocaleString('id-ID')}**\n\n> Tanam lewat 🌱 Plant!`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`farm_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`farm_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
@@ -1764,10 +1767,11 @@ async function handleFarmModal(interaction) {
         const input = interaction.fields.getTextInputValue('farm_seed_qty_input');
         const qty = parseInt(input);
         if (isNaN(qty) || qty < 1 || qty > 999) return interaction.reply({ content: '❌ Masukkan angka valid (1-999)!', ephemeral: true });
-        const totalCost = crop.cost * qty;
+        const dynamicCost = getDynamicPrice(crop, 'buy');
+        const totalCost = dynamicCost * qty;
         const userData = getOrCreateUser(guildId, userId);
         if (userData.balance < totalCost) {
-            const affordable = Math.floor(userData.balance / crop.cost);
+            const affordable = Math.floor(userData.balance / dynamicCost);
             return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} bibit.\n> Mampu beli **${affordable}** bibit.`, ephemeral: true });
         }
         subtractUserBalance(guildId, userId, totalCost);

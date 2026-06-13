@@ -113,4 +113,85 @@ module.exports = function register() {
       if (!it._cap.reply || !/tidak ketemu/i.test(it._cap.reply.content)) throw new Error('unknown not rejected');
     });
   });
+
+  // ---- Dynamic Economy & Weather tests ----
+  const farmSeason = botRequire('systems/farmSeason.js');
+  const farmWeather = botRequire('systems/farmWeather.js');
+  const fishing = botRequire('systems/fishing.js');
+
+  test('dynamic price: winter increases seed cost 20% and crop sell price 30%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'winter', name: 'Winter' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const buyPrice = farmSeason.getDynamicPrice(crop, 'buy');
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (buyPrice !== 120) throw new Error('expected buy price 120, got ' + buyPrice);
+      if (sellPrice !== 130) throw new Error('expected sell price 130, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('dynamic price: spring decreases seed cost 20%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const buyPrice = farmSeason.getDynamicPrice(crop, 'buy');
+      if (buyPrice !== 80) throw new Error('expected buy price 80, got ' + buyPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+    }
+  });
+
+  test('dynamic price: sunny/rainbow weather decreases crop sell price 10%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'sunny', name: 'Sunny' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (sellPrice !== 90) throw new Error('expected sell price 90, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('dynamic price: stormy/drought weather increases crop sell price 20%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'stormy', name: 'Stormy' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (sellPrice !== 120) throw new Error('expected sell price 120, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('weather fishing: rainy/stormy reduces fishing cooldown by 15%', () => {
+    const origWeather = farmWeather.getTodayWeather;
+    farmWeather.getTodayWeather = () => ({ id: 'rainy', name: 'Rainy' });
+
+    try {
+      const rod = { cooldown: 10 };
+      const cd = fishing.getFishingCooldown('user1', rod);
+      if (cd !== 9) throw new Error('expected cooldown 9 (15% reduction of 10), got ' + cd);
+    } finally {
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
 };

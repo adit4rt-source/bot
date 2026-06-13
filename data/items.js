@@ -31,6 +31,9 @@ const ITEMS = [
     { id: 'mutation_serum', name: 'Mutation Serum', emoji: '🧪', menuEmoji: '🧪', desc: 'Katalis mutation pet — drop dari dungeon co-op dan boss', price: 0, category: 'Pet' },
     { id: 'ancient_core', name: 'Ancient Core', emoji: '🔮', menuEmoji: '🔮', desc: 'Material langka untuk mutasi pet tier tinggi', price: 0, category: 'Pet' },
     { id: 'trait_stabilizer', name: 'Trait Stabilizer', emoji: '🧯', menuEmoji: '🧯', desc: '+15% peluang Mutation Lab sekali pakai', price: 0, category: 'Pet' },
+    { id: 'cooked_pancake', name: 'Cooked Pancake', emoji: '🥞', menuEmoji: '🥞', desc: 'Pulihkan 100% laper & seneng pet', price: 0, category: 'Consumable' },
+    { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', menuEmoji: '🍜', desc: 'Buff pet ATK +10% selama 1 jam', price: 0, category: 'Consumable' },
+    { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', menuEmoji: '🥗', desc: 'Lindungi farm dari hama selama 6 jam', price: 0, category: 'Consumable' },
 ];
 
 const CRAFT_RECIPES = [
@@ -62,4 +65,10 @@ const CRAFT_RECIPES = [
     { id: 'pest_shield_craft', name: 'Pestisida Shield Craft', emoji: '<:pesticide_shield:1514055510058602618>', ingredients: [{id: 'pesticide', qty: 3}], result: {type: 'item', id: 'pesticide_shield', qty: 1}, desc: '3 Pestisida → 1 Pestisida Shield' },
 ];
 
-module.exports = { ITEMS, CRAFT_RECIPES };
+const COOKING_RECIPES = [
+    { id: 'cooked_pancake', name: 'Cooked Pancake', emoji: '🥞', ingredients: [{id: 'gandum', qty: 2}, {id: 'egg_normal', qty: 1}, {id: 'milk_normal', qty: 1}], desc: 'Pulihkan 100% laper & seneng pet' },
+    { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', ingredients: [{id: 'rare_fish', qty: 1}, {id: 'pesticide', qty: 2}], desc: 'Buff pet ATK +10% selama 1 jam' },
+    { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', ingredients: [{id: 'wortel', qty: 3}, {id: 'kentang', qty: 2}], desc: 'Lindungi farm dari hama selama 6 jam' }
+];
+
+module.exports = { ITEMS, CRAFT_RECIPES, COOKING_RECIPES };

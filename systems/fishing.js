@@ -211,6 +211,15 @@ function rollSeaMonster(guildId, userId, location, rod) {
     const { weather } = getFishingWeather();
     effectiveChance = Math.max(0, effectiveChance * weather.effects.monsterMult);
 
+    // Apply daily global weather multiplier
+    try {
+        const { getTodayWeather } = require('./farmWeather');
+        const dailyWeather = getTodayWeather();
+        if (dailyWeather && dailyWeather.id === 'stormy') {
+            effectiveChance *= 2.0; // 2x monster rate on stormy days
+        }
+    } catch (e) {}
+
     // Monster Repellent: -50% chance
     if (hasMonsterRepellent(guildId, userId)) {
         effectiveChance = Math.max(2, effectiveChance * 0.5);
@@ -438,4 +447,18 @@ function catchFish(guildId, userId) {
     return { fish, tier: selectedTier, weight, value, location, luckPenalty: luckPenaltyApplied, droppedPart, activeWeather };
 }
 
-module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getOwnedRods, ownsRod, addRodToInventory, equipRod, rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER };
+function getFishingCooldown(userId, rod) {
+    try {
+        const { getTodayWeather } = require('./farmWeather');
+        const todayWeather = getTodayWeather();
+        let cooldown = rod.cooldown;
+        if (todayWeather && (todayWeather.id === 'rainy' || todayWeather.id === 'stormy')) {
+            cooldown = Math.max(1, Math.round(cooldown * 0.85)); // 15% reduction
+        }
+        return cooldown;
+    } catch (e) {
+        return rod.cooldown;
+    }
+}
+
+module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getOwnedRods, ownsRod, addRodToInventory, equipRod, rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER, getFishingCooldown };

@@ -469,6 +469,269 @@ module.exports = function register() {
     if (!tank.alive) throw new Error('tank with equipped +5000 DEF relic should survive');
     if (plain.alive) throw new Error('plain pet should die — equipped relic bonus not applied in battle!');
   });
+  test('relic: gem socketing verification and stats/combat integration', () => {
+    const uid = 'RELIC_GEM_USER', PID = 99110;
+    // 1. Create a relic (Legendary -> 2 sockets)
+    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id,gems) VALUES (?,?,?,?,?,?,?,?,?,?)');
+    const relicId = ins.run('g', uid, 'Aegis', 'armor', 'Legendary', 'def', 10, 0, PID, '[]').lastInsertRowid;
+
+    // 2. Check getRelicBonus initially
+    let bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 0 || bonus.atk !== 0 || bonus.def !== 10) throw new Error('def should be 10, got ' + bonus.def);
+
+    // 3. Socket a gem: dna_shard (+15 HP option)
+    let gems = [ { gemId: 'dna_shard', stat: 'hp' }, null ];
+    db.db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relicId);
+
+    // 4. Verify bonus includes gem flat hp (+15 HP)
+    bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 15) throw new Error('hp should be 15, got ' + bonus.hp);
+
+    // 5. Socket another gem: ancient_core (+5% ATK/DEF/SPD option)
+    gems = [ { gemId: 'dna_shard', stat: 'hp' }, { gemId: 'ancient_core', stat: 'all' } ];
+    db.db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relicId);
+
+    // 6. Verify bonus includes percent stats (+5% ATK/DEF/SPD)
+    bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 15) throw new Error('hp should be 15');
+    if (bonus.percent.atk !== 5 || bonus.percent.def !== 5 || bonus.percent.spd !== 5) throw new Error('percent bonus not applied correctly');
+
+    // 7. Verify getEffectiveStats applies flat then percentage
+    const basePet = { userId: uid, id: PID, hp: 100, atk: 100, def: 100, spd: 100, crit: 0 };
+    const eff = pets.getEffectiveStats(basePet);
+    // hp: (100 + 15) * 1.0 = 115 (no percent hp bonus)
+    // def: (100 + 10) * 1.05 = 115
+    // atk: (100 + 0) * 1.05 = 105
+    // spd: (100 + 0) * 1.05 = 105
+    if (eff.hp !== 115) throw new Error('effective hp should be 115, got ' + eff.hp);
+    if (eff.def !== 115) throw new Error('effective def should be 115, got ' + eff.def);
+    if (eff.atk !== 105) throw new Error('effective atk should be 105, got ' + eff.atk);
+    if (eff.spd !== 105) throw new Error('effective spd should be 105, got ' + eff.spd);
+
+    // 8. Verify combat simulation integrates the socketed gems
+    const petDef = { emoji: '🐾' };
+    const mk = (hp, atk, def, spd) => ({ userId: uid, id: PID, petId: 'x', hp, atk, def, spd, crit: 0, level: 1, element: null, skills: '[]' });
+    
+    // Enemy that can kill a pet with 100 HP + 10 DEF, but dies to a pet with 115 HP + 115 DEF
+    const enemy = [{ hp: 10, atk: 110, def: 0, element: null }];
+    
+    // Simulate battle with equipped gemmed relic
+    const outcome = pets.simulateBattle(mk(100, 100, 100, 100), petDef, enemy);
+    if (!outcome.alive) throw new Error('gemmed relic pet should survive battle! log: ' + outcome.log.join('\n'));
+  });
+  test('relic: gem socketing interactive select menu flow', async () => {
+    const pPanel = botRequire('systems/petPanel.js');
+    const u = '99112', g = 'RELIC_INT_GUILD';
+    
+    // 1. Create user and active pet
+    db.getOrCreateUser(g, u);
+    db.db.prepare('INSERT INTO pets (guildId,userId,petId,name,active,level,hp,atk,def,spd,crit) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, '90001', 'TestPet', 1, 10, 100, 20, 10, 10, 5);
+    const pet = pets.getPetData(g, u);
+
+    // 2. Give the user a Legendary relic and some gems
+    const relicId = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id,gems) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, 'Aegis', 'armor', 'Legendary', 'def', 10, 0, pet.id, '[]').lastInsertRowid;
+
+    db.addItem(g, u, 'dna_shard', 2);
+
+    // 3. Click "Socket Gem" button: customId = pet_relicsocket_U
+    const itButton = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_${u}` });
+    let updateResult = await pPanel.handlePetButton(itButton);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Relic Gem Socketing')) {
+      throw new Error('Expected socket relics panel');
+    }
+
+    // 4. Select relic: customId = pet_relicsocket_select_U, values = [relicId]
+    const itRelicSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_select_${u}`, values: [String(relicId)] });
+    updateResult = await pPanel.handlePetSelectMenu(itRelicSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Kelola Socket Relic')) {
+      throw new Error('Expected slot management panel');
+    }
+
+    // 5. Select socket slot index 0: customId = pet_relicsocket_slot_select_relicId-U, values = ['0']
+    const itSlotSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] });
+    updateResult = await pPanel.handlePetSelectMenu(itSlotSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Pilih Gem')) {
+      throw new Error('Expected gem selection panel');
+    }
+
+    // 6. Select dna_shard gem: customId = pet_relicsocket_gem_select_relicId-0-U, values = ['dna_shard']
+    const itGemSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['dna_shard'] });
+    updateResult = await pPanel.handlePetSelectMenu(itGemSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Pilih Peningkatan Stat')) {
+      throw new Error('Expected stat option selection panel');
+    }
+
+    // 7. Select hp stat: customId = pet_relicsocket_stat_select_relicId-0-dna_shard-U, values = ['hp']
+    const itStatSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_stat_select_${relicId}-0-dna_shard-${u}`, values: ['hp'] });
+    updateResult = await pPanel.handlePetSelectMenu(itStatSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Kelola Socket Relic')) {
+      throw new Error('Expected back to slot panel');
+    }
+    // Verify item is deducted
+    if (db.getItemCount(g, u, 'dna_shard') !== 1) throw new Error('Expected dna_shard count to be 1');
+    // Verify relic gems inside DB
+    const relicAfter = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    let currentGems = JSON.parse(relicAfter.gems || '[]');
+    if (currentGems[0].gemId !== 'dna_shard' || currentGems[0].stat !== 'hp') {
+      throw new Error('relic gems not set correctly in database');
+    }
+
+    // 8. Go to gem select again to test replacement/refunding
+    // Select socket slot 0
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] }));
+    // User has 1 dna_shard left. They choose to socket dna_shard again but choose atk option this time.
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['dna_shard'] }));
+    // Select atk stat
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_stat_select_${relicId}-0-dna_shard-${u}`, values: ['atk'] }));
+    // Verify old gem is refunded, new gem is deducted. Total count of dna_shard should still be 1 (deducted 1, returned 1)
+    if (db.getItemCount(g, u, 'dna_shard') !== 1) throw new Error('Expected dna_shard count to be 1 after replacement refund');
+    // Verify slot 0 stat is now atk
+    const relicAfter2 = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    currentGems = JSON.parse(relicAfter2.gems || '[]');
+    if (currentGems[0].stat !== 'atk') throw new Error('Expected socket 0 stat to be atk');
+
+    // 9. Go to gem select again to test removal (cabut)
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] }));
+    // Select cabut option
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['cabut'] }));
+    // Verify gem is refunded to inventory (1 + 1 = 2)
+    if (db.getItemCount(g, u, 'dna_shard') !== 2) throw new Error('Expected dna_shard count to be 2 after cabut');
+    // Verify slot 0 is now null
+    const relicAfter3 = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    currentGems = JSON.parse(relicAfter3.gems || '[]');
+    if (currentGems[0] !== null) throw new Error('Expected socket 0 to be empty');
+  });
+  test('cooking: recipes and interactive panels validation', async () => {
+    const pPanel = botRequire('systems/petPanel.js');
+    const u = '88223', g = 'COOK_GUILD';
+
+    // 1. Create user and active pet with depleted hunger/happiness
+    db.getOrCreateUser(g, u);
+    db.db.prepare('INSERT INTO pets (guildId,userId,petId,name,active,level,hp,atk,def,spd,crit,hunger,happiness) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, '90001', 'ChefPet', 1, 10, 100, 20, 10, 10, 5, 20, 30);
+    const pet = pets.getPetData(g, u);
+
+    // 2. Set up initial items: Gandum (2) and Susu Normal (1) in farm_storage, but missing Telur Normal (egg_normal)
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'gandum', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'milk_normal', 1);
+
+    // Click "Cook" button
+    const itCookBtn = mockInteraction({ userId: u, guildId: g, customId: `pet_cook_${u}` });
+    let updateResult = await pPanel.handlePetButton(itCookBtn);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Cooking Hub')) {
+      throw new Error('Expected cooking hub panel');
+    }
+
+    // Try to cook pancake (ingredients incomplete: missing egg)
+    const itCookPancakeFail = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_cooked_pancake-${u}` });
+    let replyResult = await pPanel.handlePetButton(itCookPancakeFail);
+    if (!replyResult || !replyResult.content || !replyResult.content.includes('Bahan kurang')) {
+      throw new Error('Expected failure due to missing egg');
+    }
+
+    // Add missing egg_normal to storage
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'egg_normal', 1);
+
+    // Try cooking pancake again (should succeed)
+    updateResult = await pPanel.handlePetButton(itCookPancakeFail);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected cooking success for cooked_pancake');
+    }
+
+    // Verify ingredients consumed
+    const { getStorageQty } = botRequire('systems/farming.js');
+    if (getStorageQty(g, u, 'gandum') !== 0) throw new Error('Expected gandum to be consumed');
+    if (getStorageQty(g, u, 'egg_normal') !== 0) throw new Error('Expected egg_normal to be consumed');
+    if (getStorageQty(g, u, 'milk_normal') !== 0) throw new Error('Expected milk_normal to be consumed');
+
+    // Verify pancake added to inventory
+    if (db.getItemCount(g, u, 'cooked_pancake') !== 1) throw new Error('Expected 1 cooked_pancake in inventory');
+
+    // Open Bag/Consumables Panel
+    const itBagBtn = mockInteraction({ userId: u, guildId: g, customId: `pet_bag_${u}` });
+    updateResult = await pPanel.handlePetButton(itBagBtn);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Tas Consumables')) {
+      throw new Error('Expected bag consumables panel');
+    }
+
+    // Consume pancake
+    const itUsePancake = mockInteraction({ userId: u, guildId: g, customId: `pet_use_cooked_pancake-${u}` });
+    updateResult = await pPanel.handlePetButton(itUsePancake);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('memakan Pancake')) {
+      throw new Error('Expected pancake consumption success message');
+    }
+
+    // Verify pet stats fully restored
+    const petAfter = pets.getPetData(g, u);
+    if (petAfter.hunger !== 100 || petAfter.happiness !== 100) {
+      throw new Error(`Expected hunger & happiness to be 100, got hunger=${petAfter.hunger}, happy=${petAfter.happiness}`);
+    }
+    if (db.getItemCount(g, u, 'cooked_pancake') !== 0) throw new Error('Expected pancake consumed from inventory');
+
+    // 3. Test Spicy Fish Soup: Rare Fish + 2 Pesticide -> +10% ATK buff
+    // Add ingredients
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?,?,?,?,?)')
+      .run(g, u, 'arwana_silver', 2.5, Date.now()); // arwana_silver is Rare fish
+    db.addItem(g, u, 'pesticide', 2);
+
+    // Cook spicy fish soup
+    const itCookSoup = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_spicy_fish_soup-${u}` });
+    updateResult = await pPanel.handlePetButton(itCookSoup);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected soup cooking success');
+    }
+
+    // Verify ingredients deducted
+    const fishCount = db.db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(u).c;
+    if (fishCount !== 0) throw new Error('Expected rare fish to be consumed');
+    if (db.getItemCount(g, u, 'pesticide') !== 0) throw new Error('Expected pesticide to be consumed');
+
+    // Verify soup added
+    if (db.getItemCount(g, u, 'spicy_fish_soup') !== 1) throw new Error('Expected 1 spicy_fish_soup in inventory');
+
+    // Consume soup
+    const itUseSoup = mockInteraction({ userId: u, guildId: g, customId: `pet_use_spicy_fish_soup-${u}` });
+    updateResult = await pPanel.handlePetButton(itUseSoup);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('meminum Spicy Fish Soup')) {
+      throw new Error('Expected soup consumption success');
+    }
+
+    // Verify ATK buff active (combat integration)
+    const baseStats = pets.getEffectiveStats(petAfter);
+    // Base ATK is 20, should be multiplied by 1.10 = 22
+    if (baseStats.atk !== 22) throw new Error('Expected effective ATK to be 22 (+10% buff), got ' + baseStats.atk);
+
+    // 4. Test Veggie Salad: 3 Wortel + 2 Kentang -> 6 hours pest shield
+    // Add ingredients
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'wortel', 3);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'kentang', 2);
+
+    // Cook veggie salad
+    const itCookSalad = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_veggie_salad-${u}` });
+    updateResult = await pPanel.handlePetButton(itCookSalad);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected salad cooking success');
+    }
+
+    // Verify salad added
+    if (db.getItemCount(g, u, 'veggie_salad') !== 1) throw new Error('Expected veggie_salad in inventory');
+
+    // Consume salad
+    const itUseSalad = mockInteraction({ userId: u, guildId: g, customId: `pet_use_veggie_salad-${u}` });
+    updateResult = await pPanel.handlePetButton(itUseSalad);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('memakan Veggie Salad')) {
+      throw new Error('Expected salad consumption success');
+    }
+
+    // Verify pest shield set in user stats
+    const shieldUntil = db.getUserStat(g, u, 'pest_shield_until');
+    if (shieldUntil < Date.now() + 5.9 * 3600 * 1000) {
+      throw new Error('Expected pest shield to be set to ~6 hours');
+    }
+  });
 
   // ---- Achievement pokedex progress ----
   const ach = botRequire('systems/achievements.js');

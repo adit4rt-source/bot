@@ -46,7 +46,7 @@ const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotCh
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
-const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation } = require('../systems/fishing');
+const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getFishingCooldown } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
 const { CALENDAR_REWARDS, getLoginCalendar } = require('../systems/calendar');
@@ -306,7 +306,8 @@ async function routeInteraction(interaction) {
             const eq = getEquipment(guildId, interaction.user.id);
             const rod = ROD_TYPES.find(r => r.id === eq.rod) || ROD_TYPES[0];
             if (fishCooldowns.has(cdKey) && Date.now() < fishCooldowns.get(cdKey)) { const remaining = Math.ceil((fishCooldowns.get(cdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true }); }
-            fishCooldowns.set(cdKey, Date.now() + rod.cooldown * 1000);
+            const finalCdSec = getFishingCooldown(interaction.user.id, rod);
+            fishCooldowns.set(cdKey, Date.now() + finalCdSec * 1000);
 
             // === GIANT FISH: Check active encounter ===
             const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGiantFish, buildGiantFishSpawnEmbed, buildGiantFishHitEmbed, buildGiantFishDefeatedEmbed } = require('../systems/giantFish');
@@ -369,12 +370,13 @@ async function routeInteraction(interaction) {
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
+            const finalCdSec = getFishingCooldown(interaction.user.id, rod);
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
                 .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
                 .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
                 .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
-                .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${rod.cooldown}s | Max combo: ${comboData.maxCombo}x` });
+                .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${finalCdSec}s | Max combo: ${comboData.maxCombo}x` });
             if (result.tier.tier === 'Secret') embed.setTitle('🔮💫 SECRET CATCH!!! 💫🔮');
             else if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
             else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
@@ -537,13 +539,21 @@ async function routeInteraction(interaction) {
             componentsRows.push(new ActionRowBuilder().addComponents(fishingMenu));
 
             // 🌾 FARMING section (Bibit + Pupuk) — Row 2
+            const { getDynamicPrice } = require('../systems/farmSeason');
             shopDesc += '🌾 **FARMING**\n';
-            FARM_CROPS.slice(0, 4).forEach(c => { shopDesc += `> ${c.emoji} ${c.name} — 🪙 **${c.cost}** | ${c.time}m\n`; });
+            FARM_CROPS.slice(0, 4).forEach(c => {
+                const dynamicCost = getDynamicPrice(c, 'buy');
+                shopDesc += `> ${c.emoji} ${c.name} — 🪙 **${dynamicCost}** | ${c.time}m\n`;
+            });
             shopDesc += `> *...dan ${FARM_CROPS.length - 4} bibit lainnya*\n`;
             FARM_FERTILIZERS.filter(f => f.cost > 0).forEach(f => { shopDesc += `> ${f.emoji} ${f.name} — 🪙 **${f.cost}** | -${Math.round(f.speedBonus*100)}% waktu\n`; });
             shopDesc += '\n';
             const farmMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_farming').setPlaceholder('🌾 Beli Bibit / Pupuk...').setMinValues(1).setMaxValues(1);
-            FARM_CROPS.slice(0, 20).forEach(c => { farmMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙 ${c.cost})`).setValue(`crop_${c.id}`).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${c.sellPrice}`)); });
+            FARM_CROPS.slice(0, 20).forEach(c => {
+                const dynamicCost = getDynamicPrice(c, 'buy');
+                const dynamicSell = getDynamicPrice(c, 'sell');
+                farmMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙 ${dynamicCost})`).setValue(`crop_${c.id}`).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${dynamicSell}`));
+            });
             FARM_FERTILIZERS.filter(f => f.cost > 0).forEach(f => { farmMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(`fert_${f.id}`).setDescription(`-${Math.round(f.speedBonus*100)}% waktu | +${Math.round(f.yieldBonus*100)}% hasil`)); });
             componentsRows.push(new ActionRowBuilder().addComponents(farmMenu));
 
@@ -1105,10 +1115,12 @@ async function routeInteraction(interaction) {
             const cropId = interaction.values[0];
             const crop = FARM_CROPS.find(c => c.id === cropId);
             if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+            const { getDynamicPrice } = require('../systems/farmSeason');
+            const dynamicCost = getDynamicPrice(crop, 'buy');
             // Show modal for quantity input
             const modal = new ModalBuilder().setCustomId(`seed_qty_${cropId}`).setTitle(`Beli ${crop.emoji} ${crop.name}`);
             modal.addComponents(new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
+                new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${dynamicCost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
             ));
             return interaction.showModal(modal);
         }
@@ -1132,9 +1144,11 @@ async function routeInteraction(interaction) {
                 const cropId = selected.substring(5);
                 const crop = FARM_CROPS.find(c => c.id === cropId);
                 if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+                const { getDynamicPrice } = require('../systems/farmSeason');
+                const dynamicCost = getDynamicPrice(crop, 'buy');
                 const modal = new ModalBuilder().setCustomId(`seed_qty_${cropId}`).setTitle(`Beli ${crop.emoji} ${crop.name}`);
                 modal.addComponents(new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${crop.cost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
+                    new TextInputBuilder().setCustomId('seed_qty_input').setLabel(`Berapa bibit? (🪙${dynamicCost}/bibit)`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(3).setPlaceholder('Contoh: 10')
                 ));
                 return interaction.showModal(modal);
             }
@@ -1835,14 +1849,16 @@ async function routeInteraction(interaction) {
             const cropId = interaction.customId.replace('seed_qty_', '');
             const crop = FARM_CROPS.find(c => c.id === cropId);
             if (!crop) return interaction.reply({ content: '❌ Bibit tidak ditemukan!', ephemeral: true });
+            const { getDynamicPrice } = require('../systems/farmSeason');
+            const dynamicCost = getDynamicPrice(crop, 'buy');
             const input = interaction.fields.getTextInputValue('seed_qty_input');
             const qty = parseInt(input);
             if (isNaN(qty) || qty < 1 || qty > 999) return interaction.reply({ content: '❌ Masukkan angka valid (1-999)!', ephemeral: true });
-            const totalCost = crop.cost * qty;
+            const totalCost = dynamicCost * qty;
             const userData = getOrCreateUser(guildId, interaction.user.id);
             if (userData.balance < totalCost) {
-                const affordable = Math.floor(userData.balance / crop.cost);
-                return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} bibit.\n> Kamu hanya mampu beli **${affordable}** bibit (🪙 ${(affordable * crop.cost).toLocaleString('id-ID')}).`, ephemeral: true });
+                const affordable = Math.floor(userData.balance / dynamicCost);
+                return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${totalCost.toLocaleString('id-ID')}** untuk ${qty} bibit.\n> Kamu hanya mampu beli **${affordable}** bibit (🪙 ${(affordable * dynamicCost).toLocaleString('id-ID')}).`, ephemeral: true });
             }
             db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalCost, guildId, interaction.user.id);
             addSeed(guildId, interaction.user.id, cropId, qty);
