@@ -370,7 +370,6 @@ async function routeInteraction(interaction) {
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
-            const finalCdSec = getFishingCooldown(interaction.user.id, rod);
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
                 .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
