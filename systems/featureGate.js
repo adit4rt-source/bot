@@ -5,8 +5,9 @@ const { getSetting, setSetting } = require('../database');
 // Each feature maps a setting key to a group of commands/interactions.
 // Default is ON ('1'). Admin can set to '0' to disable.
 const FEATURES = [
-    // Page 1
-    { key: 'feature_economy',      label: 'Economy',       emoji: '💰', desc: '/wallet, /gift, /shop, /daily, /calendar', commands: ['wallet', 'gift', 'shop', 'daily', 'calendar'] },
+    { key: 'feature_economy',      label: 'Economy',       emoji: '💰', desc: '/wallet, /gift', commands: ['wallet', 'gift'] },
+    { key: 'feature_daily',        label: 'Daily Reward',  emoji: '🎁', desc: '/daily, /calendar', commands: ['daily', 'calendar'] },
+    { key: 'feature_shop',         label: 'Shop',          emoji: '🛒', desc: '/shop', commands: ['shop'] },
     { key: 'feature_fishing',      label: 'Fishing',       emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
     { key: 'feature_farming',      label: 'Farming',       emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
     { key: 'feature_pet',          label: 'Pet & Battle',  emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
@@ -14,15 +15,15 @@ const FEATURES = [
     { key: 'feature_quest',        label: 'Quest',         emoji: '📜', desc: '/quest (daily & weekly)', commands: ['quest'] },
     { key: 'feature_arena',        label: 'Arena',         emoji: '⚔️', desc: '/arena', commands: ['arena'] },
     { key: 'feature_auction',      label: 'Auction',       emoji: '🏛️', desc: '/auction', commands: ['auction'] },
-    // Page 2
     { key: 'feature_trade',        label: 'Trade',         emoji: '🤝', desc: '/trade, /market', commands: ['trade', 'market'] },
     { key: 'feature_globalmarket', label: 'Global Market', emoji: '🌍', desc: '/globalmarket, /globaltrade', commands: ['globalmarket', 'globaltrade'] },
     { key: 'feature_card',         label: 'Cards',         emoji: '🃏', desc: '/card, /drop, /cards, /cardview, /wishlist, /cardlb', commands: ['card', 'drop', 'cards', 'cardview', 'wishlist', 'cardlb'] },
-    { key: 'feature_giveaway',     label: 'Giveaway',      emoji: '🎁', desc: '/giveaway', commands: ['giveaway'] },
+    { key: 'feature_giveaway',     label: 'Giveaway',      emoji: '🎉', desc: '/giveaway', commands: ['giveaway'] },
     { key: 'feature_starboard',    label: 'Starboard',     emoji: '⭐', desc: '/starboard', commands: ['starboard'] },
     { key: 'feature_invite',       label: 'Invite Tracker',emoji: '📨', desc: '/invite', commands: ['invite'] },
     { key: 'feature_tempvoice',    label: 'TempVoice',     emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
     { key: 'feature_aibot',        label: 'AI Bot',        emoji: '🤖', desc: '/tanya, /aibot', commands: ['tanya', 'aibot'] },
+    { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
 ];
 
 const PAGE_SIZE = 8;
@@ -95,9 +96,12 @@ const INTERACTION_PREFIX_MAP = {
     // Economy
     'economy_':        'feature_economy',
     'econ_':           'feature_economy',
-    'daily_':          'feature_economy',
-    'shop_buy_':       'feature_economy',
-    'seed_qty_':       'feature_economy',
+    // Daily Reward
+    'daily_':          'feature_daily',
+    // Shop
+    'shop_buy_':       'feature_shop',
+    // Farming (has seed_qty)
+    'seed_qty_':       'feature_farming',
     // Fishing
     'fish_':           'feature_fishing',
     'fishing_':        'feature_fishing',
