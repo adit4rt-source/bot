@@ -1,0 +1,14 @@
+{
+  "cooking": {
+    "success": "Successfully cooked {qty}x **{item}**! 🍳",
+    "failed_ingredients": "Insufficient ingredients to cook {qty}x **{item}**:\n{missing}",
+    "invalid_qty": "Invalid quantity!",
+    "no_pet": "You must have an active pet to cook!",
+    "title": "🍳 Cooking Hub",
+    "desc": "Cook ingredients from farm & fishing for your pet!\n\n**Owned Ingredients:**\n{crops}\n{fish}"
+  },
+  "language": {
+    "success": "Language successfully changed to **English**! 🇬🇧",
+    "invalid": "Invalid language selection!"
+  }
+}

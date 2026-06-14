@@ -1,0 +1,14 @@
+{
+  "cooking": {
+    "success": "Berhasil memasak {qty}x **{item}**! 🍳",
+    "failed_ingredients": "Bahan kurang untuk memasak {qty}x **{item}**:\n{missing}",
+    "invalid_qty": "Jumlah tidak valid!",
+    "no_pet": "Kamu harus memiliki pet aktif untuk memasak!",
+    "title": "🍳 Cooking Hub",
+    "desc": "Masak bahan makanan dari kebun & hasil pancing untuk pet-mu!\n\n**Bahan Dimiliki:**\n{crops}\n{fish}"
+  },
+  "language": {
+    "success": "Bahasa berhasil diubah ke **Bahasa Indonesia**! 🇮🇩",
+    "invalid": "Pilihan bahasa tidak valid!"
+  }
+}

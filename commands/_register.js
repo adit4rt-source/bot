@@ -146,6 +146,14 @@ const commands = [
         .addSubcommand(sub => sub.setName('disable').setDescription('⭐ Nonaktifkan starboard'))
         .addSubcommand(sub => sub.setName('status').setDescription('⭐ Lihat status starboard saat ini')),
 
+    // ================= LANGUAGE / LOCALE =================
+    new SlashCommandBuilder().setName('language').setDescription('🌐 Ganti bahasa bot / Change bot language')
+        .addStringOption(opt => opt.setName('lang').setDescription('Pilih bahasa / Select language').setRequired(true)
+            .addChoices(
+                { name: 'Bahasa Indonesia 🇮🇩', value: 'id' },
+                { name: 'English 🇬🇧', value: 'en' }
+            )),
+
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
         .setName('admin')

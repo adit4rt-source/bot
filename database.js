@@ -278,6 +278,7 @@ try {
 
 // ================= MIGRATIONS =================
 try { db.exec(`ALTER TABLE fish_inventory ADD COLUMN locked INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN locale TEXT DEFAULT 'id'"); } catch(e) {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId TEXT, fishId TEXT, PRIMARY KEY(guildId, userId, fishId))`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS item_inventory (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);

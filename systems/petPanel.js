@@ -15,6 +15,8 @@ const { fishCooldowns, activeBossParties } = state;
 const ui = require('./ui');
 const { formatTrait } = require('./mutationLab');
 
+const i18n = require('./i18n');
+
 // ============ Release Pet: refund per tier (money) ============
 const PET_RELEASE_REFUND = { Common: 100, Uncommon: 500, Rare: 2500, Epic: 10000, Legendary: 25000, Mythic: 50000, Secret: 125000, God: 250000 };
 const RARE_RELEASE_TIERS = ['Legendary', 'Mythic', 'Secret', 'God'];
@@ -552,7 +554,11 @@ function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) 
 
             if (mode === 'validate') {
                 if (matchingFish.length < requiredQty) {
-                    return { valid: false, error: `Bahan kurang! Butuh 🐡 ${tierName} Fish x${requiredQty} (Miliki: ${matchingFish.length})` };
+                    const isEn = i18n.getLocale(guildId, userId) === 'en';
+                    const errorMsg = isEn
+                        ? `Insufficient ingredients! Need 🐡 ${tierName} Fish x${requiredQty} (Owned: ${matchingFish.length})`
+                        : `Bahan kurang! Butuh 🐡 ${tierName} Fish x${requiredQty} (Miliki: ${matchingFish.length})`;
+                    return { valid: false, error: errorMsg };
                 }
             } else if (mode === 'consume') {
                 for (let i = 0; i < requiredQty; i++) {
@@ -561,11 +567,15 @@ function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) 
             }
         } else if (FISH_DATA.some(f => f.id === ing.id)) {
             const matchingFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ? AND fishId = ? AND locked = 0').all(userId, ing.id);
-
+ 
             if (mode === 'validate') {
                 if (matchingFish.length < requiredQty) {
                     const fishDef = FISH_DATA.find(f => f.id === ing.id) || { name: ing.id, emoji: '🐟' };
-                    return { valid: false, error: `Bahan kurang! Butuh ${fishDef.emoji} ${fishDef.name} x${requiredQty} (Miliki: ${matchingFish.length})` };
+                    const isEn = i18n.getLocale(guildId, userId) === 'en';
+                    const errorMsg = isEn
+                        ? `Insufficient ingredients! Need ${fishDef.emoji} ${fishDef.name} x${requiredQty} (Owned: ${matchingFish.length})`
+                        : `Bahan kurang! Butuh ${fishDef.emoji} ${fishDef.name} x${requiredQty} (Miliki: ${matchingFish.length})`;
+                    return { valid: false, error: errorMsg };
                 }
             } else if (mode === 'consume') {
                 for (let i = 0; i < requiredQty; i++) {
@@ -577,7 +587,7 @@ function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) 
                                   ing.id.startsWith('egg_') || 
                                   ing.id.startsWith('milk_') || 
                                   ing.id.startsWith('wool_');
-
+ 
             if (isStorageItem) {
                 const ownedQty = getStorageQty(guildId, userId, ing.id);
                 if (mode === 'validate') {
@@ -585,7 +595,11 @@ function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) 
                         const cropDef = FARM_CROPS.find(c => c.id === ing.id);
                         const cropEmoji = cropDef ? cropDef.emoji : '';
                         const cropName = cropDef ? cropDef.name : ing.id;
-                        return { valid: false, error: `Bahan kurang! Butuh ${cropEmoji} ${cropName} x${requiredQty} (Miliki: ${ownedQty})` };
+                        const isEn = i18n.getLocale(guildId, userId) === 'en';
+                        const errorMsg = isEn
+                            ? `Insufficient ingredients! Need ${cropEmoji} ${cropName} x${requiredQty} (Owned: ${ownedQty})`
+                            : `Bahan kurang! Butuh ${cropEmoji} ${cropName} x${requiredQty} (Miliki: ${ownedQty})`;
+                        return { valid: false, error: errorMsg };
                     }
                 } else if (mode === 'consume') {
                     removeStorage(guildId, userId, ing.id, requiredQty);
@@ -596,7 +610,11 @@ function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) 
                     if (ownedQty < requiredQty) {
                         const itemDef = ITEMS.find(item => item.id === ing.id) || { name: ing.id };
                         const itemEmoji = itemDef.emoji || '';
-                        return { valid: false, error: `Bahan kurang! Butuh ${itemEmoji} ${itemDef.name} x${requiredQty} (Miliki: ${ownedQty})` };
+                        const isEn = i18n.getLocale(guildId, userId) === 'en';
+                        const errorMsg = isEn
+                            ? `Insufficient ingredients! Need ${itemEmoji} ${itemDef.name} x${requiredQty} (Owned: ${ownedQty})`
+                            : `Bahan kurang! Butuh ${itemEmoji} ${itemDef.name} x${requiredQty} (Miliki: ${ownedQty})`;
+                        return { valid: false, error: errorMsg };
                     }
                 } else if (mode === 'consume') {
                     removeItem(guildId, userId, ing.id, requiredQty);
@@ -612,9 +630,9 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
     const pet = getPetData(guildId, userId);
     if (!pet) {
         return {
-            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription('Kamu belum memiliki pet aktif!')],
+            embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle('❌ Error').setDescription(i18n.t(guildId, userId, 'cooking.no_pet'))],
             components: [new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel(i18n.getLocale(guildId, userId) === 'en' ? '🔙 Back' : '🔙 Kembali').setStyle(ButtonStyle.Secondary)
             )]
         };
     }
@@ -637,17 +655,19 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
     const belutCount = userFish.filter(f => f.fishId === 'belut').length;
     const abyssAnglerCount = userFish.filter(f => f.fishId === 'abyss_angler').length;
 
-    let desc = `🍳 **Cooking Hub**\n`;
-    if (successMsg) desc += `\n✨ **${successMsg}**\n`;
-    desc += `\n📦 **Bahan Tersedia:**\n`;
-    desc += `> 🌾 Gandum: **${getStorageQty(guildId, userId, 'gandum')}** | 🥕 Wortel: **${getStorageQty(guildId, userId, 'wortel')}** | 🥔 Kentang: **${getStorageQty(guildId, userId, 'kentang')}**\n`;
-    desc += `> 🍅 Tomat: **${getStorageQty(guildId, userId, 'tomat')}** | 🌶️ Cabai: **${getStorageQty(guildId, userId, 'cabai')}** | 🧄 B. Putih: **${getStorageQty(guildId, userId, 'bawang_putih')}**\n`;
-    desc += `> 🧅 B. Merah: **${getStorageQty(guildId, userId, 'bawang_merah')}** | 🍯 Madu: **${getStorageQty(guildId, userId, 'madu')}** | 🌿 M. Herb: **${getStorageQty(guildId, userId, 'mystic_herb')}**\n`;
-    desc += `> 🌸 C. Flower: **${getStorageQty(guildId, userId, 'crystal_flower')}** | 🥚 Telur: **${getStorageQty(guildId, userId, 'egg_normal')}** | 🧴 Pestisida: **${getItemCount(guildId, userId, 'pesticide')}**\n`;
-    desc += `> 🐟 Common Fish: **${commonFishCount}** | 🐡 Rare Fish: **${rareFishCount}**\n`;
-    desc += `> 🐟 Tuna: **${tunaCount}** | 🐍 Belut: **${belutCount}** | 🔦 Abyssal Angler: **${abyssAnglerCount}**\n\n`;
-    desc += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    desc += `📜 **Resep Masakan:**\n\n`;
+    const cropsText = `> 🌾 Gandum: **${getStorageQty(guildId, userId, 'gandum')}** | 🥕 Wortel: **${getStorageQty(guildId, userId, 'wortel')}** | 🥔 Kentang: **${getStorageQty(guildId, userId, 'kentang')}**\n` +
+                      `> 🍅 Tomat: **${getStorageQty(guildId, userId, 'tomat')}** | 🌶️ Cabai: **${getStorageQty(guildId, userId, 'cabai')}** | 🧄 B. Putih: **${getStorageQty(guildId, userId, 'bawang_putih')}**\n` +
+                      `> 🧅 B. Merah: **${getStorageQty(guildId, userId, 'bawang_merah')}** | 🍯 Madu: **${getStorageQty(guildId, userId, 'madu')}** | 🌿 M. Herb: **${getStorageQty(guildId, userId, 'mystic_herb')}**\n` +
+                      `> 🌸 C. Flower: **${getStorageQty(guildId, userId, 'crystal_flower')}** | 🥚 Telur: **${getStorageQty(guildId, userId, 'egg_normal')}** | 🧴 Pestisida: **${getItemCount(guildId, userId, 'pesticide')}**`;
+
+    const fishText = `> 🐟 Common Fish: **${commonFishCount}** | 🐡 Rare Fish: **${rareFishCount}**\n` +
+                     `> 🐟 Tuna: **${tunaCount}** | 🐍 Belut: **${belutCount}** | 🔦 Abyssal Angler: **${abyssAnglerCount}**`;
+
+    const rawDesc = i18n.t(guildId, userId, 'cooking.desc', { crops: cropsText, fish: fishText });
+    let desc = rawDesc;
+    if (successMsg) desc += `\n\n✨ **${successMsg}**`;
+    desc += `\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    desc += i18n.getLocale(guildId, userId) === 'en' ? `📜 **Recipes:**\n\n` : `📜 **Resep Masakan:**\n\n`;
 
     COOKING_RECIPES.forEach((recipe, i) => {
         desc += `**${i+1}. ${recipe.emoji} ${recipe.name}**\n`;
@@ -675,9 +695,10 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
         }).join(', ') + '\n\n';
     });
 
+    const placeholder = i18n.getLocale(guildId, userId) === 'en' ? '🍳 Choose a recipe to cook...' : '🍳 Pilih resep untuk dimasak...';
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`pet_cook_select_${userId}`)
-        .setPlaceholder('🍳 Pilih resep untuk dimasak...');
+        .setPlaceholder(placeholder);
 
     COOKING_RECIPES.forEach(recipe => {
         const check = validateAndConsumeIngredients(guildId, userId, recipe, 1, 'validate');
@@ -692,13 +713,14 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
     });
 
     const embed = new EmbedBuilder()
-        .setTitle('🍳 Cooking Hub')
+        .setTitle(i18n.t(guildId, userId, 'cooking.title'))
         .setColor('#E67E22')
         .setDescription(desc);
 
     const rowMenu = new ActionRowBuilder().addComponents(selectMenu);
+    const backLabel = i18n.getLocale(guildId, userId) === 'en' ? '🔙 Back' : '🔙 Kembali';
     const rowBack = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel(backLabel).setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [rowMenu, rowBack] };
@@ -2448,7 +2470,7 @@ async function handlePetModal(interaction) {
         updateQuestProgress(guildId, userId, 'cook', quantity);
         await checkAchievements(interaction.guild, userId, { type: 'cook' });
 
-        const msg = `Berhasil memasak ${recipe.emoji} **${recipe.name}** x${quantity}!`;
+        const msg = i18n.t(guildId, userId, 'cooking.success', { qty: quantity, item: `${recipe.emoji} ${recipe.name}` });
         return interaction.update(buildPetCookingPanel(guildId, userId, msg));
     }
     return null;

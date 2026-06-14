@@ -47,6 +47,7 @@ const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotCh
 const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
 const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
+const i18n = require('../systems/i18n');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getFishingCooldown } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -158,6 +159,16 @@ async function routeInteraction(interaction) {
                 new ButtonBuilder().setLabel('📖 Help').setCustomId('welcome_help').setStyle(ButtonStyle.Secondary)
             );
             interaction.channel.send({ embeds: [welcomeEmbed], components: [welcomeRow] }).catch(() => {});
+        }
+
+        if (command === 'language') {
+            const lang = interaction.options.getString('lang');
+            if (lang !== 'id' && lang !== 'en') {
+                return interaction.reply({ content: '❌ Invalid language / Pilihan bahasa tidak valid!', ephemeral: true });
+            }
+            i18n.setLocale(guildId, interaction.user.id, lang);
+            const msg = i18n.t(guildId, interaction.user.id, 'language.success');
+            return interaction.reply({ content: msg, ephemeral: true });
         }
 
         if (command === 'help') {

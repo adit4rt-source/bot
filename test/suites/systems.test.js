@@ -958,4 +958,52 @@ module.exports = function register() {
     const ancient = BOSS_LIST.find(b => b.id === 'ancient');
     if (ancient.reward[0] !== 70000 || ancient.reward[1] !== 150000) throw new Error('ancient reward changed!');
   });
+
+  // ---- Localization & i18n System ----
+  const i18n = botRequire('systems/i18n.js');
+  test('i18n: defaults to id and translates correctly', () => {
+    const g = 'I18N_G', u = 'I18NU1';
+    db.getOrCreateUser(g, u);
+    // Unset locale defaults to 'id'
+    const locale = i18n.getLocale(g, u);
+    if (locale !== 'id') throw new Error('Expected default locale to be id, got ' + locale);
+    
+    // Test simple translation in Indonesian
+    const msg = i18n.t(g, u, 'language.success');
+    if (!msg.includes('Bahasa berhasil diubah ke')) throw new Error('Expected Indonesian language.success string');
+  });
+
+  test('i18n: sets locale and translates with parameters', () => {
+    const g = 'I18N_G', u = 'I18NU2';
+    db.getOrCreateUser(g, u);
+    
+    // Set to english
+    i18n.setLocale(g, u, 'en');
+    const locale = i18n.getLocale(g, u);
+    if (locale !== 'en') throw new Error('Expected locale to be en');
+    
+    // Test simple translation in English
+    const msg = i18n.t(g, u, 'language.success');
+    if (!msg.includes('Language successfully changed to')) throw new Error('Expected English language.success string');
+    
+    // Test parameterized translation
+    const cookMsg = i18n.t(g, u, 'cooking.success', { qty: 3, item: 'Sushi' });
+    if (cookMsg !== 'Successfully cooked 3x **Sushi**! 🍳') {
+      throw new Error('Expected parsed English cooking success string, got: ' + cookMsg);
+    }
+  });
+
+  test('i18n: fallback to default id locale when key is missing in en', () => {
+    const g = 'I18N_G', u = 'I18NU3';
+    db.getOrCreateUser(g, u);
+    i18n.setLocale(g, u, 'en');
+    
+    // Insert a dummy key to locales.id but not locales.en
+    i18n.locales.id.test_fallback = 'Ini fallback';
+    // Remove if present in en
+    if (i18n.locales.en) delete i18n.locales.en.test_fallback;
+    
+    const msg = i18n.t(g, u, 'test_fallback');
+    if (msg !== 'Ini fallback') throw new Error('Expected fallback to Indonesian, got ' + msg);
+  });
 };
