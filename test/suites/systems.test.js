@@ -1009,7 +1009,6 @@ module.exports = function register() {
 
   // ---- Game Terms Consent Gating ----
   const consent = botRequire('systems/consent.js');
-  const notif = botRequire('systems/notifications.js');
   test('consent: hasGameConsent defaults false and is updated by setGameConsent', () => {
     const g = 'CONSENT_G1', u = 'CONSENT_U1';
     db.getOrCreateUser(g, u);
