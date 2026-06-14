@@ -80,7 +80,15 @@ function mockInteraction(opts = {}) {
       channels: { cache: new Map() },
       roles: { cache: new Map(), create: async () => ({ id: 'role1' }) },
     },
+    client: {
+      user: {
+        displayAvatarURL: () => ''
+      }
+    },
     channelId: 'chan1',
+    channel: {
+      send: async (p) => { cap.channelSend = p; return p; }
+    },
     message: { edit: async (p) => { cap.messageEdit = p; return p; }, delete: async () => {} },
     fields: { getTextInputValue: (k) => (opts.fields && opts.fields[k]) || '' },
     replied: false, deferred: false,
