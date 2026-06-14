@@ -10,5 +10,13 @@
   "language": {
     "success": "Bahasa berhasil diubah ke **Bahasa Indonesia**! 🇮🇩",
     "invalid": "Pilihan bahasa tidak valid!"
+  },
+  "game_consent": {
+    "title": "🎮 Persetujuan Ketentuan Bermain",
+    "desc": "Sebelum menggunakan fitur game (**Pet, Farming, Fishing, Pokemon Card, Casino, Arena, Dungeon, dll.**), kamu harus menyetujui Ketentuan Bermain.\n\nDengan menyetujui, kamu setuju untuk bermain secara adil, mematuhi peraturan komunitas, dan menyetujui penyimpanan data progres game milikmu.\n\nApakah kamu menyetujui?",
+    "agree": "Setuju",
+    "disagree": "Tidak",
+    "success": "Terima kasih! Kamu sekarang bisa menggunakan semua fitur game di bot ini. Selamat bermain! 🎉",
+    "declined": "Kamu menolak persetujuan. Fitur ekonomi tetap bisa digunakan, tetapi fitur game terkunci sampai kamu menyetujuinya."
   }
 }

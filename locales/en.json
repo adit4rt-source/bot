@@ -10,5 +10,13 @@
   "language": {
     "success": "Language successfully changed to **English**! 🇬🇧",
     "invalid": "Invalid language selection!"
+  },
+  "game_consent": {
+    "title": "🎮 Game Terms Agreement",
+    "desc": "Before using any game features (**Pet, Farming, Fishing, Pokemon Cards, Casino, Arena, Dungeon, etc.**), you must agree to the Game Terms.\n\nBy agreeing, you agree to play fairly, follow community guidelines, and allow the storage of your game progression data.\n\nDo you agree?",
+    "agree": "Agree",
+    "disagree": "Disagree",
+    "success": "Thank you! You can now access all game features on this bot. Have fun! 🎉",
+    "declined": "You declined the agreement. Economy features remain accessible, but game features are locked until you agree in the future."
   }
 }

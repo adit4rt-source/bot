@@ -34,7 +34,8 @@ function runGlobalMigration(db) {
                 level INTEGER DEFAULT 0,
                 balance INTEGER DEFAULT 0,
                 lastDaily TEXT,
-                locale TEXT DEFAULT 'id'
+                locale TEXT DEFAULT 'id',
+                game_consent INTEGER DEFAULT 0
             );
             
             -- Global User Stats (no guildId)
@@ -211,13 +212,14 @@ function runGlobalMigration(db) {
         // Migrate users - aggregate best data per user
         console.log('  → Migrating users...');
         db.exec(`
-            INSERT OR IGNORE INTO users_global (userId, xp, level, balance, lastDaily, locale)
+            INSERT OR IGNORE INTO users_global (userId, xp, level, balance, lastDaily, locale, game_consent)
             SELECT userId, 
                    MAX(xp) as xp, 
                    MAX(level) as level, 
                    MAX(balance) as balance,
                    lastDaily,
-                   COALESCE(MAX(locale), 'id') as locale
+                   COALESCE(MAX(locale), 'id') as locale,
+                   COALESCE(MAX(game_consent), 0) as game_consent
             FROM users
             GROUP BY userId
         `);

@@ -1006,4 +1006,133 @@ module.exports = function register() {
     const msg = i18n.t(g, u, 'test_fallback');
     if (msg !== 'Ini fallback') throw new Error('Expected fallback to Indonesian, got ' + msg);
   });
+
+  // ---- Game Terms Consent Gating ----
+  const consent = botRequire('systems/consent.js');
+  const notif = botRequire('systems/notifications.js');
+  test('consent: hasGameConsent defaults false and is updated by setGameConsent', () => {
+    const g = 'CONSENT_G1', u = 'CONSENT_U1';
+    db.getOrCreateUser(g, u);
+    // 1. Initial consent must be false
+    if (consent.hasGameConsent(g, u)) throw new Error('consent should default to false');
+
+    // 2. Set to true
+    consent.setGameConsent(g, u, true);
+    if (!consent.hasGameConsent(g, u)) throw new Error('consent should be true after set');
+
+    // 3. Set to false
+    consent.setGameConsent(g, u, false);
+    if (consent.hasGameConsent(g, u)) throw new Error('consent should be false after setting back');
+  });
+
+  test('consent: handles consent button interactions correctly', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G2', u = 'CONSENT_U2';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Test yes button
+    const itYes = mockInteraction({
+      userId: u, guildId: g,
+      customId: `gameconsent_yes_${u}`
+    });
+    itYes.isButton = () => true;
+    itYes.isChatInputCommand = () => false;
+    
+    await handleInteractionCreate(itYes);
+    if (!consent.hasGameConsent(g, u)) throw new Error('yes button should grant consent');
+    if (!itYes._cap.update || !itYes._cap.update.content.includes('Selamat bermain') && !itYes._cap.update.content.includes('Have fun')) {
+      throw new Error('yes button should update with success message, got: ' + JSON.stringify(itYes._cap.update));
+    }
+
+    // Test no button
+    const itNo = mockInteraction({
+      userId: u, guildId: g,
+      customId: `gameconsent_no_${u}`
+    });
+    itNo.isButton = () => true;
+    itNo.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itNo);
+    if (consent.hasGameConsent(g, u)) throw new Error('no button should revoke consent');
+    if (!itNo._cap.update || !itNo._cap.update.content.includes('terkunci') && !itNo._cap.update.content.includes('locked')) {
+      throw new Error('no button should update with declined message');
+    }
+  });
+
+  test('consent: command gating blocks gated commands and allows economy commands', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G3', u = 'CONSENT_U3';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Command that is gated (e.g. /fishing)
+    const itGated = mockInteraction({
+      userId: u, guildId: g,
+      customId: 'fishing'
+    });
+    itGated.isButton = () => false;
+    itGated.isChatInputCommand = () => true;
+    itGated.commandName = 'fishing';
+    itGated.options = { getSubcommand: () => null, getSubcommandGroup: () => null };
+
+    // Initially, user has no consent, so calling /fishing should prompt with consent embeds
+    await handleInteractionCreate(itGated);
+    if (!itGated._cap.reply || !itGated._cap.reply.embeds || !itGated._cap.reply.embeds[0].data.title.includes('Persetujuan') && !itGated._cap.reply.embeds[0].data.title.includes('Agreement')) {
+      throw new Error('gated command should reply with consent prompt');
+    }
+
+    // Command that is NOT gated (e.g. /wallet)
+    const itNonGated = mockInteraction({
+      userId: u, guildId: g,
+      customId: 'wallet'
+    });
+    itNonGated.isButton = () => false;
+    itNonGated.isChatInputCommand = () => true;
+    itNonGated.commandName = 'wallet';
+    itNonGated.options = { getSubcommand: () => null, getSubcommandGroup: () => null };
+
+    await handleInteractionCreate(itNonGated);
+    // Should bypass gate and not reply with consent prompt
+    if (itNonGated._cap.reply && itNonGated._cap.reply.embeds && itNonGated._cap.reply.embeds[0].data.title && (itNonGated._cap.reply.embeds[0].data.title.includes('Persetujuan') || itNonGated._cap.reply.embeds[0].data.title.includes('Agreement'))) {
+      throw new Error('non-gated command should not be blocked');
+    }
+  });
+
+  test('consent: interactive components are gated by consent', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G4', u = 'CONSENT_U4';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Interaction that is gated (e.g. clicking /fish_cast_ button)
+    const itGatedBtn = mockInteraction({
+      userId: u, guildId: g,
+      customId: `fish_cast_${u}`
+    });
+    itGatedBtn.isButton = () => true;
+    itGatedBtn.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itGatedBtn);
+    if (!itGatedBtn._cap.reply || !itGatedBtn._cap.reply.embeds || !itGatedBtn._cap.reply.embeds[0].data.title.includes('Persetujuan') && !itGatedBtn._cap.reply.embeds[0].data.title.includes('Agreement')) {
+      throw new Error('gated interaction should reply with consent prompt');
+    }
+
+    // Grant consent
+    consent.setGameConsent(g, u, true);
+
+    // Call gated interaction again
+    const itGatedBtnAfter = mockInteraction({
+      userId: u, guildId: g,
+      customId: `fish_cast_${u}`
+    });
+    itGatedBtnAfter.isButton = () => true;
+    itGatedBtnAfter.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itGatedBtnAfter);
+    // Should bypass and be handled by normal fishing (e.g. cooldown/fail or cast success, but NOT consent prompt)
+    if (itGatedBtnAfter._cap.reply && itGatedBtnAfter._cap.reply.embeds && itGatedBtnAfter._cap.reply.embeds[0].data.title && (itGatedBtnAfter._cap.reply.embeds[0].data.title.includes('Persetujuan') || itGatedBtnAfter._cap.reply.embeds[0].data.title.includes('Agreement'))) {
+      throw new Error('gated interaction should proceed normally when consent is granted');
+    }
+  });
 };

@@ -48,6 +48,7 @@ const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } 
 const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const i18n = require('../systems/i18n');
+const consent = require('../systems/consent');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getFishingCooldown } = require('../systems/fishing');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty } = require('../systems/farming');
 const { updateQuestProgress, getOrCreateWeeklyQuests, getWeekId, checkDailyQuestStreak, DIFFICULTY_TIERS } = require('../systems/quests');
@@ -133,6 +134,11 @@ async function routeInteraction(interaction) {
         if (!wasDmAsked(guildId, interaction.user.id)) {
             markDmAsked(guildId, interaction.user.id);
             return interaction.reply(buildConsentPrompt(interaction.user.id));
+        }
+
+        // === GAME CONSENT (opt-in) ===
+        if (consent.isGatedGameCommand(command) && !consent.hasGameConsent(guildId, interaction.user.id)) {
+            return interaction.reply({ ...consent.buildGameConsentPrompt(guildId, interaction.user.id), ephemeral: true });
         }
 
         // === WELCOME / JOIN SERVER PROMPT (once per guild, first command usage) ===
@@ -958,6 +964,10 @@ async function routeInteraction(interaction) {
 
     }
 
+    // === GAME CONSENT GATE FOR INTERACTIONS ===
+    if (interaction.customId && consent.isGatedGameInteraction(interaction.customId) && !consent.hasGameConsent(guildId, interaction.user.id)) {
+        return interaction.reply({ ...consent.buildGameConsentPrompt(guildId, interaction.user.id), ephemeral: true });
+    }
 
     // ================= USER SELECT MENU HANDLERS =================
     // UserSelectMenu is distinct from StringSelectMenu in discord.js v14.
@@ -1526,6 +1536,22 @@ async function routeInteraction(interaction) {
         // --- TEMPVOICE PANEL BUTTONS ---
         if (isTempvoicePanelButton(interaction.customId)) {
             return handleTempvoiceButton(interaction);
+        }
+
+        // --- GAME TERMS CONSENT BUTTONS ---
+        if (interaction.customId.startsWith('gameconsent_')) {
+            const parts = interaction.customId.split('_'); // gameconsent_yes_<id> | gameconsent_no_<id>
+            const choice = parts[1];
+            const targetUserId = parts.slice(2).join('_');
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu! / This is not your panel!', ephemeral: true });
+            if (choice === 'yes') {
+                consent.setGameConsent(guildId, targetUserId, true);
+                const msg = i18n.t(guildId, targetUserId, 'game_consent.success');
+                return interaction.update({ content: msg, embeds: [], components: [] });
+            }
+            consent.setGameConsent(guildId, targetUserId, false);
+            const msg = i18n.t(guildId, targetUserId, 'game_consent.declined');
+            return interaction.update({ content: msg, embeds: [], components: [] });
         }
 
         // --- NOTIFICATION TOGGLE BUTTONS ---

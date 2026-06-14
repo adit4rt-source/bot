@@ -68,7 +68,7 @@ function mockInteraction(opts = {}) {
     displayAvatarURL: () => '',
     voice: { channel: null },
   };
-  return {
+  const it = {
     customId: opts.customId,
     values: opts.values,
     user: member.user,
@@ -85,17 +85,18 @@ function mockInteraction(opts = {}) {
     fields: { getTextInputValue: (k) => (opts.fields && opts.fields[k]) || '' },
     replied: false, deferred: false,
     showModal: async (m) => { cap.modal = m; return m; },
-    update: async (p) => { cap.update = p; return p; },
-    reply: async (p) => { cap.reply = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
+    update: async (p) => { it.replied = true; cap.update = p; return p; },
+    reply: async (p) => { it.replied = true; cap.reply = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
     followUp: async (p) => { cap.followUp = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
-    deferReply: async () => { cap.deferred = true; },
-    deferUpdate: async () => { cap.deferred = true; },
+    deferReply: async () => { it.deferred = true; cap.deferred = true; },
+    deferUpdate: async () => { it.deferred = true; cap.deferred = true; },
     editReply: async (p) => { cap.editReply = p; return p; },
     isButton: () => true, isAnySelectMenu: () => false, isUserSelectMenu: () => false,
     isStringSelectMenu: () => false, isModalSubmit: () => false,
     isChatInputCommand: () => false, isAutocomplete: () => false,
     _cap: cap,
   };
+  return it;
 }
 
 module.exports = { botRequire, test, assert, finish, mockInteraction, _state };

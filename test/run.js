@@ -23,8 +23,8 @@ process.chdir(tmp);
   const { DatabaseSync } = require('node:sqlite');
   const d = new DatabaseSync(path.join(tmp, 'economy.sqlite'));
   // Minimal global-schema users + the marker table checkGlobalMode/migration look for.
-  d.exec(`CREATE TABLE IF NOT EXISTS users (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id');`);
-  d.exec(`CREATE TABLE IF NOT EXISTS users_global (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id');`);
+  d.exec(`CREATE TABLE IF NOT EXISTS users (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id', game_consent INTEGER DEFAULT 0);`);
+  d.exec(`CREATE TABLE IF NOT EXISTS users_global (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id', game_consent INTEGER DEFAULT 0);`);
   d.close();
 })();
 
