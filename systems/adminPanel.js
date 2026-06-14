@@ -1,7 +1,8 @@
 // systems/adminPanel.js - Admin Panel UI System (Button-based admin controls)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
-const { db, getOrCreateUser, getSetting, checkGlobalMode } = require('../database');
+const { db, getOrCreateUser, getSetting, setSetting, checkGlobalMode } = require('../database');
 const fs = require('fs');
+const { FEATURES, PAGE_SIZE, isFeatureEnabled, toggleFeature } = require('./featureGate');
 const path = require('path');
 
 // Voucher scope: bot berjalan GLOBAL (ekonomi lintas server), jadi voucher juga
@@ -69,6 +70,10 @@ function buildAdminPanel(guildId) {
     const streakOn = getSetting(guildId, 'streak_enabled', '1') !== '0';
     const loveOn = getSetting(guildId, 'love_enabled', '1') !== '0';
 
+    // Feature toggle summary
+    const enabledCount = FEATURES.filter(f => isFeatureEnabled(guildId, f.key)).length;
+    const featureSummary = `🎛️ Features: **${enabledCount}/${FEATURES.length}** aktif`;
+
     const embed = new EmbedBuilder()
         .setTitle('🛡️ ADMIN PANEL')
         .setColor('#2B2D31')
@@ -76,8 +81,8 @@ function buildAdminPanel(guildId) {
             `Selamat datang di panel admin! Pilih kategori:\n\n` +
             `**🚀 QUICK SETUP** *(baru pakai bot? mulai di sini!)*\n` +
             `> ⚙️ Setting — Channel, toggle fitur, streak\n` +
+            `> 🎛️ Features — ON/OFF fitur bot per server\n` +
             `> 📢 Notif — Auto-buat channel notifikasi\n` +
-            `> 🎙️ TempVoice — Setup voice privat\n` +
             `> 🎫 Ticket — Setup support ticket\n\n` +
             `**💰 EKONOMI & GAME**\n` +
             `> 🛒 Shop — Tambah role/item/voucher\n` +
@@ -91,7 +96,7 @@ function buildAdminPanel(guildId) {
             `> 📊 Analytics — Stats pemakaian\n` +
             `> 🚫 Blacklist — Block user\n` +
             `> 🔧 DB Tools — Restore data\n\n` +
-            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${loveOn ? '❤️ Love ✅' : '❤️ Love ❌'}`
+            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${loveOn ? '❤️ Love ✅' : '❤️ Love ❌'} | ${featureSummary}`
         )
         .setFooter({ text: '💡 Baru pertama? Klik ⚙️ Setting untuk setup awal' })
         .setTimestamp();
@@ -99,8 +104,8 @@ function buildAdminPanel(guildId) {
     // Row 1: Quick Setup (paling penting untuk admin baru)
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_setting').setLabel('⚙️ Setting').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('📢 Notif Setup').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('🎙️ TempVoice').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Success)
     );
     // Row 2: Economy & Game
@@ -375,6 +380,55 @@ function buildNotificationsSubPanel() {
     return { embeds: [embed], components: [row] };
 }
 
+// ============ BUILD: Feature Toggle sub-panel ============
+function buildFeatureTogglePanel(guildId, page = 0) {
+    const totalPages = Math.ceil(FEATURES.length / PAGE_SIZE);
+    if (page < 0) page = 0;
+    if (page >= totalPages) page = totalPages - 1;
+    const start = page * PAGE_SIZE;
+    const pageFeatures = FEATURES.slice(start, start + PAGE_SIZE);
+
+    let desc = `Klik tombol untuk **ON/OFF** fitur di server ini.\nFitur yang di-OFF tidak bisa dipakai oleh semua member.\n\n`;
+    for (const f of pageFeatures) {
+        const on = isFeatureEnabled(guildId, f.key);
+        desc += `> ${f.emoji} **${f.label}** — ${on ? '✅ ON' : '❌ OFF'}\n>  ┗ *${f.desc}*\n`;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle(`🎛️ FEATURE TOGGLE — Page ${page + 1}/${totalPages}`)
+        .setColor('#5865F2')
+        .setDescription(desc)
+        .setFooter({ text: `${FEATURES.filter(f => isFeatureEnabled(guildId, f.key)).length}/${FEATURES.length} fitur aktif • Klik tombol untuk toggle` });
+
+    // Build toggle buttons (max 5 per row, up to 2 rows = 10 buttons, but we use 8)
+    const rows = [];
+    const btnRow1 = new ActionRowBuilder();
+    const btnRow2 = new ActionRowBuilder();
+    pageFeatures.forEach((f, i) => {
+        const on = isFeatureEnabled(guildId, f.key);
+        const btn = new ButtonBuilder()
+            .setCustomId(`admpnl_ftoggle_${f.key}_${page}`)
+            .setLabel(`${f.emoji} ${f.label}`)
+            .setStyle(on ? ButtonStyle.Success : ButtonStyle.Danger);
+        if (i < 4) btnRow1.addComponents(btn);
+        else btnRow2.addComponents(btn);
+    });
+    if (btnRow1.components.length > 0) rows.push(btnRow1);
+    if (btnRow2.components.length > 0) rows.push(btnRow2);
+
+    // Navigation row
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_prev_${page}`).setLabel('◀️ Prev').setStyle(ButtonStyle.Secondary).setDisabled(page <= 0),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_next_${page}`).setLabel('Next ▶️').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_allon`).setLabel('✅ All ON').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_alloff`).setLabel('❌ All OFF').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+    rows.push(navRow);
+
+    return { embeds: [embed], components: rows };
+}
+
 // ============ BUILD: TempVoice sub-panel ============
 function buildTempVoiceSubPanel() {
     const embed = new EmbedBuilder()
@@ -429,6 +483,7 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_setting') return interaction.update(buildSettingSubPanel(guildId));
     if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
     if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
+    if (customId === 'admpnl_features') return interaction.update(buildFeatureTogglePanel(guildId, 0));
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
 
     // === TICKET SUB-PANEL ===
@@ -466,6 +521,36 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
+    // === FEATURE TOGGLE BUTTONS ===
+    if (customId.startsWith('admpnl_ftoggle_')) {
+        const parts = customId.replace('admpnl_ftoggle_', '').split('_');
+        // Navigation: prev/next
+        if (parts[0] === 'prev') {
+            const curPage = parseInt(parts[1]) || 0;
+            return interaction.update(buildFeatureTogglePanel(guildId, curPage - 1));
+        }
+        if (parts[0] === 'next') {
+            const curPage = parseInt(parts[1]) || 0;
+            return interaction.update(buildFeatureTogglePanel(guildId, curPage + 1));
+        }
+        // All ON / All OFF
+        if (parts[0] === 'allon') {
+            for (const f of FEATURES) setSetting(guildId, f.key, '1');
+            return interaction.update(buildFeatureTogglePanel(guildId, 0));
+        }
+        if (parts[0] === 'alloff') {
+            for (const f of FEATURES) setSetting(guildId, f.key, '0');
+            return interaction.update(buildFeatureTogglePanel(guildId, 0));
+        }
+        // Individual toggle: admpnl_ftoggle_feature_KEY_PAGE
+        const page = parseInt(parts[parts.length - 1]) || 0;
+        const featureKey = parts.slice(0, -1).join('_'); // rejoin in case key has underscores
+        const newState = toggleFeature(guildId, featureKey);
+        const fDef = FEATURES.find(f => f.key === featureKey);
+        // Update panel in-place
+        return interaction.update(buildFeatureTogglePanel(guildId, page));
+    }
+
     if (customId === 'admpnl_blacklist') return interaction.update(buildBlacklistSubPanel(guildId));
     if (customId === 'admpnl_customembed') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_customembed').setTitle('🏷️ Custom Embed');

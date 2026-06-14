@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMen
 const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt, replyTemp } = require('../utils');
 const state = require('../state');
+const { isFeatureEnabled, getFeatureKeyForCommand, getFeatureDef, getDisabledMessage, getFeatureKeyForInteraction } = require('../systems/featureGate');
 const { ACHIEVEMENTS, checkAchievements, getAchievementProgress } = require('../systems/achievements');
 const { addComboFeature, getComboMultiplier } = require('../systems/combo');
 const { getContestState, startFishContest, addContestEntry, getContestLeaderboard } = require('../systems/contest');
@@ -119,6 +120,13 @@ async function routeInteraction(interaction) {
         const userData = getOrCreateUser(guildId, interaction.user.id);
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
+        // === FEATURE GATE: check if the command's feature is enabled ===
+        const featureKey = getFeatureKeyForCommand(command);
+        if (featureKey && !isFeatureEnabled(guildId, featureKey)) {
+            const fDef = getFeatureDef(featureKey);
+            return replyTemp(interaction, getDisabledMessage(fDef ? fDef.label : command));
+        }
+
         // === DM CONSENT (opt-in) — asked once, before first real use ===
         // Players must explicitly allow DMs; otherwise the bot never DMs them.
         if (!wasDmAsked(guildId, interaction.user.id)) {
@@ -159,9 +167,9 @@ async function routeInteraction(interaction) {
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
                 { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel lengkap\n> 13 Rod tier | 12 Bait | 8+ Lokasi | Giant Fish | Sea Monsters`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING & PETERNAKAN** (`/farm`)', inline: false },
-                { name: '\u200b', value: `> \`/farm\` — 🌾 Farm Hub Panel\n> 🌱 **Tanaman** — Plant, Water, Harvest (30 jenis)\n> 🐔 **Kandang Ayam** — Ternak ayam, collect telur\n> 🐄 **Peternakan** — Sapi (susu) + Domba (bulu)\n> 🧪 **Crafting** — 36 resep gabungan\n> 📦 **Storage** — Semua item terkumpul\n> 🌦️ Season berubah setiap hari (efek ke produksi)`, inline: false },
+                { name: '\u200b', value: `> \`/farm\` — 🌾 Farm Hub Panel\n> 🌱 **Tanaman** — Plant, Water, Harvest (30 jenis)\n> 🐔 **Kandang Ayam** — Ternak ayam, collect telur\n> 🐄 **Peternakan** — Sapi (susu) + Domba (bulu)\n> 🧪 **Crafting** — 36 resep gabungan\n> 📦 **Storage** — Semua item terkumpul\n> 🌦️ Season & Cuaca dinamis (efek ke produksi & harga pasar)`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
-                { name: '\u200b', value: `> \`/pet\` — 🐾 Pet Panel (95+ pet)\n> Feed, Play, Hunt, Dungeon, Boss, Fusion, Evolve\n> \`/battle @user\` — ⚔️ PvP auto-battle\n> \`/expedition\` — 🌊 Kirim pet ekspedisi\n> \`/worldboss\` — 🗺️ Boss global`, inline: false },
+                { name: '\u200b', value: `> \`/pet\` — 🐾 Pet Panel (95+ pet)\n> Feed, Play, Hunt, Dungeon, Boss, Fusion, Evolve, Cook, Sockets\n> \`/battle @user\` — ⚔️ PvP auto-battle\n> \`/expedition\` — 🌊 Kirim pet ekspedisi\n> \`/worldboss\` — 🗺️ Boss global`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & QUEST**', inline: false },
                 { name: '\u200b', value: `> \`/profile\` — 📋 Profil, Achievement, Stats\n> \`/quest\` — 📜 Daily & Weekly Quest\n> \`/levelpanel\` — 🌟 Level, Rank, Rewards\n> \`/stats\` — 📊 Statistics Dashboard\n> \`/leaderboard\` — 🏆 Ranking pemain`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🔧 **SERVER TOOLS**', inline: false },
@@ -984,6 +992,13 @@ async function routeInteraction(interaction) {
 
     // ================= SELECT MENU HANDLERS =================
     if (interaction.isStringSelectMenu()) {
+        // === FEATURE GATE for select menu components ===
+        const selFeatureKey = getFeatureKeyForInteraction(interaction.customId);
+        if (selFeatureKey && !isFeatureEnabled(guildId, selFeatureKey)) {
+            const fDef = getFeatureDef(selFeatureKey);
+            return interaction.reply({ content: getDisabledMessage(fDef ? fDef.label : 'ini'), ephemeral: true });
+        }
+
         // --- SELF-ROLES: public role picker (any member) ---
         if (isSelfRolePublicPick(interaction.customId)) {
             return handleSelfRolePick(interaction);
@@ -1216,6 +1231,13 @@ async function routeInteraction(interaction) {
 
     // ================= BUTTON HANDLERS =================
     if (interaction.isButton()) {
+        // === FEATURE GATE for interactive components ===
+        const btnFeatureKey = getFeatureKeyForInteraction(interaction.customId);
+        if (btnFeatureKey && !isFeatureEnabled(guildId, btnFeatureKey)) {
+            const fDef = getFeatureDef(btnFeatureKey);
+            return interaction.reply({ content: getDisabledMessage(fDef ? fDef.label : 'ini'), ephemeral: true });
+        }
+
         // --- QR CODE SIZE BUTTONS ---
         if (interaction.customId.startsWith('qr_')) {
             const { isQrButton, handleQrButton } = require('../systems/qrcode');
@@ -1768,8 +1790,14 @@ async function routeInteraction(interaction) {
     }
 
 
-    // ================= MODAL HANDLERS =================
+    // ================= MODAL SUBMIT HANDLERS =================
     if (interaction.isModalSubmit()) {
+        // === FEATURE GATE for modal components ===
+        const modFeatureKey = getFeatureKeyForInteraction(interaction.customId);
+        if (modFeatureKey && !isFeatureEnabled(guildId, modFeatureKey)) {
+            const fDef = getFeatureDef(modFeatureKey);
+            return interaction.reply({ content: getDisabledMessage(fDef ? fDef.label : 'ini'), ephemeral: true });
+        }
         if (isAuctionModal(interaction.customId)) {
             return handleAuctionModal(interaction);
         }

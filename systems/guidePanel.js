@@ -153,9 +153,43 @@ const SECTIONS = {
             `> ★ +15% · ★★ +30% · ★★★ +50% · ★★★★ +75% · ★★★★★ **+100%**\n` +
             `> Skill & ability tetap. Butuh money + material langka.`
     },
+    farming: {
+        label: '🌾 Tani & Cuaca',
+        title: '🌾 Pertanian, Cuaca & Musim',
+        body:
+            `**🌦️ Cuaca & Musim** berpengaruh besar ke pertanian dan pancingan!\n\n` +
+            `${DIV}\n**📈 Fluktuasi Harga Pasar**\n` +
+            `> Harga benih & tanaman naik-turun berdasarkan musim/cuaca hari itu.\n` +
+            `> Contoh: Musim Dingin (Winter) meningkatkan harga tanaman pangan +30%.\n` +
+            `> Kekeringan (Drought) atau Badai meningkatkan harga +20%.\n` +
+            `> Gunakan fluktuasi ini untuk menjual hasil panen di harga puncak!\n\n` +
+            `${DIV}\n**🌧️ Efek Cuaca pada Pancing**\n` +
+            `> 🌧️ Hujan / Badai: Cooldown memancing dipotong **15%**.\n` +
+            `> 🌩️ Badai (Stormy): Kemunculan Sea Monster meningkat **2x lipat**.\n\n` +
+            `${DIV}\n**🛡️ Proteksi Hama (Pest Shield)**\n` +
+            `> Hama bisa menyerang lahan dan mengurangi hasil panen.\n` +
+            `> Konsumsi 🥗 **Veggie Salad** untuk melindungi lahan selama **6 jam**.`
+    },
+    cooking: {
+        label: '🍳 Masak & Gem',
+        title: '🍳 Cooking Hub & Relic Socketing',
+        body:
+            `Manfaatkan bahan mentah dan sisa material untuk memperkuat pet aktifmu!\n\n` +
+            `${DIV}\n**🍳 Cooking Hub (Menu Masak)**\n` +
+            `> Akses melalui \`/pet\` → tombol 🍳 **Cook**.\n` +
+            `> Masak bahan makanan dari storage menjadi hidangan berguna:\n` +
+            `> 🥞 **Pancake** (2 Gandum + 1 Telur + 1 Susu) → 100% pulihkan lapar & senang pet.\n` +
+            `> 🍜 **Spicy Fish Soup** (1 Rare Fish + 2 Pestisida) → +10% ATK pet (1 jam).\n` +
+            `> 🥗 **Veggie Salad** (3 Wortel + 2 Kentang) → Kebal hama pertanian (6 jam).\n\n` +
+            `${DIV}\n**🧬 Relic Gem Socketing**\n` +
+            `> Relic tier Epic ke atas memiliki slot untuk dipasang permata:\n` +
+            `> 🟣 **Epic**: 1 Slot | 🟡 **Legendary**: 2 Slot | 🔴 **Mythic/God**: 3 Slot.\n` +
+            `> Pasang permata (\`dna_shard\`, \`mutation_serum\`, dll) untuk stat HP/ATK/DEF/SPD/CRIT.\n` +
+            `> Cabut permata kapan saja tanpa biaya untuk mengembalikannya ke tas.`
+    },
 };
 
-const SECTION_ORDER = ['overview', 'care', 'battle', 'activity', 'progress', 'card', 'arena'];
+const SECTION_ORDER = ['overview', 'care', 'battle', 'activity', 'progress', 'card', 'arena', 'farming', 'cooking'];
 
 // ==================== BUILD PANEL ====================
 function buildGuidePanel(userId, section = 'overview') {

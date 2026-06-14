@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 129, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 132, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -167,6 +167,10 @@ const ACHIEVEMENTS = [
     { id: 'arena_win_50', name: 'Arena Champion', emoji: '🏆', desc: 'Menang 50 pertarungan Arena', category: 'Battle', reward: 3000 },
     // --- LIVESTOCK ---
     { id: 'livestock_first', name: 'Peternak Pemula', emoji: '🐄', desc: 'Punya ternak pertama', category: 'Farming', reward: 100 },
+    // --- COOKING & RELIC SOCKET ---
+    { id: 'cook_first', name: 'Asisten Dapur', emoji: '🍳', desc: 'Pertama kali memasak hidangan di Cooking Hub', category: 'Farming', reward: 200 },
+    { id: 'cook_10', name: 'Kopi & Roti', emoji: '👨‍🍳', desc: 'Masak 10 hidangan di Cooking Hub', category: 'Farming', reward: 1000 },
+    { id: 'relic_socket_first', name: 'Relic Artificer', emoji: '💠', desc: 'Soket permata pertama ke Relic', category: 'Battle', reward: 500 },
 
 ];
 
@@ -391,6 +395,17 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'arena') { const w = getUserStat(guildId, userId, 'arena_wins'); const t = (getUserStat(guildId, userId, 'arena_wins') || 0) + (getUserStat(guildId, userId, 'arena_losses') || 0); if (t >= 1) checks.push('arena_first'); if (w >= 10) checks.push('arena_win_10'); if (w >= 50) checks.push('arena_win_50'); }
     // --- LIVESTOCK ---
     if (context.type === 'livestock') { checks.push('livestock_first'); }
+    // --- COOKING ---
+    if (context.type === 'cook') {
+        const c = getUserStat(guildId, userId, 'total_cooked');
+        if (c >= 1) checks.push('cook_first');
+        if (c >= 10) checks.push('cook_10');
+    }
+    // --- RELIC SOCKET ---
+    if (context.type === 'relic_socket') {
+        const c = getUserStat(guildId, userId, 'relic_gems_socketed');
+        if (c >= 1) checks.push('relic_socket_first');
+    }
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
@@ -433,6 +448,8 @@ const ACH_PROGRESS = {
     card_first: { stat: 'cards_grabbed', target: 1 }, card_25: { special: 'totalCards', target: 25 }, card_100: { special: 'totalCards', target: 100 },
     arena_first: { special: 'arenaFights', target: 1 }, arena_win_10: { stat: 'arena_wins', target: 10 }, arena_win_50: { stat: 'arena_wins', target: 50 },
     livestock_first: { special: 'livestock', target: 1 },
+    cook_first: { stat: 'total_cooked', target: 1 }, cook_10: { stat: 'total_cooked', target: 10 },
+    relic_socket_first: { stat: 'relic_gems_socketed', target: 1 },
 };
 
 // Returns { raw, current, target } for a countable achievement, or null.

@@ -4,8 +4,8 @@ const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
 const UPDATE_CHANNEL_ID = '1510705567944151150';
-const CURRENT_VERSION = '3.7.0';
-const RELEASE_DATE = '2026-06-11';
+const CURRENT_VERSION = '3.8.0';
+const RELEASE_DATE = '2026-06-13';
 
 // Ensure table
 try { db.exec(`CREATE TABLE IF NOT EXISTS bot_updates (version TEXT PRIMARY KEY, sentAt INTEGER)`); } catch (_) {}
@@ -37,63 +37,56 @@ async function sendUpdateAnnouncement(client) {
             .setTitle(`🎉 MAJOR UPDATE — v${CURRENT_VERSION}`)
             .setDescription(
                 `**Release ${CURRENT_VERSION}** — ${RELEASE_DATE}\n\n` +
-                `Update besar! Sistem kartu Pokemon TCG & perbaikan fishing.\n` +
+                `Update besar! Sistem Cooking Hub & Relic Socketing untuk Pet kamu.\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp();
 
         const embed2 = new EmbedBuilder()
             .setColor('#E74C3C')
-            .setTitle('🃏 Pokemon TCG Card System (BARU!)')
+            .setTitle('🍳 Cooking Hub (BARU!)')
             .setDescription(
-                `Koleksi kartu Pokemon asli dari database **20,359 kartu** HD!\nDari generasi pertama sampai terbaru — semua ada.\n\n` +
-                `**🎴 Gacha Packs (beli dari /card):**\n` +
-                `> 🟢 **Basic Pack** — 3 kartu (💰 15.000) ⏱️ 5m CD\n` +
-                `>    Pool: Common, Uncommon, Rare\n` +
-                `> 🔵 **Premium Pack** — 3 kartu (💰 75.000) ⏱️ 15m CD\n` +
-                `>    Pool: Rare, Rare Holo, Holo EX/GX/V\n` +
-                `> 🟣 **Ultra Pack** — 3 kartu (💰 200.000) ⏱️ 30m CD\n` +
-                `>    Pool: Rare Holo, Ultra, Rainbow, Secret\n` +
-                `> 💎 **Master Pack** — **10 kartu** (💰 750.000) ⏱️ 60m CD\n` +
-                `>    Pool: SEMUA rarity + guaranteed 1 Ultra+!\n\n` +
-                `**📊 Rarity (jumlah kartu):**\n` +
-                `> ⚪ Common (5,289) | 🟢 Uncommon (4,862)\n` +
-                `> 🔵 Rare (8,600) | 🟣 Rare Holo (2,695)\n` +
-                `> 🟡 Holo EX/GX/V (764) | 🔴 Ultra (798)\n` +
-                `> 🌈 Rainbow (324) | 👑 Secret (325) | 🎨 Illustration (697)`
+                `Masak bahan makanan dari storage menjadi hidangan berguna!\nAkses via \`/pet\` → 🍳 **Cook**.\n\n` +
+                `**Resep Tersedia:**\n` +
+                `> 🥞 **Pancake** (2 Gandum + 1 Telur + 1 Susu)\n` +
+                `>    *Memulihkan 100% Hunger & Happiness pet.*\n` +
+                `> 🍜 **Spicy Fish Soup** (1 Rare Fish + 2 Pestisida)\n` +
+                `>    *Buff Pet: +10% ATK selama 1 jam.*\n` +
+                `> 🥗 **Veggie Salad** (3 Wortel + 2 Kentang)\n` +
+                `>    *Proteksi Farm: Kebal serangan hama selama 6 jam.*\n`
             );
 
         const embed3 = new EmbedBuilder()
             .setColor('#FFD700')
-            .setTitle('✨ Fitur Card System')
+            .setTitle('🧬 Relic Gem Socketing')
             .setDescription(
-                `**📖 Collection Gallery:**\n` +
-                `> Tampilan card book premium (10 kartu/page)\n` +
-                `> Background gelap + gold border + rarity glow\n` +
-                `> Pagination ◀️ ▶️ untuk browse\n\n` +
-                `**🔄 Dupe Detection:** Kartu duplikat ditandai 🔄 DUPE\n` +
-                `**❤️ Wishlist:** Max 10 Pokemon, auto-ping saat muncul\n` +
-                `**🔄 Trade:** /trade → 🃏 Kartu (2-way, kedua setuju)\n` +
-                `**📊 Leaderboard:** Most Cards / Rare / Unique\n` +
-                `**💸 Total Spent:** Track pengeluaran di panel\n` +
-                `**⏱️ Cooldown:** 5m - 60m per pack tier`
+                `Perkuat Relic kamu dengan menyisipkan Permata!\nAkses via \`/pet\` → 📿 **Relic** → 🧬 **Socket**.\n\n` +
+                `**Slot Tersedia:**\n` +
+                `> 🟣 Epic: **1 Slot**\n` +
+                `> 🟡 Legendary: **2 Slot**\n` +
+                `> 🔴 Mythic / 👑 GOD: **3 Slot**\n\n` +
+                `**Efek Permata:**\n` +
+                `> 🧬 **DNA Shard**: +5% Max HP\n` +
+                `> 🧪 **Mutation Serum**: +5% ATK\n` +
+                `> 🪨 **Refine Stone**: +5% DEF\n` +
+                `> 🛡️ **Protection Stone**: +5% SPD\n` +
+                `> ✨ **Awakening Crystal**: +5% CRIT\n\n` +
+                `*Cabut permata kapan saja tanpa biaya untuk mengembalikannya ke tas.*`
             );
 
         const embed4 = new EmbedBuilder()
             .setColor('#3498DB')
-            .setTitle('🎣 Fishing — Rod Inventory & Equip')
+            .setTitle('🔧 Perbaikan & Update Lainnya')
             .setDescription(
                 `**🐛 Bug Fixed:**\n` +
-                `> ❌ Beli joran 2x → uang hilang — **SOLVED!**\n` +
-                `> ❌ Joran lama hilang saat beli baru — **SOLVED!**\n\n` +
-                `**🆕 Sistem Baru:**\n` +
-                `> 🎋 **Rod Inventory** — Joran tersimpan permanen\n` +
-                `> 🔄 **Equip/Unequip** — Ganti joran via /fishing → 🎋 Equip\n` +
-                `> ✅ Shop tampilkan "Owned" per joran\n` +
-                `> 🚫 Tidak bisa beli joran yang sudah punya\n\n` +
-                `-# Joran lama otomatis masuk inventory.`
+                `> ❌ SyntaxError \`finalCdSec\` di interactionCreate — **SOLVED!**\n\n` +
+                `**🆕 Fitur Lain:**\n` +
+                `> 🏆 **Achievement Baru:** First Cook, Chef (10x), Socket Master.\n` +
+                `> 📜 **Quest Baru:** Quest memasak (cook) & pasang gem (relic_socket).\n` +
+                `> 📖 **Guide Panel:** Update informasi Cooking & Farming di \`/guide\`.\n\n` +
+                `-# Selamat menikmati update terbaru!`
             )
-            .setFooter({ text: `Update oleh Peko • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
+            .setFooter({ text: `Update oleh Tim Dev • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
             .setTimestamp();
 
         await channel.send({ embeds: [embed1, embed2, embed3, embed4] });

@@ -238,7 +238,7 @@ function buildRelicSocketRelicsPanel(guildId, userId) {
             .setCustomId(`pet_relicsocket_select_${userId}`)
             .setPlaceholder('🧬 Pilih relic untuk di-socket...')
             .setMinValues(1).setMaxValues(1);
-        for (const r of socketable) {
+        for (const r of socketable.slice(0, 25)) {
             let gems = [];
             try { gems = JSON.parse(r.gems || '[]'); } catch(e) {}
             const cap = getRelicSocketCapacity(r.rarity);
@@ -845,6 +845,9 @@ async function handlePetButton(interaction) {
 
         // 3. Add result item
         addItem(guildId, userId, recipeId, 1);
+        incrementUserStat(guildId, userId, 'total_cooked', 1);
+        updateQuestProgress(guildId, userId, 'cook', 1);
+        await checkAchievements(interaction.guild, userId, { type: 'cook' });
 
         const msg = `Berhasil memasak ${recipe.emoji} **${recipe.name}**!`;
         return interaction.update(buildPetCookingPanel(guildId, userId, msg));
@@ -2062,6 +2065,10 @@ async function handlePetSelectMenu(interaction) {
         // 5. Update array and DB
         gems[socketIndexInt] = { gemId, stat };
         db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relic.id);
+
+        incrementUserStat(guildId, userId, 'relic_gems_socketed', 1);
+        updateQuestProgress(guildId, userId, 'relic_socket', 1);
+        await checkAchievements(interaction.guild, userId, { type: 'relic_socket' });
 
         const gemDef = GEM_STATS[gemId];
         const opt = gemDef ? gemDef.options.find(o => o.id === stat) : null;

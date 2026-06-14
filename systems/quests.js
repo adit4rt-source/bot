@@ -47,6 +47,8 @@ const QUEST_POOL = [
     { type: 'worldboss', descFn: (q) => `🗺️ Serang World Boss ${q.target} kali`, targetRange: { easy: [1,1], medium: [2,3], hard: [3,5] } },
     { type: 'card_gacha', descFn: (q) => `🃏 Buka ${q.target} pack kartu`, targetRange: { easy: [1,1], medium: [2,2], hard: [2,3] } },
     { type: 'arena', descFn: (q) => `⚔️ Bertarung di Arena ${q.target} kali`, targetRange: { easy: [2,3], medium: [3,5], hard: [5,8] } },
+    { type: 'cook', descFn: (q) => `🍳 Masak ${q.target} hidangan di Cooking Hub`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
+    { type: 'relic_socket', descFn: (q) => `🧬 Soket permata ke Relic`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
 ];
 
 // ================= DIFFICULTY TIERS =================

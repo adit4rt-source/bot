@@ -181,10 +181,21 @@ function buildFarmHub(guildId, userId, username) {
         return Date.now() - p.plantedAt >= growTime;
     }).length;
 
+    // Decoration display
+    const ownedDecos = getFarmDecorations(guildId, userId);
+    let decoDisplay = '';
+    if (ownedDecos.length > 0) {
+        decoDisplay = ownedDecos.map(d => {
+            const deco = FARM_DECORATIONS.find(dec => dec.id === d.decoId);
+            return deco ? deco.emoji : '';
+        }).filter(Boolean).join(' ') + '\n';
+    }
+
     const embed = new EmbedBuilder()
         .setTitle(`🌾 FARM — ${username}`)
         .setColor('#2ECC71')
         .setDescription(
+            (decoDisplay ? decoDisplay : '') +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `${season.emoji} **Season: ${season.name}**\n` +
             `> ${season.desc}\n\n` +
