@@ -11,7 +11,7 @@ const FEATURES = [
     { key: 'feature_fishing',      label: 'Fishing',       emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
     { key: 'feature_farming',      label: 'Farming',       emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
     { key: 'feature_pet',          label: 'Pet & Battle',  emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
-    { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel', commands: ['casino', 'blackjack', 'togel'] },
+    { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel, /rps, /horserace', commands: ['casino', 'blackjack', 'togel', 'rps', 'horserace'] },
     { key: 'feature_quest',        label: 'Quest',         emoji: '📜', desc: '/quest (daily & weekly)', commands: ['quest'] },
     { key: 'feature_arena',        label: 'Arena',         emoji: '⚔️', desc: '/arena', commands: ['arena'] },
     { key: 'feature_auction',      label: 'Auction',       emoji: '🏛️', desc: '/auction', commands: ['auction'] },
@@ -122,6 +122,8 @@ const INTERACTION_PREFIX_MAP = {
     'lottery_':        'feature_casino',
     'coinflip_':       'feature_casino',
     'slot_':           'feature_casino',
+    'rps_':            'feature_casino',
+    'hr_':             'feature_casino',
     // Quest
     'quest_':          'feature_quest',
     // Arena

@@ -1203,4 +1203,258 @@ module.exports = function register() {
       }
     });
   });
+
+  // ================= NEW MINI-GAMES: RPS & HORSE RACING =================
+
+  test('rps: challenger cannot challenge self', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'RPS_G1', challenger = '900001';
+    db.getOrCreateUser(g, challenger);
+    consent.setGameConsent(g, challenger, true);
+    notif.markDmAsked(g, challenger);
+
+    const it = mockInteraction({
+      userId: challenger, guildId: g,
+    });
+    it.isButton = () => false;
+    it.isChatInputCommand = () => true;
+    it.commandName = 'rps';
+    it.options = {
+      getSubcommand: () => null,
+      getSubcommandGroup: () => null,
+      getUser: (name) => {
+        if (name === 'lawan') return { id: challenger };
+        return null;
+      },
+      getInteger: (name) => {
+        if (name === 'taruhan') return 100;
+        return null;
+      }
+    };
+
+    await handleInteractionCreate(it);
+    if (!it._cap.reply || !it._cap.reply.content.includes('diri sendiri')) {
+      throw new Error('should fail when challenging self');
+    }
+  });
+
+  test('rps: challenger insufficient balance', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'RPS_G2', challenger = '900002', opponent = '900003';
+    db.getOrCreateUser(g, challenger);
+    db.getOrCreateUser(g, opponent);
+    consent.setGameConsent(g, challenger, true);
+    consent.setGameConsent(g, opponent, true);
+    notif.markDmAsked(g, challenger);
+
+    // Set challenger balance to 0
+    db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(challenger);
+
+    const it = mockInteraction({
+      userId: challenger, guildId: g,
+    });
+    it.isButton = () => false;
+    it.isChatInputCommand = () => true;
+    it.commandName = 'rps';
+    it.options = {
+      getSubcommand: () => null,
+      getSubcommandGroup: () => null,
+      getUser: (name) => {
+        if (name === 'lawan') return { id: opponent };
+        return null;
+      },
+      getInteger: (name) => {
+        if (name === 'taruhan') return 100;
+        return null;
+      }
+    };
+
+    await handleInteractionCreate(it);
+    if (!it._cap.reply || !it._cap.reply.content.includes('Saldo kamu kurang')) {
+      throw new Error('should fail when challenger has insufficient balance');
+    }
+  });
+
+  test('rps: duel play E2E (challenger wins, opponent loses)', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'RPS_G3', challenger = '900004', opponent = '900005';
+    db.getOrCreateUser(g, challenger);
+    db.getOrCreateUser(g, opponent);
+    consent.setGameConsent(g, challenger, true);
+    consent.setGameConsent(g, opponent, true);
+    notif.markDmAsked(g, challenger);
+    notif.markDmAsked(g, opponent);
+
+    // Give both players 1000 coins
+    db.db.prepare('UPDATE users SET balance = 1000 WHERE userId = ?').run(challenger);
+    db.db.prepare('UPDATE users SET balance = 1000 WHERE userId = ?').run(opponent);
+
+    // 1. Create challenge
+    const itChallenge = mockInteraction({
+      userId: challenger, guildId: g,
+    });
+    itChallenge.isButton = () => false;
+    itChallenge.isChatInputCommand = () => true;
+    itChallenge.commandName = 'rps';
+    itChallenge.options = {
+      getSubcommand: () => null,
+      getSubcommandGroup: () => null,
+      getUser: (name) => {
+        if (name === 'lawan') return { id: opponent };
+        return null;
+      },
+      getInteger: (name) => {
+        if (name === 'taruhan') return 100;
+        return null;
+      }
+    };
+
+    await handleInteractionCreate(itChallenge);
+    if (!itChallenge._cap.reply || !itChallenge._cap.reply.embeds || !itChallenge._cap.reply.embeds[0].data.title.includes('TANTANGAN')) {
+      throw new Error('should successfully create challenge');
+    }
+
+    // 2. Accept challenge (button accept)
+    const itAccept = mockInteraction({
+      userId: opponent, guildId: g,
+      customId: `rps_accept_${challenger}_${opponent}_100`
+    });
+    itAccept.isButton = () => true;
+    itAccept.isChatInputCommand = () => false;
+    itAccept.message = {
+      id: 'msg123',
+      edit: async (p) => { itAccept._cap.messageEdit = p; return p; }
+    };
+
+    await handleInteractionCreate(itAccept);
+    // Verify escrow deduction
+    const cBal = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(challenger).balance;
+    const oBal = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(opponent).balance;
+    if (cBal !== 900 || oBal !== 900) {
+      throw new Error(`escrow deduction failed: challenger=${cBal}, opponent=${oBal}`);
+    }
+
+    // 3. Opponent plays Rock
+    const itPlayOpponent = mockInteraction({
+      userId: opponent, guildId: g,
+      customId: `rps_play_rock_${challenger}_${opponent}_100`
+    });
+    itPlayOpponent.isButton = () => true;
+    itPlayOpponent.isChatInputCommand = () => false;
+    itPlayOpponent.message = itAccept.message;
+
+    await handleInteractionCreate(itPlayOpponent);
+    if (!itPlayOpponent._cap.reply || !itPlayOpponent._cap.reply.content.includes('Batu')) {
+      throw new Error('should acknowledge opponent move');
+    }
+
+    // 4. Challenger plays Paper (Paper wraps Rock -> challenger wins)
+    const itPlayChallenger = mockInteraction({
+      userId: challenger, guildId: g,
+      customId: `rps_play_paper_${challenger}_${opponent}_100`
+    });
+    itPlayChallenger.isButton = () => true;
+    itPlayChallenger.isChatInputCommand = () => false;
+    itPlayChallenger.message = itAccept.message;
+
+    await handleInteractionCreate(itPlayChallenger);
+    
+    // Check that game resolved
+    const cBalAfter = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(challenger).balance;
+    const oBalAfter = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(opponent).balance;
+    if (cBalAfter !== 1100 || oBalAfter !== 900) {
+      throw new Error(`payout distribution failed: challenger=${cBalAfter}, opponent=${oBalAfter}`);
+    }
+  });
+
+  test('horserace: dynamic lobby creation, joining, simulation, and payout', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'HR_G1', p1 = '900006', p2 = '900007', p3 = '900008';
+    db.getOrCreateUser(g, p1);
+    db.getOrCreateUser(g, p2);
+    db.getOrCreateUser(g, p3);
+    consent.setGameConsent(g, p1, true);
+    consent.setGameConsent(g, p2, true);
+    consent.setGameConsent(g, p3, true);
+    notif.markDmAsked(g, p1);
+    notif.markDmAsked(g, p2);
+    notif.markDmAsked(g, p3);
+
+    // Set balances to 1000
+    db.db.prepare('UPDATE users SET balance = 1000 WHERE userId = ?').run(p1);
+    db.db.prepare('UPDATE users SET balance = 1000 WHERE userId = ?').run(p2);
+    db.db.prepare('UPDATE users SET balance = 1000 WHERE userId = ?').run(p3);
+
+    // 1. Create horse race (creator starts on Red horse)
+    const itCreate = mockInteraction({
+      userId: p1, guildId: g,
+    });
+    itCreate.channel.send = async (payload) => {
+      return {
+        guild: { id: g },
+        edit: async (newPayload) => {
+          itCreate._cap.raceEdit = newPayload;
+          return newPayload;
+        }
+      };
+    };
+    itCreate.isButton = () => false;
+    itCreate.isChatInputCommand = () => true;
+    itCreate.commandName = 'horserace';
+    itCreate.options = {
+      getSubcommand: () => null,
+      getSubcommandGroup: () => null,
+      getInteger: (name) => {
+        if (name === 'taruhan') return 100;
+        return null;
+      },
+      getString: (name) => {
+        if (name === 'kuda') return 'red';
+        return null;
+      }
+    };
+
+    await handleInteractionCreate(itCreate);
+    if (!itCreate._cap.reply || !itCreate._cap.reply.embeds || !itCreate._cap.reply.embeds[0].data.title.includes('PENDAFTARAN')) {
+      throw new Error('should create horserace lobby');
+    }
+
+    const balP1 = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(p1).balance;
+    if (balP1 !== 900) {
+      throw new Error(`horserace creator bet deduction failed: p1=${balP1}`);
+    }
+
+    // 2. Player 2 joins on Blue horse
+    const itJoinP2 = mockInteraction({
+      userId: p2, guildId: g,
+      customId: `hr_bet_blue_${p1}`
+    });
+    itJoinP2.isButton = () => true;
+    itJoinP2.isChatInputCommand = () => false;
+    itJoinP2.message = {
+      edit: async (p) => { itJoinP2._cap.messageEdit = p; return p; }
+    };
+
+    await handleInteractionCreate(itJoinP2);
+    if (!itJoinP2._cap.reply || !itJoinP2._cap.reply.content.includes('Biru')) {
+      throw new Error('should allow p2 to join on blue');
+    }
+    const balP2 = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(p2).balance;
+    if (balP2 !== 900) {
+      throw new Error(`horserace joiner bet deduction failed: p2=${balP2}`);
+    }
+
+    // Wait for the race simulation to run (timer is 10ms in test mode)
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Confirm that the race has finished and balance has changed
+    const balP1After = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(p1).balance;
+    const balP2After = db.db.prepare('SELECT balance FROM users WHERE userId = ?').get(p2).balance;
+    
+    // Pot must be distributed or kept depending on winner
+    const totalBalance = balP1After + balP2After;
+    if (totalBalance !== 2000 && totalBalance !== 1800) {
+      throw new Error(`payout anomaly: total=${totalBalance}, p1=${balP1After}, p2=${balP2After}`);
+    }
+  });
 };

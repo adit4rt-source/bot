@@ -59,6 +59,8 @@ const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
+const { createRpsChallenge, acceptRpsChallenge, declineRpsChallenge, playRpsMove } = require('../systems/rps');
+const { createHorseRace, joinHorseRace, startRace } = require('../systems/horserace');
 
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
 const cooldowns = require('../systems/cooldowns');
@@ -962,6 +964,28 @@ async function routeInteraction(interaction) {
             return interaction.reply({ embeds: [embed] });
         }
 
+        // ================= RPS (Rock-Paper-Scissors) =================
+        if (command === 'rps') {
+            const opponent = interaction.options.getUser('lawan');
+            const bet = interaction.options.getInteger('taruhan');
+            const challenge = createRpsChallenge(interaction, interaction.user.id, opponent.id, bet);
+            if (challenge.error) {
+                return interaction.reply({ content: challenge.error, ephemeral: true });
+            }
+            return interaction.reply(challenge);
+        }
+
+        // ================= HORSE RACING =================
+        if (command === 'horserace') {
+            const bet = interaction.options.getInteger('taruhan');
+            const horse = interaction.options.getString('kuda');
+            const race = createHorseRace(interaction, bet, horse);
+            if (race.error) {
+                return interaction.reply({ content: race.error, ephemeral: true });
+            }
+            return interaction.reply(race);
+        }
+
     }
 
     // === GAME CONSENT GATE FOR INTERACTIONS ===
@@ -1536,6 +1560,37 @@ async function routeInteraction(interaction) {
         // --- TEMPVOICE PANEL BUTTONS ---
         if (isTempvoicePanelButton(interaction.customId)) {
             return handleTempvoiceButton(interaction);
+        }
+
+        // --- RPS BUTTONS ---
+        if (interaction.customId.startsWith('rps_accept_')) {
+            const parts = interaction.customId.split('_');
+            const challengerId = parts[2];
+            const opponentId = parts[3];
+            const bet = parseInt(parts[4]);
+            return acceptRpsChallenge(interaction, challengerId, opponentId, bet);
+        }
+        if (interaction.customId.startsWith('rps_decline_')) {
+            const parts = interaction.customId.split('_');
+            const challengerId = parts[2];
+            const opponentId = parts[3];
+            return declineRpsChallenge(interaction, challengerId, opponentId);
+        }
+        if (interaction.customId.startsWith('rps_play_')) {
+            const parts = interaction.customId.split('_');
+            const move = parts[2];
+            const challengerId = parts[3];
+            const opponentId = parts[4];
+            const bet = parseInt(parts[5]);
+            return playRpsMove(interaction, move, challengerId, opponentId, bet);
+        }
+
+        // --- HORSE RACING BUTTONS ---
+        if (interaction.customId.startsWith('hr_bet_')) {
+            const parts = interaction.customId.split('_');
+            const chosenHorse = parts[2];
+            const creatorId = parts[3];
+            return joinHorseRace(interaction, chosenHorse, creatorId);
         }
 
         // --- GAME TERMS CONSENT BUTTONS ---

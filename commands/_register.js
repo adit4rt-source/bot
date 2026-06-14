@@ -154,6 +154,21 @@ const commands = [
                 { name: 'English 🇬🇧', value: 'en' }
             )),
 
+    // ================= NEW MINI-GAMES =================
+    new SlashCommandBuilder().setName('rps').setDescription('🤝 Rock-Paper-Scissors (RPS) PvP Betting — Duel koin dengan pemain lain')
+        .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang ingin Anda tantang?').setRequired(true))
+        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan koin').setRequired(true).setMinValue(1)),
+    new SlashCommandBuilder().setName('horserace').setDescription('🐎 Balapan Kuda — Buka taruhan event balap kuda live server')
+        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan awal').setRequired(true).setMinValue(100))
+        .addStringOption(opt => opt.setName('kuda').setDescription('Kuda pilihan Anda').setRequired(true)
+            .addChoices(
+                { name: '🔴 Merah', value: 'red' },
+                { name: '🔵 Biru', value: 'blue' },
+                { name: '🟢 Hijau', value: 'green' },
+                { name: '🟡 Kuning', value: 'yellow' },
+                { name: '🟣 Ungu', value: 'purple' }
+            )),
+
     // ================= ADMIN (satu command saja) =================
     new SlashCommandBuilder()
         .setName('admin')

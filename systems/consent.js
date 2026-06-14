@@ -12,7 +12,8 @@ const GAME_COMMANDS = [
     'casino', 'blackjack', 'togel', 'arena', 'auction',
     'trade', 'market', 'globalmarket', 'globaltrade',
     'expedition', 'worldboss', 'battle',
-    'card', 'drop', 'cardview', 'cards', 'cardlb'
+    'card', 'drop', 'cardview', 'cards', 'cardlb',
+    'rps', 'horserace'
 ];
 
 /**
@@ -114,7 +115,7 @@ function isGatedGameInteraction(customId) {
     if (featureKey && GATED_FEATURES.includes(featureKey)) {
         return true;
     }
-    const extraPrefixes = ['cardgrab_', 'cardtrade_', 'cardpage_', 'fcol_'];
+    const extraPrefixes = ['cardgrab_', 'cardtrade_', 'cardpage_', 'fcol_', 'rps_', 'hr_'];
     for (const p of extraPrefixes) {
         if (customId.startsWith(p)) return true;
     }
