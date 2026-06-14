@@ -17,9 +17,9 @@ const ROOM_TYPES = [
 ];
 
 const COOP_DUNGEONS = [
-    { id: 'crypt', name: '🕯️ Forgotten Crypt', minLevel: 15, rooms: 4, boss: 'Crypt Warden', element: 'dark', power: 280, reward: [2500, 6500], exp: 18, cooldown: 3 * 60 * 1000 },
-    { id: 'labyrinth', name: '🌀 Shifting Labyrinth', minLevel: 40, rooms: 5, boss: 'Maze Tyrant', element: 'nature', power: 620, reward: [7000, 16000], exp: 32, cooldown: 5 * 60 * 1000 },
-    { id: 'abyss', name: '🌌 Abyss Gate', minLevel: 85, rooms: 6, boss: 'Abyss Herald', element: 'dark', power: 1250, reward: [18000, 42000], exp: 55, cooldown: 8 * 60 * 1000 },
+    { id: 'crypt', name: '🕯️ Forgotten Crypt', minLevel: 15, rooms: 4, boss: 'Crypt Warden', element: 'dark', power: 280, reward: [2500, 6500], exp: 18, cooldown: 10 * 60 * 1000 },
+    { id: 'labyrinth', name: '🌀 Shifting Labyrinth', minLevel: 40, rooms: 5, boss: 'Maze Tyrant', element: 'nature', power: 620, reward: [7000, 16000], exp: 32, cooldown: 15 * 60 * 1000 },
+    { id: 'abyss', name: '🌌 Abyss Gate', minLevel: 85, rooms: 6, boss: 'Abyss Herald', element: 'dark', power: 1250, reward: [18000, 42000], exp: 55, cooldown: 20 * 60 * 1000 },
 ];
 
 function runKey(guildId, leaderId) {
