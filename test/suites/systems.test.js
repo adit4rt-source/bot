@@ -671,11 +671,12 @@ module.exports = function register() {
     }
     if (db.getItemCount(g, u, 'cooked_pancake') !== 0) throw new Error('Expected pancake consumed from inventory');
 
-    // 3. Test Spicy Fish Soup: Rare Fish + 2 Pesticide -> +10% ATK buff
+    // 3. Test Spicy Fish Soup: Rare Fish + 2 Cabai + 2 Bawang Putih -> +10% ATK buff
     // Add ingredients
     db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?,?,?,?,?)')
       .run(g, u, 'arwana_silver', 2.5, Date.now()); // arwana_silver is Rare fish
-    db.addItem(g, u, 'pesticide', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_putih', 2);
 
     // Cook spicy fish soup
     const itCookSoup = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_spicy_fish_soup-${u}` });
@@ -687,7 +688,10 @@ module.exports = function register() {
     // Verify ingredients deducted
     const fishCount = db.db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(u).c;
     if (fishCount !== 0) throw new Error('Expected rare fish to be consumed');
-    if (db.getItemCount(g, u, 'pesticide') !== 0) throw new Error('Expected pesticide to be consumed');
+    const cabaiCount = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'cabai')?.quantity || 0;
+    const bawangPutihCount = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'bawang_putih')?.quantity || 0;
+    if (cabaiCount !== 0) throw new Error('Expected cabai to be consumed');
+    if (bawangPutihCount !== 0) throw new Error('Expected bawang_putih to be consumed');
 
     // Verify soup added
     if (db.getItemCount(g, u, 'spicy_fish_soup') !== 1) throw new Error('Expected 1 spicy_fish_soup in inventory');
@@ -730,6 +734,88 @@ module.exports = function register() {
     const shieldUntil = db.getUserStat(g, u, 'pest_shield_until');
     if (shieldUntil < Date.now() + 5.9 * 3600 * 1000) {
       throw new Error('Expected pest shield to be set to ~6 hours');
+    }
+
+    // 5. Test Locked Fish catches: a locked Rare fish cannot be cooked
+    db.db.prepare('DELETE FROM fish_inventory WHERE userId = ?').run(u);
+    // Insert a locked Rare fish (locked = 1)
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,1)')
+      .run(g, u, 'arwana_silver', 2.5, Date.now());
+    // Give cabai and bawang putih
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_putih', 2);
+
+    // Try cooking spicy fish soup (should fail because rare fish is locked)
+    const itCookSoupLocked = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_spicy_fish_soup-${u}` });
+    const replyResult2 = await pPanel.handlePetButton(itCookSoupLocked);
+    if (!replyResult2 || !replyResult2.content || !replyResult2.content.includes('Bahan kurang')) {
+      throw new Error('Expected failure due to locked Rare Fish');
+    }
+
+    // 6. Test select menu and modal multi-quantity cooking flow
+    // Clean up
+    db.db.prepare('DELETE FROM fish_inventory WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    
+    // Seed ingredients for 2 grilled fish (Common Fish x4, Cabai x4, Bawang Merah x2)
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'nila', 1.0, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'nila', 1.1, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'mujair', 1.2, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'mujair', 1.3, Date.now());
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 4);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_merah', 2);
+
+    // Select menu choice
+    const itSelectCook = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_cook_select_${u}`,
+      values: ['grilled_fish']
+    });
+    const selectResult = await pPanel.handlePetSelectMenu(itSelectCook);
+    if (!selectResult || selectResult.data?.custom_id !== `pet_cookqty_modal_grilled_fish_${u}`) {
+      throw new Error('Expected select menu to prompt quantity modal');
+    }
+
+    // Modal submit: cook 2 grilled fish
+    const itSubmitModal = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_cookqty_modal_grilled_fish_${u}`,
+      fields: { pet_cook_qty: '2' }
+    });
+    const modalResult = await pPanel.handlePetModal(itSubmitModal);
+    if (!modalResult || !modalResult.embeds || !modalResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected modal submit to successfully cook 2 grilled_fish');
+    }
+
+    // Verify ingredients consumed
+    const remainingCommon = db.db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(u).c;
+    if (remainingCommon !== 0) throw new Error('Expected all 4 common fish to be consumed');
+    const remainingCabai = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'cabai')?.quantity || 0;
+    if (remainingCabai !== 0) throw new Error('Expected all 4 cabai to be consumed');
+
+    // Verify 2 grilled_fish added
+    if (db.getItemCount(g, u, 'grilled_fish') !== 2) throw new Error('Expected 2 grilled_fish in inventory');
+
+    // 7. Test using grilled_fish through select menu in Bag
+    const itUseSelect = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_bag_use_select_${u}`,
+      values: ['grilled_fish']
+    });
+    const bagResult = await pPanel.handlePetSelectMenu(itUseSelect);
+    if (!bagResult || !bagResult.embeds || !bagResult.embeds[0].data.description.includes('memakan Grilled Fish')) {
+      throw new Error('Expected bag select use of grilled_fish to succeed');
+    }
+
+    // Verify 1 grilled_fish consumed and buff active
+    if (db.getItemCount(g, u, 'grilled_fish') !== 1) throw new Error('Expected 1 grilled_fish consumed');
+    const luckBuffUntil = db.getUserStat(g, u, 'fishing_luck_buff_until');
+    if (luckBuffUntil < Date.now() + 0.9 * 3600 * 1000) {
+      throw new Error('Expected luck buff until to be set');
     }
   });
 

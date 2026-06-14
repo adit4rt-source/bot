@@ -621,7 +621,38 @@ async function handleProfileSelectMenu(interaction) {
         case 'money_magnet': {
             const until = Date.now() + 3600000;
             db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'money_magnet_until', until);
-            resultMsg = `\ud83e\uddf2 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            resultMsg = `🧲 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'grilled_fish': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'fishing_luck_buff_until', until);
+            resultMsg = `🐟 **Grilled Fish** dimakan!\n> +15% Rare Fish chance selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'sushi_roll': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'pet_atk_def_buff_until', until);
+            resultMsg = `🍣 **Sushi Roll** dimakan!\n> Pet ATK & DEF +15% selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'seafood_paella': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'money_magnet_until', until);
+            resultMsg = `🍛 **Seafood Paella** dimakan!\n> +50% Money Magnet selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'abyssal_stew': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'xp_boost_2x_until', until);
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'pet_xp_boost_2x_until', until);
+            resultMsg = `🥣 **Abyssal Stew** dimakan!\n> Double Player & Pet XP booster selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            break;
+        }
+        case 'fisherman_feast': {
+            const until = Date.now() + 3600000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'fishing_cd_buff_until', until);
+            resultMsg = `🍤 **Fisherman's Feast** dimakan!\n> Cooldown mancing berkurang 3 detik selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
             break;
         }
         case 'daily_doubler': {

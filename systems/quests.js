@@ -394,8 +394,28 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     const xpMultiplier = parseFloat(getSetting(guildId, 'xp_multiplier', '1')) || 1;
     const maxLevel = parseInt(getSetting(guildId, 'max_level', '200')) || 200;
 
-    const gainedXp = Math.floor((Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin) * multiplier * xpMultiplier);
-    user.xp += gainedXp; user.balance += Math.floor(gainedXp / 2);
+    // Booster XP check (2x or 3x)
+    let boosterXpMult = 1;
+    if (Date.now() < (getUserStat(guildId, member.id, 'xp_boost_3x_until') || 0)) {
+        boosterXpMult = 3;
+    } else if (Date.now() < (getUserStat(guildId, member.id, 'xp_boost_2x_until') || 0)) {
+        boosterXpMult = 2;
+    }
+
+    const baseGainedXp = Math.floor((Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin) * multiplier * xpMultiplier);
+    const gainedXp = baseGainedXp * boosterXpMult;
+
+    // Money Magnet booster (+50%) check
+    let moneyMult = 1.0;
+    if (Date.now() < (getUserStat(guildId, member.id, 'money_magnet_until') || 0)) {
+        moneyMult = 1.5;
+    }
+
+    const baseMoneyGained = Math.floor(gainedXp / 2);
+    const moneyGained = Math.floor(baseMoneyGained * moneyMult);
+
+    user.xp += gainedXp; 
+    user.balance += moneyGained;
 
     // Check max level
     if (user.level >= maxLevel) {

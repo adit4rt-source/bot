@@ -349,6 +349,15 @@ function catchFish(guildId, userId) {
     // === LUCK CALCULATION ===
     let rareBonus = rod.rareBonus + bait.rareBonus + location.bonusRare;
 
+    // Rare Fish Luck Buff (+15%)
+    try {
+        const { getUserStat } = require('../database');
+        const luckBuffUntil = getUserStat(guildId, userId, 'fishing_luck_buff_until') || 0;
+        if (Date.now() < luckBuffUntil) {
+            rareBonus += 15;
+        }
+    } catch (e) {}
+
     // Rod penalty
     const rodDeficit = location.requiredRodTier - rod.tier;
     let luckPenaltyApplied = 0;
@@ -454,6 +463,17 @@ function getFishingCooldown(userId, rod) {
         let cooldown = rod.cooldown;
         if (todayWeather && (todayWeather.id === 'rainy' || todayWeather.id === 'stormy')) {
             cooldown = Math.max(1, Math.round(cooldown * 0.85)); // 15% reduction
+        }
+        // Fishing Cooldown Buff (-3s)
+        const { getUserStat, checkGlobalMode } = require('../database');
+        let guildId = null;
+        if (!checkGlobalMode()) {
+            const userRow = db.prepare('SELECT guildId FROM users WHERE userId = ? LIMIT 1').get(userId);
+            if (userRow) guildId = userRow.guildId;
+        }
+        const cdBuffUntil = getUserStat(guildId, userId, 'fishing_cd_buff_until') || 0;
+        if (Date.now() < cdBuffUntil) {
+            cooldown = Math.max(1, cooldown - 3);
         }
         return cooldown;
     } catch (e) {

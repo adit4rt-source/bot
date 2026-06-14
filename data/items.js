@@ -34,6 +34,11 @@ const ITEMS = [
     { id: 'cooked_pancake', name: 'Cooked Pancake', emoji: '🥞', menuEmoji: '🥞', desc: 'Pulihkan 100% laper & seneng pet', price: 0, category: 'Consumable' },
     { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', menuEmoji: '🍜', desc: 'Buff pet ATK +10% selama 1 jam', price: 0, category: 'Consumable' },
     { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', menuEmoji: '🥗', desc: 'Lindungi farm dari hama selama 6 jam', price: 0, category: 'Consumable' },
+    { id: 'grilled_fish', name: 'Grilled Fish', emoji: '🐟', menuEmoji: '🐟', desc: 'Buff mancing: +15% Rare Fish chance (1 jam)', price: 0, category: 'Consumable' },
+    { id: 'sushi_roll', name: 'Sushi Roll', emoji: '🍣', menuEmoji: '🍣', desc: 'Buff pet: ATK & DEF +15% (1 jam)', price: 0, category: 'Consumable' },
+    { id: 'seafood_paella', name: 'Seafood Paella', emoji: '🍛', menuEmoji: '🍛', desc: 'Buff booster: +50% money magnet (1 jam)', price: 0, category: 'Consumable' },
+    { id: 'abyssal_stew', name: 'Abyssal Stew', emoji: '🥣', menuEmoji: '🥣', desc: 'Booster: Double Player & Pet XP (1 jam)', price: 0, category: 'Consumable' },
+    { id: 'fisherman_feast', name: 'Fisherman\'s Feast', emoji: '🍤', menuEmoji: '🍤', desc: 'Buff mancing: Cooldown -3s (1 jam)', price: 0, category: 'Consumable' },
 ];
 
 const CRAFT_RECIPES = [
@@ -67,8 +72,13 @@ const CRAFT_RECIPES = [
 
 const COOKING_RECIPES = [
     { id: 'cooked_pancake', name: 'Cooked Pancake', emoji: '🥞', ingredients: [{id: 'gandum', qty: 2}, {id: 'egg_normal', qty: 1}, {id: 'milk_normal', qty: 1}], desc: 'Pulihkan 100% laper & seneng pet' },
-    { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', ingredients: [{id: 'rare_fish', qty: 1}, {id: 'pesticide', qty: 2}], desc: 'Buff pet ATK +10% selama 1 jam' },
-    { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', ingredients: [{id: 'wortel', qty: 3}, {id: 'kentang', qty: 2}], desc: 'Lindungi farm dari hama selama 6 jam' }
+    { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', ingredients: [{id: 'rare_fish', qty: 1}, {id: 'cabai', qty: 2}, {id: 'bawang_putih', qty: 2}], desc: 'Buff pet ATK +10% selama 1 jam' },
+    { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', ingredients: [{id: 'wortel', qty: 3}, {id: 'kentang', qty: 2}], desc: 'Lindungi farm dari hama selama 6 jam' },
+    { id: 'grilled_fish', name: 'Grilled Fish', emoji: '🐟', ingredients: [{id: 'common_fish', qty: 2}, {id: 'cabai', qty: 2}, {id: 'bawang_merah', qty: 1}], desc: 'Buff mancing: +15% Rare Fish chance (1 jam)' },
+    { id: 'sushi_roll', name: 'Sushi Roll', emoji: '🍣', ingredients: [{id: 'tuna', qty: 1}, {id: 'gandum', qty: 3}, {id: 'madu', qty: 1}], desc: 'Buff pet: ATK & DEF +15% (1 jam)' },
+    { id: 'seafood_paella', name: 'Seafood Paella', emoji: '🍛', ingredients: [{id: 'rare_fish', qty: 1}, {id: 'gandum', qty: 3}, {id: 'tomat', qty: 2}, {id: 'egg_normal', qty: 1}], desc: 'Buff booster: +50% money magnet (1 jam)' },
+    { id: 'abyssal_stew', name: 'Abyssal Stew', emoji: '🥣', ingredients: [{id: 'abyss_angler', qty: 1}, {id: 'mystic_herb', qty: 1}, {id: 'crystal_flower', qty: 1}], desc: 'Booster: Double Player & Pet XP (1 jam)' },
+    { id: 'fisherman_feast', name: 'Fisherman\'s Feast', emoji: '🍤', ingredients: [{id: 'belut', qty: 2}, {id: 'kentang', qty: 3}, {id: 'bawang_putih', qty: 2}], desc: 'Buff mancing: Cooldown -3s (1 jam)' }
 ];
 
 module.exports = { ITEMS, CRAFT_RECIPES, COOKING_RECIPES };

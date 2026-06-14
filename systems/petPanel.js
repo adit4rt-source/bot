@@ -521,6 +521,93 @@ function buildDropRatesPanel(userId, category = 'dungeon') {
 }
 
 // ============ HELPER: Build the Cooking panel ============
+// ============ HELPER: Validate and consume recipe ingredients dynamically ============
+function validateAndConsumeIngredients(guildId, userId, recipe, quantity, mode) {
+    const { getStorageQty, removeStorage } = require('./farming');
+    const { FISH_DATA } = require('../data/fish');
+    const { FARM_CROPS } = require('../data/farming');
+
+    for (const ing of recipe.ingredients) {
+        const requiredQty = ing.qty * quantity;
+
+        if (ing.id.endsWith('_fish')) {
+            const tierMap = {
+                common: 'Common',
+                rare: 'Rare',
+                uncommon: 'Uncommon',
+                epic: 'Epic',
+                legendary: 'Legendary',
+                mythic: 'Mythic',
+                secret: 'Secret',
+                god: 'God'
+            };
+            const tierKey = ing.id.substring(0, ing.id.length - 5);
+            const tierName = tierMap[tierKey] || 'Common';
+
+            const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ? AND locked = 0').all(userId);
+            const matchingFish = userFish.filter(f => {
+                const def = FISH_DATA.find(fd => fd.id === f.fishId);
+                return def && def.tier === tierName;
+            });
+
+            if (mode === 'validate') {
+                if (matchingFish.length < requiredQty) {
+                    return { valid: false, error: `Bahan kurang! Butuh 🐡 ${tierName} Fish x${requiredQty} (Miliki: ${matchingFish.length})` };
+                }
+            } else if (mode === 'consume') {
+                for (let i = 0; i < requiredQty; i++) {
+                    db.prepare('DELETE FROM fish_inventory WHERE id = ?').run(matchingFish[i].id);
+                }
+            }
+        } else if (FISH_DATA.some(f => f.id === ing.id)) {
+            const matchingFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ? AND fishId = ? AND locked = 0').all(userId, ing.id);
+
+            if (mode === 'validate') {
+                if (matchingFish.length < requiredQty) {
+                    const fishDef = FISH_DATA.find(f => f.id === ing.id) || { name: ing.id, emoji: '🐟' };
+                    return { valid: false, error: `Bahan kurang! Butuh ${fishDef.emoji} ${fishDef.name} x${requiredQty} (Miliki: ${matchingFish.length})` };
+                }
+            } else if (mode === 'consume') {
+                for (let i = 0; i < requiredQty; i++) {
+                    db.prepare('DELETE FROM fish_inventory WHERE id = ?').run(matchingFish[i].id);
+                }
+            }
+        } else {
+            const isStorageItem = FARM_CROPS.some(c => c.id === ing.id) || 
+                                  ing.id.startsWith('egg_') || 
+                                  ing.id.startsWith('milk_') || 
+                                  ing.id.startsWith('wool_');
+
+            if (isStorageItem) {
+                const ownedQty = getStorageQty(guildId, userId, ing.id);
+                if (mode === 'validate') {
+                    if (ownedQty < requiredQty) {
+                        const cropDef = FARM_CROPS.find(c => c.id === ing.id);
+                        const cropEmoji = cropDef ? cropDef.emoji : '';
+                        const cropName = cropDef ? cropDef.name : ing.id;
+                        return { valid: false, error: `Bahan kurang! Butuh ${cropEmoji} ${cropName} x${requiredQty} (Miliki: ${ownedQty})` };
+                    }
+                } else if (mode === 'consume') {
+                    removeStorage(guildId, userId, ing.id, requiredQty);
+                }
+            } else {
+                const ownedQty = getItemCount(guildId, userId, ing.id);
+                if (mode === 'validate') {
+                    if (ownedQty < requiredQty) {
+                        const itemDef = ITEMS.find(item => item.id === ing.id) || { name: ing.id };
+                        const itemEmoji = itemDef.emoji || '';
+                        return { valid: false, error: `Bahan kurang! Butuh ${itemEmoji} ${itemDef.name} x${requiredQty} (Miliki: ${ownedQty})` };
+                    }
+                } else if (mode === 'consume') {
+                    removeItem(guildId, userId, ing.id, requiredQty);
+                }
+            }
+        }
+    }
+    return { valid: true };
+}
+
+// ============ HELPER: Build the Cooking panel ============
 function buildPetCookingPanel(guildId, userId, successMsg = '') {
     const pet = getPetData(guildId, userId);
     if (!pet) {
@@ -535,27 +622,30 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
     const { getStorageQty } = require('./farming');
     const { FISH_DATA } = require('../data/fish');
 
-    // Query rare fish count
-    const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ?').all(userId);
-    const rareFishOwned = userFish.filter(f => {
+    // Query fish inventory
+    const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ? AND locked = 0').all(userId);
+    const commonFishCount = userFish.filter(f => {
+        const def = FISH_DATA.find(fd => fd.id === f.fishId);
+        return def && def.tier === 'Common';
+    }).length;
+    const rareFishCount = userFish.filter(f => {
         const def = FISH_DATA.find(fd => fd.id === f.fishId);
         return def && def.tier === 'Rare';
-    });
+    }).length;
 
-    const gandum = getStorageQty(guildId, userId, 'gandum');
-    const wortel = getStorageQty(guildId, userId, 'wortel');
-    const kentang = getStorageQty(guildId, userId, 'kentang');
-    const egg = getStorageQty(guildId, userId, 'egg_normal');
-    const milk = getStorageQty(guildId, userId, 'milk_normal');
-    const pesticide = getItemCount(guildId, userId, 'pesticide');
-    const rareFishCount = rareFishOwned.length;
+    const tunaCount = userFish.filter(f => f.fishId === 'tuna').length;
+    const belutCount = userFish.filter(f => f.fishId === 'belut').length;
+    const abyssAnglerCount = userFish.filter(f => f.fishId === 'abyss_angler').length;
 
     let desc = `🍳 **Cooking Hub**\n`;
     if (successMsg) desc += `\n✨ **${successMsg}**\n`;
     desc += `\n📦 **Bahan Tersedia:**\n`;
-    desc += `> 🌾 Gandum: **${gandum}** | 🥕 Wortel: **${wortel}** | 🥔 Kentang: **${kentang}**\n`;
-    desc += `> 🥚 Telur Normal: **${egg}** | 🥛 Susu Normal: **${milk}**\n`;
-    desc += `> 🧴 Pestisida: **${pesticide}** | 🐡 Rare Fish: **${rareFishCount}**\n\n`;
+    desc += `> 🌾 Gandum: **${getStorageQty(guildId, userId, 'gandum')}** | 🥕 Wortel: **${getStorageQty(guildId, userId, 'wortel')}** | 🥔 Kentang: **${getStorageQty(guildId, userId, 'kentang')}**\n`;
+    desc += `> 🍅 Tomat: **${getStorageQty(guildId, userId, 'tomat')}** | 🌶️ Cabai: **${getStorageQty(guildId, userId, 'cabai')}** | 🧄 B. Putih: **${getStorageQty(guildId, userId, 'bawang_putih')}**\n`;
+    desc += `> 🧅 B. Merah: **${getStorageQty(guildId, userId, 'bawang_merah')}** | 🍯 Madu: **${getStorageQty(guildId, userId, 'madu')}** | 🌿 M. Herb: **${getStorageQty(guildId, userId, 'mystic_herb')}**\n`;
+    desc += `> 🌸 C. Flower: **${getStorageQty(guildId, userId, 'crystal_flower')}** | 🥚 Telur: **${getStorageQty(guildId, userId, 'egg_normal')}** | 🧴 Pestisida: **${getItemCount(guildId, userId, 'pesticide')}**\n`;
+    desc += `> 🐟 Common Fish: **${commonFishCount}** | 🐡 Rare Fish: **${rareFishCount}**\n`;
+    desc += `> 🐟 Tuna: **${tunaCount}** | 🐍 Belut: **${belutCount}** | 🔦 Abyssal Angler: **${abyssAnglerCount}**\n\n`;
     desc += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     desc += `📜 **Resep Masakan:**\n\n`;
 
@@ -567,11 +657,38 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
                        ing.id === 'egg_normal' ? '🥚 Telur Normal' :
                        ing.id === 'milk_normal' ? '🥛 Susu Normal' :
                        ing.id === 'rare_fish' ? '🐡 Rare Fish' :
+                       ing.id === 'common_fish' ? '🐟 Common Fish' :
                        ing.id === 'pesticide' ? '🧴 Pestisida' :
                        ing.id === 'wortel' ? '🥕 Wortel' :
-                       ing.id === 'kentang' ? '🥔 Kentang' : ing.id;
+                       ing.id === 'kentang' ? '🥔 Kentang' :
+                       ing.id === 'tomat' ? '🍅 Tomat' :
+                       ing.id === 'cabai' ? '🌶️ Cabai' :
+                       ing.id === 'bawang_putih' ? '🧄 Bawang Putih' :
+                       ing.id === 'bawang_merah' ? '🧅 Bawang Merah' :
+                       ing.id === 'madu' ? '🍯 Madu' :
+                       ing.id === 'mystic_herb' ? '🌿 Mystic Herb' :
+                       ing.id === 'crystal_flower' ? '🌸 Crystal Flower' :
+                       ing.id === 'tuna' ? '🐟 Tuna' :
+                       ing.id === 'belut' ? '🐍 Belut' :
+                       ing.id === 'abyss_angler' ? '🔦 Abyssal Angler' : ing.id;
             return `${name} x${ing.qty}`;
         }).join(', ') + '\n\n';
+    });
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pet_cook_select_${userId}`)
+        .setPlaceholder('🍳 Pilih resep untuk dimasak...');
+
+    COOKING_RECIPES.forEach(recipe => {
+        const check = validateAndConsumeIngredients(guildId, userId, recipe, 1, 'validate');
+        const prefix = check.valid ? '✅' : '❌';
+        selectMenu.addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(`${prefix} ${recipe.name}`)
+                .setValue(recipe.id)
+                .setEmoji(recipe.emoji)
+                .setDescription(recipe.desc.substring(0, 100))
+        );
     });
 
     const embed = new EmbedBuilder()
@@ -579,21 +696,12 @@ function buildPetCookingPanel(guildId, userId, successMsg = '') {
         .setColor('#E67E22')
         .setDescription(desc);
 
-    const row = new ActionRowBuilder();
-
-    // Check recipe ingredients to enable/disable buttons
-    const canMakePancake = gandum >= 2 && egg >= 1 && milk >= 1;
-    const canMakeSoup = rareFishCount >= 1 && pesticide >= 2;
-    const canMakeSalad = wortel >= 3 && kentang >= 2;
-
-    row.addComponents(
-        new ButtonBuilder().setCustomId(`pet_docook_cooked_pancake-${userId}`).setLabel('🥞 Pancake').setStyle(ButtonStyle.Success).setDisabled(!canMakePancake),
-        new ButtonBuilder().setCustomId(`pet_docook_spicy_fish_soup-${userId}`).setLabel('🍜 Soup').setStyle(ButtonStyle.Success).setDisabled(!canMakeSoup),
-        new ButtonBuilder().setCustomId(`pet_docook_veggie_salad-${userId}`).setLabel('🥗 Salad').setStyle(ButtonStyle.Success).setDisabled(!canMakeSalad),
+    const rowMenu = new ActionRowBuilder().addComponents(selectMenu);
+    const rowBack = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [rowMenu, rowBack] };
 }
 
 // ============ HELPER: Build the Bag/Consumables panel ============
@@ -611,47 +719,117 @@ function buildPetBagPanel(guildId, userId, successMsg = '') {
     const pancakeQty = getItemCount(guildId, userId, 'cooked_pancake');
     const soupQty = getItemCount(guildId, userId, 'spicy_fish_soup');
     const saladQty = getItemCount(guildId, userId, 'veggie_salad');
+    const grilledQty = getItemCount(guildId, userId, 'grilled_fish');
+    const sushiQty = getItemCount(guildId, userId, 'sushi_roll');
+    const paellaQty = getItemCount(guildId, userId, 'seafood_paella');
+    const stewQty = getItemCount(guildId, userId, 'abyssal_stew');
+    const feastQty = getItemCount(guildId, userId, 'fisherman_feast');
 
     let desc = `💼 **Tas Consumables Pet**\n`;
     if (successMsg) desc += `\n✨ **${successMsg}**\n`;
     
-    // Check active ATK buff timer
+    // Check active buffs
+    const activeBuffs = [];
+    
     const atkBuffUntil = getUserStat(guildId, userId, 'pet_atk_buff_until') || 0;
-    const isAtkBuffActive = Date.now() < atkBuffUntil;
-    const atkBuffText = isAtkBuffActive 
-        ? `\n⚔️ **Buff ATK (+10%) aktif:** Sisa waktu <t:${Math.floor(atkBuffUntil / 1000)}:R>\n` 
-        : '';
-        
-    // Check active pest shield timer
-    const shieldUntil = getUserStat(guildId, userId, 'pest_shield_until') || 0;
-    const isShieldActive = Date.now() < shieldUntil;
-    const shieldText = isShieldActive 
-        ? `🛡️ **Pestisida Shield aktif:** Sisa waktu <t:${Math.floor(shieldUntil / 1000)}:R>\n` 
-        : '';
+    if (Date.now() < atkBuffUntil) {
+        activeBuffs.push(`⚔️ **Buff ATK (+10%) aktif:** Sisa waktu <t:${Math.floor(atkBuffUntil / 1000)}:R>`);
+    }
 
-    if (atkBuffText || shieldText) {
-        desc += `\n⚡ **Buff Aktif:**\n${atkBuffText}${shieldText}`;
+    const atkDefBuffUntil = getUserStat(guildId, userId, 'pet_atk_def_buff_until') || 0;
+    if (Date.now() < atkDefBuffUntil) {
+        activeBuffs.push(`⚔️🛡️ **Buff ATK & DEF Pet (+15%) aktif:** Sisa waktu <t:${Math.floor(atkDefBuffUntil / 1000)}:R>`);
+    }
+
+    const shieldUntil = getUserStat(guildId, userId, 'pest_shield_until') || 0;
+    if (Date.now() < shieldUntil) {
+        activeBuffs.push(`🛡️ **Pestisida Shield aktif:** Sisa waktu <t:${Math.floor(shieldUntil / 1000)}:R>`);
+    }
+
+    const luckBuffUntil = getUserStat(guildId, userId, 'fishing_luck_buff_until') || 0;
+    if (Date.now() < luckBuffUntil) {
+        activeBuffs.push(`🍀🎣 **Buff Luck Mancing (+15%) aktif:** Sisa waktu <t:${Math.floor(luckBuffUntil / 1000)}:R>`);
+    }
+
+    const moneyMagnetUntil = getUserStat(guildId, userId, 'money_magnet_until') || 0;
+    if (Date.now() < moneyMagnetUntil) {
+        activeBuffs.push(`🧲 **Money Magnet (+50%) aktif:** Sisa waktu <t:${Math.floor(moneyMagnetUntil / 1000)}:R>`);
+    }
+
+    const xpBoostUntil = getUserStat(guildId, userId, 'xp_boost_2x_until') || 0;
+    if (Date.now() < xpBoostUntil) {
+        activeBuffs.push(`⚡ **Booster Player XP (2x) aktif:** Sisa waktu <t:${Math.floor(xpBoostUntil / 1000)}:R>`);
+    }
+
+    const petXpBoostUntil = getUserStat(guildId, userId, 'pet_xp_boost_2x_until') || 0;
+    if (Date.now() < petXpBoostUntil) {
+        activeBuffs.push(`🐾✨ **Booster Pet XP (2x) aktif:** Sisa waktu <t:${Math.floor(petXpBoostUntil / 1000)}:R>`);
+    }
+
+    const cdBuffUntil = getUserStat(guildId, userId, 'fishing_cd_buff_until') || 0;
+    if (Date.now() < cdBuffUntil) {
+        activeBuffs.push(`🍤⏱️ **Buff Cooldown Mancing (-3s) aktif:** Sisa waktu <t:${Math.floor(cdBuffUntil / 1000)}:R>`);
+    }
+
+    if (activeBuffs.length > 0) {
+        desc += `\n⚡ **Buff Aktif:**\n` + activeBuffs.map(b => `> ${b}`).join('\n') + `\n`;
     }
 
     desc += `\n🎒 **Makanan & Ramuan yang Dimiliki:**\n\n`;
     desc += `🥞 **Cooked Pancake**: **${pancakeQty}** buah\n> *Efek: Pulihkan 100% laper & seneng pet*\n\n`;
     desc += `🍜 **Spicy Fish Soup**: **${soupQty}** buah\n> *Efek: Buff pet ATK +10% selama 1 jam*\n\n`;
     desc += `🥗 **Veggie Salad**: **${saladQty}** buah\n> *Efek: Lindungi farm dari hama selama 6 jam*\n\n`;
-    desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Klik tombol di bawah untuk mengonsumsi masakan.`;
+    desc += `🐟 **Grilled Fish**: **${grilledQty}** buah\n> *Efek: Buff mancing: +15% Rare Fish chance selama 1 jam*\n\n`;
+    desc += `🍣 **Sushi Roll**: **${sushiQty}** buah\n> *Efek: Buff pet: ATK & DEF +15% selama 1 jam*\n\n`;
+    desc += `🍛 **Seafood Paella**: **${paellaQty}** buah\n> *Efek: Buff booster: +50% money magnet selama 1 jam*\n\n`;
+    desc += `🥣 **Abyssal Stew**: **${stewQty}** buah\n> *Efek: Booster: Double Player & Pet XP selama 1 jam*\n\n`;
+    desc += `🍤 **Fisherman\'s Feast**: **${feastQty}** buah\n> *Efek: Buff mancing: Cooldown -3s selama 1 jam*\n\n`;
+    desc += `━━━━━━━━━━━━━━━━━━━━━━\n-# Pilih hidangan dari menu di bawah untuk mengonsumsi.`;
 
     const embed = new EmbedBuilder()
         .setTitle('💼 Tas Consumables')
         .setColor('#9B59B6')
         .setDescription(desc);
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`pet_use_cooked_pancake-${userId}`).setLabel('🥞 Makan Pancake').setStyle(ButtonStyle.Primary).setDisabled(pancakeQty <= 0),
-        new ButtonBuilder().setCustomId(`pet_use_spicy_fish_soup-${userId}`).setLabel('🍜 Minum Soup').setStyle(ButtonStyle.Primary).setDisabled(soupQty <= 0),
-        new ButtonBuilder().setCustomId(`pet_use_veggie_salad-${userId}`).setLabel('🥗 Makan Salad').setStyle(ButtonStyle.Primary).setDisabled(saladQty <= 0),
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pet_bag_use_select_${userId}`)
+        .setPlaceholder('💼 Pilih hidangan untuk dimakan/digunakan...');
+
+    const foodsList = [
+        { id: 'cooked_pancake', name: 'Cooked Pancake', emoji: '🥞', qty: pancakeQty },
+        { id: 'spicy_fish_soup', name: 'Spicy Fish Soup', emoji: '🍜', qty: soupQty },
+        { id: 'veggie_salad', name: 'Veggie Salad', emoji: '🥗', qty: saladQty },
+        { id: 'grilled_fish', name: 'Grilled Fish', emoji: '🐟', qty: grilledQty },
+        { id: 'sushi_roll', name: 'Sushi Roll', emoji: '🍣', qty: sushiQty },
+        { id: 'seafood_paella', name: 'Seafood Paella', emoji: '🍛', qty: paellaQty },
+        { id: 'abyssal_stew', name: 'Abyssal Stew', emoji: '🥣', qty: stewQty },
+        { id: 'fisherman_feast', name: 'Fisherman\'s Feast', emoji: '🍤', qty: feastQty }
+    ];
+
+    let hasUsable = false;
+    foodsList.forEach(food => {
+        if (food.qty > 0) {
+            selectMenu.addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(`${food.name} (x${food.qty})`)
+                    .setValue(food.id)
+                    .setEmoji(food.emoji)
+            );
+            hasUsable = true;
+        }
+    });
+
+    const components = [];
+    if (hasUsable) {
+        components.push(new ActionRowBuilder().addComponents(selectMenu));
+    }
+
+    const rowBack = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
+    components.push(rowBack);
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components };
 }
 
 // ============ HELPER: Build main pet panel embed + buttons ============
@@ -800,50 +978,13 @@ async function handlePetButton(interaction) {
         const recipe = COOKING_RECIPES.find(r => r.id === recipeId);
         if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
 
-        const { getStorageQty, removeStorage } = require('./farming');
-        const { FISH_DATA } = require('../data/fish');
-
-        // Query rare fish
-        const userFish = db.prepare('SELECT * FROM fish_inventory WHERE userId = ?').all(userId);
-        const rareFishOwned = userFish.filter(f => {
-            const def = FISH_DATA.find(fd => fd.id === f.fishId);
-            return def && def.tier === 'Rare';
-        });
-
-        // 1. Verify ingredients
-        for (const ing of recipe.ingredients) {
-            if (ing.id === 'rare_fish') {
-                if (rareFishOwned.length < ing.qty) {
-                    return interaction.reply({ content: `❌ Bahan kurang! Butuh 🐡 Rare Fish x${ing.qty}`, ephemeral: true });
-                }
-            } else if (ing.id === 'pesticide') {
-                if (getItemCount(guildId, userId, 'pesticide') < ing.qty) {
-                    return interaction.reply({ content: `❌ Bahan kurang! Butuh 🧴 Pestisida x${ing.qty}`, ephemeral: true });
-                }
-            } else {
-                const qty = getStorageQty(guildId, userId, ing.id);
-                if (qty < ing.qty) {
-                    const c = ITEMS.find(item => item.id === ing.id) || { name: ing.id };
-                    return interaction.reply({ content: `❌ Bahan kurang! Butuh ${c.name} x${ing.qty}`, ephemeral: true });
-                }
-            }
+        const validation = validateAndConsumeIngredients(guildId, userId, recipe, 1, 'validate');
+        if (!validation.valid) {
+            return interaction.reply({ content: `❌ ${validation.error}`, ephemeral: true });
         }
 
-        // 2. Consume ingredients
-        for (const ing of recipe.ingredients) {
-            if (ing.id === 'rare_fish') {
-                for (let i = 0; i < ing.qty; i++) {
-                    const fishToConsume = rareFishOwned[i];
-                    db.prepare('DELETE FROM fish_inventory WHERE id = ?').run(fishToConsume.id);
-                }
-            } else if (ing.id === 'pesticide') {
-                removeItem(guildId, userId, 'pesticide', ing.qty);
-            } else {
-                removeStorage(guildId, userId, ing.id, ing.qty);
-            }
-        }
+        validateAndConsumeIngredients(guildId, userId, recipe, 1, 'consume');
 
-        // 3. Add result item
         addItem(guildId, userId, recipeId, 1);
         incrementUserStat(guildId, userId, 'total_cooked', 1);
         updateQuestProgress(guildId, userId, 'cook', 1);
@@ -879,6 +1020,23 @@ async function handlePetButton(interaction) {
         } else if (recipeId === 'veggie_salad') {
             setUserStat(guildId, userId, 'pest_shield_until', Date.now() + 6 * 3600 * 1000); // 6 jam
             msg = `Pet **${pet.name}** memakan Veggie Salad! 🥗 Kebun terlindungi dari hama selama 6 jam!`;
+        } else if (recipeId === 'grilled_fish') {
+            setUserStat(guildId, userId, 'fishing_luck_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Grilled Fish! 🐟 Luck memancing meningkat +15% selama 1 jam!`;
+        } else if (recipeId === 'sushi_roll') {
+            setUserStat(guildId, userId, 'pet_atk_def_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Sushi Roll! 🍣 Pet ATK & DEF meningkat +15% selama 1 jam!`;
+        } else if (recipeId === 'seafood_paella') {
+            setUserStat(guildId, userId, 'money_magnet_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Seafood Paella! 🍛 Money Magnet aktif (+50% money dari semua sumber) selama 1 jam!`;
+        } else if (recipeId === 'abyssal_stew') {
+            const until = Date.now() + 3600000;
+            setUserStat(guildId, userId, 'xp_boost_2x_until', until); // 1 jam
+            setUserStat(guildId, userId, 'pet_xp_boost_2x_until', until); // 1 jam
+            msg = `Pet **${pet.name}** memakan Abyssal Stew! 🥣 Double XP booster untuk Player & Pet aktif selama 1 jam!`;
+        } else if (recipeId === 'fisherman_feast') {
+            setUserStat(guildId, userId, 'fishing_cd_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Fisherman's Feast! 🍤 Cooldown memancing berkurang 3 detik selama 1 jam!`;
         }
 
         return interaction.update(buildPetBagPanel(guildId, userId, msg));
@@ -2124,6 +2282,71 @@ async function handlePetSelectMenu(interaction) {
         return handleRefineAction(interaction, guildId, userId, slot, relic);
     }
 
+    // === COOKING SELECT ===
+    if (customId.startsWith('pet_cook_select_')) {
+        const recipeId = interaction.values[0];
+        const recipe = COOKING_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        const modal = new ModalBuilder()
+            .setCustomId(`pet_cookqty_modal_${recipeId}_${userId}`)
+            .setTitle(`🍳 Masak ${recipe.name}`);
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('pet_cook_qty')
+                .setLabel('Jumlah Masak')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setMaxLength(5)
+                .setValue('1')
+                .setPlaceholder('Masukkan jumlah porsi...')
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === BAG USE SELECT ===
+    if (customId.startsWith('pet_bag_use_select_')) {
+        const recipeId = interaction.values[0];
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+
+        const qty = getItemCount(guildId, userId, recipeId);
+        if (qty <= 0) return interaction.reply({ content: '❌ Kamu tidak memiliki masakan ini!', ephemeral: true });
+
+        removeItem(guildId, userId, recipeId, 1);
+
+        let msg = '';
+        if (recipeId === 'cooked_pancake') {
+            db.prepare('UPDATE pets SET hunger = 100, happiness = 100 WHERE id = ?').run(pet.id);
+            msg = `Pet **${pet.name}** memakan Pancake! 🥞 Hunger & Happiness pulih ke 100%!`;
+        } else if (recipeId === 'spicy_fish_soup') {
+            setUserStat(guildId, userId, 'pet_atk_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** meminum Spicy Fish Soup! 🍜 ATK meningkat 10% selama 1 jam!`;
+        } else if (recipeId === 'veggie_salad') {
+            setUserStat(guildId, userId, 'pest_shield_until', Date.now() + 6 * 3600 * 1000); // 6 jam
+            msg = `Pet **${pet.name}** memakan Veggie Salad! 🥗 Kebun terlindungi dari hama selama 6 jam!`;
+        } else if (recipeId === 'grilled_fish') {
+            setUserStat(guildId, userId, 'fishing_luck_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Grilled Fish! 🐟 Luck memancing meningkat +15% selama 1 jam!`;
+        } else if (recipeId === 'sushi_roll') {
+            setUserStat(guildId, userId, 'pet_atk_def_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Sushi Roll! 🍣 Pet ATK & DEF meningkat +15% selama 1 jam!`;
+        } else if (recipeId === 'seafood_paella') {
+            setUserStat(guildId, userId, 'money_magnet_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Seafood Paella! 🍛 Money Magnet aktif (+50% money dari semua sumber) selama 1 jam!`;
+        } else if (recipeId === 'abyssal_stew') {
+            const until = Date.now() + 3600000;
+            setUserStat(guildId, userId, 'xp_boost_2x_until', until); // 1 jam
+            setUserStat(guildId, userId, 'pet_xp_boost_2x_until', until); // 1 jam
+            msg = `Pet **${pet.name}** memakan Abyssal Stew! 🥣 Double XP booster untuk Player & Pet aktif selama 1 jam!`;
+        } else if (recipeId === 'fisherman_feast') {
+            setUserStat(guildId, userId, 'fishing_cd_buff_until', Date.now() + 3600000); // 1 jam
+            msg = `Pet **${pet.name}** memakan Fisherman's Feast! 🍤 Cooldown memancing berkurang 3 detik selama 1 jam!`;
+        }
+
+        return interaction.update(buildPetBagPanel(guildId, userId, msg));
+    }
+
     return null;
 }
 
@@ -2177,7 +2400,7 @@ async function handleRefineAction(interaction, guildId, userId, slot, relic) {
 }
 
 
-// ============ HANDLER: Pet rename modal submit ============
+// ============ HANDLER: Pet rename/cooking modal submit ============
 async function handlePetModal(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
@@ -2192,6 +2415,42 @@ async function handlePetModal(interaction) {
         const panel = buildMainPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
     }
+
+    if (customId.startsWith('pet_cookqty_modal_')) {
+        const payload = customId.substring('pet_cookqty_modal_'.length);
+        const lastUnderscore = payload.lastIndexOf('_');
+        const recipeId = payload.substring(0, lastUnderscore);
+        const userId = payload.substring(lastUnderscore + 1);
+
+        if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Bukan milikmu!', ephemeral: true });
+
+        const pet = getPetData(guildId, userId);
+        if (!pet) return interaction.reply({ content: '❌ Belum punya pet aktif!', ephemeral: true });
+
+        const recipe = COOKING_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return interaction.reply({ content: '❌ Resep tidak ditemukan!', ephemeral: true });
+
+        const qtyStr = interaction.fields.getTextInputValue('pet_cook_qty');
+        const quantity = parseInt(qtyStr, 10);
+        if (isNaN(quantity) || quantity <= 0) {
+            return interaction.reply({ content: '❌ Jumlah masak harus berupa angka positif lebih dari 0!', ephemeral: true });
+        }
+
+        const validation = validateAndConsumeIngredients(guildId, userId, recipe, quantity, 'validate');
+        if (!validation.valid) {
+            return interaction.reply({ content: `❌ ${validation.error}`, ephemeral: true });
+        }
+
+        validateAndConsumeIngredients(guildId, userId, recipe, quantity, 'consume');
+
+        addItem(guildId, userId, recipeId, quantity);
+        incrementUserStat(guildId, userId, 'total_cooked', quantity);
+        updateQuestProgress(guildId, userId, 'cook', quantity);
+        await checkAchievements(interaction.guild, userId, { type: 'cook' });
+
+        const msg = `Berhasil memasak ${recipe.emoji} **${recipe.name}** x${quantity}!`;
+        return interaction.update(buildPetCookingPanel(guildId, userId, msg));
+    }
     return null;
 }
 
@@ -2205,7 +2464,7 @@ function isPetPanelSelectMenu(customId) {
 }
 
 function isPetPanelModal(customId) {
-    return customId.startsWith('pet_rename_modal_');
+    return customId.startsWith('pet_rename_modal_') || customId.startsWith('pet_cookqty_modal_');
 }
 
 module.exports = {

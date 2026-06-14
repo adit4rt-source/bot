@@ -185,6 +185,12 @@ function getEffectiveStats(pet) {
             if (Date.now() < buffUntil) {
                 atk = Math.floor(atk * 1.10);
             }
+            // Apply Sushi Roll ATK/DEF buff (+15%)
+            const sushiBuffUntil = getUserStat(null, pet.userId, 'pet_atk_def_buff_until') || 0;
+            if (Date.now() < sushiBuffUntil) {
+                atk = Math.floor(atk * 1.15);
+                def = Math.floor(def * 1.15);
+            }
         } catch (_) {}
     }
     return { hp, atk, def, spd, crit, bonus: b };
@@ -426,6 +432,16 @@ function addPetExp(guildId, userId, amount) {
     const pet = getPetData(guildId, userId);
     if (!pet) return null;
     if (pet.level >= 200) return { leveledUp: false, newLevel: 200, newExp: 0, newSkill: null, petName: pet.name };
+
+    // Apply Pet XP Booster (2x)
+    try {
+        const { getUserStat } = require('../database');
+        const petXpBoostUntil = getUserStat(guildId, userId, 'pet_xp_boost_2x_until') || 0;
+        if (Date.now() < petXpBoostUntil) {
+            amount *= 2;
+        }
+    } catch (_) {}
+
     let newExp = pet.exp + amount;
     let newLevel = pet.level;
     let leveledUp = false;
