@@ -1283,6 +1283,9 @@ async function routeInteraction(interaction) {
             const { claimDaily } = require('../systems/dailyReward');
             const r = claimDaily(guildId, interaction.user.id, { today });
             if (r.alreadyClaimed) return interaction.reply({ content: '❌ Kamu sudah claim /daily hari ini!', ephemeral: true });
+            
+            await interaction.deferReply();
+
             const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
             const embed = new EmbedBuilder()
                 .setTitle('🎁 Daily Reward!')
@@ -1328,15 +1331,15 @@ async function routeInteraction(interaction) {
                         .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
                     if (att) {
                         cardEmbed.setImage('attachment://daily_cards.png');
-                        return interaction.reply({ embeds: [embed, cardEmbed], files: [att] });
+                        return interaction.editReply({ embeds: [embed, cardEmbed], files: [att] });
                     }
-                    return interaction.reply({ embeds: [embed, cardEmbed] });
+                    return interaction.editReply({ embeds: [embed, cardEmbed] });
                 } else {
                     console.error('[Daily-Btn] pullCards returned empty — cache likely empty');
                 }
             } catch (e) { console.error('[Daily-Btn] Card bonus FULL error:', e.message, e.stack); }
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         // --- FISHING PANEL BUTTONS ---
