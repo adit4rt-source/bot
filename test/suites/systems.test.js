@@ -1134,4 +1134,73 @@ module.exports = function register() {
       throw new Error('gated interaction should proceed normally when consent is granted');
     }
   });
+
+  test('achievement: single unlock is announced after delay as single embed', () => {
+    const ach = botRequire('systems/achievements.js');
+    const g = 'ACH_COAL_G1', u = 'ACH_COAL_U1', chId = '12345';
+    db.getOrCreateUser(g, u);
+    db.db.prepare("INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, 'achievement_channel', ?)").run(g, chId);
+    db.db.prepare('DELETE FROM achievements WHERE guildId = ? AND userId = ?').run(g, u);
+
+    let sentPayload = null;
+    const mockChannel = {
+      send: async (p) => { sentPayload = p; return p; }
+    };
+    const mockGuild = {
+      id: g,
+      channels: { cache: new Map([[chId, mockChannel]]) }
+    };
+
+    return ach.grantAchievement(mockGuild, u, 'first_chat').then(() => {
+      // Should not send immediately
+      if (sentPayload !== null) throw new Error('should not send immediately');
+
+      // Wait 30ms (test timeout is 10ms)
+      return new Promise(resolve => setTimeout(resolve, 30));
+    }).then(() => {
+      if (!sentPayload || !sentPayload.embeds || sentPayload.embeds[0].data.title !== '🏆 ACHIEVEMENT UNLOCKED!') {
+        throw new Error('should send single achievement embed after delay');
+      }
+    });
+  });
+
+  test('achievement: multiple unlocks are coalesced into a single combined embed', () => {
+    const ach = botRequire('systems/achievements.js');
+    const g = 'ACH_COAL_G2', u = 'ACH_COAL_U2', chId = '12345';
+    db.getOrCreateUser(g, u);
+    db.db.prepare("INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, 'achievement_channel', ?)").run(g, chId);
+    db.db.prepare('DELETE FROM achievements WHERE guildId = ? AND userId = ?').run(g, u);
+
+    let sentPayloads = [];
+    const mockChannel = {
+      send: async (p) => { sentPayloads.push(p); return p; }
+    };
+    const mockGuild = {
+      id: g,
+      channels: { cache: new Map([[chId, mockChannel]]) }
+    };
+
+    // Trigger multiple achievements
+    return Promise.all([
+      ach.grantAchievement(mockGuild, u, 'first_chat'),
+      ach.grantAchievement(mockGuild, u, 'first_buy')
+    ]).then(() => {
+      if (sentPayloads.length > 0) throw new Error('should not send immediately');
+      
+      // Wait for delay
+      return new Promise(resolve => setTimeout(resolve, 30));
+    }).then(() => {
+      if (sentPayloads.length !== 1) {
+        throw new Error('should only send ONE coalesced message: got ' + sentPayloads.length);
+      }
+      const p = sentPayloads[0];
+      if (!p.embeds || p.embeds[0].data.title !== '🏆 MULTIPLE ACHIEVEMENTS UNLOCKED!') {
+        throw new Error('should send multiple achievements coalesced title');
+      }
+      const desc = p.embeds[0].data.description;
+      if (!desc.includes('Newbie') || !desc.includes('Shopaholic Pemula')) {
+        throw new Error('description should list all unlocked achievements');
+      }
+    });
+  });
 };

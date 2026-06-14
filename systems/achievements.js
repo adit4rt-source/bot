@@ -178,6 +178,119 @@ function hasAchievement(guildId, userId, achievementId) {
     return !!db.prepare('SELECT 1 FROM achievements WHERE guildId = ? AND userId = ? AND achievementId = ?').get(guildId, userId, achievementId);
 }
 
+const pendingNotifications = new Map();
+const coalesceDelay = process.env.NODE_ENV === 'test' ? 10 : 4000;
+
+function queueNotification(guild, userId, achChannelId, item) {
+    const key = `${guild.id}_${userId}`;
+    if (!pendingNotifications.has(key)) {
+        pendingNotifications.set(key, {
+            guild,
+            userId,
+            achChannelId,
+            items: [],
+            timer: null
+        });
+    }
+    const record = pendingNotifications.get(key);
+    
+    // Avoid duplicate achievements in the same batch
+    if (item.type === 'achievement' && record.items.some(x => x.type === 'achievement' && x.id === item.id)) {
+        return;
+    }
+    
+    record.items.push(item);
+
+    if (record.timer) {
+        clearTimeout(record.timer);
+    }
+
+    record.timer = setTimeout(() => {
+        dispatchNotifications(key).catch(() => {});
+    }, coalesceDelay);
+}
+
+async function dispatchNotifications(key) {
+    const record = pendingNotifications.get(key);
+    if (!record) return;
+    pendingNotifications.delete(key);
+
+    const { guild, userId, achChannelId, items } = record;
+    const channel = guild.channels.cache.get(achChannelId);
+    if (!channel) return;
+
+    const achievements = items.filter(i => i.type === 'achievement');
+    const milestones = items.filter(i => i.type === 'milestone');
+
+    if (achievements.length === 0 && milestones.length === 0) return;
+
+    if (achievements.length === 1 && milestones.length === 0) {
+        const ach = achievements[0];
+        const embed = new EmbedBuilder()
+            .setColor('#FFD700')
+            .setTitle('🏆 ACHIEVEMENT UNLOCKED!')
+            .setDescription(`<@${userId}> mendapatkan badge baru!\n\n${ach.emoji} **${ach.name}**\n> *${ach.desc}*\n\n🎁 Hadiah: 🪙 **${ach.reward.toLocaleString('id-ID')} Money**`)
+            .setFooter({ text: `Kategori: ${ach.category}` })
+            .setTimestamp();
+        channel.send({ embeds: [embed] }).catch(() => {});
+        return;
+    }
+
+    if (milestones.length === 1 && achievements.length === 0) {
+        const m = milestones[0];
+        const embed = new EmbedBuilder()
+            .setColor('#FF69B4')
+            .setTitle('🌟 MILESTONE REWARD!')
+            .setDescription(
+                `<@${userId}> mencapai **${m.desc}** milestone!\n\n` +
+                `🏆 Title: **${m.title}**\n` +
+                `💰 Money: **+${m.money.toLocaleString('id-ID')}**\n` +
+                (m.item ? `🎁 Item: **${m.item}**\n` : '') +
+                `\n*Selamat! Terus kumpulkan badge!*`
+            )
+            .setTimestamp();
+        channel.send({ embeds: [embed] }).catch(() => {});
+        return;
+    }
+
+    // Coalesced / Batched message for multiple achievements/milestones
+    const embed = new EmbedBuilder()
+        .setColor('#FFD700')
+        .setTitle('🏆 MULTIPLE ACHIEVEMENTS UNLOCKED!')
+        .setTimestamp();
+
+    let descriptionText = `<@${userId}> telah membuka beberapa pencapaian baru secara bersamaan! 🎉\n\n`;
+    let totalMoneyReward = 0;
+    const itemsGained = [];
+    const titlesGained = [];
+
+    achievements.forEach((ach, index) => {
+        descriptionText += `**${index + 1}. ${ach.emoji} ${ach.name}**\n> *${ach.desc}*\n`;
+        totalMoneyReward += ach.reward;
+    });
+
+    if (milestones.length > 0) {
+        descriptionText += `\n🌟 **Milestone Tercapai:**\n`;
+        milestones.forEach(m => {
+            descriptionText += `> • **${m.desc}**\n`;
+            totalMoneyReward += m.money;
+            if (m.item) itemsGained.push(m.item);
+            if (m.title) titlesGained.push(m.title);
+        });
+    }
+
+    descriptionText += `\n🎁 **Total Hadiah Akumulatif:**\n> 💰 Money: **🪙 ${totalMoneyReward.toLocaleString('id-ID')}**`;
+    if (itemsGained.length > 0) {
+        descriptionText += `\n> 📦 Item: **${itemsGained.join(', ')}**`;
+    }
+    if (titlesGained.length > 0) {
+        descriptionText += `\n> 👑 Gelar/Title: **${titlesGained.join(', ')}**`;
+    }
+
+    embed.setDescription(descriptionText);
+    channel.send({ embeds: [embed] }).catch(() => {});
+}
+
 async function grantAchievement(guild, userId, achievementId) {
     const guildId = guild.id;
     if (hasAchievement(guildId, userId, achievementId)) return false;
@@ -187,18 +300,18 @@ async function grantAchievement(guild, userId, achievementId) {
     const user = getOrCreateUser(guildId, userId);
     user.balance += achDef.reward;
     updateUserBalance(guildId, userId, user.balance);
+    
     const achChannelId = getSetting(guildId, 'achievement_channel', null);
     if (achChannelId) {
-        const channel = guild.channels.cache.get(achChannelId);
-        if (channel) {
-            const embed = new EmbedBuilder()
-                .setColor('#FFD700')
-                .setTitle('🏆 ACHIEVEMENT UNLOCKED!')
-                .setDescription(`<@${userId}> mendapatkan badge baru!\n\n${achDef.emoji} **${achDef.name}**\n> *${achDef.desc}*\n\n🎁 Hadiah: 🪙 **${achDef.reward.toLocaleString('id-ID')} Money**`)
-                .setFooter({ text: `Kategori: ${achDef.category}` })
-                .setTimestamp();
-            channel.send({ embeds: [embed] }).catch(() => {});
-        }
+        queueNotification(guild, userId, achChannelId, {
+            type: 'achievement',
+            id: achievementId,
+            emoji: achDef.emoji,
+            name: achDef.name,
+            desc: achDef.desc,
+            reward: achDef.reward,
+            category: achDef.category
+        });
     }
 
     // Check milestone rewards
@@ -231,21 +344,13 @@ async function checkMilestoneRewards(guild, userId) {
             // Send notification
             const achChannelId = getSetting(guildId, 'achievement_channel', null);
             if (achChannelId) {
-                const channel = guild.channels.cache.get(achChannelId);
-                if (channel) {
-                    const embed = new EmbedBuilder()
-                        .setColor('#FF69B4')
-                        .setTitle('🌟 MILESTONE REWARD!')
-                        .setDescription(
-                            `<@${userId}> mencapai **${milestone.desc}** milestone!\n\n` +
-                            `🏆 Title: **${milestone.reward.title}**\n` +
-                            `💰 Money: **+${milestone.reward.money.toLocaleString('id-ID')}**\n` +
-                            (milestone.reward.item ? `🎁 Item: **${milestone.reward.item}**\n` : '') +
-                            `\n*Selamat! Terus kumpulkan badge!*`
-                        )
-                        .setTimestamp();
-                    channel.send({ embeds: [embed] }).catch(() => {});
-                }
+                queueNotification(guild, userId, achChannelId, {
+                    type: 'milestone',
+                    desc: milestone.desc,
+                    title: milestone.reward.title,
+                    money: milestone.reward.money,
+                    item: milestone.reward.item
+                });
             }
         }
     }
