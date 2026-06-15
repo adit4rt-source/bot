@@ -490,7 +490,6 @@ function isWorldBossButton(customId) {
 module.exports = {
     WORLD_BOSSES,
     getCurrentBoss,
-    getWeekId,
     claimWorldBossRewards,
     buildWorldBossPanel,
     handleWorldBossButton,
