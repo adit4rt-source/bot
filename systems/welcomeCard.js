@@ -378,4 +378,123 @@ async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFF
     return canvas.toBuffer('image/png');
 }
 
-module.exports = { generateCard, generateAvatarBanner };
+/**
+ * Generate an ANIMATED welcome GIF: keeps the source GIF moving and layers a
+ * static circular avatar + username on top of every frame.
+ *
+ * Uses `sharp` (libvips) to decode/recompose the GIF reliably, and the existing
+ * canvas stack to render the overlay once. Returns null (so the caller can fall
+ * back to a static banner) when:
+ *   - `sharp` is not installed,
+ *   - the buffer isn't a usable animated image, or
+ *   - the encoded result exceeds `maxBytes` (Discord upload limit safety).
+ *
+ * @param {Object} opts
+ * @param {Buffer} opts.gifBuffer  raw GIF bytes
+ * @param {string} [opts.avatarURL] PNG avatar URL (optional)
+ * @param {string} [opts.username]  text drawn under the avatar (optional)
+ * @param {string} [opts.accent]    hex accent for the ring + username (default #FFFFFF)
+ * @param {number} [opts.maxBytes]  max output size in bytes (default ~8MB)
+ * @returns {Promise<Buffer|null>} animated GIF buffer, or null to signal fallback
+ */
+async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent = '#FFFFFF', maxBytes = 8 * 1024 * 1024 }) {
+    let sharp;
+    try {
+        sharp = require('sharp');
+    } catch (e) {
+        console.error('[welcomeCard] modul "sharp" belum terpasang — jalankan `npm install sharp` untuk welcomer GIF animasi. Sementara pakai banner statis.');
+        return null;
+    }
+    if (!gifBuffer || !gifBuffer.length) return null;
+
+    // Inspect the animated image: dimensions + number of frames (pages).
+    const meta = await sharp(gifBuffer, { animated: true }).metadata();
+    const width = meta.width;
+    const pageHeight = meta.pageHeight || meta.height;
+    const pages = meta.pages || 1;
+    if (!width || !pageHeight) return null;
+
+    // ---- Render the static overlay once (transparent bg) ----
+    const canvas = createCanvas(width, pageHeight);
+    const ctx = canvas.getContext('2d');
+
+    const size = Math.round(Math.min(width, pageHeight) * 0.42);
+    const radius = size / 2;
+    const cx = width / 2;
+    const cy = username ? pageHeight * 0.40 : pageHeight * 0.5;
+    const ring = Math.max(3, Math.round(size * 0.045));
+
+    // Accent ring base
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + ring * 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = accent;
+    ctx.fill();
+
+    // Thin dark gap for definition
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + ring, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fill();
+
+    // Avatar (circular)
+    let avatar = null;
+    if (avatarURL) {
+        try { avatar = await loadImage(avatarURL); } catch (e) {
+            console.error('[welcomeCard] generateAvatarBannerGif gagal load avatar:', e.message);
+        }
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (avatar) {
+        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
+    } else {
+        ctx.fillStyle = '#2b2d31';
+        ctx.fillRect(cx - radius, cy - radius, size, size);
+    }
+    ctx.restore();
+
+    // Username under the avatar
+    const name = String(username || '').trim();
+    if (name) {
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = Math.max(6, Math.round(size * 0.06));
+        ctx.shadowOffsetY = 2;
+        const basePx = Math.max(16, Math.round(pageHeight * 0.1));
+        const nameFit = fitText(ctx, name, SUB_FONT, basePx, Math.max(40, width - size), 14);
+        ctx.font = `${nameFit.px}px ${SUB_FONT}`;
+        ctx.fillStyle = accent;
+        ctx.fillText(nameFit.text, cx, cy + radius + Math.round(size * 0.36));
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+    }
+
+    const overlayPng = canvas.toBuffer('image/png');
+
+    // ---- Layer the overlay onto every frame of the filmstrip ----
+    // sharp lays an animated image out as a vertical strip of `pages` frames,
+    // each `pageHeight` tall. Compositing the overlay at each page offset stamps
+    // it on every frame while preserving the original animation + timing.
+    const composites = [];
+    for (let i = 0; i < pages; i++) {
+        composites.push({ input: overlayPng, top: i * pageHeight, left: 0 });
+    }
+
+    const out = await sharp(gifBuffer, { animated: true })
+        .composite(composites)
+        .gif()
+        .toBuffer();
+
+    if (maxBytes && out.length > maxBytes) {
+        console.error(`[welcomeCard] GIF welcomer ${(out.length / 1048576).toFixed(2)}MB melebihi batas ${(maxBytes / 1048576).toFixed(0)}MB — pakai banner statis.`);
+        return null;
+    }
+    return out;
+}
+
+module.exports = { generateCard, generateAvatarBanner, generateAvatarBannerGif };

@@ -19,6 +19,25 @@ function setWelcomerSetting(guildId, key, value) {
     db.prepare('INSERT OR REPLACE INTO welcomer_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
 }
 
+// Download a remote image into a Buffer (used to sniff GIF vs static and to
+// feed the GIF processor). Returns null on any failure so callers can fall back.
+async function fetchImageBuffer(url, { timeoutMs = 10000, maxBytes = 25 * 1024 * 1024 } = {}) {
+    if (!url || typeof fetch !== 'function') return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (maxBytes && buf.length > maxBytes) return null;
+        return buf;
+    } catch (_) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 function getAllWelcomerSettings(guildId) {
     const keys = [
         'welcome_enabled', 'welcome_channel', 'welcome_message', 'welcome_embed_color',
@@ -178,26 +197,45 @@ async function handleWelcome(member) {
 
             if (customImage && customImage.startsWith('http')) {
                 // Custom image as canvas background — overlay member avatar in the
-                // center + username only (no headline). Uses the minimal
-                // generateAvatarBanner so it's robust on the server.
-                const { generateAvatarBanner } = require('./welcomeCard');
+                // center + username. If the image is an animated GIF we keep the
+                // animation and layer the avatar on every frame; otherwise we
+                // render a static PNG banner. Both fall back gracefully.
+                const { generateAvatarBanner, generateAvatarBannerGif } = require('./welcomeCard');
                 const accent = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+                const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+                const username = member.user.username;
                 try {
-                    const buffer = await generateAvatarBanner({
-                        bgURL: customImage,
-                        avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
-                        username: member.user.username,
-                        accent,
-                    });
-                    if (buffer) {
-                        const card = new AttachmentBuilder(buffer, { name: 'welcome.png' });
+                    // Download the source once so we can sniff its type (GIF vs static).
+                    const srcBuffer = await fetchImageBuffer(customImage);
+                    const isGif = !!srcBuffer && srcBuffer.length > 6 &&
+                        srcBuffer.toString('ascii', 0, 4) === 'GIF8';
+
+                    let card = null;
+                    if (isGif) {
+                        // Animated path: layer avatar onto each frame, keep it a GIF.
+                        const gifOut = await generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, accent });
+                        if (gifOut) {
+                            card = new AttachmentBuilder(gifOut, { name: 'welcome.gif' });
+                        } else {
+                            // sharp missing / GIF too large / processing failed —
+                            // fall back to a static banner (first frame + avatar).
+                            log('WARN', `[welcomer] GIF welcomer di guild ${guildId} jatuh ke banner statis (sharp belum terpasang atau GIF terlalu besar). Jalankan \`npm install sharp\` di server untuk hasil animasi.`);
+                            const png = await generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                            if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
+                        }
+                    } else {
+                        const png = await generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                        if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
+                    }
+
+                    if (card) {
                         channel.send({ content: message, files: [card], allowedMentions: { users: [member.id] } }).catch(onErr);
                     } else {
                         const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                         channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                     }
                 } catch (e) {
-                    log('ERROR', `[welcomer] generateAvatarBanner gagal untuk custom image welcomer di guild ${guildId}: ${e.message}. Fallback ke embed gambar mentah (avatar tidak muncul).`);
+                    log('ERROR', `[welcomer] gagal render custom image welcomer di guild ${guildId}: ${e.message}. Fallback ke embed gambar mentah (avatar tidak muncul).`);
                     const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                     channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                 }
