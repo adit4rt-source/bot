@@ -42,6 +42,7 @@ const suiteFiles = [
   'suites/systems.test.js',
   'suites/globaltrade.test.js',
   'suites/engagement.test.js',
+  'suites/api.test.js',
 ];
 
 (async () => {

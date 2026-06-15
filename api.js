@@ -1114,6 +1114,181 @@ app.post('/api/tempvoice/settings/:guildId', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== ACHIEVEMENTS ====================
+app.get('/api/achievements', async (req, res) => {
+    try {
+        const { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const totalUnlocked = db.prepare('SELECT COUNT(*) as c FROM achievements').get();
+        const usersWithAch = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM achievements').get();
+        const mostUnlockedRaw = db.prepare('SELECT achievementId, COUNT(*) as count FROM achievements GROUP BY achievementId ORDER BY count DESC LIMIT 10').all();
+        const topUsersRaw = db.prepare('SELECT userId, COUNT(*) as total FROM achievements GROUP BY userId ORDER BY total DESC LIMIT 10').all();
+        res.json({
+            totalDefined: ACHIEVEMENTS.length,
+            totalUnlocked: totalUnlocked?.c || 0,
+            usersWithAchievements: usersWithAch?.c || 0,
+            milestones: ACHIEVEMENT_MILESTONES,
+            definitions: ACHIEVEMENTS.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward })),
+            mostUnlocked: mostUnlockedRaw.map(r => ({ id: r.achievementId, count: r.count, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' })),
+            topUsers: await enrichLeaderboard(topUsersRaw),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/achievements/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { ACHIEVEMENTS, getAchievementProgress } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const unlockedRows = db.prepare('SELECT achievementId, unlockedAt FROM achievements WHERE userId = ? ORDER BY unlockedAt DESC').all(userId);
+        const unlockedSet = new Set(unlockedRows.map(r => r.achievementId));
+        const unlocked = unlockedRows.map(r => ({ id: r.achievementId, unlockedAt: r.unlockedAt, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' }));
+        const locked = ACHIEVEMENTS.filter(a => !unlockedSet.has(a.id)).map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward, progress: getAchievementProgress(null, userId, a.id) }));
+        res.json({ userId, unlockedCount: unlocked.length, totalDefined: ACHIEVEMENTS.length, unlocked, locked });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== QUESTS ====================
+app.get('/api/quests', (req, res) => {
+    try {
+        const { QUEST_POOL, DIFFICULTY_TIERS } = require('./systems/quests');
+        const questTypes = QUEST_POOL.map(q => q.type);
+        const usersWithDailyQuests = db.prepare('SELECT COUNT(*) as c FROM daily_quests').get();
+        res.json({
+            difficulties: DIFFICULTY_TIERS,
+            questTypes,
+            totalQuestTypes: questTypes.length,
+            usersWithDailyQuests: usersWithDailyQuests?.c || 0,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/quests/:guildId/:userId', (req, res) => {
+    try {
+        const { guildId, userId } = req.params;
+        const { getWeekId } = require('./systems/quests');
+        const parse = (s) => { try { return s ? JSON.parse(s) : null; } catch (_) { return null; } };
+        const dailyRow = db.prepare('SELECT date, data FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        const week = getWeekId();
+        const weeklyRow = db.prepare('SELECT week, data FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, userId, week);
+        res.json({
+            guildId, userId,
+            daily: dailyRow ? { date: dailyRow.date, quests: parse(dailyRow.data) } : null,
+            weekly: weeklyRow ? { week: weeklyRow.week, quests: parse(weeklyRow.data) } : null,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== GIVEAWAYS ====================
+app.get('/api/giveaways/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getGuildGiveaways, countEntries } = require('./systems/giveaway');
+        const giveaways = getGuildGiveaways(guildId).map(g => ({
+            id: g.id, prize: g.prize, channelId: g.channelId, messageId: g.messageId,
+            hostId: g.hostId, winners: g.winners, requiredRoleId: g.requiredRoleId || null,
+            endsAt: g.endsAt, ended: !!g.ended, createdAt: g.createdAt,
+            winnerIds: g.winnerIds ? String(g.winnerIds).split(',').filter(Boolean) : [],
+            entries: countEntries(g.id),
+        }));
+        res.json({
+            total: giveaways.length,
+            active: giveaways.filter(g => !g.ended).length,
+            ended: giveaways.filter(g => g.ended).length,
+            giveaways,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== SELF ROLES ====================
+app.get('/api/selfroles/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getMenus, getOptions } = require('./systems/selfRoles');
+        const menus = getMenus(guildId).map(m => ({
+            id: m.id, title: m.title, description: m.description, type: m.type,
+            color: m.color, channelId: m.channelId, messageId: m.messageId, maxRoles: m.maxRoles || 0,
+            options: getOptions(m.id).map(o => ({ id: o.id, roleId: o.roleId, label: o.label, emoji: o.emoji, description: o.description })),
+        }));
+        res.json({ total: menus.length, menus });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== STARBOARD ====================
+app.get('/api/starboard/:guildId', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        require('./systems/starboard'); // ensure the starboard table exists
+        const settings = {
+            channel: getSetting(guildId, 'starboard_channel', null),
+            threshold: parseInt(getSetting(guildId, 'starboard_threshold', '3'), 10) || 3,
+            emoji: getSetting(guildId, 'starboard_emoji', '⭐'),
+            selfStar: getSetting(guildId, 'starboard_self_star', '0') === '1',
+        };
+        const totalMessages = db.prepare('SELECT COUNT(*) as c FROM starboard WHERE guildId = ?').get(guildId);
+        const totalStars = db.prepare('SELECT SUM(stars) as s FROM starboard WHERE guildId = ?').get(guildId);
+        const topRaw = db.prepare('SELECT messageId, channelId, authorId, stars, content, createdAt FROM starboard WHERE guildId = ? ORDER BY stars DESC LIMIT 10').all(guildId);
+        res.json({
+            enabled: !!settings.channel,
+            settings,
+            totalMessages: totalMessages?.c || 0,
+            totalStars: totalStars?.s || 0,
+            topMessages: await enrichLeaderboard(topRaw, 'authorId'),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== TITLES ====================
+app.get('/api/titles', (req, res) => {
+    try {
+        const { getAllTitles } = require('./systems/titles');
+        res.json({ titles: getAllTitles() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/titles/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const guildId = req.query.guildId || null;
+        const { getUserTitle, getTitleProgress, getScoreBreakdown, calculateOverallScore } = require('./systems/titles');
+        res.json({
+            userId,
+            score: calculateOverallScore(guildId, userId),
+            title: getUserTitle(guildId, userId),
+            progress: getTitleProgress(guildId, userId),
+            breakdown: getScoreBreakdown(guildId, userId),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== WORLD BOSS ====================
+app.get('/api/worldboss', async (req, res) => {
+    try {
+        const { WORLD_BOSSES, getWeekId } = require('./systems/worldBoss');
+        const weekId = getWeekId();
+        const boss = db.prepare('SELECT * FROM world_boss WHERE weekId = ?').get(weekId);
+        let damageLeaderboard = [];
+        let participants = 0;
+        if (boss) {
+            const dmgRows = db.prepare('SELECT userId, username, totalDamage, attacks FROM world_boss_damage WHERE weekId = ? ORDER BY totalDamage DESC LIMIT 10').all(weekId);
+            damageLeaderboard = await enrichLeaderboard(dmgRows);
+            participants = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM world_boss_damage WHERE weekId = ?').get(weekId)?.c || 0;
+        }
+        res.json({
+            weekId,
+            spawned: !!boss,
+            boss: boss ? {
+                bossId: boss.bossId, name: boss.bossName, maxHp: boss.maxHp, currentHp: boss.currentHp,
+                status: boss.status, startedAt: boss.startedAt, defeatedAt: boss.defeatedAt,
+                hpPercent: boss.maxHp ? Math.round((boss.currentHp / boss.maxHp) * 100) : 0,
+            } : null,
+            participants,
+            damageLeaderboard,
+            bosses: WORLD_BOSSES,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== QR CODE REDIRECT ROUTES ====================
 try {
     const { registerQrRoutes } = require('./systems/qrcode');
