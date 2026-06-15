@@ -387,4 +387,35 @@ module.exports = function register() {
       if (s.welcome_message !== 'Hi {user.mention}') throw new Error('message not saved');
     });
   });
+
+  // ===== Custom Embed builder (admin panel) =====
+  const adm = botRequire('systems/adminPanel.js');
+  const AG = 'ADMG', AU = '400000000000000004';
+
+  test('customembed: opens builder with channel-select + buttons', () => {
+    const it = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_customembed', admin: true });
+    return Promise.resolve(adm.handleAdminButton(it)).then(() => {
+      const upd = it._cap.update;
+      if (!upd || !upd.components || upd.components.length < 2) throw new Error('builder should have channel-select + button rows');
+    });
+  });
+
+  test('customembed: channel-select + modal (with image) then send', () => {
+    const itCh = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_ce_channel', values: ['CH_TARGET'], admin: true });
+    return Promise.resolve(adm.handleAdminChannelSelect(itCh)).then(() => {
+      const itModal = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_modal_customembed', admin: true, fields: { title: 'Hi', description: 'Halo {server}', color: '#abcdef', footer: 'ft', image: 'https://example.com/x.png' } });
+      return Promise.resolve(adm.handleAdminModal(itModal)).then(() => {
+        const upd = itModal._cap.update;
+        if (!upd || !upd.embeds || upd.embeds.length < 2) throw new Error('builder should show a preview embed after content set');
+        const sent = [];
+        const itSend = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_ce_send', admin: true });
+        itSend.guild.channels.cache.set('CH_TARGET', { send: async (p) => { sent.push(p); return p; } });
+        return Promise.resolve(adm.handleAdminButton(itSend)).then(() => {
+          if (sent.length !== 1) throw new Error('embed should be sent to the selected channel');
+          const e = sent[0].embeds[0];
+          if (!e || !e.data || e.data.image !== 'https://example.com/x.png') throw new Error('image link should be applied to the embed');
+        });
+      });
+    });
+  });
 };

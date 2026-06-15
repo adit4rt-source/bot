@@ -176,6 +176,7 @@ async function handleWelcomerButton(interaction) {
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message').setLabel('Welcome Message').setStyle(TextInputStyle.Paragraph).setRequired(false).setValue((s.welcome_message || '').slice(0, 1000))),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Embed Title').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.welcome_embed_title || '').slice(0, 100))),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Embed Color (hex, mis. #5865F2)').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.welcome_embed_color || '').slice(0, 7))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image').setLabel('Image/GIF URL (embed gambar, kosong = tanpa)').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.welcome_embed_image || '').slice(0, 200))),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('delay').setLabel('Auto-Role Delay (detik)').setStyle(TextInputStyle.Short).setRequired(false).setValue(String(s.welcome_autorole_delay || '0')))
         );
         return interaction.showModal(modal);
@@ -240,7 +241,8 @@ function buildEditView(guildId, userId, guild) {
             `**🎭 Auto-Role:** ${autoroles.length ? autoroles.map(r => `<@&${r}>`).join(', ') : '*tidak ada*'}  •  Delay: ${s.welcome_autorole_delay || '0'}s\n` +
             `**👋 Goodbye:** ${on(s.goodbye_enabled) ? '✅' : '❌'}  •  Channel: ${s.goodbye_channel ? `<#${s.goodbye_channel}>` : '*belum diset*'}\n` +
             `**🖼️ Banner:** Welcome ${on(s.welcome_banner_enabled) ? '✅' : '❌'}  •  Goodbye ${on(s.goodbye_banner_enabled) ? '✅' : '❌'}\n` +
-            `**🎨 Color:** \`${s.welcome_embed_color}\`  •  **Title:** ${s.welcome_embed_title || '*default*'}\n\n` +
+            `**🎨 Color:** \`${s.welcome_embed_color}\`  •  **Title:** ${s.welcome_embed_title || '*default*'}\n` +
+            `**🖼️ Image/GIF:** ${s.welcome_embed_image ? '✅ terpasang' : '*tidak ada*'}\n\n` +
             `Atur langsung pakai komponen di bawah 👇`
         )
         .setFooter({ text: ui.footer(guild?.name || 'Welcomer') });
@@ -302,12 +304,19 @@ async function handleWelcomerModal(interaction) {
     const message = (f.getTextInputValue('message') || '').trim();
     const title = (f.getTextInputValue('title') || '').trim();
     const colorRaw = (f.getTextInputValue('color') || '').trim();
+    const imageRaw = (f.getTextInputValue('image') || '').trim();
     const delayRaw = (f.getTextInputValue('delay') || '').trim();
     if (message) setWelcomerSetting(guildId, 'welcome_message', message);
     if (title) setWelcomerSetting(guildId, 'welcome_embed_title', title);
     if (colorRaw) {
         const c = colorRaw.startsWith('#') ? colorRaw : `#${colorRaw}`;
         if (/^#[0-9a-fA-F]{6}$/.test(c)) setWelcomerSetting(guildId, 'welcome_embed_color', c);
+    }
+    // Image/GIF URL (empty = remove)
+    if (imageRaw && /^https?:\/\/.+/i.test(imageRaw)) {
+        setWelcomerSetting(guildId, 'welcome_embed_image', imageRaw);
+    } else if (imageRaw === '') {
+        setWelcomerSetting(guildId, 'welcome_embed_image', '');
     }
     const delay = parseInt(delayRaw, 10);
     if (!isNaN(delay) && delay >= 0) setWelcomerSetting(guildId, 'welcome_autorole_delay', String(delay));
