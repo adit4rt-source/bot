@@ -1,23 +1,20 @@
 // systems/videoDownloader.js — Multi-platform video downloader
 //
 // Detects video links from YouTube, Instagram, Twitter/X, Facebook, Reddit,
-// and other platforms. Downloads the video and re-uploads to Discord for
-// inline playback. Works alongside the existing TikTok system (tiktok.js).
+// Pinterest, and other platforms. Downloads the video and re-uploads to Discord.
+// Works alongside the existing TikTok system (tiktok.js).
 //
-// Resolution strategy (in priority order):
-//   1. Cobalt self-hosted instance (supports 20+ platforms, configurable via
-//      env COBALT_API_URL or server_settings key `cobalt_api_url`)
-//   2. Per-platform fallback resolvers (no external dependency for basic cases)
+// NO SETUP REQUIRED — uses free public resolver APIs (same pattern as tikwm for TikTok).
+// Admin just enables the toggle (video_convert = 1) and it works.
 //
-// Per-guild toggle: server_settings key `video_convert` ('1' = on, '0' = off (default OFF)).
-// Individual platforms can be toggled: `video_convert_youtube`, `video_convert_instagram`, etc.
+// Per-guild toggle: server_settings key `video_convert` ('1' = on, '0' = off — default OFF).
 
-const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getSetting } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 
 // ==================== URL PATTERNS ====================
 const PLATFORM_PATTERNS = {
@@ -27,34 +24,16 @@ const PLATFORM_PATTERNS = {
     facebook: /https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.watch)\/[^\s<>()]+/i,
     reddit: /https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/r\/[^\s<>()]+/i,
     pinterest: /https?:\/\/(?:www\.|pin\.)?(?:pinterest\.com|pin\.it)\/[^\s<>()]+/i,
-    bluesky: /https?:\/\/bsky\.app\/profile\/[^\s<>()]+\/post\/[^\s<>()]+/i,
-    threads: /https?:\/\/(?:www\.)?threads\.net\/@[^\s<>()]+\/post\/[^\s<>()]+/i,
 };
-
-// Platforms where the existing tiktok.js handles it — skip here.
-const SKIP_PLATFORMS = ['tiktok'];
 
 // ==================== SETTINGS ====================
 function isEnabled(guildId) {
     return getSetting(guildId, 'video_convert', '0') === '1';
 }
 
-function isPlatformEnabled(guildId, platform) {
-    // Default: all platforms ON once master toggle is on
-    return getSetting(guildId, `video_convert_${platform}`, '1') === '1';
-}
-
 function setEnabled(guildId, on) {
     db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)')
         .run(guildId, 'video_convert', on ? '1' : '0');
-}
-
-function getCobaltUrl(guildId) {
-    // Priority: guild-specific > env > default public (may be rate-limited)
-    const guildUrl = getSetting(guildId, 'cobalt_api_url', '');
-    if (guildUrl && guildUrl.startsWith('http')) return guildUrl.replace(/\/+$/, '');
-    if (process.env.COBALT_API_URL) return process.env.COBALT_API_URL.replace(/\/+$/, '');
-    return null; // No cobalt instance configured
 }
 
 // ==================== DETECTION ====================
@@ -68,53 +47,10 @@ function detectVideoUrl(content) {
     return null;
 }
 
-// ==================== COBALT RESOLVER ====================
-// Cobalt API v7+: POST / with JSON { url, videoQuality, filenameStyle }
-// Response: { status: "tunnel"|"redirect", url: "..." } or { status: "error", ... }
-async function resolveCobalt(cobaltBase, videoUrl) {
-    const endpoint = `${cobaltBase}/`;
-    const body = JSON.stringify({
-        url: videoUrl,
-        videoQuality: '720',
-        filenameStyle: 'basic',
-    });
-    const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'User-Agent': UA,
-        },
-        body,
-    });
-    if (!res.ok) throw new Error(`Cobalt HTTP ${res.status}`);
-    const json = await res.json();
+// ==================== RESOLVERS (free public APIs, no key needed) ====================
 
-    if (json.status === 'error') {
-        throw new Error(json.error?.code || json.text || 'cobalt error');
-    }
-
-    // status: "tunnel" or "redirect" — both give a downloadable URL
-    if (json.status === 'tunnel' || json.status === 'redirect' || json.status === 'stream') {
-        return { videoUrl: json.url, filename: json.filename || null };
-    }
-
-    // Picker (multiple items, e.g. Instagram carousel)
-    if (json.status === 'picker' && Array.isArray(json.picker)) {
-        // Return first video item
-        const vid = json.picker.find(p => p.type === 'video') || json.picker[0];
-        if (vid && vid.url) return { videoUrl: vid.url, filename: vid.filename || null };
-    }
-
-    throw new Error('unexpected cobalt response');
-}
-
-// ==================== FALLBACK RESOLVERS ====================
-// These work without Cobalt for common platforms.
-
-// Twitter/X: use fxtwitter.com API (public, no key)
+// --- Twitter/X: fxtwitter.com API (public, reliable) ---
 async function resolveTwitter(url) {
-    // Extract tweet URL and convert to fxtwitter API
     const match = url.match(/(?:twitter|x)\.com\/([^/]+)\/status\/(\d+)/i);
     if (!match) return null;
     const apiUrl = `https://api.fxtwitter.com/${match[1]}/status/${match[2]}`;
@@ -122,33 +58,153 @@ async function resolveTwitter(url) {
     if (!res.ok) return null;
     const json = await res.json();
     const tweet = json.tweet;
-    if (!tweet || !tweet.media || !tweet.media.videos || !tweet.media.videos.length) return null;
-    // Get best quality video variant
-    const video = tweet.media.videos[0];
-    const videoUrl = video.url || (video.variants && video.variants.length ? video.variants[video.variants.length - 1].url : null);
-    if (!videoUrl) return null;
-    return {
-        videoUrl,
-        title: (tweet.text || '').slice(0, 200),
-        author: tweet.author ? (tweet.author.name || tweet.author.screen_name || '') : '',
-    };
+    if (!tweet) return null;
+    // Video from media
+    if (tweet.media && tweet.media.videos && tweet.media.videos.length) {
+        const video = tweet.media.videos[0];
+        return {
+            videoUrl: video.url || null,
+            title: (tweet.text || '').slice(0, 200),
+            author: tweet.author ? (tweet.author.name || '') : '',
+        };
+    }
+    return null;
 }
 
-// Instagram: use ddinstagram.com (public embed fix API)
+// --- Instagram: use public ddinstagram / saveig APIs ---
 async function resolveInstagram(url) {
-    // Convert to ddinstagram API
-    const ddUrl = url.replace(/instagram\.com/i, 'ddinstagram.com');
-    const res = await fetch(ddUrl, {
-        headers: { 'User-Agent': UA },
-        redirect: 'manual',
-    });
-    // ddinstagram redirects to the video URL or returns HTML with video tag
-    const location = res.headers.get('location');
-    if (location && /\.(mp4|webm)/i.test(location)) {
-        return { videoUrl: location, title: '', author: '' };
-    }
-    // Try alternate approach: use igram.world
+    // Method 1: igdownloader.app API
+    try {
+        const apiUrl = `https://v3.igdownloader.app/api/v1/instagram/reels?url=${encodeURIComponent(url)}`;
+        const res = await fetch(apiUrl, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+        if (res.ok) {
+            const json = await res.json();
+            if (json && json.items && json.items.length) {
+                const item = json.items.find(i => i.url) || json.items[0];
+                if (item && item.url) return { videoUrl: item.url, title: '', author: '' };
+            }
+        }
+    } catch (_) {}
+
+    // Method 2: saveig.app style
+    try {
+        const res = await fetch('https://api.saveig.app/api/convert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+            body: `url=${encodeURIComponent(url)}`,
+        });
+        if (res.ok) {
+            const json = await res.json();
+            if (json && json.url && Array.isArray(json.url) && json.url.length) {
+                const vid = json.url.find(u => u.type === 'video') || json.url[0];
+                if (vid && vid.url) return { videoUrl: vid.url, title: '', author: '' };
+            }
+        }
+    } catch (_) {}
+
     return null;
+}
+
+// --- YouTube: cobalt-style free API (tikwm equivalent for YT) ---
+async function resolveYouTube(url) {
+    // Method 1: Use a public all-in-one downloader API
+    try {
+        const apiUrl = `https://api.vevioz.com/api/button/videos?url=${encodeURIComponent(url)}`;
+        const res = await fetch(apiUrl, { headers: { 'User-Agent': UA } });
+        if (res.ok) {
+            const html = await res.text();
+            // Parse download link from response (returns HTML with download buttons)
+            const match720 = html.match(/href="(https?:\/\/[^"]+)"[^>]*>720p/i);
+            const match480 = html.match(/href="(https?:\/\/[^"]+)"[^>]*>480p/i);
+            const match360 = html.match(/href="(https?:\/\/[^"]+)"[^>]*>360p/i);
+            const matchAny = html.match(/href="(https?:\/\/[^"]+\.mp4[^"]*)"/i);
+            const downloadUrl = (match720 && match720[1]) || (match480 && match480[1]) || (match360 && match360[1]) || (matchAny && matchAny[1]);
+            if (downloadUrl) {
+                const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
+                return { videoUrl: downloadUrl, title: titleMatch ? titleMatch[1].slice(0, 100) : '', author: '' };
+            }
+        }
+    } catch (_) {}
+
+    // Method 2: y2mate-style API
+    try {
+        const res = await fetch('https://api.mp4youtube.com/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+            body: JSON.stringify({ url }),
+        });
+        if (res.ok) {
+            const json = await res.json();
+            if (json && json.url) return { videoUrl: json.url, title: json.title || '', author: '' };
+        }
+    } catch (_) {}
+
+    // Method 3: Cobalt instance (if env is set)
+    if (process.env.COBALT_API_URL) {
+        try {
+            const cobaltUrl = process.env.COBALT_API_URL.replace(/\/+$/, '');
+            const res = await fetch(`${cobaltUrl}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': UA },
+                body: JSON.stringify({ url, videoQuality: '720', filenameStyle: 'basic' }),
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if ((json.status === 'tunnel' || json.status === 'redirect' || json.status === 'stream') && json.url) {
+                    return { videoUrl: json.url, title: '', author: '' };
+                }
+            }
+        } catch (_) {}
+    }
+
+    return null;
+}
+
+// --- Facebook: use a public API ---
+async function resolveFacebook(url) {
+    try {
+        const apiUrl = `https://api.fbdownloader.app/api/convert?url=${encodeURIComponent(url)}`;
+        const res = await fetch(apiUrl, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+        if (res.ok) {
+            const json = await res.json();
+            if (json && (json.hd || json.sd)) {
+                return { videoUrl: json.hd || json.sd, title: json.title || '', author: '' };
+            }
+        }
+    } catch (_) {}
+    return null;
+}
+
+// --- Reddit: use reddit's own JSON endpoint ---
+async function resolveReddit(url) {
+    try {
+        // Append .json to get post data
+        const jsonUrl = url.replace(/\/?(\?.*)?$/, '.json$1');
+        const res = await fetch(jsonUrl, { headers: { 'User-Agent': UA } });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const post = data?.[0]?.data?.children?.[0]?.data;
+        if (!post) return null;
+        // Reddit-hosted video
+        if (post.is_video && post.media && post.media.reddit_video) {
+            const vidUrl = post.media.reddit_video.fallback_url || post.media.reddit_video.dash_url;
+            if (vidUrl) return { videoUrl: vidUrl.split('?')[0], title: (post.title || '').slice(0, 200), author: post.author || '' };
+        }
+        return null;
+    } catch (_) {}
+    return null;
+}
+
+// ==================== RESOLVER ROUTER ====================
+async function resolveVideo(platform, url) {
+    switch (platform) {
+        case 'twitter': return resolveTwitter(url);
+        case 'instagram': return resolveInstagram(url);
+        case 'youtube': return resolveYouTube(url);
+        case 'facebook': return resolveFacebook(url);
+        case 'reddit': return resolveReddit(url);
+        default: return null;
+    }
 }
 
 // ==================== DISCORD HELPERS ====================
@@ -159,27 +215,8 @@ function uploadLimitMB(guild) {
     return 25;
 }
 
-const PLATFORM_EMOJI = {
-    youtube: '▶️',
-    instagram: '📸',
-    twitter: '🐦',
-    facebook: '📘',
-    reddit: '🤖',
-    pinterest: '📌',
-    bluesky: '🦋',
-    threads: '🧵',
-};
-
-const PLATFORM_NAME = {
-    youtube: 'YouTube',
-    instagram: 'Instagram',
-    twitter: 'Twitter/X',
-    facebook: 'Facebook',
-    reddit: 'Reddit',
-    pinterest: 'Pinterest',
-    bluesky: 'Bluesky',
-    threads: 'Threads',
-};
+const PLATFORM_EMOJI = { youtube: '▶️', instagram: '📸', twitter: '🐦', facebook: '📘', reddit: '🤖', pinterest: '📌' };
+const PLATFORM_NAME = { youtube: 'YouTube', instagram: 'Instagram', twitter: 'Twitter/X', facebook: 'Facebook', reddit: 'Reddit', pinterest: 'Pinterest' };
 
 function buildCaption(platform, info = {}) {
     const emoji = PLATFORM_EMOJI[platform] || '🎬';
@@ -189,7 +226,7 @@ function buildCaption(platform, info = {}) {
     if (info.author) head += ` — ${info.author}`;
     parts.push(head);
     if (info.title) parts.push(`> ${info.title.replace(/\n+/g, ' ').slice(0, 280)}`);
-    parts.push('-# ✅ Auto-converted for inline playback');
+    parts.push('-# ✅ Auto-download');
     return parts.join('\n');
 }
 
@@ -214,16 +251,14 @@ async function maybeHandleVideo(message) {
         if (!detected) return false;
 
         const { platform, url } = detected;
-        if (!isPlatformEnabled(message.guild.id, platform)) return false;
 
-        // Cooldown per channel
+        // Cooldown per channel+platform
         const now = Date.now();
         const key = `${message.channel.id}_${platform}`;
         const last = _cooldown.get(key) || 0;
         if (now - last < COOLDOWN_MS) return false;
         _cooldown.set(key, now);
 
-        const guildId = message.guild.id;
         const emoji = PLATFORM_EMOJI[platform] || '🎬';
         const pname = PLATFORM_NAME[platform] || platform;
 
@@ -232,37 +267,16 @@ async function maybeHandleVideo(message) {
         }).catch(() => null);
 
         let resolved = null;
-
-        // Try Cobalt first (if configured)
-        const cobaltUrl = getCobaltUrl(guildId);
-        if (cobaltUrl) {
-            try {
-                resolved = await resolveCobalt(cobaltUrl, url);
-            } catch (e) {
-                log('WARN', `[videoDownloader] Cobalt gagal untuk ${platform}: ${e.message}`);
-            }
-        }
-
-        // Fallback per-platform resolvers
-        if (!resolved) {
-            try {
-                if (platform === 'twitter') {
-                    resolved = await resolveTwitter(url);
-                } else if (platform === 'instagram') {
-                    resolved = await resolveInstagram(url);
-                }
-            } catch (e) {
-                log('WARN', `[videoDownloader] fallback resolver gagal untuk ${platform}: ${e.message}`);
-            }
+        try {
+            resolved = await resolveVideo(platform, url);
+        } catch (e) {
+            log('WARN', `[videoDownloader] resolve gagal untuk ${platform}: ${e.message}`);
         }
 
         if (!resolved || !resolved.videoUrl) {
-            const fail = `⚠️ Gagal mengambil video dari ${pname}. `;
-            const hint = cobaltUrl
-                ? 'Coba lagi nanti.'
-                : 'Hint: set Cobalt instance URL via `COBALT_API_URL` env atau admin panel untuk support lebih banyak platform.';
+            const fail = `⚠️ Gagal mengambil video dari ${pname}. Video mungkin private atau platform tidak support.`;
             if (status) {
-                status.edit({ content: fail + hint })
+                status.edit({ content: fail })
                     .then(m => setTimeout(() => m.delete().catch(() => {}), 10000))
                     .catch(() => {});
             }
@@ -274,24 +288,19 @@ async function maybeHandleVideo(message) {
 
         const caption = buildCaption(platform, resolved);
 
-        // Download video
+        // Download video buffer
         let buffer = null;
         try {
-            const vres = await fetch(resolved.videoUrl, {
-                headers: { 'User-Agent': UA },
-            });
+            const vres = await fetch(resolved.videoUrl, { headers: { 'User-Agent': UA } });
             if (vres.ok) buffer = Buffer.from(await vres.arrayBuffer());
         } catch (e) {
             log('WARN', `[videoDownloader] download video gagal: ${e.message}`);
         }
 
         const limitBytes = uploadLimitMB(message.guild) * 1024 * 1024;
-        const ext = (resolved.filename && resolved.filename.includes('.'))
-            ? resolved.filename.split('.').pop()
-            : 'mp4';
 
         if (buffer && buffer.length <= limitBytes) {
-            const file = new AttachmentBuilder(buffer, { name: `${platform}.${ext}` });
+            const file = new AttachmentBuilder(buffer, { name: `${platform}.mp4` });
             try {
                 if (status) await status.edit({ content: caption, files: [file] });
                 else await message.channel.send({ content: caption, files: [file] });
@@ -302,7 +311,7 @@ async function maybeHandleVideo(message) {
         }
 
         // Too large or download failed — send direct link
-        const content = `${caption}\n-# Video terlalu besar untuk diupload — klik tombol di bawah untuk download.`;
+        const content = `${caption}\n-# Video terlalu besar untuk diupload — klik tombol di bawah.`;
         if (status) await status.edit({ content, components: [linkRow(resolved.videoUrl, platform)] }).catch(() => {});
         else await message.channel.send({ content, components: [linkRow(resolved.videoUrl, platform)] }).catch(() => {});
         return true;
@@ -317,10 +326,10 @@ module.exports = {
     detectVideoUrl,
     isEnabled,
     setEnabled,
-    isPlatformEnabled,
     maybeHandleVideo,
-    resolveCobalt,
     resolveTwitter,
     resolveInstagram,
-    getCobaltUrl,
+    resolveYouTube,
+    resolveFacebook,
+    resolveReddit,
 };
