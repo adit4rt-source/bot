@@ -1114,6 +1114,296 @@ app.post('/api/tempvoice/settings/:guildId', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== ACHIEVEMENTS ====================
+app.get('/api/achievements', async (req, res) => {
+    try {
+        const { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const totalUnlocked = db.prepare('SELECT COUNT(*) as c FROM achievements').get();
+        const usersWithAch = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM achievements').get();
+        const mostUnlockedRaw = db.prepare('SELECT achievementId, COUNT(*) as count FROM achievements GROUP BY achievementId ORDER BY count DESC LIMIT 10').all();
+        const topUsersRaw = db.prepare('SELECT userId, COUNT(*) as total FROM achievements GROUP BY userId ORDER BY total DESC LIMIT 10').all();
+        res.json({
+            totalDefined: ACHIEVEMENTS.length,
+            totalUnlocked: totalUnlocked?.c || 0,
+            usersWithAchievements: usersWithAch?.c || 0,
+            milestones: ACHIEVEMENT_MILESTONES,
+            definitions: ACHIEVEMENTS.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward })),
+            mostUnlocked: mostUnlockedRaw.map(r => ({ id: r.achievementId, count: r.count, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' })),
+            topUsers: await enrichLeaderboard(topUsersRaw),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/achievements/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { ACHIEVEMENTS, getAchievementProgress } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const unlockedRows = db.prepare('SELECT achievementId, unlockedAt FROM achievements WHERE userId = ? ORDER BY unlockedAt DESC').all(userId);
+        const unlockedSet = new Set(unlockedRows.map(r => r.achievementId));
+        const unlocked = unlockedRows.map(r => ({ id: r.achievementId, unlockedAt: r.unlockedAt, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' }));
+        const locked = ACHIEVEMENTS.filter(a => !unlockedSet.has(a.id)).map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward, progress: getAchievementProgress(null, userId, a.id) }));
+        res.json({ userId, unlockedCount: unlocked.length, totalDefined: ACHIEVEMENTS.length, unlocked, locked });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== QUESTS ====================
+app.get('/api/quests', (req, res) => {
+    try {
+        const { QUEST_POOL, DIFFICULTY_TIERS } = require('./systems/quests');
+        const questTypes = QUEST_POOL.map(q => q.type);
+        const usersWithDailyQuests = db.prepare('SELECT COUNT(*) as c FROM daily_quests').get();
+        res.json({
+            difficulties: DIFFICULTY_TIERS,
+            questTypes,
+            totalQuestTypes: questTypes.length,
+            usersWithDailyQuests: usersWithDailyQuests?.c || 0,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/quests/:guildId/:userId', (req, res) => {
+    try {
+        const { guildId, userId } = req.params;
+        const { getWeekId } = require('./systems/quests');
+        const parse = (s) => { try { return s ? JSON.parse(s) : null; } catch (_) { return null; } };
+        const dailyRow = db.prepare('SELECT date, data FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        const week = getWeekId();
+        const weeklyRow = db.prepare('SELECT week, data FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, userId, week);
+        res.json({
+            guildId, userId,
+            daily: dailyRow ? { date: dailyRow.date, quests: parse(dailyRow.data) } : null,
+            weekly: weeklyRow ? { week: weeklyRow.week, quests: parse(weeklyRow.data) } : null,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== GIVEAWAYS ====================
+app.get('/api/giveaways/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getGuildGiveaways, countEntries } = require('./systems/giveaway');
+        const giveaways = getGuildGiveaways(guildId).map(g => ({
+            id: g.id, prize: g.prize, channelId: g.channelId, messageId: g.messageId,
+            hostId: g.hostId, winners: g.winners, requiredRoleId: g.requiredRoleId || null,
+            endsAt: g.endsAt, ended: !!g.ended, createdAt: g.createdAt,
+            winnerIds: g.winnerIds ? String(g.winnerIds).split(',').filter(Boolean) : [],
+            entries: countEntries(g.id),
+        }));
+        res.json({
+            total: giveaways.length,
+            active: giveaways.filter(g => !g.ended).length,
+            ended: giveaways.filter(g => g.ended).length,
+            giveaways,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== SELF ROLES ====================
+app.get('/api/selfroles/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getMenus, getOptions } = require('./systems/selfRoles');
+        const menus = getMenus(guildId).map(m => ({
+            id: m.id, title: m.title, description: m.description, type: m.type,
+            color: m.color, channelId: m.channelId, messageId: m.messageId, maxRoles: m.maxRoles || 0,
+            options: getOptions(m.id).map(o => ({ id: o.id, roleId: o.roleId, label: o.label, emoji: o.emoji, description: o.description })),
+        }));
+        res.json({ total: menus.length, menus });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== STARBOARD ====================
+app.get('/api/starboard/:guildId', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        require('./systems/starboard'); // ensure the starboard table exists
+        const settings = {
+            channel: getSetting(guildId, 'starboard_channel', null),
+            threshold: parseInt(getSetting(guildId, 'starboard_threshold', '3'), 10) || 3,
+            emoji: getSetting(guildId, 'starboard_emoji', '⭐'),
+            selfStar: getSetting(guildId, 'starboard_self_star', '0') === '1',
+        };
+        const totalMessages = db.prepare('SELECT COUNT(*) as c FROM starboard WHERE guildId = ?').get(guildId);
+        const totalStars = db.prepare('SELECT SUM(stars) as s FROM starboard WHERE guildId = ?').get(guildId);
+        const topRaw = db.prepare('SELECT messageId, channelId, authorId, stars, content, createdAt FROM starboard WHERE guildId = ? ORDER BY stars DESC LIMIT 10').all(guildId);
+        res.json({
+            enabled: !!settings.channel,
+            settings,
+            totalMessages: totalMessages?.c || 0,
+            totalStars: totalStars?.s || 0,
+            topMessages: await enrichLeaderboard(topRaw, 'authorId'),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== TITLES ====================
+app.get('/api/titles', (req, res) => {
+    try {
+        const { getAllTitles } = require('./systems/titles');
+        res.json({ titles: getAllTitles() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/titles/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const guildId = req.query.guildId || null;
+        const { getUserTitle, getTitleProgress, getScoreBreakdown, calculateOverallScore } = require('./systems/titles');
+        res.json({
+            userId,
+            score: calculateOverallScore(guildId, userId),
+            title: getUserTitle(guildId, userId),
+            progress: getTitleProgress(guildId, userId),
+            breakdown: getScoreBreakdown(guildId, userId),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== WORLD BOSS ====================
+app.get('/api/worldboss', async (req, res) => {
+    try {
+        const { WORLD_BOSSES, getWeekId } = require('./systems/worldBoss');
+        const weekId = getWeekId();
+        const boss = db.prepare('SELECT * FROM world_boss WHERE weekId = ?').get(weekId);
+        let damageLeaderboard = [];
+        let participants = 0;
+        if (boss) {
+            const dmgRows = db.prepare('SELECT userId, username, totalDamage, attacks FROM world_boss_damage WHERE weekId = ? ORDER BY totalDamage DESC LIMIT 10').all(weekId);
+            damageLeaderboard = await enrichLeaderboard(dmgRows);
+            participants = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM world_boss_damage WHERE weekId = ?').get(weekId)?.c || 0;
+        }
+        res.json({
+            weekId,
+            spawned: !!boss,
+            boss: boss ? {
+                bossId: boss.bossId, name: boss.bossName, maxHp: boss.maxHp, currentHp: boss.currentHp,
+                status: boss.status, startedAt: boss.startedAt, defeatedAt: boss.defeatedAt,
+                hpPercent: boss.maxHp ? Math.round((boss.currentHp / boss.maxHp) * 100) : 0,
+            } : null,
+            participants,
+            damageLeaderboard,
+            bosses: WORLD_BOSSES,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== PETS: EVOLUTION / FUSION / AWAKENING ====================
+app.get('/api/pets/evolutions', (req, res) => {
+    try {
+        const { PET_DATA, PET_EVOLUTIONS, PET_SKILL_MILESTONES } = require('./data/pets');
+        const { AWAKENING_TIERS } = require('./systems/awakening');
+        const { FUSION_CONFIG } = require('./systems/petFusion');
+        const petMap = Object.fromEntries(PET_DATA.map(p => [p.id, p]));
+        const lite = (id) => { const p = petMap[id]; return p ? { id: p.id, name: p.name, emoji: p.emoji, tier: p.tier } : { id, name: id, emoji: '❓', tier: '?' }; };
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
+        res.json({
+            tiers: TIER_ORDER,
+            totalPets: PET_DATA.length,
+            pets: PET_DATA.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, tier: p.tier })),
+            evolutions: PET_EVOLUTIONS.map(e => ({ from: lite(e.from), to: lite(e.to), level: e.level, name: e.name })),
+            skillMilestones: PET_SKILL_MILESTONES,
+            awakeningTiers: AWAKENING_TIERS.map(t => ({ level: t.level, stars: t.stars, name: t.name, title: t.title, color: t.color, statBoost: t.statBoost, requirements: t.requirements, reward: t.reward })),
+            fusion: { fusableTiers: Object.keys(FUSION_CONFIG), config: FUSION_CONFIG },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== FARMING: RECIPE TREE ====================
+app.get('/api/farming/recipes', (req, res) => {
+    try {
+        const { FARM_RECIPES, FARM_CROPS } = require('./data/farming');
+        let PRESTIGE_CROPS = [];
+        try { PRESTIGE_CROPS = require('./systems/farmMutation').PRESTIGE_CROPS || []; } catch (_) { /* optional */ }
+        const cropMap = Object.fromEntries([...FARM_CROPS, ...PRESTIGE_CROPS].map(c => [c.id, c]));
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const tierOf = (price) => {
+            if (price < 500) return 'Common';
+            if (price < 1500) return 'Uncommon';
+            if (price < 5000) return 'Rare';
+            if (price < 20000) return 'Epic';
+            if (price < 120000) return 'Legendary';
+            return 'Mythic';
+        };
+        const recipes = FARM_RECIPES.map(r => ({
+            id: r.id, name: r.name, emoji: r.emoji, sellPrice: r.sellPrice, tier: tierOf(r.sellPrice),
+            ingredients: r.ingredients.map(i => ({ id: i.id, qty: i.qty, name: cropMap[i.id]?.name || i.id, emoji: cropMap[i.id]?.emoji || '📦' })),
+        }));
+        const byTier = {};
+        for (const t of TIER_ORDER) byTier[t] = recipes.filter(r => r.tier === t);
+        res.json({ tiers: TIER_ORDER, total: recipes.length, byTier, recipes });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ANALYTICS (weekly overview) ====================
+app.get('/api/analytics', async (req, res) => {
+    try {
+        const DAY = 86400000;
+        const since = Date.now() - 7 * DAY;
+
+        // --- economy health ---
+        const totalMoney = db.prepare('SELECT SUM(balance) as s FROM users').get()?.s || 0;
+        const totalUsers = db.prepare('SELECT COUNT(*) as c FROM users').get()?.c || 0;
+        const avgBalance = totalUsers ? Math.round(totalMoney / totalUsers) : 0;
+        const top10 = db.prepare('SELECT balance FROM users ORDER BY balance DESC LIMIT 10').all();
+        const top10Sum = top10.reduce((s, u) => s + (u.balance || 0), 0);
+        const top10Share = totalMoney > 0 ? Math.round((top10Sum / totalMoney) * 1000) / 10 : 0;
+        const totalEarned = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_earned'").get()?.s || 0;
+        const totalSpent = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_spent'").get()?.s || 0;
+        const sinkRatio = totalEarned > 0 ? Math.round((totalSpent / totalEarned) * 1000) / 10 : 0;
+
+        // daily money created over the last 7 days (WIB), from income_<YYYY-MM-DD> stats
+        const wibDate = (offsetDays) => new Date(Date.now() - offsetDays * DAY).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const dailyIncome = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = wibDate(i);
+            const amount = db.prepare('SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = ?').get('income_' + date)?.s || 0;
+            dailyIncome.push({ date, amount });
+        }
+
+        // --- top players ---
+        const byBalance = db.prepare('SELECT userId, balance, level FROM users ORDER BY balance DESC LIMIT 5').all();
+        const byLevel = db.prepare('SELECT userId, level, xp, balance FROM users ORDER BY level DESC, xp DESC LIMIT 5').all();
+        const byActivity = db.prepare('SELECT userId, COUNT(*) as count FROM logs WHERE time >= ? GROUP BY userId ORDER BY count DESC LIMIT 5').all(since);
+
+        // --- activity by hour (WIB) from the transaction log over the last 7 days ---
+        const logRows = db.prepare('SELECT time FROM logs WHERE time >= ?').all(since);
+        const hours = new Array(24).fill(0);
+        for (const r of logRows) {
+            const h = Math.floor(((r.time + 7 * 3600000) / 3600000) % 24); // shift to WIB (UTC+7)
+            if (h >= 0 && h < 24) hours[h]++;
+        }
+        let peakHour = 0;
+        for (let h = 1; h < 24; h++) if (hours[h] > hours[peakHour]) peakHour = h;
+
+        // --- commands ---
+        const cmdTotal = db.prepare('SELECT SUM(count) as s FROM command_summary').get()?.s || 0;
+        const topCommands = db.prepare('SELECT command, SUM(count) as count FROM command_summary GROUP BY command ORDER BY count DESC LIMIT 10').all();
+
+        res.json({
+            generatedAt: Date.now(),
+            rangeDays: 7,
+            economy: {
+                totalMoney, totalUsers, avgBalance, top10Share,
+                totalEarned, totalSpent, sinkRatio,
+                dailyIncome,
+            },
+            topPlayers: {
+                byBalance: await enrichLeaderboard(byBalance),
+                byLevel: await enrichLeaderboard(byLevel),
+                byActivity: await enrichLeaderboard(byActivity),
+            },
+            activity: {
+                totalEvents: logRows.length,
+                peakHour,
+                byHour: hours.map((count, hour) => ({ hour, count })),
+            },
+            commands: { total: cmdTotal, top: topCommands },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== QR CODE REDIRECT ROUTES ====================
 try {
     const { registerQrRoutes } = require('./systems/qrcode');
