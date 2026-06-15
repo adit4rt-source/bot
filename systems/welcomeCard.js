@@ -459,38 +459,45 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
     }
     if (!gifBuffer || !gifBuffer.length) return null;
 
-    // Inspect the animated image: dimensions + number of frames (pages).
-    const meta = await sharp(gifBuffer, { animated: true }).metadata();
-    const width = meta.width;
-    const pageHeight = meta.pageHeight || meta.height;
-    const pages = meta.pages || 1;
-    if (!width || !pageHeight) return null;
+    try {
+        // Inspect the animated image: dimensions + number of frames (pages).
+        const meta = await sharp(gifBuffer, { animated: true }).metadata();
+        const width = meta.width;
+        const pageHeight = meta.pageHeight || meta.height;
+        const pages = meta.pages || 1;
+        if (!width || !pageHeight) return null;
 
-    // ---- Render the static overlay once (transparent bg) ----
-    const canvas = createCanvas(width, pageHeight);
-    const ctx = canvas.getContext('2d');
-    await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username });
-    const overlayPng = canvas.toBuffer('image/png');
+        // ---- Render the static overlay once (transparent bg) ----
+        const canvas = createCanvas(width, pageHeight);
+        const ctx = canvas.getContext('2d');
+        await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username });
+        const overlayPng = canvas.toBuffer('image/png');
 
-    // ---- Layer the overlay onto every frame of the filmstrip ----
-    // sharp lays an animated image out as a vertical strip of `pages` frames,
-    // each `pageHeight` tall. Compositing the overlay at each page offset stamps
-    // it on every frame while preserving the original animation + timing.
-    const composites = [];
-    for (let i = 0; i < pages; i++) {
-        composites.push({ input: overlayPng, top: i * pageHeight, left: 0 });
-    }
+        // ---- Layer the overlay onto every frame of the filmstrip ----
+        // sharp lays an animated image out as a vertical strip of `pages` frames,
+        // each `pageHeight` tall. Compositing the overlay at each page offset
+        // stamps it on every frame while preserving the original animation/timing.
+        const composites = [];
+        for (let i = 0; i < pages; i++) {
+            composites.push({ input: overlayPng, top: i * pageHeight, left: 0 });
+        }
 
-    const out = await sharp(gifBuffer, { animated: true })
-        .composite(composites)
-        .gif()
-        .toBuffer();
+        const out = await sharp(gifBuffer, { animated: true })
+            .composite(composites)
+            .gif()
+            .toBuffer();
 
-    if (maxBytes && out.length > maxBytes) {
-        console.error(`[welcomeCard] GIF welcomer ${(out.length / 1048576).toFixed(2)}MB melebihi batas ${(maxBytes / 1048576).toFixed(0)}MB — pakai banner statis.`);
+        if (maxBytes && out.length > maxBytes) {
+            console.error(`[welcomeCard] GIF welcomer ${(out.length / 1048576).toFixed(2)}MB melebihi batas ${(maxBytes / 1048576).toFixed(0)}MB — pakai banner statis.`);
+            return null;
+        }
+        return out;
+    } catch (e) {
+        // sharp present but failed (corrupt binary, bad GIF, etc.) — signal the
+        // caller to fall back to the static banner (which still shows the avatar).
+        console.error('[welcomeCard] generateAvatarBannerGif gagal memproses GIF, pakai banner statis:', e.message);
         return null;
     }
-    return out;
 }
 
 module.exports = { generateCard, generateAvatarBanner, generateAvatarBannerGif };
