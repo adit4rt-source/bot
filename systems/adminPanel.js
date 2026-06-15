@@ -1,5 +1,5 @@
 // systems/adminPanel.js - Admin Panel UI System (Button-based admin controls)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType, ChannelSelectMenuBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
 const { db, getOrCreateUser, getSetting, setSetting, checkGlobalMode } = require('../database');
 const fs = require('fs');
 const { FEATURES, PAGE_SIZE, isFeatureEnabled, toggleFeature } = require('./featureGate');
@@ -64,54 +64,6 @@ async function resolveTargetId(interaction, raw) {
 }
 
 // ============ BUILD: Main Admin Panel (restructured for clarity) ============
-// ==================== CUSTOM EMBED BUILDER ====================
-// In-memory draft store (transient — fine for a builder). Key: `${guildId}:${userId}`.
-const embedDrafts = new Map();
-function ceKey(guildId, userId) { return `${guildId}:${userId}`; }
-function getEmbedDraft(guildId, userId) {
-    const k = ceKey(guildId, userId);
-    if (!embedDrafts.has(k)) embedDrafts.set(k, { channelId: '', title: '', description: '', color: '#2B2D31', footer: '', image: '' });
-    return embedDrafts.get(k);
-}
-
-function buildCustomEmbedPanel(guildId, userId, guild) {
-    const d = getEmbedDraft(guildId, userId);
-    const ready = Boolean(d.channelId && d.description);
-
-    const status = new EmbedBuilder()
-        .setTitle('🏷️ Custom Embed Builder')
-        .setColor('#5865F2')
-        .setDescription(
-            `**1.** 📍 Channel: ${d.channelId ? `<#${d.channelId}>` : '*belum dipilih*'}\n` +
-            `**2.** ✏️ Konten: ${d.description ? '✅ sudah diisi' : '*belum diisi*'}\n` +
-            `**3.** 🖼️ Gambar: ${d.image ? '✅ terpasang' : '*tidak ada*'}\n\n` +
-            (ready ? '✅ **Siap dikirim!** Klik **📤 Kirim**.' : '⚠️ Pilih channel & isi konten dulu, lalu Kirim.') +
-            `\n\n💡 Variabel: \`{server}\` = nama server, \`\\n\` = baris baru (di konten).`
-        );
-
-    const embeds = [status];
-    if (d.description) {
-        const preview = new EmbedBuilder().setColor(d.color && /^#?[0-9a-fA-F]{6}$/.test(d.color) ? (d.color.startsWith('#') ? d.color : `#${d.color}`) : '#2B2D31');
-        const desc = d.description.replace(/\\n/g, '\n').replace(/{server}/g, guild?.name || 'Server');
-        preview.setDescription(desc);
-        if (d.title) preview.setTitle(d.title.replace(/{server}/g, guild?.name || 'Server'));
-        if (d.footer) preview.setFooter({ text: d.footer });
-        if (d.image) preview.setImage(d.image);
-        embeds.push(preview);
-    }
-
-    const channelRow = new ActionRowBuilder().addComponents(
-        new ChannelSelectMenuBuilder().setCustomId('admpnl_ce_channel').setPlaceholder('📍 Pilih channel tujuan...').setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setMinValues(1).setMaxValues(1)
-    );
-    const btnRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_ce_edit').setLabel('✏️ Edit Konten').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_ce_send').setLabel('📤 Kirim').setStyle(ButtonStyle.Success).setDisabled(!ready),
-        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-    );
-
-    return { embeds, components: [channelRow, btnRow] };
-}
-
 function buildAdminPanel(guildId) {
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
     const levelingOn = getSetting(guildId, 'leveling_enabled', '1') !== '0';
@@ -601,38 +553,15 @@ async function handleAdminButton(interaction) {
 
     if (customId === 'admpnl_blacklist') return interaction.update(buildBlacklistSubPanel(guildId));
     if (customId === 'admpnl_customembed') {
-        return interaction.update(buildCustomEmbedPanel(guildId, interaction.user.id, interaction.guild));
-    }
-    if (customId === 'admpnl_ce_edit') {
-        const d = getEmbedDraft(guildId, interaction.user.id);
         const modal = new ModalBuilder().setCustomId('admpnl_modal_customembed').setTitle('🏷️ Custom Embed');
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Judul embed').setValue(d.title || '')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi (\\n untuk newline, {server} untuk nama)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Konten embed...').setValue(d.description || '')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#2B2D31').setValue(d.color || '')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer text (kosong = tanpa footer)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Footer teks').setValue(d.footer || '')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image').setLabel('Link gambar (URL, kosong = tanpa gambar)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('https://...png/jpg/gif').setValue(d.image || ''))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID (kirim embed ke sini)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Channel ID')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Judul embed')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi (\\n untuk newline, {server} untuk nama)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Konten embed...')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#2B2D31')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer text (kosong = tanpa footer)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Footer teks'))
         );
         return interaction.showModal(modal);
-    }
-    if (customId === 'admpnl_ce_send') {
-        const d = getEmbedDraft(guildId, interaction.user.id);
-        if (!d.channelId || !d.description) return interaction.reply({ content: '❌ Pilih channel & isi konten dulu!', flags: 1 << 6 });
-        const channel = interaction.guild.channels.cache.get(d.channelId);
-        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', flags: 1 << 6 });
-        const embed = new EmbedBuilder()
-            .setColor(d.color && /^#?[0-9a-fA-F]{6}$/.test(d.color) ? (d.color.startsWith('#') ? d.color : `#${d.color}`) : '#2B2D31')
-            .setDescription(d.description.replace(/\\n/g, '\n').replace(/{server}/g, interaction.guild.name));
-        if (d.title) embed.setTitle(d.title.replace(/{server}/g, interaction.guild.name));
-        if (d.footer) embed.setFooter({ text: d.footer });
-        if (d.image) embed.setImage(d.image);
-        try {
-            await channel.send({ embeds: [embed] });
-        } catch (e) {
-            return interaction.reply({ content: `❌ Gagal kirim: ${e.message}`, flags: 1 << 6 });
-        }
-        embedDrafts.delete(ceKey(guildId, interaction.user.id)); // reset draft after send
-        return interaction.update({ content: `✅ Custom embed terkirim ke <#${d.channelId}>!`, embeds: [], components: [] });
     }
 
     // === DB TOOLS (Owner Only) ===
@@ -1309,15 +1238,23 @@ async function handleAdminModal(interaction) {
 
     // === CUSTOM EMBED ===
     if (customId === 'admpnl_modal_customembed') {
-        const d = getEmbedDraft(interaction.guild.id, interaction.user.id);
-        d.title = (interaction.fields.getTextInputValue('title') || '').trim();
-        d.description = (interaction.fields.getTextInputValue('description') || '').trim();
-        const color = (interaction.fields.getTextInputValue('color') || '').trim();
-        if (color) d.color = color.startsWith('#') ? color : `#${color}`;
-        d.footer = (interaction.fields.getTextInputValue('footer') || '').trim();
-        const image = (interaction.fields.getTextInputValue('image') || '').trim();
-        d.image = /^https?:\/\/.+/i.test(image) ? image : '';
-        return interaction.update(buildCustomEmbedPanel(interaction.guild.id, interaction.user.id, interaction.guild));
+        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+        const title = interaction.fields.getTextInputValue('title')?.trim() || '';
+        const description = interaction.fields.getTextInputValue('description').replace(/\\n/g, '\n').replace(/{server}/g, interaction.guild.name);
+        const color = interaction.fields.getTextInputValue('color')?.trim() || '#2B2D31';
+        const footer = interaction.fields.getTextInputValue('footer')?.trim() || '';
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setDescription(description)
+            .setColor(color.startsWith('#') ? color : `#${color}`);
+        if (title) embed.setTitle(title);
+        if (footer) embed.setFooter({ text: footer });
+
+        await channel.send({ embeds: [embed] });
+        return interaction.reply({ content: `✅ Custom embed terkirim ke <#${channelId}>!`, ephemeral: true });
     }
 
     // === BLACKLIST: Add ===
@@ -1455,18 +1392,6 @@ async function handleAdminModal(interaction) {
 // ============ UTILITY: Detection helpers ============
 function isAdminPanelButton(customId) {
     return customId.startsWith('admpnl_');
-}
-
-async function handleAdminChannelSelect(interaction) {
-    if (!isAdminUser(interaction)) return interaction.reply({ content: '❌ Hanya Admin!', flags: 1 << 6 });
-    if (interaction.customId === 'admpnl_ce_channel') {
-        const d = getEmbedDraft(interaction.guild.id, interaction.user.id);
-        d.channelId = interaction.values[0];
-        return interaction.update(buildCustomEmbedPanel(interaction.guild.id, interaction.user.id, interaction.guild));
-    }
-}
-function isAdminPanelChannelSelect(customId) {
-    return typeof customId === 'string' && customId.startsWith('admpnl_ce_channel');
 }
 
 function isAdminPanelModal(customId) {
@@ -1842,8 +1767,6 @@ module.exports = {
     buildAdminPanel,
     handleAdminCommand,
     handleAdminButton,
-    handleAdminChannelSelect,
-    isAdminPanelChannelSelect,
     handleAdminModal,
     handleDbToolsButton,
     handleDbToolsModal,
