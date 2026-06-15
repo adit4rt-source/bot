@@ -57,6 +57,13 @@ async function cacheAllGuildInvites(client) {
 }
 
 // ==================== MEMBER JOIN HANDLER ====================
+// Build a decorative framed description block: each line prefixed with "◆ ➣".
+function inviteFrame(lines) {
+    const top = '┏━━━━━━━━━━ ✦ ━━━━━━━━━━┓';
+    const bottom = '┗━━━━━━━━━━ ✦ ━━━━━━━━━━┛';
+    return [top, ...lines.map((l) => `◆ ➣ ${l}`), bottom].join('\n');
+}
+
 async function handleMemberJoin(member) {
     const guildId = member.guild.id;
     const enabled = getInviteSetting(guildId, 'invite_enabled', '1');
@@ -100,14 +107,11 @@ async function handleMemberJoin(member) {
                     if (channel) {
                         const embed = new EmbedBuilder()
                             .setColor('#5865F2')
-                            .setAuthor({ name: `${member.user.username} bergabung`, iconURL: member.user.displayAvatarURL() })
-                            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-                            .setDescription(`✨ <@${member.id}> bergabung lewat **vanity invite**!`)
-                            .addFields(
-                                { name: '🔗 Vanity', value: `discord.gg/${vanityData.code}`, inline: true },
-                                { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
-                                { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
-                            )
+                            .setDescription(inviteFrame([
+                                `**Invited :** <@${member.id}>`,
+                                `**Invited by :** ✨ Vanity (discord.gg/${vanityData.code})`,
+                                `**Total Member :** ${member.guild.memberCount}`,
+                            ]))
                             .setFooter({ text: `ID: ${member.id}` })
                             .setTimestamp();
                         channel.send({ embeds: [embed] }).catch(() => {});
@@ -127,13 +131,11 @@ async function handleMemberJoin(member) {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor('#808080')
-                    .setAuthor({ name: `${member.user.username} bergabung`, iconURL: member.user.displayAvatarURL() })
-                    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-                    .setDescription(`🚫 <@${member.id}> bergabung, tapi inviter <@${inviterUserId}> di-**blacklist** — invite tidak dihitung.`)
-                    .addFields(
-                        { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
-                        { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
-                    )
+                    .setDescription(inviteFrame([
+                        `**Invited :** <@${member.id}>`,
+                        `**Invited by :** <@${inviterUserId}> 🚫 *(blacklist — tidak dihitung)*`,
+                        `**Total Member :** ${member.guild.memberCount}`,
+                    ]))
                     .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
@@ -174,19 +176,15 @@ async function handleMemberJoin(member) {
             const stats = getInviterStats(guildId, inviterUserId);
 
             const embed = new EmbedBuilder()
-                .setColor(isFake ? '#FAA61A' : '#43B581')
-                .setAuthor({ name: `${member.user.username} bergabung!`, iconURL: member.user.displayAvatarURL() })
-                .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-                .setDescription(`🎉 Selamat datang <@${member.id}>!`)
-                .addFields(
-                    { name: '📨 Diundang oleh', value: `<@${inviterUserId}>`, inline: true },
-                    { name: '🎟️ Total Invite', value: `**${stats.total}**`, inline: true },
-                    { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
-                    { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
-                    { name: '🔗 Kode Invite', value: usedCode ? `\`${usedCode}\`` : '—', inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                )
-                .setFooter({ text: isFake ? `⚠️ Kemungkinan fake — akun < ${fakeThreshold} hari` : `ID: ${member.id}` })
+                .setColor(isFake ? '#FAA61A' : '#E91E63')
+                .setDescription(inviteFrame([
+                    `**Invited :** <@${member.id}>`,
+                    `**Invited by :** <@${inviterUserId}>`,
+                    `**Total Invite :** ${stats.total}`,
+                    `**Total Member :** ${member.guild.memberCount}`,
+                    ...(isFake ? [`⚠️ *Possible fake — akun < ${fakeThreshold} hari*`] : []),
+                ]))
+                .setFooter({ text: `ID: ${member.id}` })
                 .setTimestamp();
 
             channel.send({ embeds: [embed] }).catch(() => {});
@@ -217,14 +215,12 @@ async function handleMemberLeave(member) {
                 const stats = getInviterStats(guildId, record.inviterId);
                 const embed = new EmbedBuilder()
                     .setColor('#ED4245')
-                    .setAuthor({ name: `${member.user.username} keluar`, iconURL: member.user.displayAvatarURL() })
-                    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-                    .setDescription(`👋 <@${member.id}> meninggalkan server.`)
-                    .addFields(
-                        { name: '📨 Dulu diundang oleh', value: `<@${record.inviterId}>`, inline: true },
-                        { name: '🎟️ Invite inviter sekarang', value: `**${stats.total}**`, inline: true },
-                        { name: '👥 Member tersisa', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
-                    )
+                    .setDescription(inviteFrame([
+                        `**Left :** <@${member.id}>`,
+                        `**Invited by :** <@${record.inviterId}>`,
+                        `**Inviter Invite :** ${stats.total}`,
+                        `**Total Member :** ${member.guild.memberCount}`,
+                    ]))
                     .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
