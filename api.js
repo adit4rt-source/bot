@@ -1336,6 +1336,74 @@ app.get('/api/farming/recipes', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== ANALYTICS (weekly overview) ====================
+app.get('/api/analytics', async (req, res) => {
+    try {
+        const DAY = 86400000;
+        const since = Date.now() - 7 * DAY;
+
+        // --- economy health ---
+        const totalMoney = db.prepare('SELECT SUM(balance) as s FROM users').get()?.s || 0;
+        const totalUsers = db.prepare('SELECT COUNT(*) as c FROM users').get()?.c || 0;
+        const avgBalance = totalUsers ? Math.round(totalMoney / totalUsers) : 0;
+        const top10 = db.prepare('SELECT balance FROM users ORDER BY balance DESC LIMIT 10').all();
+        const top10Sum = top10.reduce((s, u) => s + (u.balance || 0), 0);
+        const top10Share = totalMoney > 0 ? Math.round((top10Sum / totalMoney) * 1000) / 10 : 0;
+        const totalEarned = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_earned'").get()?.s || 0;
+        const totalSpent = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_spent'").get()?.s || 0;
+        const sinkRatio = totalEarned > 0 ? Math.round((totalSpent / totalEarned) * 1000) / 10 : 0;
+
+        // daily money created over the last 7 days (WIB), from income_<YYYY-MM-DD> stats
+        const wibDate = (offsetDays) => new Date(Date.now() - offsetDays * DAY).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const dailyIncome = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = wibDate(i);
+            const amount = db.prepare('SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = ?').get('income_' + date)?.s || 0;
+            dailyIncome.push({ date, amount });
+        }
+
+        // --- top players ---
+        const byBalance = db.prepare('SELECT userId, balance, level FROM users ORDER BY balance DESC LIMIT 5').all();
+        const byLevel = db.prepare('SELECT userId, level, xp, balance FROM users ORDER BY level DESC, xp DESC LIMIT 5').all();
+        const byActivity = db.prepare('SELECT userId, COUNT(*) as count FROM logs WHERE time >= ? GROUP BY userId ORDER BY count DESC LIMIT 5').all(since);
+
+        // --- activity by hour (WIB) from the transaction log over the last 7 days ---
+        const logRows = db.prepare('SELECT time FROM logs WHERE time >= ?').all(since);
+        const hours = new Array(24).fill(0);
+        for (const r of logRows) {
+            const h = Math.floor(((r.time + 7 * 3600000) / 3600000) % 24); // shift to WIB (UTC+7)
+            if (h >= 0 && h < 24) hours[h]++;
+        }
+        let peakHour = 0;
+        for (let h = 1; h < 24; h++) if (hours[h] > hours[peakHour]) peakHour = h;
+
+        // --- commands ---
+        const cmdTotal = db.prepare('SELECT SUM(count) as s FROM command_summary').get()?.s || 0;
+        const topCommands = db.prepare('SELECT command, SUM(count) as count FROM command_summary GROUP BY command ORDER BY count DESC LIMIT 10').all();
+
+        res.json({
+            generatedAt: Date.now(),
+            rangeDays: 7,
+            economy: {
+                totalMoney, totalUsers, avgBalance, top10Share,
+                totalEarned, totalSpent, sinkRatio,
+                dailyIncome,
+            },
+            topPlayers: {
+                byBalance: await enrichLeaderboard(byBalance),
+                byLevel: await enrichLeaderboard(byLevel),
+                byActivity: await enrichLeaderboard(byActivity),
+            },
+            activity: {
+                totalEvents: logRows.length,
+                peakHour,
+                byHour: hours.map((count, hour) => ({ hour, count })),
+            },
+            commands: { total: cmdTotal, top: topCommands },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== QR CODE REDIRECT ROUTES ====================
 try {
     const { registerQrRoutes } = require('./systems/qrcode');

@@ -206,4 +206,27 @@ module.exports = function register() {
             }
         }
     });
+
+    // ---------------- analytics ----------------
+    test('api: GET /api/analytics returns economy, top players, activity & commands', async () => {
+        // Seed a guaranteed whale + this-week income + a few log events
+        D.getOrCreateUser(null, 'ANALYTICS_WHALE');
+        D.updateUserBalance(null, 'ANALYTICS_WHALE', 9000000000000);
+        const todayWib = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run('global', 'ANALYTICS_WHALE', 'income_' + todayWib, 5000);
+        const tnow = Date.now();
+        for (let i = 0; i < 3; i++) db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run('gtest', tnow - i * 1000, 'ANALYTICS_WHALE', 'BUY', 'thing', 100);
+
+        const r = await call('/api/analytics');
+        if (r.status !== 200) throw new Error('status ' + r.status);
+        if (typeof r.body.economy?.totalMoney !== 'number' || r.body.economy.totalMoney < 9000000000000) throw new Error('totalMoney wrong');
+        if (!Array.isArray(r.body.economy.dailyIncome) || r.body.economy.dailyIncome.length !== 7) throw new Error('dailyIncome should have 7 days');
+        const today = r.body.economy.dailyIncome.find((d) => d.date === todayWib);
+        if (!today || today.amount < 5000) throw new Error('today income not reflected');
+        if (!r.body.topPlayers?.byBalance?.length || r.body.topPlayers.byBalance[0].userId !== 'ANALYTICS_WHALE') throw new Error('whale should top balance board');
+        if (!Array.isArray(r.body.activity?.byHour) || r.body.activity.byHour.length !== 24) throw new Error('byHour should have 24 buckets');
+        if (typeof r.body.activity.peakHour !== 'number' || r.body.activity.peakHour < 0 || r.body.activity.peakHour > 23) throw new Error('bad peakHour');
+        if (r.body.activity.totalEvents < 3) throw new Error('seeded log events not counted');
+        if (!r.body.commands || typeof r.body.commands.total !== 'number') throw new Error('commands block missing');
+    });
 };
