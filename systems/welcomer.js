@@ -177,26 +177,28 @@ async function handleWelcome(member) {
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
 
             if (customImage && customImage.startsWith('http')) {
-                // Custom image as canvas background — overlay avatar in center + username only (no headline).
-                const { generateCard } = require('./welcomeCard');
+                // Custom image as canvas background — overlay member avatar in the
+                // center + username only (no headline). Uses the minimal
+                // generateAvatarBanner so it's robust on the server.
+                const { generateAvatarBanner } = require('./welcomeCard');
                 const accent = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
                 try {
-                    const card = await generateCard({
-                        headline: '',
-                        username: member.user.username,
-                        subtitle: `member #${member.guild.memberCount}`,
-                        avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                    const buffer = await generateAvatarBanner({
                         bgURL: customImage,
+                        avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                        username: member.user.username,
                         accent,
                     });
-                    if (card) {
+                    if (buffer) {
+                        const card = new AttachmentBuilder(buffer, { name: 'welcome.png' });
                         channel.send({ content: message, files: [card], allowedMentions: { users: [member.id] } }).catch(onErr);
                     } else {
                         const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                         channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                     }
                 } catch (e) {
-                    const embed = new EmbedBuilder().setColor('#5865F2').setDescription(message).setImage(customImage).setTimestamp();
+                    log('ERROR', `[welcomer] generateAvatarBanner gagal untuk custom image welcomer di guild ${guildId}: ${e.message}. Fallback ke embed gambar mentah (avatar tidak muncul).`);
+                    const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                     channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                 }
             } else if (banner) {

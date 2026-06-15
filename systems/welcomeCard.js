@@ -269,4 +269,113 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     return canvas.toBuffer('image/png');
 }
 
-module.exports = { generateCard };
+/**
+ * Generate a minimal "avatar banner" PNG buffer: the provided image as a
+ * full-cover background, a circular avatar centered on top, and the username
+ * underneath. Used by the custom-image welcomer so the member avatar always
+ * shows in the middle of the chosen background.
+ *
+ * Intentionally simpler than generateCard() — no headline, no blur, no heavy
+ * effects — so it is robust on the server and unlikely to throw.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.bgURL]     background image URL (falls back to gradient)
+ * @param {string} [opts.avatarURL] PNG avatar URL (optional)
+ * @param {string} [opts.username]  text drawn under the avatar (optional)
+ * @param {string} [opts.accent]    hex accent for the ring + username (default #FFFFFF)
+ * @returns {Promise<Buffer>} PNG buffer
+ */
+async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFFFFF' }) {
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    // ---- Rounded-corner clip for the whole card ----
+    roundRectPath(ctx, 0, 0, W, H, CORNER_RADIUS);
+    ctx.clip();
+
+    // ---- Background (full cover, no blur for reliability) ----
+    let drewBg = false;
+    if (bgURL && /^https?:\/\//i.test(bgURL)) {
+        try {
+            const bg = await loadImage(bgURL);
+            drawCover(ctx, bg, W, H, 1);
+            drewBg = true;
+        } catch (e) {
+            console.error('[welcomeCard] generateAvatarBanner gagal load background:', e.message);
+        }
+    }
+    if (!drewBg) {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, '#252a40');
+        g.addColorStop(0.55, '#1a1c2b');
+        g.addColorStop(1, '#0e0f18');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    // ---- Soft dark overlay so the avatar + text stay readable ----
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fillRect(0, 0, W, H);
+
+    // ---- Avatar (circular, centered) with accent ring ----
+    const size = 200;
+    const radius = size / 2;
+    const cx = W / 2;
+    const cy = username ? H * 0.40 : H * 0.5;
+
+    // Accent ring base
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 8, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = accent;
+    ctx.fill();
+    ctx.restore();
+
+    // Thin dark gap for definition
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fill();
+    ctx.restore();
+
+    let avatar = null;
+    if (avatarURL) {
+        try { avatar = await loadImage(avatarURL); } catch (e) {
+            console.error('[welcomeCard] generateAvatarBanner gagal load avatar:', e.message);
+        }
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (avatar) {
+        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
+    } else {
+        ctx.fillStyle = '#2b2d31';
+        ctx.fillRect(cx - radius, cy - radius, size, size);
+    }
+    ctx.restore();
+
+    // ---- Username under the avatar ----
+    const name = String(username || '').trim();
+    if (name) {
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
+        const nameFit = fitText(ctx, name, SUB_FONT, 44, W - 160, 20);
+        ctx.font = `${nameFit.px}px ${SUB_FONT}`;
+        ctx.fillStyle = accent;
+        ctx.fillText(nameFit.text, cx, cy + radius + 64);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+    }
+
+    return canvas.toBuffer('image/png');
+}
+
+module.exports = { generateCard, generateAvatarBanner };
