@@ -177,14 +177,12 @@ async function handleWelcome(member) {
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
 
             if (customImage && customImage.startsWith('http')) {
-                // Custom image as canvas background — overlay avatar in center + username + WELCOME text.
-                // Re-use the canvas card generator with the custom URL as bgURL.
+                // Custom image as canvas background — overlay avatar in center + username only (no headline).
                 const { generateCard } = require('./welcomeCard');
                 const accent = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
-                const headline = getWelcomerSetting(guildId, 'welcome_banner_text', 'WELCOME');
                 try {
                     const card = await generateCard({
-                        headline,
+                        headline: '',
                         username: member.user.username,
                         subtitle: `member #${member.guild.memberCount}`,
                         avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
@@ -194,12 +192,10 @@ async function handleWelcome(member) {
                     if (card) {
                         channel.send({ content: message, files: [card], allowedMentions: { users: [member.id] } }).catch(onErr);
                     } else {
-                        // Fallback: just embed with image
                         const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                         channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                     }
                 } catch (e) {
-                    // Canvas failed — fallback to plain embed with image
                     const embed = new EmbedBuilder().setColor('#5865F2').setDescription(message).setImage(customImage).setTimestamp();
                     channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
                 }

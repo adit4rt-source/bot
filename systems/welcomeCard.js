@@ -216,28 +216,33 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 3;
 
-    // Headline (letter-spaced)
+    // Headline (letter-spaced) — skip if empty
     const head = String(headline || '').toUpperCase();
-    const HEAD_SPACING = 8;
-    const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
-    ctx.font = `${headFit.px}px ${HEAD_FONT}`;
-    ctx.fillStyle = '#FFFFFF';
-    const headY = 312;
-    drawSpacedText(ctx, headFit.text, cx, headY, HEAD_SPACING);
+    let headY = 312;
+    if (head) {
+        const HEAD_SPACING = 8;
+        const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
+        ctx.font = `${headFit.px}px ${HEAD_FONT}`;
+        ctx.fillStyle = '#FFFFFF';
+        drawSpacedText(ctx, headFit.text, cx, headY, HEAD_SPACING);
 
-    // Accent bar under the headline
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-    const barW = 92;
-    const barH = 6;
-    const barY = headY + 16;
-    ctx.save();
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 14;
-    roundRectPath(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.restore();
+        // Accent bar under the headline
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        const barW = 92;
+        const barH = 6;
+        const barY = headY + 16;
+        ctx.save();
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        roundRectPath(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.restore();
+    } else {
+        // No headline — move username up
+        headY = 280;
+    }
 
     // Username
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
