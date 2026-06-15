@@ -276,6 +276,7 @@ function buildSettingSubPanel(guildId) {
     const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
     const onboardingEnabled = getSetting(guildId, 'onboarding_enabled', '1');
     const tiktokEnabled = getSetting(guildId, 'tiktok_convert', '1');
+    const videoEnabled = getSetting(guildId, 'video_convert', '0');
     const xpMult = getSetting(guildId, 'xp_multiplier', '1');
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
@@ -295,7 +296,8 @@ function buildSettingSubPanel(guildId) {
             `> ${streakEmoji} Streak: ${streakEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
             `> ❤️ Love: ${loveEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
             `> 👋 Onboarding: ${onboardingEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
-            `> 🎵 TikTok Convert: ${tiktokEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n\n` +
+            `> 🎵 TikTok Convert: ${tiktokEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
+            `> 🎬 Video Convert: ${videoEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n\n` +
             `**📈 XP & Level:**\n` +
             `> ⚡ XP Multiplier: **${xpMult}x**\n` +
             `> 🎯 Max Level: **${getSetting(guildId, 'max_level', '200')}**\n\n` +
@@ -311,6 +313,7 @@ function buildSettingSubPanel(guildId) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_set_media').setLabel('🎬 Media').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
@@ -887,6 +890,16 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
+    if (customId === 'admpnl_set_media') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_media').setTitle('🎬 Media Downloader Config');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tiktok').setLabel('TikTok Convert (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'tiktok_convert', '1'))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('video').setLabel('Video Convert — YT/IG/X/FB (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'video_convert', '0'))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cobalt_url').setLabel('Cobalt API URL (kosong = tanpa)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'cobalt_api_url', '') || 'https://your-cobalt.example.com')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('platforms').setLabel('Platform ON (youtube,instagram,twitter,...)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder('youtube,instagram,twitter,facebook,reddit'))
+        );
+        return interaction.showModal(modal);
+    }
     if (customId === 'admpnl_set_misc') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_misc').setTitle('Settings Lainnya');
         modal.addComponents(
@@ -1225,6 +1238,30 @@ async function handleAdminModal(interaction) {
         const autoNick = (interaction.fields.getTextInputValue('auto_nick') || '').trim();
         if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
         return interaction.reply({ content: updated.length > 0 ? `✅ Love config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+    }
+
+    // === SETTING: Media (TikTok + Video Converter) ===
+    if (customId === 'admpnl_modal_media') {
+        const updated = [];
+        const tiktok = (interaction.fields.getTextInputValue('tiktok') || '').trim();
+        if (tiktok === '0' || tiktok === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'tiktok_convert', tiktok); updated.push(`TikTok: ${tiktok === '1' ? 'ON' : 'OFF'}`); }
+        const video = (interaction.fields.getTextInputValue('video') || '').trim();
+        if (video === '0' || video === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'video_convert', video); updated.push(`Video Convert: ${video === '1' ? 'ON' : 'OFF'}`); }
+        const cobaltUrl = (interaction.fields.getTextInputValue('cobalt_url') || '').trim();
+        if (cobaltUrl && /^https?:\/\/.+/i.test(cobaltUrl)) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'cobalt_api_url', cobaltUrl); updated.push(`Cobalt URL: ${cobaltUrl}`); }
+        else if (cobaltUrl === '') { db.prepare('DELETE FROM server_settings WHERE guildId = ? AND key = ?').run(guildId, 'cobalt_api_url'); updated.push('Cobalt URL: dihapus'); }
+        const platforms = (interaction.fields.getTextInputValue('platforms') || '').trim();
+        if (platforms) {
+            const valid = ['youtube', 'instagram', 'twitter', 'facebook', 'reddit', 'pinterest', 'bluesky', 'threads'];
+            const list = platforms.split(/[,\s]+/).map(p => p.toLowerCase().trim()).filter(Boolean);
+            // Disable all first, then enable listed ones
+            for (const p of valid) {
+                const on = list.includes(p) ? '1' : '0';
+                db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, `video_convert_${p}`, on);
+            }
+            updated.push(`Platforms: ${list.filter(p => valid.includes(p)).join(', ') || 'none'}`);
+        }
+        return interaction.reply({ content: updated.length > 0 ? `✅ Media Config Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
     // === SETTING: Misc ===

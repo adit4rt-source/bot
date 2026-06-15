@@ -92,6 +92,11 @@ module.exports = async function handleMessageCreate(message) {
     const { maybeHandleTikTok } = require('../systems/tiktok');
     maybeHandleTikTok(message).catch(() => {});
 
+    // === MULTI-PLATFORM VIDEO DOWNLOADER (YouTube, Instagram, Twitter/X, etc.) ===
+    // Same pattern as TikTok: fire-and-forget in the background.
+    const { maybeHandleVideo } = require('../systems/videoDownloader');
+    maybeHandleVideo(message).catch(() => {});
+
     // Mini-event answer handling
     if (state.activeMiniEvents.has(guildId)) {
         const game = state.activeMiniEvents.get(guildId);
