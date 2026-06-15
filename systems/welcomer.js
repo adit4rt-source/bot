@@ -173,9 +173,23 @@ async function handleWelcome(member) {
         if (channel) {
             const message = replaceVariables(getWelcomerSetting(guildId, 'welcome_message', 'Welcome {user.mention}!'), member);
             const banner = await buildBannerAttachment(member, 'welcome');
+            const customImage = getWelcomerSetting(guildId, 'welcome_embed_image', '');
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
 
-            if (banner) {
+            if (customImage && customImage.startsWith('http')) {
+                // Custom image/GIF takes priority over generated canvas banner.
+                const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+                const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
+                const embed = new EmbedBuilder()
+                    .setColor(color)
+                    .setTitle(title)
+                    .setDescription(message)
+                    .setImage(customImage)
+                    .setTimestamp();
+                const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
+                if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
+                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+            } else if (banner) {
                 // Kythia-style single block: greeting line as plain text, then the
                 // large card image directly below it. No embed (keeps it as one
                 // visual block and lets the card render at full media width).
