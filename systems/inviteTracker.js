@@ -99,8 +99,16 @@ async function handleMemberJoin(member) {
                     const channel = member.guild.channels.cache.get(channelId);
                     if (channel) {
                         const embed = new EmbedBuilder()
-                            .setColor('#7289DA')
-                            .setDescription(`**${member.user.username}** joined using a vanity invite. (discord.gg/${vanityData.code})`)
+                            .setColor('#5865F2')
+                            .setAuthor({ name: `${member.user.username} bergabung`, iconURL: member.user.displayAvatarURL() })
+                            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+                            .setDescription(`✨ <@${member.id}> bergabung lewat **vanity invite**!`)
+                            .addFields(
+                                { name: '🔗 Vanity', value: `discord.gg/${vanityData.code}`, inline: true },
+                                { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
+                                { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+                            )
+                            .setFooter({ text: `ID: ${member.id}` })
                             .setTimestamp();
                         channel.send({ embeds: [embed] }).catch(() => {});
                     }
@@ -119,7 +127,14 @@ async function handleMemberJoin(member) {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor('#808080')
-                    .setDescription(`**${member.user.username}** joined. Inviter <@${inviterUserId}> is blacklisted — invite not counted.`)
+                    .setAuthor({ name: `${member.user.username} bergabung`, iconURL: member.user.displayAvatarURL() })
+                    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+                    .setDescription(`🚫 <@${member.id}> bergabung, tapi inviter <@${inviterUserId}> di-**blacklist** — invite tidak dihitung.`)
+                    .addFields(
+                        { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
+                        { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+                    )
+                    .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
             }
@@ -157,19 +172,21 @@ async function handleMemberJoin(member) {
         const channel = member.guild.channels.cache.get(channelId);
         if (channel) {
             const stats = getInviterStats(guildId, inviterUserId);
-            const inviterMember = member.guild.members.cache.get(inviterUserId);
-            const inviterName = inviterMember ? inviterMember.user.username : inviterUserId;
-            
+
             const embed = new EmbedBuilder()
-                .setColor(isFake ? '#FF6B6B' : '#43B581')
-                .setDescription(
-                    `**Name :** <@${member.id}>\n` +
-                    `**Inviter :** ${inviterName}\n` +
-                    `**Total Invite :** ${stats.total}\n` +
-                    `**Total Member :** ${member.guild.memberCount} Member\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-                    (isFake ? `\n⚠️ *Possible fake invite (akun baru < ${fakeThreshold} hari)*` : '')
+                .setColor(isFake ? '#FAA61A' : '#43B581')
+                .setAuthor({ name: `${member.user.username} bergabung!`, iconURL: member.user.displayAvatarURL() })
+                .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+                .setDescription(`🎉 Selamat datang <@${member.id}>!`)
+                .addFields(
+                    { name: '📨 Diundang oleh', value: `<@${inviterUserId}>`, inline: true },
+                    { name: '🎟️ Total Invite', value: `**${stats.total}**`, inline: true },
+                    { name: '👥 Member ke-', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
+                    { name: '📅 Umur Akun', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+                    { name: '🔗 Kode Invite', value: usedCode ? `\`${usedCode}\`` : '—', inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                 )
+                .setFooter({ text: isFake ? `⚠️ Kemungkinan fake — akun < ${fakeThreshold} hari` : `ID: ${member.id}` })
                 .setTimestamp();
 
             channel.send({ embeds: [embed] }).catch(() => {});
@@ -199,8 +216,16 @@ async function handleMemberLeave(member) {
             if (channel) {
                 const stats = getInviterStats(guildId, record.inviterId);
                 const embed = new EmbedBuilder()
-                    .setColor('#FF6B6B')
-                    .setDescription(`👋 **${member.user.username}** left. Invited by <@${record.inviterId}> (Now: **${stats.total}** invites)`)
+                    .setColor('#ED4245')
+                    .setAuthor({ name: `${member.user.username} keluar`, iconURL: member.user.displayAvatarURL() })
+                    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+                    .setDescription(`👋 <@${member.id}> meninggalkan server.`)
+                    .addFields(
+                        { name: '📨 Dulu diundang oleh', value: `<@${record.inviterId}>`, inline: true },
+                        { name: '🎟️ Invite inviter sekarang', value: `**${stats.total}**`, inline: true },
+                        { name: '👥 Member tersisa', value: `**${member.guild.memberCount.toLocaleString('id-ID')}**`, inline: true },
+                    )
+                    .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
             }
