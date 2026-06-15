@@ -326,6 +326,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     // Headline (letter-spaced) — skip if empty
     const head = String(headline || '').toUpperCase();
     let headY = 312;
+    let barY = headY + 16; // default fallback position
     if (head) {
         const HEAD_SPACING = 8;
         const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
@@ -338,7 +339,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
         ctx.shadowOffsetY = 0;
         const barW = 92;
         const barH = 6;
-        const barY = headY + 16;
+        barY = headY + 16;
         ctx.save();
         ctx.shadowColor = accent;
         ctx.shadowBlur = 14;
@@ -349,6 +350,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     } else {
         // No headline — move username up
         headY = 280;
+        barY = headY;
     }
 
     // Username
