@@ -1289,6 +1289,27 @@ app.get('/api/worldboss', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== PETS: EVOLUTION / FUSION / AWAKENING ====================
+app.get('/api/pets/evolutions', (req, res) => {
+    try {
+        const { PET_DATA, PET_EVOLUTIONS, PET_SKILL_MILESTONES } = require('./data/pets');
+        const { AWAKENING_TIERS } = require('./systems/awakening');
+        const { FUSION_CONFIG } = require('./systems/petFusion');
+        const petMap = Object.fromEntries(PET_DATA.map(p => [p.id, p]));
+        const lite = (id) => { const p = petMap[id]; return p ? { id: p.id, name: p.name, emoji: p.emoji, tier: p.tier } : { id, name: id, emoji: '❓', tier: '?' }; };
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
+        res.json({
+            tiers: TIER_ORDER,
+            totalPets: PET_DATA.length,
+            pets: PET_DATA.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, tier: p.tier })),
+            evolutions: PET_EVOLUTIONS.map(e => ({ from: lite(e.from), to: lite(e.to), level: e.level, name: e.name })),
+            skillMilestones: PET_SKILL_MILESTONES,
+            awakeningTiers: AWAKENING_TIERS.map(t => ({ level: t.level, stars: t.stars, name: t.name, title: t.title, color: t.color, statBoost: t.statBoost, requirements: t.requirements, reward: t.reward })),
+            fusion: { fusableTiers: Object.keys(FUSION_CONFIG), config: FUSION_CONFIG },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== QR CODE REDIRECT ROUTES ====================
 try {
     const { registerQrRoutes } = require('./systems/qrcode');

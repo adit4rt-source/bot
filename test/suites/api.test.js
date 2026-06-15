@@ -152,4 +152,17 @@ module.exports = function register() {
         if (r.body.participants !== 1) throw new Error('participants wrong: ' + r.body.participants);
         if (!r.body.damageLeaderboard.find(d => d.totalDamage === 5000)) throw new Error('damage leaderboard wrong');
     });
+
+    // ---------------- pets: evolution / fusion / awakening ----------------
+    test('api: GET /api/pets/evolutions returns evolution graph + fusion + awakening', async () => {
+        const r = await call('/api/pets/evolutions');
+        if (r.status !== 200) throw new Error('status ' + r.status);
+        const { PET_DATA } = botRequire('data/pets.js');
+        if (r.body.totalPets !== PET_DATA.length) throw new Error('totalPets mismatch');
+        if (!Array.isArray(r.body.evolutions) || r.body.evolutions.length === 0) throw new Error('no evolutions');
+        const ev = r.body.evolutions[0];
+        if (!ev.from?.name || !ev.to?.name || typeof ev.level !== 'number') throw new Error('evolution row shape wrong');
+        if (!Array.isArray(r.body.awakeningTiers) || r.body.awakeningTiers.length === 0) throw new Error('no awakening tiers');
+        if (!r.body.fusion || !r.body.fusion.config || !r.body.fusion.config.Common) throw new Error('fusion config missing');
+    });
 };
