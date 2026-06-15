@@ -38,7 +38,7 @@ const { handleMarketCommand, handleMarketButton, handleMarketSelectMenu, handleM
 const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
 const { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton } = require('../systems/leaderboard');
 const { handleInviteCommand, handleInviteButton, isInvitePanelButton, handleInviteModal, isInvitePanelModal } = require('../systems/invitePanel');
-const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton, handleWelcomerChannelSelect, handleWelcomerRoleSelect, handleWelcomerModal, isWelcomerChannelSelect, isWelcomerRoleSelect, isWelcomerPanelModal } = require('../systems/welcomerPanel');
+const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton } = require('../systems/welcomerPanel');
 const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handleSelfRoleRoleSelect, handleSelfRoleChannelSelect, handleSelfRoleModal, isSelfRolePanelButton, isSelfRolePanelSelect, isSelfRoleRoleSelect, isSelfRoleChannelSelect, isSelfRolePanelModal } = require('../systems/selfRolePanel');
 const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
@@ -1018,9 +1018,6 @@ async function routeInteraction(interaction) {
         if (isGiveawayBonusRoleSelect(interaction.customId)) {
             return handleGiveawayBonusRoleSelect(interaction);
         }
-        if (isWelcomerRoleSelect(interaction.customId)) {
-            return handleWelcomerRoleSelect(interaction);
-        }
         return;
     }
 
@@ -1034,9 +1031,6 @@ async function routeInteraction(interaction) {
         }
         if (isAiBotChannelSelect(interaction.customId)) {
             return handleAiBotChannelSelect(interaction);
-        }
-        if (isWelcomerChannelSelect(interaction.customId)) {
-            return handleWelcomerChannelSelect(interaction);
         }
         return;
     }
@@ -1901,9 +1895,6 @@ async function routeInteraction(interaction) {
         }
         if (isAuctionModal(interaction.customId)) {
             return handleAuctionModal(interaction);
-        }
-        if (isWelcomerPanelModal(interaction.customId)) {
-            return handleWelcomerModal(interaction);
         }
         // --- TOGEL / LOTTERY MODAL (one-click quick bet) ---
         if (isLotteryModal(interaction.customId)) {

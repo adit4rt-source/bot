@@ -342,49 +342,4 @@ module.exports = function register() {
       if (handled !== false) throw new Error('should not handle when disabled');
     });
   });
-
-  // ===== Welcomer in-Discord editing =====
-  const welEdit = botRequire('systems/welcomerPanel.js');
-  const welCfg = botRequire('systems/welcomer.js');
-  const WG = 'WELG', WU = '300000000000000003';
-
-  test('welcomer: edit view renders interactive components', () => {
-    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_settings_${WU}`, admin: true });
-    return Promise.resolve(welEdit.handleWelcomerButton(it)).then(() => {
-      const upd = it._cap.update;
-      if (!upd || !upd.components || upd.components.length < 4) throw new Error('edit view should have channel/role/toggle component rows');
-    });
-  });
-
-  test('welcomer: toggle flips welcome_enabled', () => {
-    const before = welCfg.getAllWelcomerSettings(WG).welcome_enabled;
-    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_togwelcome_${WU}`, admin: true });
-    return Promise.resolve(welEdit.handleWelcomerButton(it)).then(() => {
-      if (welCfg.getAllWelcomerSettings(WG).welcome_enabled === before) throw new Error('welcome_enabled should toggle');
-    });
-  });
-
-  test('welcomer: channel select sets welcome channel', () => {
-    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_chwelcome_${WU}`, values: ['CH_WELCOME'], admin: true });
-    return Promise.resolve(welEdit.handleWelcomerChannelSelect(it)).then(() => {
-      if (welCfg.getAllWelcomerSettings(WG).welcome_channel !== 'CH_WELCOME') throw new Error('welcome_channel not set');
-    });
-  });
-
-  test('welcomer: role select sets auto-roles', () => {
-    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_autorole_${WU}`, values: ['R1', 'R2'], admin: true });
-    return Promise.resolve(welEdit.handleWelcomerRoleSelect(it)).then(() => {
-      if (welCfg.getAllWelcomerSettings(WG).welcome_autorole !== 'R1,R2') throw new Error('autorole not set');
-    });
-  });
-
-  test('welcomer: modal saves message/color/delay (validated)', () => {
-    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_textmodal_${WU}`, admin: true, fields: { message: 'Hi {user.mention}', title: 'Halo', color: '#123abc', delay: '5' } });
-    return Promise.resolve(welEdit.handleWelcomerModal(it)).then(() => {
-      const s = welCfg.getAllWelcomerSettings(WG);
-      if (s.welcome_embed_color !== '#123abc') throw new Error('color not saved');
-      if (s.welcome_autorole_delay !== '5') throw new Error('delay not saved');
-      if (s.welcome_message !== 'Hi {user.mention}') throw new Error('message not saved');
-    });
-  });
 };
