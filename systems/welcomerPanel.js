@@ -1,7 +1,7 @@
 // systems/welcomerPanel.js - Welcomer Panel UI System (Button-based navigation)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType } = require('discord.js');
 const { db } = require('../database');
-const { getAllWelcomerSettings, getWelcomerSetting, buildBannerAttachment } = require('./welcomer');
+const { getAllWelcomerSettings, getWelcomerSetting, setWelcomerSetting, buildBannerAttachment } = require('./welcomer');
 const ui = require('./ui');
 
 // ============ BUILD: Main Welcomer Panel ============
@@ -31,17 +31,17 @@ function buildWelcomerPanel(guildId, userId, guild) {
             ui.menuList([
                 { emoji: '👁️', label: 'Preview', desc: 'Intip tampilan pesan sambutan' },
                 { emoji: '👋', label: 'Goodbye Preview', desc: 'Intip tampilan pesan perpisahan' },
-                { emoji: '⚙️', label: 'Settings', desc: 'Lihat konfigurasi lengkap' },
+                { emoji: '⚙️', label: 'Settings', desc: 'Edit semua konfigurasi di sini' },
                 { emoji: '📩', label: 'Test', desc: 'Kirim pesan uji coba ke channel' },
             ])
         )
-        .setFooter({ text: ui.footer(`${guild.name} • Ubah settings via Dashboard`) })
+        .setFooter({ text: ui.footer(`${guild.name} • Edit di Discord atau Dashboard`) })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`welpnl_preview_${userId}`).setLabel('👁️ Preview').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`welpnl_goodbye_${userId}`).setLabel('👋 Goodbye Preview').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`welpnl_settings_${userId}`).setLabel('⚙️ Settings').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_settings_${userId}`).setLabel('⚙️ Edit Settings').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`welpnl_test_${userId}`).setLabel('📩 Test').setStyle(ButtonStyle.Success)
     );
 
@@ -148,38 +148,37 @@ async function handleWelcomerButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // === SETTINGS ===
+    // === SETTINGS (interactive edit view) ===
     if (action === 'settings') {
-        const settings = getAllWelcomerSettings(guildId);
-        const autoroles = settings.welcome_autorole ? settings.welcome_autorole.split(',').filter(Boolean) : [];
+        return interaction.update(buildEditView(guildId, userId, interaction.guild));
+    }
 
-        const embed = new EmbedBuilder()
-            .setTitle('⚙️ Welcomer Configuration')
-            .setColor('#2B2D31')
-            .setDescription(
-                `**👋 Welcome Message:**\n` +
-                `> Enabled: ${settings.welcome_enabled === '1' ? '✅' : '❌'}\n` +
-                `> Channel: ${settings.welcome_channel ? `<#${settings.welcome_channel}>` : '❌ Belum diset'}\n` +
-                `> Color: \`${settings.welcome_embed_color}\`\n` +
-                `> Title: ${settings.welcome_embed_title || '*Default*'}\n\n` +
-                `**📩 DM Welcome:**\n` +
-                `> Enabled: ${settings.welcome_dm_enabled === '1' ? '✅' : '❌'}\n\n` +
-                `**🎭 Auto-Role:**\n` +
-                `> Roles: ${autoroles.length > 0 ? autoroles.map(r => `<@&${r}>`).join(', ') : '*Tidak ada*'}\n` +
-                `> Delay: ${settings.welcome_autorole_delay || '0'}s\n\n` +
-                `**👋 Goodbye:**\n` +
-                `> Enabled: ${settings.goodbye_enabled === '1' ? '✅' : '❌'}\n` +
-                `> Channel: ${settings.goodbye_channel ? `<#${settings.goodbye_channel}>` : '❌ Belum diset'}\n\n` +
-                `**🖼️ Banner (gambar):**\n` +
-                `> Welcome: ${settings.welcome_banner_enabled === '1' ? '✅' : '❌'}${settings.welcome_banner_bg ? ' (custom bg)' : ''}\n` +
-                `> Goodbye: ${settings.goodbye_banner_enabled === '1' ? '✅' : '❌'}${settings.goodbye_banner_bg ? ' (custom bg)' : ''}\n\n` +
-                `💡 *Gunakan Dashboard untuk mengubah semua pengaturan.*`
-            );
+    // === TOGGLES ===
+    const toggleMap = {
+        togwelcome: 'welcome_enabled',
+        togdm: 'welcome_dm_enabled',
+        toggoodbye: 'goodbye_enabled',
+        togbannerw: 'welcome_banner_enabled',
+        togbannerg: 'goodbye_banner_enabled',
+    };
+    if (toggleMap[action]) {
+        const key = toggleMap[action];
+        const cur = getWelcomerSetting(guildId, key, '0');
+        setWelcomerSetting(guildId, key, cur === '1' ? '0' : '1');
+        return interaction.update(buildEditView(guildId, userId, interaction.guild));
+    }
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`welpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    // === EDIT TEXT (modal) ===
+    if (action === 'edittext') {
+        const s = getAllWelcomerSettings(guildId);
+        const modal = new ModalBuilder().setCustomId(`welpnl_textmodal_${userId}`).setTitle('✏️ Edit Welcomer Text');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message').setLabel('Welcome Message').setStyle(TextInputStyle.Paragraph).setRequired(false).setValue((s.welcome_message || '').slice(0, 1000))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Embed Title').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.welcome_embed_title || '').slice(0, 100))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Embed Color (hex, mis. #5865F2)').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.welcome_embed_color || '').slice(0, 7))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('delay').setLabel('Auto-Role Delay (detik)').setStyle(TextInputStyle.Short).setRequired(false).setValue(String(s.welcome_autorole_delay || '0')))
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.showModal(modal);
     }
 
     // === TEST ===
@@ -226,14 +225,118 @@ async function handleWelcomerButton(interaction) {
     }
 }
 
+// ============ BUILD: Interactive Edit View ============
+function buildEditView(guildId, userId, guild) {
+    const s = getAllWelcomerSettings(guildId);
+    const on = (v) => v === '1';
+    const autoroles = s.welcome_autorole ? s.welcome_autorole.split(',').filter(Boolean) : [];
+
+    const embed = new EmbedBuilder()
+        .setTitle('⚙️ Edit Welcomer')
+        .setColor(s.welcome_embed_color || '#5865F2')
+        .setDescription(
+            `**👋 Welcome:** ${on(s.welcome_enabled) ? '✅' : '❌'}  •  Channel: ${s.welcome_channel ? `<#${s.welcome_channel}>` : '*belum diset*'}\n` +
+            `**📩 DM Welcome:** ${on(s.welcome_dm_enabled) ? '✅' : '❌'}\n` +
+            `**🎭 Auto-Role:** ${autoroles.length ? autoroles.map(r => `<@&${r}>`).join(', ') : '*tidak ada*'}  •  Delay: ${s.welcome_autorole_delay || '0'}s\n` +
+            `**👋 Goodbye:** ${on(s.goodbye_enabled) ? '✅' : '❌'}  •  Channel: ${s.goodbye_channel ? `<#${s.goodbye_channel}>` : '*belum diset*'}\n` +
+            `**🖼️ Banner:** Welcome ${on(s.welcome_banner_enabled) ? '✅' : '❌'}  •  Goodbye ${on(s.goodbye_banner_enabled) ? '✅' : '❌'}\n` +
+            `**🎨 Color:** \`${s.welcome_embed_color}\`  •  **Title:** ${s.welcome_embed_title || '*default*'}\n\n` +
+            `Atur langsung pakai komponen di bawah 👇`
+        )
+        .setFooter({ text: ui.footer(guild?.name || 'Welcomer') });
+
+    const chWelcome = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId(`welpnl_chwelcome_${userId}`).setPlaceholder('📍 Set Welcome Channel...').setChannelTypes(ChannelType.GuildText).setMinValues(1).setMaxValues(1)
+    );
+    const chGoodbye = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId(`welpnl_chgoodbye_${userId}`).setPlaceholder('📍 Set Goodbye Channel...').setChannelTypes(ChannelType.GuildText).setMinValues(1).setMaxValues(1)
+    );
+    const roleRow = new ActionRowBuilder().addComponents(
+        new RoleSelectMenuBuilder().setCustomId(`welpnl_autorole_${userId}`).setPlaceholder('🎭 Set Auto-Roles (pilih kosong = hapus)...').setMinValues(0).setMaxValues(5)
+    );
+    const togRow1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`welpnl_togwelcome_${userId}`).setLabel(`👋 Welcome: ${on(s.welcome_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.welcome_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_togdm_${userId}`).setLabel(`📩 DM: ${on(s.welcome_dm_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.welcome_dm_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_toggoodbye_${userId}`).setLabel(`👋 Goodbye: ${on(s.goodbye_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.goodbye_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_edittext_${userId}`).setLabel('✏️ Text/Color').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`welpnl_back_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)
+    );
+    const togRow2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`welpnl_togbannerw_${userId}`).setLabel(`🖼️ Banner Welcome: ${on(s.welcome_banner_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.welcome_banner_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_togbannerg_${userId}`).setLabel(`🖼️ Banner Goodbye: ${on(s.goodbye_banner_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.goodbye_banner_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [chWelcome, chGoodbye, roleRow, togRow1, togRow2] };
+}
+
+// ============ HANDLERS: Channel / Role select & modal (edit view) ============
+async function handleWelcomerChannelSelect(interaction) {
+    const guildId = interaction.guild.id;
+    const parts = interaction.customId.split('_'); // welpnl_chwelcome_<userId> | welpnl_chgoodbye_<userId>
+    const which = parts[1];
+    const userId = parts[parts.length - 1];
+    if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+    const key = which === 'chgoodbye' ? 'goodbye_channel' : 'welcome_channel';
+    setWelcomerSetting(guildId, key, interaction.values[0]);
+    return interaction.update(buildEditView(guildId, userId, interaction.guild));
+}
+
+async function handleWelcomerRoleSelect(interaction) {
+    const guildId = interaction.guild.id;
+    const parts = interaction.customId.split('_');
+    const userId = parts[parts.length - 1];
+    if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+    setWelcomerSetting(guildId, 'welcome_autorole', (interaction.values || []).join(','));
+    return interaction.update(buildEditView(guildId, userId, interaction.guild));
+}
+
+async function handleWelcomerModal(interaction) {
+    const guildId = interaction.guild.id;
+    const parts = interaction.customId.split('_');
+    const userId = parts[parts.length - 1];
+    if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+    const f = interaction.fields;
+    const message = (f.getTextInputValue('message') || '').trim();
+    const title = (f.getTextInputValue('title') || '').trim();
+    const colorRaw = (f.getTextInputValue('color') || '').trim();
+    const delayRaw = (f.getTextInputValue('delay') || '').trim();
+    if (message) setWelcomerSetting(guildId, 'welcome_message', message);
+    if (title) setWelcomerSetting(guildId, 'welcome_embed_title', title);
+    if (colorRaw) {
+        const c = colorRaw.startsWith('#') ? colorRaw : `#${colorRaw}`;
+        if (/^#[0-9a-fA-F]{6}$/.test(c)) setWelcomerSetting(guildId, 'welcome_embed_color', c);
+    }
+    const delay = parseInt(delayRaw, 10);
+    if (!isNaN(delay) && delay >= 0) setWelcomerSetting(guildId, 'welcome_autorole_delay', String(delay));
+    return interaction.update(buildEditView(guildId, userId, interaction.guild));
+}
+
 // ============ UTILITY: Detection helper ============
 function isWelcomerPanelButton(customId) {
     return customId.startsWith('welpnl_');
+}
+function isWelcomerChannelSelect(customId) {
+    return typeof customId === 'string' && customId.startsWith('welpnl_ch');
+}
+function isWelcomerRoleSelect(customId) {
+    return typeof customId === 'string' && customId.startsWith('welpnl_autorole_');
+}
+function isWelcomerPanelModal(customId) {
+    return typeof customId === 'string' && customId.startsWith('welpnl_textmodal_');
 }
 
 module.exports = {
     buildWelcomerPanel,
     handleWelcomerCommand,
     handleWelcomerButton,
-    isWelcomerPanelButton
+    isWelcomerPanelButton,
+    handleWelcomerChannelSelect,
+    handleWelcomerRoleSelect,
+    handleWelcomerModal,
+    isWelcomerChannelSelect,
+    isWelcomerRoleSelect,
+    isWelcomerPanelModal
 };
