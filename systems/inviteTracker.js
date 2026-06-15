@@ -57,6 +57,13 @@ async function cacheAllGuildInvites(client) {
 }
 
 // ==================== MEMBER JOIN HANDLER ====================
+// Build a decorative framed description block: each line prefixed with "◆ ➣".
+function inviteFrame(lines) {
+    const top = '┏━━━━━━━━━━ ✦ ━━━━━━━━━━┓';
+    const bottom = '┗━━━━━━━━━━ ✦ ━━━━━━━━━━┛';
+    return [top, ...lines.map((l) => `◆ ➣ ${l}`), bottom].join('\n');
+}
+
 async function handleMemberJoin(member) {
     const guildId = member.guild.id;
     const enabled = getInviteSetting(guildId, 'invite_enabled', '1');
@@ -99,8 +106,13 @@ async function handleMemberJoin(member) {
                     const channel = member.guild.channels.cache.get(channelId);
                     if (channel) {
                         const embed = new EmbedBuilder()
-                            .setColor('#7289DA')
-                            .setDescription(`**${member.user.username}** joined using a vanity invite. (discord.gg/${vanityData.code})`)
+                            .setColor('#5865F2')
+                            .setDescription(inviteFrame([
+                                `**Invited :** <@${member.id}>`,
+                                `**Invited by :** ✨ Vanity (discord.gg/${vanityData.code})`,
+                                `**Total Member :** ${member.guild.memberCount}`,
+                            ]))
+                            .setFooter({ text: `ID: ${member.id}` })
                             .setTimestamp();
                         channel.send({ embeds: [embed] }).catch(() => {});
                     }
@@ -119,7 +131,12 @@ async function handleMemberJoin(member) {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor('#808080')
-                    .setDescription(`**${member.user.username}** joined. Inviter <@${inviterUserId}> is blacklisted — invite not counted.`)
+                    .setDescription(inviteFrame([
+                        `**Invited :** <@${member.id}>`,
+                        `**Invited by :** <@${inviterUserId}> 🚫 *(blacklist — tidak dihitung)*`,
+                        `**Total Member :** ${member.guild.memberCount}`,
+                    ]))
+                    .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
             }
@@ -157,19 +174,17 @@ async function handleMemberJoin(member) {
         const channel = member.guild.channels.cache.get(channelId);
         if (channel) {
             const stats = getInviterStats(guildId, inviterUserId);
-            const inviterMember = member.guild.members.cache.get(inviterUserId);
-            const inviterName = inviterMember ? inviterMember.user.username : inviterUserId;
-            
+
             const embed = new EmbedBuilder()
-                .setColor(isFake ? '#FF6B6B' : '#43B581')
-                .setDescription(
-                    `**Name :** <@${member.id}>\n` +
-                    `**Inviter :** ${inviterName}\n` +
-                    `**Total Invite :** ${stats.total}\n` +
-                    `**Total Member :** ${member.guild.memberCount} Member\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-                    (isFake ? `\n⚠️ *Possible fake invite (akun baru < ${fakeThreshold} hari)*` : '')
-                )
+                .setColor(isFake ? '#FAA61A' : '#E91E63')
+                .setDescription(inviteFrame([
+                    `**Invited :** <@${member.id}>`,
+                    `**Invited by :** <@${inviterUserId}>`,
+                    `**Total Invite :** ${stats.total}`,
+                    `**Total Member :** ${member.guild.memberCount}`,
+                    ...(isFake ? [`⚠️ *Possible fake — akun < ${fakeThreshold} hari*`] : []),
+                ]))
+                .setFooter({ text: `ID: ${member.id}` })
                 .setTimestamp();
 
             channel.send({ embeds: [embed] }).catch(() => {});
@@ -199,8 +214,14 @@ async function handleMemberLeave(member) {
             if (channel) {
                 const stats = getInviterStats(guildId, record.inviterId);
                 const embed = new EmbedBuilder()
-                    .setColor('#FF6B6B')
-                    .setDescription(`👋 **${member.user.username}** left. Invited by <@${record.inviterId}> (Now: **${stats.total}** invites)`)
+                    .setColor('#ED4245')
+                    .setDescription(inviteFrame([
+                        `**Left :** <@${member.id}>`,
+                        `**Invited by :** <@${record.inviterId}>`,
+                        `**Inviter Invite :** ${stats.total}`,
+                        `**Total Member :** ${member.guild.memberCount}`,
+                    ]))
+                    .setFooter({ text: `ID: ${member.id}` })
                     .setTimestamp();
                 channel.send({ embeds: [embed] }).catch(() => {});
             }
