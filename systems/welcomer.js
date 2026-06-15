@@ -46,6 +46,7 @@ function getAllWelcomerSettings(guildId) {
         'welcome_autorole', 'welcome_autorole_delay',
         'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text', 'welcome_banner_style',
         'goodbye_enabled', 'goodbye_channel', 'goodbye_message', 'goodbye_embed_color',
+        'goodbye_embed_image',
         'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text', 'goodbye_banner_style',
     ];
     const defaults = {
@@ -68,6 +69,7 @@ function getAllWelcomerSettings(guildId) {
         goodbye_channel: '',
         goodbye_message: '👋 **{user.name}** telah meninggalkan server. (Member: **{server.memberCount}**)',
         goodbye_embed_color: '#FF6B6B',
+        goodbye_embed_image: '',
         goodbye_banner_enabled: '0',
         goodbye_banner_bg: '',
         goodbye_banner_text: 'GOODBYE',
@@ -328,20 +330,68 @@ async function handleGoodbye(member) {
     const message = replaceVariables(getWelcomerSetting(guildId, 'goodbye_message', '👋 {user.name} left.'), member);
 
     try {
-        const banner = await buildBannerAttachment(member, 'goodbye');
+        const customImage = getWelcomerSetting(guildId, 'goodbye_embed_image', '');
 
-        if (banner) {
-            channel.send({ content: message, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
+        if (customImage && customImage.startsWith('http')) {
+            // Custom image goodbye — same logic as welcome: GIF stays animated,
+            // static gets avatar overlay, fallback to raw embed.
+            let wcMod;
+            try { wcMod = require('./welcomeCard'); } catch (_) { wcMod = null; }
+            const accent = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
+            const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            const username = member.user.username;
+
+            if (wcMod) {
+                try {
+                    const srcBuffer = await fetchImageBuffer(customImage);
+                    const isGif = !!srcBuffer && srcBuffer.length > 6 &&
+                        srcBuffer.toString('ascii', 0, 4) === 'GIF8';
+
+                    let card = null;
+                    if (isGif && wcMod.generateAvatarBannerGif) {
+                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, accent });
+                        if (gifOut) {
+                            card = new AttachmentBuilder(gifOut, { name: 'goodbye.gif' });
+                        } else {
+                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                            if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
+                        }
+                    } else if (wcMod.generateAvatarBanner) {
+                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                        if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
+                    }
+
+                    if (card) {
+                        channel.send({ content: message, files: [card], allowedMentions: { parse: [] } }).catch(() => {});
+                    } else {
+                        const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                        channel.send({ embeds: [embed] }).catch(() => {});
+                    }
+                } catch (e) {
+                    log('ERROR', `[welcomer] gagal render goodbye custom image di guild ${guildId}: ${e.message}. Fallback embed.`);
+                    const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                    channel.send({ embeds: [embed] }).catch(() => {});
+                }
+            } else {
+                const embed = new EmbedBuilder().setColor('#FF6B6B').setDescription(message).setImage(customImage).setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
         } else {
-            const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
-            const embed = new EmbedBuilder()
-                .setColor(color)
-                .setDescription(message)
-                .setTimestamp();
-            channel.send({ embeds: [embed] }).catch(() => {});
+            const banner = await buildBannerAttachment(member, 'goodbye');
+
+            if (banner) {
+                channel.send({ content: message, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
+            } else {
+                const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
+                const embed = new EmbedBuilder()
+                    .setColor(color)
+                    .setDescription(message)
+                    .setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
         }
     } catch (e) {
-        // SAFETY NET: if banner generation throws, still send a basic goodbye
+        // SAFETY NET: if anything throws, still send a basic goodbye
         log('ERROR', `[welcomer] handleGoodbye FATAL di guild ${guildId}: ${e.message}. Kirim embed minimal.`);
         try {
             const embed = new EmbedBuilder().setColor('#FF6B6B').setDescription(message).setTimestamp();

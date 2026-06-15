@@ -182,6 +182,18 @@ async function handleWelcomerButton(interaction) {
         return interaction.showModal(modal);
     }
 
+    // === EDIT GOODBYE TEXT (modal) ===
+    if (action === 'editgoodbye') {
+        const s = getAllWelcomerSettings(guildId);
+        const modal = new ModalBuilder().setCustomId(`welpnl_goodbyemodal_${userId}`).setTitle('✏️ Edit Goodbye Text');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('message').setLabel('Goodbye Message').setStyle(TextInputStyle.Paragraph).setRequired(false).setValue((s.goodbye_message || '').slice(0, 1000))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Embed Color (hex, mis. #FF6B6B)').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.goodbye_embed_color || '').slice(0, 7))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image').setLabel('Image/GIF URL (kosong = tanpa gambar)').setStyle(TextInputStyle.Short).setRequired(false).setValue((s.goodbye_embed_image || '').slice(0, 200)))
+        );
+        return interaction.showModal(modal);
+    }
+
     // === TEST ===
     if (action === 'test') {
         const settings = getAllWelcomerSettings(guildId);
@@ -242,7 +254,7 @@ function buildEditView(guildId, userId, guild) {
             `**👋 Goodbye:** ${on(s.goodbye_enabled) ? '✅' : '❌'}  •  Channel: ${s.goodbye_channel ? `<#${s.goodbye_channel}>` : '*belum diset*'}\n` +
             `**🖼️ Banner:** Welcome ${on(s.welcome_banner_enabled) ? '✅' : '❌'}  •  Goodbye ${on(s.goodbye_banner_enabled) ? '✅' : '❌'}\n` +
             `**🎨 Color:** \`${s.welcome_embed_color}\`  •  **Title:** ${s.welcome_embed_title || '*default*'}\n` +
-            `**🖼️ Image/GIF:** ${s.welcome_embed_image ? '✅ terpasang' : '*tidak ada*'}\n\n` +
+            `**🖼️ Image/GIF:** Welcome ${s.welcome_embed_image ? '✅ terpasang' : '*tidak ada*'}  •  Goodbye ${s.goodbye_embed_image ? '✅ terpasang' : '*tidak ada*'}\n\n` +
             `Atur langsung pakai komponen di bawah 👇`
         )
         .setFooter({ text: ui.footer(guild?.name || 'Welcomer') });
@@ -265,7 +277,8 @@ function buildEditView(guildId, userId, guild) {
     );
     const togRow2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`welpnl_togbannerw_${userId}`).setLabel(`🖼️ Banner Welcome: ${on(s.welcome_banner_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.welcome_banner_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`welpnl_togbannerg_${userId}`).setLabel(`🖼️ Banner Goodbye: ${on(s.goodbye_banner_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.goodbye_banner_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`welpnl_togbannerg_${userId}`).setLabel(`🖼️ Banner Goodbye: ${on(s.goodbye_banner_enabled) ? 'ON' : 'OFF'}`).setStyle(on(s.goodbye_banner_enabled) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`welpnl_editgoodbye_${userId}`).setLabel('✏️ Goodbye Text').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [chWelcome, chGoodbye, roleRow, togRow1, togRow2] };
@@ -297,10 +310,31 @@ async function handleWelcomerRoleSelect(interaction) {
 async function handleWelcomerModal(interaction) {
     const guildId = interaction.guild.id;
     const parts = interaction.customId.split('_');
+    const modalType = parts[1]; // 'textmodal' or 'goodbyemodal'
     const userId = parts[parts.length - 1];
     if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
     if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
     const f = interaction.fields;
+
+    if (modalType === 'goodbyemodal') {
+        // Goodbye text/color/image modal
+        const message = (f.getTextInputValue('message') || '').trim();
+        const colorRaw = (f.getTextInputValue('color') || '').trim();
+        const imageRaw = (f.getTextInputValue('image') || '').trim();
+        if (message) setWelcomerSetting(guildId, 'goodbye_message', message);
+        if (colorRaw) {
+            const c = colorRaw.startsWith('#') ? colorRaw : `#${colorRaw}`;
+            if (/^#[0-9a-fA-F]{6}$/.test(c)) setWelcomerSetting(guildId, 'goodbye_embed_color', c);
+        }
+        if (imageRaw && /^https?:\/\/.+/i.test(imageRaw)) {
+            setWelcomerSetting(guildId, 'goodbye_embed_image', imageRaw);
+        } else if (imageRaw === '') {
+            setWelcomerSetting(guildId, 'goodbye_embed_image', '');
+        }
+        return interaction.update(buildEditView(guildId, userId, interaction.guild));
+    }
+
+    // Welcome text/color/image/delay modal (default)
     const message = (f.getTextInputValue('message') || '').trim();
     const title = (f.getTextInputValue('title') || '').trim();
     const colorRaw = (f.getTextInputValue('color') || '').trim();
@@ -334,7 +368,7 @@ function isWelcomerRoleSelect(customId) {
     return typeof customId === 'string' && customId.startsWith('welpnl_autorole_');
 }
 function isWelcomerPanelModal(customId) {
-    return typeof customId === 'string' && customId.startsWith('welpnl_textmodal_');
+    return typeof customId === 'string' && (customId.startsWith('welpnl_textmodal_') || customId.startsWith('welpnl_goodbyemodal_'));
 }
 
 module.exports = {
