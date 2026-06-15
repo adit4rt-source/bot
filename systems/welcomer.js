@@ -177,18 +177,32 @@ async function handleWelcome(member) {
             const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
 
             if (customImage && customImage.startsWith('http')) {
-                // Custom image/GIF takes priority over generated canvas banner.
-                const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
-                const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
-                const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
-                const embed = new EmbedBuilder()
-                    .setColor(color)
-                    .setTitle(title)
-                    .setDescription(message)
-                    .setImage(customImage)
-                    .setTimestamp();
-                if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
-                channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+                // Custom image as canvas background — overlay avatar in center + username + WELCOME text.
+                // Re-use the canvas card generator with the custom URL as bgURL.
+                const { generateCard } = require('./welcomeCard');
+                const accent = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+                const headline = getWelcomerSetting(guildId, 'welcome_banner_text', 'WELCOME');
+                try {
+                    const card = await generateCard({
+                        headline,
+                        username: member.user.username,
+                        subtitle: `member #${member.guild.memberCount}`,
+                        avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                        bgURL: customImage,
+                        accent,
+                    });
+                    if (card) {
+                        channel.send({ content: message, files: [card], allowedMentions: { users: [member.id] } }).catch(onErr);
+                    } else {
+                        // Fallback: just embed with image
+                        const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                        channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+                    }
+                } catch (e) {
+                    // Canvas failed — fallback to plain embed with image
+                    const embed = new EmbedBuilder().setColor('#5865F2').setDescription(message).setImage(customImage).setTimestamp();
+                    channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+                }
             } else if (banner) {
                 // Kythia-style single block: greeting line as plain text, then the
                 // large card image directly below it. No embed (keeps it as one

@@ -162,7 +162,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     const size = 210;            // bigger avatar (Kythia style)
     const radius = size / 2;
     const cx = W / 2;
-    const cy = 140;
+    const cy = 155;            // vertically centered (upper portion, text below)
 
     // Glow halo behind the avatar
     ctx.save();
