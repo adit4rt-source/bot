@@ -29,7 +29,7 @@ const { handleQuestCommand, handleQuestButton, isQuestPanelButton } = require('.
 const { handleArenaCommand, handleArenaButton, handleArenaSelectMenu, isArenaButton, isArenaSelectMenu } = require('../systems/arena');
 const { handleAuctionCommand, handleAuctionButton, handleAuctionSelect, handleAuctionModal, isAuctionButton, isAuctionSelect, isAuctionModal } = require('../systems/auction');
 const { handleCasinoCommand, handleCasinoButton, handleCasinoSelectMenu, isCasinoPanelButton, isCasinoPanelSelectMenu } = require('../systems/casinoPanel');
-const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal, handleAdminChannelSelect, isAdminPanelChannelSelect } = require('../systems/adminPanel');
+const { handleAdminCommand, handleAdminButton, handleAdminModal, isAdminPanelButton, isAdminPanelModal } = require('../systems/adminPanel');
 const { handleEconomyPanelCommand, handleEconomyButton, handleEconomySelect, handleEconomyModal, handleGiftCommand, isEconomyPanelButton, isEconomyPanelSelect, isEconomyPanelModal } = require('../systems/economyPanel');
 const { handleProfilePanelCommand, handleProfileButton, handleProfileSelectMenu, isProfilePanelButton, isProfilePanelSelectMenu } = require('../systems/profilePanel');
 const { handleLevelPanelCommand, handleLevelButton, isLevelPanelButton } = require('../systems/levelPanel');
@@ -1037,9 +1037,6 @@ async function routeInteraction(interaction) {
         }
         if (isWelcomerChannelSelect(interaction.customId)) {
             return handleWelcomerChannelSelect(interaction);
-        }
-        if (isAdminPanelChannelSelect(interaction.customId)) {
-            return handleAdminChannelSelect(interaction);
         }
         return;
     }
