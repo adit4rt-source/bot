@@ -18,6 +18,8 @@ Module._resolveFilename = function (request, parent, isMain, options) {
   if (request === 'discord.js') return path.join(MOCKS, 'discord.js');
   if (request === 'better-sqlite3') return path.join(MOCKS, 'better-sqlite3.js');
   if (request === '@napi-rs/canvas') return path.join(MOCKS, 'napi-canvas.js');
+  if (request === 'express') return path.join(MOCKS, 'express.js');
+  if (request === 'cors') return path.join(MOCKS, 'cors.js');
   return origResolve.call(this, request, parent, isMain, options);
 };
 
