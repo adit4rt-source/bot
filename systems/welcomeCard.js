@@ -98,6 +98,113 @@ function drawSpacedText(ctx, text, cx, y, spacing) {
 }
 
 /**
+ * Shared overlay used by the custom-image welcomer (static PNG + animated GIF):
+ * an upper-centered circular avatar with a clean BLACK aesthetic ring (+ a thin
+ * white hairline for crispness), and the username on a dark rounded "pill" so it
+ * stays readable on any background and never clashes with text baked into the
+ * source image (the avatar sits in the upper third, text right beneath it).
+ *
+ * Draws directly onto the provided 2D context. Returns nothing.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Object} opts
+ * @param {number} opts.width
+ * @param {number} opts.height
+ * @param {string} [opts.avatarURL]
+ * @param {string} [opts.username]
+ * @param {Object} [opts.avatar]   pre-loaded image (skips the fetch)
+ */
+async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, avatar = null }) {
+    const RING_COLOR = '#0c0c0c';          // aesthetic black border
+    const min = Math.min(width, height);
+    const size = Math.round(min * 0.36);   // a touch smaller so it breathes
+    const radius = size / 2;
+    const ringW = Math.max(5, Math.round(size * 0.075));
+    const cx = width / 2;
+    const name = String(username || '').trim();
+    // Sit in the upper third when there's a username, so we clear any "WELCOME"
+    // text that's usually baked into the lower part of the source image.
+    const cy = name ? Math.round(height * 0.30) : Math.round(height * 0.46);
+
+    // ---- Black ring with a soft drop shadow for separation ----
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.50)';
+    ctx.shadowBlur = ringW * 3;
+    ctx.shadowOffsetY = Math.round(ringW * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + ringW, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = RING_COLOR;
+    ctx.fill();
+    ctx.restore();
+
+    // ---- Thin white hairline at the ring edge (crisp, aesthetic) ----
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + Math.round(ringW * 0.5), 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.lineWidth = Math.max(1, Math.round(ringW * 0.22));
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.stroke();
+    ctx.restore();
+
+    // ---- Avatar (circular) ----
+    if (avatarURL && !avatar) {
+        try { avatar = await loadImage(avatarURL); } catch (e) {
+            console.error('[welcomeCard] drawAvatarOverlay gagal load avatar:', e.message);
+        }
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (avatar) {
+        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
+    } else {
+        ctx.fillStyle = '#2b2d31';
+        ctx.fillRect(cx - radius, cy - radius, size, size);
+    }
+    ctx.restore();
+
+    // ---- Username on a dark pill (aesthetic, always legible) ----
+    if (name) {
+        const baseFontPx = Math.max(18, Math.round(height * 0.092));
+        const spacing = Math.max(1, Math.round(baseFontPx * 0.06));
+        const fit = fitText(ctx, name, HEAD_FONT, baseFontPx, width * 0.82, 14, spacing);
+        ctx.font = `${fit.px}px ${HEAD_FONT}`;
+
+        // Measure rendered width (incl. letter spacing) for the pill.
+        const chars = [...fit.text];
+        let textW = -spacing;
+        for (const ch of chars) textW += ctx.measureText(ch).width + spacing;
+
+        const padX = Math.round(fit.px * 0.55);
+        const padY = Math.round(fit.px * 0.30);
+        const pillH = fit.px + padY * 2;
+        const pillW = textW + padX * 2;
+        const pillX = cx - pillW / 2;
+        const pillY = cy + radius + ringW + Math.round(fit.px * 0.5);
+
+        ctx.save();
+        roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = Math.max(4, Math.round(fit.px * 0.16));
+        ctx.shadowOffsetY = 1;
+        drawSpacedText(ctx, fit.text, cx, pillY + pillH / 2, spacing);
+        ctx.restore();
+    }
+}
+
+/**
  * Generate a banner PNG buffer.
  * @param {Object} opts
  * @param {string} opts.headline  e.g. "WELCOME" / "GOODBYE"
@@ -314,66 +421,11 @@ async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFF
     }
 
     // ---- Soft dark overlay so the avatar + text stay readable ----
-    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
     ctx.fillRect(0, 0, W, H);
 
-    // ---- Avatar (circular, centered) with accent ring ----
-    const size = 200;
-    const radius = size / 2;
-    const cx = W / 2;
-    const cy = username ? H * 0.40 : H * 0.5;
-
-    // Accent ring base
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 8, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.restore();
-
-    // Thin dark gap for definition
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fill();
-    ctx.restore();
-
-    let avatar = null;
-    if (avatarURL) {
-        try { avatar = await loadImage(avatarURL); } catch (e) {
-            console.error('[welcomeCard] generateAvatarBanner gagal load avatar:', e.message);
-        }
-    }
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    if (avatar) {
-        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
-    } else {
-        ctx.fillStyle = '#2b2d31';
-        ctx.fillRect(cx - radius, cy - radius, size, size);
-    }
-    ctx.restore();
-
-    // ---- Username under the avatar ----
-    const name = String(username || '').trim();
-    if (name) {
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0,0,0,0.7)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 3;
-        const nameFit = fitText(ctx, name, SUB_FONT, 44, W - 160, 20);
-        ctx.font = `${nameFit.px}px ${SUB_FONT}`;
-        ctx.fillStyle = accent;
-        ctx.fillText(nameFit.text, cx, cy + radius + 64);
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
-    }
+    // ---- Avatar + username overlay (black aesthetic ring, upper-centered) ----
+    await drawAvatarOverlay(ctx, { width: W, height: H, avatarURL, username });
 
     return canvas.toBuffer('image/png');
 }
@@ -417,63 +469,7 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
     // ---- Render the static overlay once (transparent bg) ----
     const canvas = createCanvas(width, pageHeight);
     const ctx = canvas.getContext('2d');
-
-    const size = Math.round(Math.min(width, pageHeight) * 0.42);
-    const radius = size / 2;
-    const cx = width / 2;
-    const cy = username ? pageHeight * 0.40 : pageHeight * 0.5;
-    const ring = Math.max(3, Math.round(size * 0.045));
-
-    // Accent ring base
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + ring * 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fillStyle = accent;
-    ctx.fill();
-
-    // Thin dark gap for definition
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + ring, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fill();
-
-    // Avatar (circular)
-    let avatar = null;
-    if (avatarURL) {
-        try { avatar = await loadImage(avatarURL); } catch (e) {
-            console.error('[welcomeCard] generateAvatarBannerGif gagal load avatar:', e.message);
-        }
-    }
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    if (avatar) {
-        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
-    } else {
-        ctx.fillStyle = '#2b2d31';
-        ctx.fillRect(cx - radius, cy - radius, size, size);
-    }
-    ctx.restore();
-
-    // Username under the avatar
-    const name = String(username || '').trim();
-    if (name) {
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0,0,0,0.7)';
-        ctx.shadowBlur = Math.max(6, Math.round(size * 0.06));
-        ctx.shadowOffsetY = 2;
-        const basePx = Math.max(16, Math.round(pageHeight * 0.1));
-        const nameFit = fitText(ctx, name, SUB_FONT, basePx, Math.max(40, width - size), 14);
-        ctx.font = `${nameFit.px}px ${SUB_FONT}`;
-        ctx.fillStyle = accent;
-        ctx.fillText(nameFit.text, cx, cy + radius + Math.round(size * 0.36));
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
-    }
-
+    await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username });
     const overlayPng = canvas.toBuffer('image/png');
 
     // ---- Layer the overlay onto every frame of the filmstrip ----
