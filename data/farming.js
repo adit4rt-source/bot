@@ -86,13 +86,6 @@ const FARM_RECIPES = [
     { id: 'celestial_potion', name: 'Celestial Potion', emoji: '⭐', ingredients: [{id:'celestial_tree',qty:1},{id:'lotus',qty:2},{id:'madu',qty:3}], sellPrice: 60000 },
     { id: 'time_essence', name: 'Time Essence', emoji: '⌛', ingredients: [{id:'time_blossom',qty:1},{id:'mystic_herb',qty:2},{id:'dragon_fruit_crop',qty:1}], sellPrice: 100000 },
     { id: 'lotus_perfume', name: 'Golden Lotus Perfume', emoji: '🪷', ingredients: [{id:'golden_lotus',qty:1},{id:'sakura',qty:3},{id:'mawar',qty:3}], sellPrice: 30000 },
-
-    // === MYTHIC RECIPES (rare combinations of prestige crops — the top of the recipe tree) ===
-    { id: 'dragon_phoenix_feast', name: 'Dragon-Phoenix Feast', emoji: '🐲', ingredients: [{id:'dragon_fruit_crop',qty:3},{id:'phoenix_flower',qty:2},{id:'ice_berry',qty:2}], sellPrice: 120000 },
-    { id: 'genesis_nectar', name: 'Genesis Nectar', emoji: '🍯', ingredients: [{id:'golden_lotus',qty:1},{id:'celestial_tree',qty:1},{id:'madu',qty:5}], sellPrice: 140000 },
-    { id: 'eternity_brew', name: 'Eternity Brew', emoji: '🌌', ingredients: [{id:'time_blossom',qty:2},{id:'celestial_tree',qty:1},{id:'mystic_herb',qty:3}], sellPrice: 160000 },
-    { id: 'void_phoenix_elixir', name: 'Void-Phoenix Elixir', emoji: '☄️', ingredients: [{id:'void_rose',qty:1},{id:'phoenix_flower',qty:1},{id:'crystal_flower',qty:3}], sellPrice: 190000 },
-    { id: 'astral_ambrosia', name: 'Astral Ambrosia', emoji: '🌠', ingredients: [{id:'time_blossom',qty:1},{id:'void_rose',qty:1},{id:'golden_lotus',qty:1},{id:'lotus',qty:3}], sellPrice: 260000 },
 ];
 
 const FARM_FERTILIZERS = [
