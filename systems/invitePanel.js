@@ -1,7 +1,7 @@
 // systems/invitePanel.js - Invite Tracker Panel UI System (Button-based navigation)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType } = require('discord.js');
 const { db, getSetting } = require('../database');
-const { getInviterStats, getInviteLeaderboard, getInvitedBy, getInvitedList, getAllInviteSettings } = require('./inviteTracker');
+const { getInviterStats, getInviteLeaderboard, getInvitedBy, getInvitedList, getAllInviteSettings, setInviteSetting } = require('./inviteTracker');
 const { getTiers, getClaimedTiers } = require('./inviteRewards');
 const ui = require('./ui');
 
@@ -217,6 +217,7 @@ async function handleInviteButton(interaction) {
             .setDescription(
                 `**Status:** ${settings.invite_enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'}\n` +
                 `**Log Channel:** ${settings.invite_channel ? `<#${settings.invite_channel}>` : '*Belum diset*'}\n` +
+                `**Reward Channel:** ${settings.invite_reward_channel ? `<#${settings.invite_reward_channel}>` : '*Ikut Log Channel*'}\n` +
                 `**Fake Threshold:** ${settings.invite_fake_threshold} hari\n` +
                 `**Deduct on Leave:** ${settings.invite_leave_deduct === '1' ? '✅ Ya' : '❌ Tidak'}\n\n` +
                 (isAdmin
@@ -225,12 +226,19 @@ async function handleInviteButton(interaction) {
             );
 
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`invpnl_channels_${userId}`).setLabel('📡 Channels').setStyle(ButtonStyle.Primary).setDisabled(!isAdmin),
             new ButtonBuilder().setCustomId(`invpnl_bonus_${userId}`).setLabel('🎁 Bonus').setStyle(ButtonStyle.Primary).setDisabled(!isAdmin),
             new ButtonBuilder().setCustomId(`invpnl_blacklist_${userId}`).setLabel('🚫 Blacklist').setStyle(ButtonStyle.Danger).setDisabled(!isAdmin),
             new ButtonBuilder().setCustomId(`invpnl_reset_${userId}`).setLabel('🔄 Reset').setStyle(ButtonStyle.Danger).setDisabled(!isAdmin),
             new ButtonBuilder().setCustomId(`invpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // === CHANNELS (Admin: set log & reward channels via ChannelSelect) ===
+    if (action === 'channels') {
+        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+        return interaction.update(buildChannelsView(guildId, userId));
     }
 
     // === BONUS (Admin modal) ===
@@ -272,6 +280,50 @@ async function handleInviteButton(interaction) {
 // ============ UTILITY: Detection helper ============
 function isInvitePanelButton(customId) {
     return customId.startsWith('invpnl_');
+}
+
+// ============ CHANNELS VIEW + CHANNEL SELECT HANDLER ============
+function buildChannelsView(guildId, userId, note) {
+    const settings = getAllInviteSettings(guildId);
+    const embed = new EmbedBuilder()
+        .setTitle('📡 Atur Channel Invite')
+        .setColor(note ? '#43B581' : '#5865F2')
+        .setDescription(
+            (note ? `${note}\n\n` : '') +
+            `**Log Channel:** ${settings.invite_channel ? `<#${settings.invite_channel}>` : '*Belum diset*'}\n` +
+            `**Reward Channel:** ${settings.invite_reward_channel ? `<#${settings.invite_reward_channel}>` : '*Ikut Log Channel*'}\n\n` +
+            `Pilih channel di bawah. **Reward Channel** kosong = ikut Log Channel.`
+        );
+    const logRow = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId(`invchan_log_${userId}`).setPlaceholder('📋 Set Log Channel...').setChannelTypes(ChannelType.GuildText).setMinValues(1).setMaxValues(1)
+    );
+    const rewardRow = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId(`invchan_reward_${userId}`).setPlaceholder('🎁 Set Reward Channel...').setChannelTypes(ChannelType.GuildText).setMinValues(1).setMaxValues(1)
+    );
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`invpnl_settings_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [logRow, rewardRow, backRow] };
+}
+
+async function handleInviteChannelSelect(interaction) {
+    const guildId = interaction.guild.id;
+    const parts = interaction.customId.split('_'); // invchan_<which>_<userId>
+    const which = parts[1];
+    const userId = parts[parts.length - 1];
+    if (interaction.user.id !== userId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+
+    const channelId = interaction.values[0];
+    const key = which === 'reward' ? 'invite_reward_channel' : 'invite_channel';
+    setInviteSetting(guildId, key, channelId);
+
+    const note = `✅ ${which === 'reward' ? 'Reward' : 'Log'} channel diset ke <#${channelId}>`;
+    return interaction.update(buildChannelsView(guildId, userId, note));
+}
+
+function isInviteChannelSelect(customId) {
+    return typeof customId === 'string' && customId.startsWith('invchan_');
 }
 
 // ============ MODAL HANDLERS ============
@@ -338,5 +390,7 @@ module.exports = {
     handleInviteButton,
     isInvitePanelButton,
     handleInviteModal,
-    isInvitePanelModal
+    isInvitePanelModal,
+    handleInviteChannelSelect,
+    isInviteChannelSelect
 };

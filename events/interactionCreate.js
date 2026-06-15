@@ -37,7 +37,7 @@ const { handleTradeCommand, handleTradeButton, handleTradeSelectMenu, handleTrad
 const { handleMarketCommand, handleMarketButton, handleMarketSelectMenu, handleMarketModal, isMarketPanelButton, isMarketPanelSelectMenu, isMarketPanelModal } = require('../systems/marketPanel');
 const { handleStatsCommand, handleStatsButton, isStatsPanelButton } = require('../systems/statsPanel');
 const { handleLeaderboardCommand, handleLeaderboardButton, isLeaderboardButton } = require('../systems/leaderboard');
-const { handleInviteCommand, handleInviteButton, isInvitePanelButton, handleInviteModal, isInvitePanelModal } = require('../systems/invitePanel');
+const { handleInviteCommand, handleInviteButton, isInvitePanelButton, handleInviteModal, isInvitePanelModal, handleInviteChannelSelect, isInviteChannelSelect } = require('../systems/invitePanel');
 const { handleWelcomerCommand, handleWelcomerButton, isWelcomerPanelButton } = require('../systems/welcomerPanel');
 const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handleSelfRoleRoleSelect, handleSelfRoleChannelSelect, handleSelfRoleModal, isSelfRolePanelButton, isSelfRolePanelSelect, isSelfRoleRoleSelect, isSelfRoleChannelSelect, isSelfRolePanelModal } = require('../systems/selfRolePanel');
 const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
@@ -1025,6 +1025,9 @@ async function routeInteraction(interaction) {
     if (interaction.isChannelSelectMenu && interaction.isChannelSelectMenu()) {
         if (isSelfRoleChannelSelect(interaction.customId)) {
             return handleSelfRoleChannelSelect(interaction);
+        }
+        if (isInviteChannelSelect(interaction.customId)) {
+            return handleInviteChannelSelect(interaction);
         }
         if (isGiveawayChannelSelect(interaction.customId)) {
             return handleGiveawayChannelSelect(interaction);

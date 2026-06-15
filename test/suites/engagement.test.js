@@ -239,5 +239,22 @@ module.exports = function register() {
       throw new Error('daily reminder should not be sent again on subsequent messages');
     }
   });
+
+  // ============ INVITE: set reward channel via Discord ChannelSelect ============
+  test('invite: ChannelSelect sets a dedicated reward channel (in Discord)', async () => {
+    const it = mockInteraction({ userId: 'adm1', guildId: 'INVG', customId: 'invchan_reward_adm1', values: ['REWARD_CH_1'], admin: true });
+    await invitePanel.handleInviteChannelSelect(it);
+    const { getAllInviteSettings } = botRequire('systems/inviteTracker.js');
+    const s = getAllInviteSettings('INVG');
+    if (s.invite_reward_channel !== 'REWARD_CH_1') throw new Error('reward channel not saved, got ' + s.invite_reward_channel);
+  });
+
+  test('invite: ChannelSelect rejects non-admin', async () => {
+    const it = mockInteraction({ userId: 'usr2', guildId: 'INVG2', customId: 'invchan_reward_usr2', values: ['X'], admin: false });
+    await invitePanel.handleInviteChannelSelect(it);
+    const { getAllInviteSettings } = botRequire('systems/inviteTracker.js');
+    const s = getAllInviteSettings('INVG2');
+    if (s.invite_reward_channel === 'X') throw new Error('non-admin should not be able to set the channel');
+  });
 };
 
