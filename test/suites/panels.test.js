@@ -65,6 +65,29 @@ module.exports = function register() {
     const entries = (desc.match(/`\[\d+\]`/g) || []).length;
     if (entries !== 3) throw new Error('expected 3 list entries (matching the count), got ' + entries);
   });
+
+  test('livestock: coop paginates when there are many animals', () => {
+    const PU = '200000000000000003';
+    db.getOrCreateUser(null, PU);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(PU);
+    const now = Date.now();
+    const ins = db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 5, 0, 0, 'healthy', ?, ?, ?, NULL, 'normal')");
+    for (let i = 0; i < 20; i++) ins.run(PU, String(now), now, now);
+
+    const p0 = live.buildCoopPanel(PU, 'Tester', 0);
+    const e0 = (p0.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e0 !== 15) throw new Error('page 0 should show 15 entries, got ' + e0);
+    if (p0.components.length !== 4) throw new Error('paginated panel should have a page-control row');
+
+    const p1 = live.buildCoopPanel(PU, 'Tester', 1);
+    const e1 = (p1.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e1 !== 5) throw new Error('page 1 should show the remaining 5, got ' + e1);
+
+    // out-of-range page clamps to last page (no crash, still 5)
+    const p9 = live.buildCoopPanel(PU, 'Tester', 99);
+    const e9 = (p9.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e9 !== 5) throw new Error('out-of-range page should clamp to last page');
+  });
   const trade = botRequire('systems/tradePanel.js');
   panel('tradePanel.buildTradePanel', () => trade.buildTradePanel(G, U, NAME));
   const market = botRequire('systems/marketPanel.js');
