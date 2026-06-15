@@ -165,4 +165,45 @@ module.exports = function register() {
         if (!Array.isArray(r.body.awakeningTiers) || r.body.awakeningTiers.length === 0) throw new Error('no awakening tiers');
         if (!r.body.fusion || !r.body.fusion.config || !r.body.fusion.config.Common) throw new Error('fusion config missing');
     });
+
+    // ---------------- farming: recipe tree ----------------
+    test('api: GET /api/farming/recipes returns tiered tree incl. new Mythic combos', async () => {
+        const r = await call('/api/farming/recipes');
+        if (r.status !== 200) throw new Error('status ' + r.status);
+        const { FARM_RECIPES } = botRequire('data/farming.js');
+        if (r.body.total !== FARM_RECIPES.length) throw new Error('total mismatch');
+        if (!r.body.byTier || !Array.isArray(r.body.byTier.Mythic)) throw new Error('byTier.Mythic missing');
+        const mythicIds = r.body.byTier.Mythic.map((x) => x.id);
+        for (const id of ['dragon_phoenix_feast', 'genesis_nectar', 'eternity_brew', 'void_phoenix_elixir', 'astral_ambrosia']) {
+            if (!mythicIds.includes(id)) throw new Error('missing Mythic recipe: ' + id);
+        }
+        // every recipe must have a tier + non-empty ingredients with names resolved
+        for (const rec of r.body.recipes) {
+            if (!rec.tier || !Array.isArray(rec.ingredients) || rec.ingredients.length === 0) throw new Error('bad recipe ' + rec.id);
+        }
+    });
+
+    test('farming: new Mythic recipes are well-formed (unique ids, valid crop ingredients)', () => {
+        const { FARM_RECIPES, FARM_CROPS } = botRequire('data/farming.js');
+        let PRESTIGE_CROPS = [];
+        try { PRESTIGE_CROPS = botRequire('systems/farmMutation.js').PRESTIGE_CROPS || []; } catch (_) { /* optional */ }
+        const cropIds = new Set([...FARM_CROPS, ...PRESTIGE_CROPS].map((c) => c.id));
+        const seen = new Set();
+        for (const rec of FARM_RECIPES) {
+            if (seen.has(rec.id)) throw new Error('duplicate recipe id: ' + rec.id);
+            seen.add(rec.id);
+            if (!rec.sellPrice || rec.sellPrice <= 0) throw new Error('bad sellPrice: ' + rec.id);
+            for (const ing of rec.ingredients) {
+                if (!ing.id || !(ing.qty > 0)) throw new Error('bad ingredient in ' + rec.id);
+            }
+        }
+        const newIds = ['dragon_phoenix_feast', 'genesis_nectar', 'eternity_brew', 'void_phoenix_elixir', 'astral_ambrosia'];
+        for (const id of newIds) {
+            const rec = FARM_RECIPES.find((x) => x.id === id);
+            if (!rec) throw new Error('missing new recipe: ' + id);
+            for (const ing of rec.ingredients) {
+                if (!cropIds.has(ing.id)) throw new Error(`recipe ${id} references unknown crop ${ing.id}`);
+            }
+        }
+    });
 };

@@ -1310,6 +1310,32 @@ app.get('/api/pets/evolutions', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== FARMING: RECIPE TREE ====================
+app.get('/api/farming/recipes', (req, res) => {
+    try {
+        const { FARM_RECIPES, FARM_CROPS } = require('./data/farming');
+        let PRESTIGE_CROPS = [];
+        try { PRESTIGE_CROPS = require('./systems/farmMutation').PRESTIGE_CROPS || []; } catch (_) { /* optional */ }
+        const cropMap = Object.fromEntries([...FARM_CROPS, ...PRESTIGE_CROPS].map(c => [c.id, c]));
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const tierOf = (price) => {
+            if (price < 500) return 'Common';
+            if (price < 1500) return 'Uncommon';
+            if (price < 5000) return 'Rare';
+            if (price < 20000) return 'Epic';
+            if (price < 120000) return 'Legendary';
+            return 'Mythic';
+        };
+        const recipes = FARM_RECIPES.map(r => ({
+            id: r.id, name: r.name, emoji: r.emoji, sellPrice: r.sellPrice, tier: tierOf(r.sellPrice),
+            ingredients: r.ingredients.map(i => ({ id: i.id, qty: i.qty, name: cropMap[i.id]?.name || i.id, emoji: cropMap[i.id]?.emoji || '📦' })),
+        }));
+        const byTier = {};
+        for (const t of TIER_ORDER) byTier[t] = recipes.filter(r => r.tier === t);
+        res.json({ tiers: TIER_ORDER, total: recipes.length, byTier, recipes });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== QR CODE REDIRECT ROUTES ====================
 try {
     const { registerQrRoutes } = require('./systems/qrcode');
