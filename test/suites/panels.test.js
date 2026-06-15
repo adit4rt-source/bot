@@ -46,6 +46,25 @@ module.exports = function register() {
   const live = botRequire('systems/livestockPanel.js');
   panel('livestockPanel.buildCoopPanel', () => live.buildCoopPanel(U, NAME));
   panel('livestockPanel.buildBarnPanel', () => live.buildBarnPanel(U, NAME));
+
+  // Regression: dead animals occupy slots, so they must be COUNTED and SHOWN
+  // (previously the header counted them but the list hid them → 25/25 but only 23 listed).
+  test('livestock: dead chickens are counted AND listed in the coop panel', () => {
+    const LU = '200000000000000002';
+    db.getOrCreateUser(null, LU);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(LU);
+    const now = Date.now();
+    const ins = db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 5, 0, 0, ?, ?, ?, ?, NULL, 'normal')");
+    ins.run(LU, 'healthy', String(now), now, now);
+    ins.run(LU, 'healthy', String(now), now, now);
+    ins.run(LU, 'dead', String(now), now, now);
+
+    const desc = live.buildCoopPanel(LU, 'Tester').embeds[0].data.description;
+    if (!/Ayam: \*\*3\*\*/.test(desc)) throw new Error('coop header should count all 3 (incl dead)');
+    if (!desc.includes('💀')) throw new Error('dead chicken should be shown with 💀 in the list');
+    const entries = (desc.match(/`\[\d+\]`/g) || []).length;
+    if (entries !== 3) throw new Error('expected 3 list entries (matching the count), got ' + entries);
+  });
   const trade = botRequire('systems/tradePanel.js');
   panel('tradePanel.buildTradePanel', () => trade.buildTradePanel(G, U, NAME));
   const market = botRequire('systems/marketPanel.js');

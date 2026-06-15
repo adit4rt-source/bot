@@ -36,48 +36,63 @@ function buildCoopPanel(userId, username) {
     const coopLvl = getCoopLevel(userId);
     const coopInfo = COOP_LEVELS.find(l => l.level === coopLvl);
     const maxSlots = getCoopSlots(userId);
-    const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
-    const deadCount = getAnimals(userId, 'chicken').filter(a => a.status === 'dead').length;
+    const chickens = getAnimals(userId, 'chicken'); // include dead so the list matches slot usage
+    const deadCount = chickens.filter(a => a.status === 'dead').length;
     const sickCount = chickens.filter(a => a.status === 'sick').length;
     const prodMult = getSeasonProductionMultiplier('chicken');
 
     // Count ready animals
     const now = Date.now();
     let totalReady = 0;
-    let animalList = '';
     const { getHungerPercent } = require('./livestock');
+    const listLines = [];
     chickens.forEach((chicken, i) => {
         const { getProduceTime } = require('../data/livestock');
+        const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
+        const rarityIcon = chicken.rarity === 'diamond' ? '💎 ' : chicken.rarity === 'golden' ? '✨ ' : '';
+        const name = chicken.name || 'Ayam';
+
+        // Dead birds still occupy a slot until buried — show them so the list matches the count.
+        if (chicken.status === 'dead') {
+            listLines.push(`\`[${i + 1}]\` 💀 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur (kosongkan slot)\n`);
+            return;
+        }
+
         const produceTime = getProduceTime('chicken', chicken.level, chicken.tier) / prodMult;
         const elapsed = now - (chicken.lastCollect || chicken.createdAt);
         const isReady = elapsed >= produceTime;
         if (isReady) totalReady++;
 
-        const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
         const hunger = getHungerPercent(chicken);
         const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
-        const rarityIcon = chicken.rarity === 'diamond' ? '💎 ' : chicken.rarity === 'golden' ? '✨ ' : '';
 
         if (chicken.status === 'sick') {
-            const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`);
         } else if (isReady) {
-            const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`);
         } else {
-            const name = chicken.name || 'Ayam';
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`);
         }
     });
 
+    // Assemble the list, guarding Discord's 4096-char description limit.
+    let animalList = '';
+    let shown = 0;
+    for (const ln of listLines) {
+        if (animalList.length + ln.length > 3500) break;
+        animalList += ln;
+        shown++;
+    }
+    if (shown < listLines.length) animalList += `> *...+${listLines.length - shown} ekor lagi — pakai 🔄 Refresh*\n`;
     if (chickens.length === 0) animalList = '> *Belum punya ayam. Beli di Shop!*\n';
 
-    // Calculate average hunger
-    const avgHunger = chickens.length > 0 ? Math.round(chickens.reduce((s, c) => s + getHungerPercent(c), 0) / chickens.length) : 100;
+    // Calculate average hunger (alive birds only)
+    const aliveChickens = chickens.filter(a => a.status !== 'dead');
+    const avgHunger = aliveChickens.length > 0 ? Math.round(aliveChickens.reduce((s, c) => s + getHungerPercent(c), 0) / aliveChickens.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
@@ -90,6 +105,7 @@ function buildCoopPanel(userId, username) {
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> 📈 Produksi: **${Math.round(prodMult * 100)}%**  •  ${ui.money(userData.balance)}\n` +
             (sickCount > 0 ? `> ⚠️ **${sickCount} ayam sakit!** Beri obat segera.\n` : '') +
+            (deadCount > 0 ? `> 💀 **${deadCount} ayam mati** — klik ⚰️ Kubur untuk kosongkan slot.\n` : '') +
             ui.DIVIDER + `\n` +
             `📋 **Daftar Ayam:**\n` +
             animalList
@@ -127,8 +143,8 @@ function buildBarnPanel(userId, username) {
     const barnLvl = getBarnLevel(userId);
     const barnInfo = BARN_LEVELS.find(l => l.level === barnLvl);
     const maxSlots = getBarnSlots(userId);
-    const cows = getAnimals(userId, 'cow').filter(a => a.status !== 'dead');
-    const sheep = getAnimals(userId, 'sheep').filter(a => a.status !== 'dead');
+    const cows = getAnimals(userId, 'cow'); // include dead so list matches slot usage
+    const sheep = getAnimals(userId, 'sheep');
     const totalAnimals = cows.length + sheep.length;
     const sickCows = cows.filter(a => a.status === 'sick').length;
     const sickSheep = sheep.filter(a => a.status === 'sick').length;
@@ -143,6 +159,12 @@ function buildBarnPanel(userId, username) {
 
     let cowList = '';
     cows.forEach((cow, i) => {
+        const tierEmoji0 = cow.tier > 0 ? ' ' + '⭐'.repeat(Math.min(cow.tier, 5)) + (cow.tier > 5 ? `+${cow.tier - 5}` : '') : '';
+        const rarityIcon0 = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
+        if (cow.status === 'dead') {
+            cowList += `\`[${i + 1}]\` 💀 ${rarityIcon0}**Sapi** Lv.${cow.level}${tierEmoji0} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur\n`;
+            return;
+        }
         const { getProduceTime } = require('../data/livestock');
         const produceTime = getProduceTime('cow', cow.level, cow.tier) / cowProd;
         const elapsed = now - (cow.lastCollect || cow.createdAt);
@@ -168,6 +190,12 @@ function buildBarnPanel(userId, username) {
 
     let sheepList = '';
     sheep.forEach((s, i) => {
+        const tierEmoji0 = s.tier > 0 ? ' ' + '⭐'.repeat(Math.min(s.tier, 5)) + (s.tier > 5 ? `+${s.tier - 5}` : '') : '';
+        const rarityIcon0 = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
+        if (s.status === 'dead') {
+            sheepList += `\`[${i + 1}]\` 💀 ${rarityIcon0}**Domba** Lv.${s.level}${tierEmoji0} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur\n`;
+            return;
+        }
         const { getProduceTime } = require('../data/livestock');
         const produceTime = getProduceTime('sheep', s.level, s.tier) / sheepProd;
         const elapsed = now - (s.lastCollect || s.createdAt);
@@ -194,7 +222,7 @@ function buildBarnPanel(userId, username) {
     if (cows.length === 0) cowList = '*Belum punya sapi*\n';
     if (sheep.length === 0) sheepList = '*Belum punya domba*\n';
 
-    const allBarn = [...cows, ...sheep];
+    const allBarn = [...cows, ...sheep].filter(a => a.status !== 'dead');
     const avgHunger = allBarn.length > 0 ? Math.round(allBarn.reduce((s, a) => s + getHungerPercent(a), 0) / allBarn.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
@@ -209,6 +237,7 @@ function buildBarnPanel(userId, username) {
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> ${ui.money(userData.balance)}\n` +
             (totalSick > 0 ? `> ⚠️ **${totalSick} hewan sakit!**\n` : '') +
+            (deadBarnCount > 0 ? `> 💀 **${deadBarnCount} hewan mati** — klik ⚰️ Kubur untuk kosongkan slot.\n` : '') +
             ui.DIVIDER + `\n` +
             `📋 **Sapi:**\n${cowList}\n` +
             `📋 **Domba:**\n${sheepList}`
