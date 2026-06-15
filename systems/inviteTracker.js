@@ -23,10 +23,11 @@ function setInviteSetting(guildId, key, value) {
 }
 
 function getAllInviteSettings(guildId) {
-    const keys = ['invite_enabled', 'invite_channel', 'invite_message', 'invite_fake_threshold', 'invite_leave_deduct'];
+    const keys = ['invite_enabled', 'invite_channel', 'invite_reward_channel', 'invite_message', 'invite_fake_threshold', 'invite_leave_deduct'];
     const defaults = {
         invite_enabled: '1',
         invite_channel: '',
+        invite_reward_channel: '', // where tier-reward announcements go; falls back to invite_channel
         invite_message: '{inviter.mention} mengundang {user.mention}! (Total: **{inviter.total}** invites)',
         invite_fake_threshold: '7', // days — accounts younger than this are "fake"
         invite_leave_deduct: '1', // deduct when invited user leaves
@@ -163,7 +164,9 @@ async function handleMemberJoin(member) {
         try {
             const { processInviteJoinRewards } = require('./inviteRewards');
             const validInvites = getInviterStats(guildId, inviterUserId).total;
-            await processInviteJoinRewards(member.guild, inviterUserId, validInvites, channelId);
+            // Reward announcements go to a dedicated channel if set, else the invite channel.
+            const rewardChannelId = getInviteSetting(guildId, 'invite_reward_channel', '') || channelId;
+            await processInviteJoinRewards(member.guild, inviterUserId, validInvites, rewardChannelId);
         } catch (e) {
             // swallow — invite tracking must keep working even if rewards fail
         }
