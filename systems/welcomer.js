@@ -38,6 +38,30 @@ async function fetchImageBuffer(url, { timeoutMs = 10000, maxBytes = 25 * 1024 *
     }
 }
 
+// ---- GIF background cache (avoids re-downloading the same GIF every join) ----
+// Cache keyed by URL, stores { buffer, ts }. Entries expire after 10 minutes.
+const _gifCache = new Map();
+const GIF_CACHE_TTL = 10 * 60 * 1000; // 10 min
+const GIF_CACHE_MAX = 20;              // max entries
+
+async function fetchImageBufferCached(url, opts) {
+    if (!url) return null;
+    const now = Date.now();
+    const cached = _gifCache.get(url);
+    if (cached && (now - cached.ts) < GIF_CACHE_TTL) return cached.buffer;
+
+    const buf = await fetchImageBuffer(url, opts);
+    if (buf) {
+        // Evict oldest if at capacity
+        if (_gifCache.size >= GIF_CACHE_MAX) {
+            const oldest = [..._gifCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+            if (oldest) _gifCache.delete(oldest[0]);
+        }
+        _gifCache.set(url, { buffer: buf, ts: now });
+    }
+    return buf;
+}
+
 function getAllWelcomerSettings(guildId) {
     const keys = [
         'welcome_enabled', 'welcome_channel', 'welcome_message', 'welcome_embed_color',
@@ -218,7 +242,7 @@ async function handleWelcome(member) {
 
             if (wcMod) {
                 try {
-                    const srcBuffer = await fetchImageBuffer(customImage);
+                    const srcBuffer = await fetchImageBufferCached(customImage);
                     const isGif = !!srcBuffer && srcBuffer.length > 6 &&
                         srcBuffer.toString('ascii', 0, 4) === 'GIF8';
 
@@ -343,7 +367,7 @@ async function handleGoodbye(member) {
 
             if (wcMod) {
                 try {
-                    const srcBuffer = await fetchImageBuffer(customImage);
+                    const srcBuffer = await fetchImageBufferCached(customImage);
                     const isGif = !!srcBuffer && srcBuffer.length > 6 &&
                         srcBuffer.toString('ascii', 0, 4) === 'GIF8';
 

@@ -466,8 +466,19 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
         const meta = await sharp(gifBuffer, { animated: true }).metadata();
         const width = meta.width;
         const pageHeight = meta.pageHeight || meta.height;
-        const pages = meta.pages || 1;
+        let pages = meta.pages || 1;
         if (!width || !pageHeight) return null;
+
+        // Limit frames to cap processing time & output size (60 frames ≈ 2s @ 30fps)
+        const MAX_FRAMES = 60;
+        let inputBuffer = gifBuffer;
+        if (pages > MAX_FRAMES) {
+            // Truncate: re-extract only first MAX_FRAMES pages
+            inputBuffer = await sharp(gifBuffer, { animated: true, pages: MAX_FRAMES })
+                .gif()
+                .toBuffer();
+            pages = MAX_FRAMES;
+        }
 
         // ---- Render the static overlay once (transparent bg) ----
         const canvas = createCanvas(width, pageHeight);
@@ -476,15 +487,12 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
         const overlayPng = canvas.toBuffer('image/png');
 
         // ---- Layer the overlay onto every frame of the filmstrip ----
-        // sharp lays an animated image out as a vertical strip of `pages` frames,
-        // each `pageHeight` tall. Compositing the overlay at each page offset
-        // stamps it on every frame while preserving the original animation/timing.
         const composites = [];
         for (let i = 0; i < pages; i++) {
             composites.push({ input: overlayPng, top: i * pageHeight, left: 0 });
         }
 
-        const out = await sharp(gifBuffer, { animated: true })
+        const out = await sharp(inputBuffer, { animated: true })
             .composite(composites)
             .gif()
             .toBuffer();
@@ -495,8 +503,6 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
         }
         return out;
     } catch (e) {
-        // sharp present but failed (corrupt binary, bad GIF, etc.) — signal the
-        // caller to fall back to the static banner (which still shows the avatar).
         console.error('[welcomeCard] generateAvatarBannerGif gagal memproses GIF, pakai banner statis:', e.message);
         return null;
     }
