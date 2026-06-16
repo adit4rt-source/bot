@@ -84,8 +84,10 @@ async function routeInteraction(interaction) {
         return;
     }
 
-    // Block command usage in restricted channels
-    const blockedChannels = ['1347190409402650736'];
+    // Block command usage in restricted channels (configurable via admin panel)
+    const { getSetting } = require('../database');
+    const blockedChannelsRaw = getSetting(guildId, 'blocked_channels', '');
+    const blockedChannels = blockedChannelsRaw ? blockedChannelsRaw.split(',').map(c => c.trim()).filter(Boolean) : [];
     if (interaction.isChatInputCommand() && blockedChannels.includes(interaction.channelId)) {
         return interaction.reply({ content: '❌ Command bot tidak bisa digunakan di channel ini! Gunakan di channel lain.', ephemeral: true });
     }

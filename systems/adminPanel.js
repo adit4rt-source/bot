@@ -302,7 +302,8 @@ function buildSettingSubPanel(guildId) {
             `> ⚡ XP Multiplier: **${xpMult}x**\n` +
             `> 🎯 Max Level: **${getSetting(guildId, 'max_level', '200')}**\n\n` +
             `-# 💡 Klik "📡 Channels" untuk set channel notifikasi.\n` +
-            `-# 💡 Klik "🎛️ Toggle" untuk ON/OFF fitur (isi 1 atau 0).`
+            `-# 💡 Klik "🎛️ Toggle" untuk ON/OFF fitur (isi 1 atau 0).\n` +
+            `-# 💡 Klik "🔧 Lainnya" untuk set blocked channels.`
         );
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -905,7 +906,8 @@ async function handleAdminButton(interaction) {
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('log_ch').setLabel('Log Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'log_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('quest_reroll').setLabel('Quest Reroll Max/Hari').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_max', '3'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reroll_cost').setLabel('Quest Reroll Cost').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_cost', '500')))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reroll_cost').setLabel('Quest Reroll Cost').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_cost', '500'))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('blocked_channels').setLabel('🚫 Blocked Channels (ID, pisah koma)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(getSetting(guildId, 'blocked_channels', '') || '123456789,987654321'))
         );
         return interaction.showModal(modal);
     }
@@ -1273,6 +1275,14 @@ async function handleAdminModal(interaction) {
         if (rerollMax && !isNaN(parseInt(rerollMax))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_reroll_max', rerollMax); updated.push(`Quest Reroll Max: ${rerollMax}/hari`); }
         const rerollCost = (interaction.fields.getTextInputValue('reroll_cost') || '').trim();
         if (rerollCost && !isNaN(parseInt(rerollCost))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_reroll_cost', rerollCost); updated.push(`Reroll Cost: 🪙 ${rerollCost}`); }
+        const blockedCh = (interaction.fields.getTextInputValue('blocked_channels') || '').trim();
+        if (blockedCh !== null && blockedCh !== undefined) {
+            // Clean: only keep numeric IDs separated by commas
+            const cleaned = blockedCh.split(/[,\s]+/).filter(id => /^\d+$/.test(id)).join(',');
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'blocked_channels', cleaned);
+            if (cleaned) updated.push(`🚫 Blocked Channels: ${cleaned.split(',').map(id => `<#${id}>`).join(', ')}`);
+            else updated.push('🚫 Blocked Channels: *dihapus (semua channel bisa)*');
+        }
         return interaction.reply({ content: updated.length > 0 ? `✅ Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
