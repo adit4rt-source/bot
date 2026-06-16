@@ -12,10 +12,30 @@
 
 const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path');
+const fs = require('fs');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
+
+// ---- Watermark logo (cached). Drop the PNG at assets/idcommunity-logo.png ----
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'idcommunity-logo.png');
+let _logoImg = null;
+let _logoTried = false;
+async function getLogo() {
+    if (_logoTried) return _logoImg;
+    _logoTried = true;
+    try {
+        if (fs.existsSync(LOGO_PATH)) {
+            _logoImg = await loadImage(LOGO_PATH);
+        }
+    } catch (e) {
+        log('WARN', `[roblox] gagal load watermark logo: ${e.message}`);
+        _logoImg = null;
+    }
+    return _logoImg;
+}
 
 // Strip characters the bundled font can't render (emoji, ☆, ♡, etc.) to avoid
 // "tofu" boxes on the canvas. Keeps Latin letters, numbers, common punctuation.
@@ -125,7 +145,7 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     const LABEL_H = 42;
     const AVATAR_W = 460;
     const AVATAR_H = 520;
-    const HEADER_H = 110;
+    const HEADER_H = 150;
     const SIDE_PAD = 35;
 
     const GRID_W = COLS * (ITEM_SIZE + ITEM_PAD) + ITEM_PAD;
@@ -166,29 +186,47 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     ctx.fillStyle = 'rgba(226, 35, 26, 0.7)';
     ctx.fillRect(0, HEADER_H - 2, W, 2);
 
+    // Watermark strip: logo + "discord.gg/idcommunity" (very top, centered)
+    const logo = await getLogo();
+    const wmText = 'discord.gg/idcommunity';
+    ctx.font = 'bold 16px sans-serif';
+    const wmTextW = ctx.measureText(wmText).width;
+    const logoSize = logo ? 30 : 0;
+    const wmGap = logo ? 10 : 0;
+    const wmTotalW = logoSize + wmGap + wmTextW;
+    const wmX = (W - wmTotalW) / 2;
+    if (logo) {
+        ctx.drawImage(logo, wmX, 8, logoSize, logoSize);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText(wmText, wmX + logoSize + wmGap, 30);
+    // thin divider under watermark
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(SIDE_PAD, 46, W - SIDE_PAD * 2, 1);
+
     // Display name (big) — sanitized
     const displayName = sanitizeText(profile.displayName || profile.name) || profile.name;
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 42px sans-serif';
-    ctx.fillText(displayName, SIDE_PAD, 52);
+    ctx.fillText(displayName, SIDE_PAD, 96);
 
     // Username
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = '18px sans-serif';
-    ctx.fillText(`@${sanitizeText(profile.name) || profile.name}`, SIDE_PAD, 82);
+    ctx.fillText(`@${sanitizeText(profile.name) || profile.name}`, SIDE_PAD, 124);
 
-    // Roblox badge (top right)
+    // Roblox badge (right)
     ctx.fillStyle = '#E2231A';
     ctx.font = 'bold 18px sans-serif';
     const badgeText = 'ROBLOX';
     const badgeW = ctx.measureText(badgeText).width + 26;
     const badgeX = W - badgeW - SIDE_PAD;
     ctx.beginPath();
-    ctx.roundRect(badgeX, 25, badgeW, 36, 8);
+    ctx.roundRect(badgeX, 78, badgeW, 36, 8);
     ctx.fill();
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(badgeText, badgeX + 13, 49);
+    ctx.fillText(badgeText, badgeX + 13, 102);
 
     // Item count badge
     const countText = `${itemCount} ITEMS`;
@@ -197,10 +235,10 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     const countX = badgeX - countW - 10;
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.beginPath();
-    ctx.roundRect(countX, 30, countW, 26, 6);
+    ctx.roundRect(countX, 83, countW, 26, 6);
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText(countText, countX + 10, 48);
+    ctx.fillText(countText, countX + 10, 101);
 
     // Avatar (left, BIG)
     const avatarX = SIDE_PAD;
