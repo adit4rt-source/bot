@@ -19,9 +19,10 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // ==================== COBALT INSTANCES (public, no auth) ====================
 // Tried in order. If one fails/blocks, move to next. Same concept as tikwm.
-// These are community instances that allow programmatic access.
+// Updated from cobalt.directory and community reports.
 const COBALT_INSTANCES = [
-    'https://api.cobalt.tools',
+    'https://cobalt-api.meowing.de',
+    'https://cobalt.ollayor.uz',
     'https://cobalt-api.ayo.tf',
     'https://co.eepy.today',
     'https://cobalt.api.timelessnesses.me',
@@ -78,47 +79,58 @@ async function resolveCobalt(videoUrl) {
     });
 
     for (const instance of instances) {
-        try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 12000);
+        // Try both endpoints: "/" (v10+) and "/api/json" (older versions)
+        const endpoints = [`${instance}/`, `${instance}/api/json`];
 
-            const headers = {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'User-Agent': UA,
-            };
-            // If this is the custom env instance and a key is set, add auth header
-            if (envKey && instance === (envUrl || '').replace(/\/+$/, '')) {
-                headers['Authorization'] = `Api-Key ${envKey}`;
+        for (const endpoint of endpoints) {
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 15000);
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'User-Agent': UA,
+                };
+                // Auth: use COBALT_API_KEY as Bearer token for the env instance,
+                // or for ALL instances if no specific COBALT_API_URL is set
+                const isEnvInstance = envUrl && instance === envUrl.replace(/\/+$/, '');
+                if (envKey && (isEnvInstance || !envUrl)) {
+                    headers['Authorization'] = `Bearer ${envKey}`;
+                }
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers,
+                    body,
+                    signal: controller.signal,
+                });
+                clearTimeout(timer);
+
+                if (!res.ok) continue;
+                const json = await res.json();
+
+                // Success responses (v10+)
+                if ((json.status === 'tunnel' || json.status === 'redirect' || json.status === 'stream') && json.url) {
+                    return { videoUrl: json.url, filename: json.filename || null };
+                }
+
+                // Picker (carousel — e.g. Instagram multi-photo/video)
+                if (json.status === 'picker' && Array.isArray(json.picker)) {
+                    const vid = json.picker.find(p => p.type === 'video') || json.picker[0];
+                    if (vid && vid.url) return { videoUrl: vid.url, filename: vid.filename || null };
+                }
+
+                // Older API format (v7/v8): { status: "stream"/"redirect", url: "..." }
+                if (json.url && !json.status) {
+                    return { videoUrl: json.url, filename: null };
+                }
+
+                // Error — try next endpoint/instance
+            } catch (e) {
+                // Timeout / network error — try next
+                continue;
             }
-
-            const res = await fetch(`${instance}/`, {
-                method: 'POST',
-                headers,
-                body,
-                signal: controller.signal,
-            });
-            clearTimeout(timer);
-
-            if (!res.ok) continue;
-            const json = await res.json();
-
-            // Success responses
-            if ((json.status === 'tunnel' || json.status === 'redirect' || json.status === 'stream') && json.url) {
-                return { videoUrl: json.url, filename: json.filename || null };
-            }
-
-            // Picker (carousel — e.g. Instagram multi-photo/video)
-            if (json.status === 'picker' && Array.isArray(json.picker)) {
-                const vid = json.picker.find(p => p.type === 'video') || json.picker[0];
-                if (vid && vid.url) return { videoUrl: vid.url, filename: vid.filename || null };
-            }
-
-            // Error from this instance — try next
-            if (json.status === 'error') continue;
-        } catch (e) {
-            // Timeout / network error — try next instance
-            continue;
         }
     }
 
@@ -187,6 +199,7 @@ async function maybeHandleVideo(message) {
         }
 
         if (!resolved || !resolved.videoUrl) {
+            log('WARN', `[videoDownloader] Semua Cobalt instances gagal untuk URL: ${url.slice(0, 80)}...`);
             const fail = `⚠️ Gagal mengambil video dari ${pname}. Video mungkin private/tidak didukung.`;
             if (status) {
                 status.edit({ content: fail })
