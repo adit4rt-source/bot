@@ -70,7 +70,39 @@ function shipName(a, b) {
 }
 
 // ==================== CANVAS: SHIP CARD ====================
-async function drawCircleAvatar(ctx, url, cx, cy, r) {
+async function drawCircleAvatar(ctx, url, cx, cy, r, ringColor = '#ff5e8a') {
+    // Outer glow
+    ctx.save();
+    ctx.shadowColor = ringColor;
+    ctx.shadowBlur = 35;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+    ctx.fillStyle = ringColor;
+    ctx.fill();
+    ctx.restore();
+
+    // Pink ring
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+    ctx.closePath();
+    const ringGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    ringGrad.addColorStop(0, '#ff8fb0');
+    ringGrad.addColorStop(1, '#ff2d6f');
+    ctx.fillStyle = ringGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // White gap
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fill();
+    ctx.restore();
+
+    // Avatar
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -84,73 +116,115 @@ async function drawCircleAvatar(ctx, url, cx, cy, r) {
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
     ctx.restore();
-    // ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
+}
+
+// Scatter decorative hearts in the background
+function drawBgHearts(ctx, W, H) {
+    const spots = [
+        [80, 60, 16, 0.06], [W - 90, 80, 22, 0.07], [W / 2 - 200, 70, 12, 0.05],
+        [60, H - 90, 18, 0.06], [W - 70, H - 70, 14, 0.05], [W / 2 + 220, H - 100, 20, 0.06],
+        [W / 2, 40, 10, 0.05], [120, H / 2 + 60, 12, 0.04], [W - 130, H / 2, 16, 0.05],
+    ];
+    for (const [x, y, s, a] of spots) {
+        ctx.globalAlpha = a;
+        drawHeart(ctx, x, y, s, '#ffffff');
+    }
+    ctx.globalAlpha = 1;
 }
 
 async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
-    const W = 800, H = 420;
+    const W = 860, H = 460;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // Pink/red romantic gradient
+    // Romantic gradient background
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#2a0a2e');
-    bg.addColorStop(0.5, '#4a1042');
-    bg.addColorStop(1, '#7a1535');
+    bg.addColorStop(0, '#1a0420');
+    bg.addColorStop(0.5, '#5c1242');
+    bg.addColorStop(1, '#8e1538');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Soft heart glow in center
-    const glow = ctx.createRadialGradient(W / 2, 150, 0, W / 2, 150, 220);
-    glow.addColorStop(0, 'rgba(255, 80, 120, 0.35)');
-    glow.addColorStop(1, 'rgba(255, 80, 120, 0)');
+    // Decorative scattered hearts
+    drawBgHearts(ctx, W, H);
+
+    // Center radial glow
+    const glow = ctx.createRadialGradient(W / 2, 175, 0, W / 2, 175, 260);
+    glow.addColorStop(0, 'rgba(255, 90, 138, 0.40)');
+    glow.addColorStop(1, 'rgba(255, 90, 138, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    // Avatars
-    const r = 95;
-    await drawCircleAvatar(ctx, avatarA, 165, 150, r);
-    await drawCircleAvatar(ctx, avatarB, 635, 150, r);
-
-    // Heart in center
-    drawHeart(ctx, W / 2, 150, 55, '#ff3b6b');
-
-    // Names under avatars
+    // Title
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `26px ${SUB_FONT}`;
-    ctx.fillText(truncate(nameA, 14), 165, 290);
-    ctx.fillText(truncate(nameB, 14), 635, 290);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.font = `bold 30px ${HEAD_FONT}`;
+    ctx.fillText('LOVE CALCULATOR', W / 2, 52);
 
-    // Percentage (big)
-    ctx.font = `bold 64px ${HEAD_FONT}`;
+    // Avatars
+    const r = 100;
+    const ay = 185;
+    await drawCircleAvatar(ctx, avatarA, 175, ay, r);
+    await drawCircleAvatar(ctx, avatarB, W - 175, ay, r);
+
+    // Heart in center (sized slightly by score) with strong glow
+    const heartSize = 60 + Math.round(pct / 100 * 20);
+    drawHeart(ctx, W / 2, ay - 5, heartSize, '#ff2d6f');
+
+    // Names in pills under avatars
+    drawNamePill(ctx, truncate(nameA, 14), 175, ay + r + 40);
+    drawNamePill(ctx, truncate(nameB, 14), W - 175, ay + r + 40);
+
+    // Percentage (big, glowing)
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(255, 45, 111, 0.8)';
+    ctx.shadowBlur = 25;
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(`${pct}%`, W / 2, 330);
+    ctx.font = `bold 72px ${HEAD_FONT}`;
+    ctx.fillText(`${pct}%`, W / 2, 360);
+    ctx.restore();
 
     // Progress bar
-    const barW = 600, barH = 26, barX = (W - barW) / 2, barY = 350;
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    roundRect(ctx, barX, barY, barW, barH, 13);
+    const barW = 660, barH = 30, barX = (W - barW) / 2, barY = 380;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    roundRect(ctx, barX, barY, barW, barH, 15);
     ctx.fill();
     const fillW = Math.max(barH, (barW * pct) / 100);
     const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-    grad.addColorStop(0, '#ff8fb0');
-    grad.addColorStop(1, '#ff3b6b');
+    grad.addColorStop(0, '#ffc2d6');
+    grad.addColorStop(0.5, '#ff5e8a');
+    grad.addColorStop(1, '#ff2d6f');
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 45, 111, 0.6)';
+    ctx.shadowBlur = 15;
     ctx.fillStyle = grad;
-    roundRect(ctx, barX, barY, fillW, barH, 13);
+    roundRect(ctx, barX, barY, fillW, barH, 15);
     ctx.fill();
+    ctx.restore();
 
     // Comment
+    ctx.textAlign = 'center';
     ctx.font = `22px ${SUB_FONT}`;
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillText(sanitize(loveComment(pct)), W / 2, 405);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillText(sanitize(loveComment(pct)), W / 2, 440);
 
     return canvas.toBuffer('image/png');
+}
+
+// Name pill under avatar
+function drawNamePill(ctx, name, cx, y) {
+    ctx.font = `bold 22px ${SUB_FONT}`;
+    const tw = ctx.measureText(name).width;
+    const padX = 18, h = 38, w = tw + padX * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(ctx, cx - w / 2, y - h / 2, w, h, h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, cx, y);
+    ctx.textBaseline = 'alphabetic';
 }
 
 function drawHeart(ctx, cx, cy, size, color) {
