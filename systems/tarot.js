@@ -52,12 +52,106 @@ const RANKS = [
     { en: 'Knight', id: 'Ksatria' }, { en: 'Queen', id: 'Ratu' }, { en: 'King', id: 'Raja' },
 ];
 
+// ==================== MAKNA (Bahasa Indonesia, built-in, tanpa AI) ====================
+const MAJOR_MEANINGS = {
+    'The Fool': ['Awal baru, kebebasan, spontanitas, berani melangkah.', 'Ceroboh, ragu-ragu, mengambil risiko tanpa pikir panjang.'],
+    'The Magician': ['Kemampuan, tekad, percaya diri, mewujudkan keinginan.', 'Bakat tak terpakai, manipulasi, kurang fokus.'],
+    'The High Priestess': ['Intuisi, kebijaksanaan batin, rahasia, ketenangan.', 'Mengabaikan kata hati, rahasia terbongkar.'],
+    'The Empress': ['Kelimpahan, kasih sayang, kesuburan, kenyamanan.', 'Kurang perhatian pada diri, ketergantungan.'],
+    'The Emperor': ['Kepemimpinan, kestabilan, struktur, kewibawaan.', 'Terlalu mengontrol, kaku, keras kepala.'],
+    'The Hierophant': ['Tradisi, bimbingan, nilai, kepercayaan.', 'Memberontak, melawan aturan, mencari jalan sendiri.'],
+    'The Lovers': ['Cinta, keharmonisan, pilihan dari hati, hubungan.', 'Ketidakcocokan, konflik, pilihan yang sulit.'],
+    'The Chariot': ['Tekad, kemenangan, kendali diri, fokus.', 'Kehilangan arah, kurang kendali, ragu.'],
+    'Strength': ['Keberanian, kesabaran, kekuatan dari dalam.', 'Ragu pada diri, emosi sulit dikendalikan.'],
+    'The Hermit': ['Perenungan, mencari jati diri, ketenangan.', 'Kesepian, terlalu menarik diri.'],
+    'Wheel of Fortune': ['Keberuntungan, perubahan, siklus, takdir baik.', 'Nasib kurang baik sementara, menolak perubahan.'],
+    'Justice': ['Keadilan, kejujuran, keseimbangan, kebenaran.', 'Ketidakadilan, menghindari tanggung jawab.'],
+    'The Hanged Man': ['Melepaskan, sudut pandang baru, kesabaran.', 'Terjebak, menunda, pengorbanan sia-sia.'],
+    'Death': ['Akhir sebuah fase, transformasi, awal yang baru.', 'Menolak perubahan, stagnan, takut melepaskan.'],
+    'Temperance': ['Keseimbangan, kesabaran, keselarasan.', 'Berlebihan, tidak sabar, kurang seimbang.'],
+    'The Devil': ['Godaan, keterikatan, materialisme, kebiasaan buruk.', 'Lepas dari belenggu, sadar, merdeka.'],
+    'The Tower': ['Kejutan, perubahan mendadak, kebenaran terungkap.', 'Menghindari bencana, perubahan yang tertunda.'],
+    'The Star': ['Harapan, inspirasi, penyembuhan, ketenangan.', 'Putus asa, lelah, kehilangan keyakinan.'],
+    'The Moon': ['Ilusi, kebingungan, intuisi, ketakutan tersembunyi.', 'Kebingungan mereda, kebenaran mulai jelas.'],
+    'The Sun': ['Kebahagiaan, kesuksesan, kehangatan, semangat.', 'Kebahagiaan tertunda, kurang bersemangat.'],
+    'Judgement': ['Kebangkitan, refleksi, panggilan, pembaruan diri.', 'Keraguan diri, menolak panggilan, terlalu mengkritik diri.'],
+    'The World': ['Pencapaian, penyelesaian, kesempurnaan, perjalanan usai.', 'Tujuan tertunda, ada yang belum selesai.'],
+};
+// Minor: keyed by `${rank.en} of ${suit.en}`
+const MINOR_MEANINGS = {
+    // Wands
+    'Ace of Wands': ['Inspirasi baru, potensi, semangat membara.', 'Ide tertunda, kurang motivasi.'],
+    'Two of Wands': ['Perencanaan, keputusan, visi masa depan.', 'Takut perubahan, kurang perencanaan.'],
+    'Three of Wands': ['Ekspansi, kemajuan, melihat peluang.', 'Hambatan, rencana tertunda.'],
+    'Four of Wands': ['Perayaan, keharmonisan, rumah, kebahagiaan.', 'Ketegangan, perayaan tertunda.'],
+    'Five of Wands': ['Persaingan, perselisihan kecil, dinamika.', 'Menghindari konflik, mencari damai.'],
+    'Six of Wands': ['Kemenangan, pengakuan, kesuksesan.', 'Ego, kemenangan tertunda.'],
+    'Seven of Wands': ['Mempertahankan posisi, keberanian, gigih.', 'Kewalahan, ingin menyerah.'],
+    'Eight of Wands': ['Gerak cepat, kabar baik, kemajuan pesat.', 'Penundaan, frustrasi.'],
+    'Nine of Wands': ['Ketahanan, gigih, hampir sampai tujuan.', 'Lelah, menyerah terlalu cepat.'],
+    'Ten of Wands': ['Beban berat, tanggung jawab, kerja keras.', 'Melepas beban, belajar mendelegasikan.'],
+    'Page of Wands': ['Antusiasme, ide segar, semangat eksplorasi.', 'Kurang arah, ide masih mentah.'],
+    'Knight of Wands': ['Energi, petualangan, penuh gairah.', 'Terburu-buru, tidak konsisten.'],
+    'Queen of Wands': ['Percaya diri, hangat, mandiri, menarik.', 'Kurang percaya diri, cemburu.'],
+    'King of Wands': ['Pemimpin visioner, berani, karismatik.', 'Otoriter, terburu nafsu.'],
+    // Cups
+    'Ace of Cups': ['Cinta baru, emosi positif, kebahagiaan.', 'Emosi tertahan, kekecewaan.'],
+    'Two of Cups': ['Hubungan, kemitraan, cinta saling.', 'Ketidakharmonisan, hubungan renggang.'],
+    'Three of Cups': ['Persahabatan, perayaan, kebersamaan.', 'Berlebihan, drama, gosip.'],
+    'Four of Cups': ['Perenungan, bosan, peluang terlewat.', 'Kesadaran baru, menerima peluang.'],
+    'Five of Cups': ['Kesedihan, kehilangan, penyesalan.', 'Penerimaan, mulai move on, pemulihan.'],
+    'Six of Cups': ['Nostalgia, kenangan indah, kepolosan.', 'Terlalu terjebak masa lalu.'],
+    'Seven of Cups': ['Banyak pilihan, khayalan, peluang.', 'Kejelasan, fokus pada satu tujuan.'],
+    'Eight of Cups': ['Meninggalkan yang tak bermakna, mencari arti.', 'Takut berubah, terjebak situasi.'],
+    'Nine of Cups': ['Kepuasan, harapan terkabul, syukur.', 'Keinginan dangkal, kurang puas.'],
+    'Ten of Cups': ['Kebahagiaan keluarga, keharmonisan.', 'Keluarga renggang, nilai tak selaras.'],
+    'Page of Cups': ['Pesan manis, kreativitas, kepekaan hati.', 'Emosi labil, kabar mengecewakan.'],
+    'Knight of Cups': ['Romantis, penuh pesona, mengikuti hati.', 'Plin-plan, terlalu melankolis.'],
+    'Queen of Cups': ['Empati, kasih sayang, intuisi, perhatian.', 'Terlalu sensitif, emosi kurang stabil.'],
+    'King of Cups': ['Dewasa secara emosi, tenang, bijaksana.', 'Memendam emosi, manipulatif.'],
+    // Swords
+    'Ace of Swords': ['Kejelasan, kebenaran, ide yang tajam.', 'Kebingungan, salah paham.'],
+    'Two of Swords': ['Kebimbangan, jalan buntu, keputusan sulit.', 'Kebuntuan terurai, mulai memilih.'],
+    'Three of Swords': ['Patah hati, kesedihan, luka.', 'Pemulihan, mulai melepaskan rasa sakit.'],
+    'Four of Swords': ['Istirahat, pemulihan, jeda sejenak.', 'Gelisah, sangat butuh istirahat.'],
+    'Five of Swords': ['Konflik, ego, kemenangan yang pahit.', 'Rekonsiliasi, melepas dendam.'],
+    'Six of Swords': ['Transisi, pindah ke tempat lebih baik.', 'Sulit melangkah maju, tertahan.'],
+    'Seven of Swords': ['Strategi, kehati-hatian, akal-akalan.', 'Pengakuan, berhenti menipu.'],
+    'Eight of Swords': ['Merasa terjebak, terbatas, ragu.', 'Bebas, menemukan jalan keluar.'],
+    'Nine of Swords': ['Kecemasan, khawatir, pikiran berat.', 'Kecemasan mereda, harapan muncul.'],
+    'Ten of Swords': ['Akhir yang berat, titik terendah.', 'Bangkit kembali, pemulihan.'],
+    'Page of Swords': ['Rasa ingin tahu, waspada, ide baru.', 'Terburu bicara, gosip.'],
+    'Knight of Swords': ['Ambisi, tegas, bertindak cepat.', 'Gegabah, agresif.'],
+    'Queen of Swords': ['Jernih, jujur, mandiri, tegas.', 'Dingin, terlalu mengkritik.'],
+    'King of Swords': ['Logika, kebenaran, adil, berwibawa.', 'Kaku, manipulatif.'],
+    // Pentacles
+    'Ace of Pentacles': ['Peluang baru, kemakmuran, rezeki.', 'Peluang terlewat, rencana keuangan gagal.'],
+    'Two of Pentacles': ['Keseimbangan, adaptasi, mengatur banyak hal.', 'Kewalahan, kurang teratur.'],
+    'Three of Pentacles': ['Kerja tim, keahlian, kolaborasi.', 'Kurang kerjasama, kerja asal-asalan.'],
+    'Four of Pentacles': ['Stabilitas, hemat, rasa aman.', 'Pelit, terlalu posesif pada materi.'],
+    'Five of Pentacles': ['Kesulitan, kekurangan, masa sulit.', 'Pemulihan, bantuan datang.'],
+    'Six of Pentacles': ['Kedermawanan, berbagi, keseimbangan rezeki.', 'Ketimpangan, utang, pamrih.'],
+    'Seven of Pentacles': ['Kesabaran, investasi, hasil jangka panjang.', 'Tidak sabar, hasil mengecewakan.'],
+    'Eight of Pentacles': ['Ketekunan, mengasah keahlian, kerja keras.', 'Kurang fokus, kualitas menurun.'],
+    'Nine of Pentacles': ['Kemandirian, kenyamanan, hasil kerja.', 'Boros, terlalu bergantung pada orang.'],
+    'Ten of Pentacles': ['Kekayaan, keluarga makmur, warisan.', 'Masalah keuangan keluarga.'],
+    'Page of Pentacles': ['Peluang belajar, ambisi, rencana baru.', 'Menunda-nunda, kurang komitmen.'],
+    'Knight of Pentacles': ['Kerja keras, dapat diandalkan, konsisten.', 'Stagnan, terlalu kaku.'],
+    'Queen of Pentacles': ['Praktis, mapan, pengasuh, nyaman.', 'Lupa merawat diri, terlalu sibuk kerja.'],
+    'King of Pentacles': ['Kesuksesan, kemapanan, pemimpin yang andal.', 'Materialistis, serakah.'],
+};
+
 function buildDeck() {
     const deck = [];
-    for (const m of MAJOR) deck.push({ name: m, nameId: MAJOR_ID[m], arcana: 'major' });
+    for (const m of MAJOR) {
+        const mn = MAJOR_MEANINGS[m] || ['', ''];
+        deck.push({ name: m, nameId: MAJOR_ID[m], arcana: 'major', meaningUp: mn[0], meaningRev: mn[1] });
+    }
     for (const s of SUITS) {
         for (const r of RANKS) {
-            deck.push({ name: `${r.en} of ${s.en}`, nameId: `${r.id} ${s.id}`, arcana: 'minor' });
+            const key = `${r.en} of ${s.en}`;
+            const mn = MINOR_MEANINGS[key] || ['', ''];
+            deck.push({ name: key, nameId: `${r.id} ${s.id}`, arcana: 'minor', meaningUp: mn[0], meaningRev: mn[1] });
         }
     }
     return deck;
@@ -77,61 +171,14 @@ function drawCards(n = 3) {
 
 const POSITIONS = ['Masa Lalu', 'Saat Ini', 'Masa Depan'];
 
-// ==================== AI READING (Bahasa Indonesia) ====================
-function aiConfig() {
-    return {
-        apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
-        baseURL: (process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1').replace(/\/$/, ''),
-        model: process.env.AI_MODEL || 'deepseek-v4-flash',
-    };
-}
-
-async function generateReading(cards, question) {
-    const cfg = aiConfig();
-    const cardList = cards.map((c, i) => `${POSITIONS[i]}: ${c.nameId} (${c.name})${c.reversed ? ' - Terbalik' : ' - Tegak'}`).join('\n');
-
-    if (!cfg.apiKey) {
-        // Fallback: simple Indonesian template (no AI)
-        return cards.map((c, i) =>
-            `**${POSITIONS[i]} — ${c.nameId}** ${c.reversed ? '🔄' : ''}\n` +
-            `Kartu ini ${c.reversed ? 'terbalik, menandakan tantangan atau energi yang terhambat' : 'tegak, membawa energi positif'}. ` +
-            `Renungkan maknanya untuk ${question || 'perjalananmu'}.`
-        ).join('\n\n');
-    }
-
-    const system = [
-        'Kamu peramal tarot yang santai dan ramah. Jawab dalam Bahasa Indonesia.',
-        'Untuk 3 kartu (Masa Lalu, Saat Ini, Masa Depan): cukup 1 kalimat makna per kartu.',
-        'Lalu tutup dengan 1 kalimat kesimpulan singkat.',
-        'SINGKAT dan mudah dimengerti (total maks ~80 kata). Jangan bertele-tele, jangan pakai heading/markdown bold.',
-        'Format tiap baris: "Masa Lalu: <makna singkat>" dst, lalu "Kesimpulan: <1 kalimat>".',
-    ].join('\n');
-
-    const user = `Pertanyaan/niat: ${question || '(umum, tidak spesifik)'}\n\nKartu yang tertarik:\n${cardList}`;
-
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 20000);
-        const res = await fetch(`${cfg.baseURL}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-            body: JSON.stringify({
-                model: cfg.model,
-                messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-                max_tokens: 500,
-                temperature: 0.8,
-            }),
-            signal: controller.signal,
-        });
-        clearTimeout(timer);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const answer = data.choices?.[0]?.message?.content?.trim();
-        return answer || null;
-    } catch (e) {
-        log('WARN', `[tarot] AI reading gagal: ${e.message}`);
-        return null;
-    }
+// ==================== READING (built-in, tanpa AI) ====================
+function buildReading(cards, question) {
+    const lines = cards.map((c, i) => {
+        const m = c.reversed ? c.meaningRev : c.meaningUp;
+        const ori = c.reversed ? '🔄 Terbalik' : '⬆️ Tegak';
+        return `**${POSITIONS[i]} — ${c.nameId}** ${ori}\n${m}`;
+    });
+    return lines.join('\n\n');
 }
 
 // ==================== CANVAS ====================
@@ -263,7 +310,7 @@ async function handleTarotCommand(interaction) {
     let buffer = null;
     try { buffer = generateTarotCanvas(cards); } catch (e) { log('WARN', `[tarot] canvas: ${e.message}`); }
 
-    const reading = await generateReading(cards, question);
+    const reading = buildReading(cards, question);
 
     const embed = new EmbedBuilder()
         .setColor('#7b2ff7')
@@ -284,4 +331,4 @@ async function handleTarotCommand(interaction) {
     return interaction.editReply({ embeds: [embed], files });
 }
 
-module.exports = { handleTarotCommand, drawCards, generateReading, generateTarotCanvas, DECK };
+module.exports = { handleTarotCommand, drawCards, buildReading, generateTarotCanvas, DECK };
