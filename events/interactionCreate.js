@@ -916,6 +916,12 @@ async function routeInteraction(interaction) {
             return handleTarotCommand(interaction);
         }
 
+        // ================= BELAJAR =================
+        if (command === 'belajar') {
+            const { handleBelajarCommand } = require('../systems/belajar');
+            return handleBelajarCommand(interaction);
+        }
+
         // ================= ANIME CARDS =================
         if (command === 'card') {
             const { handleCardPanelCommand } = require('../systems/cardGame');
@@ -1607,6 +1613,14 @@ async function routeInteraction(interaction) {
             const { isMarryButton, handleMarryButton } = require('../systems/social');
             if (isMarryButton(interaction.customId)) {
                 return handleMarryButton(interaction);
+            }
+        }
+
+        // --- BELAJAR BUTTONS ---
+        if (interaction.customId.startsWith('belajar_')) {
+            const { isBelajarButton, handleBelajarButton } = require('../systems/belajar');
+            if (isBelajarButton(interaction.customId)) {
+                return handleBelajarButton(interaction);
             }
         }
 

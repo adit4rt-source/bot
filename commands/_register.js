@@ -128,6 +128,7 @@ const commands = [
     new SlashCommandBuilder().setName('divorce').setDescription('💔 Cerai dari pasangan saat ini'),
     new SlashCommandBuilder().setName('tarot').setDescription('🔮 Ramalan Tarot — Tarik 3 kartu (Bahasa Indonesia)')
         .addStringOption(opt => opt.setName('pertanyaan').setDescription('Pertanyaan/niat (opsional)').setRequired(false)),
+    new SlashCommandBuilder().setName('belajar').setDescription('📚 Pusat Belajar — Kuis Bahasa Inggris interaktif (dapat Money!)'),
     new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
         .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
             .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
