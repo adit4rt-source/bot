@@ -66,6 +66,7 @@ function detectVideoUrl(content) {
 async function resolveCobalt(videoUrl) {
     // Custom instance from env takes priority
     const envUrl = process.env.COBALT_API_URL;
+    const envKey = process.env.COBALT_API_KEY || '';
     const instances = envUrl
         ? [envUrl.replace(/\/+$/, ''), ...COBALT_INSTANCES]
         : COBALT_INSTANCES;
@@ -81,13 +82,19 @@ async function resolveCobalt(videoUrl) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 12000);
 
+            const headers = {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'User-Agent': UA,
+            };
+            // If this is the custom env instance and a key is set, add auth header
+            if (envKey && instance === (envUrl || '').replace(/\/+$/, '')) {
+                headers['Authorization'] = `Api-Key ${envKey}`;
+            }
+
             const res = await fetch(`${instance}/`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'User-Agent': UA,
-                },
+                headers,
                 body,
                 signal: controller.signal,
             });
