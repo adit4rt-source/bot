@@ -17,6 +17,16 @@ try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 
+// Strip characters the bundled font can't render (emoji, ☆, ♡, etc.) to avoid
+// "tofu" boxes on the canvas. Keeps Latin letters, numbers, common punctuation.
+function sanitizeText(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/[^\x20-\x7E\u00A0-\u024F]/g, '') // keep ASCII + Latin-1/Ext-A
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 // ==================== API HELPERS ====================
 async function robloxFetch(url, options = {}) {
     const controller = new AbortController();
@@ -121,28 +131,28 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     const GRID_W = COLS * (ITEM_SIZE + ITEM_PAD) + ITEM_PAD;
     const GRID_H = ROWS * (ITEM_SIZE + LABEL_H + ITEM_PAD) + ITEM_PAD;
     const W = AVATAR_W + GRID_W + SIDE_PAD * 3;
-    const H = Math.max(HEADER_H + AVATAR_H + 80, HEADER_H + GRID_H + 50);
+    const H = Math.max(HEADER_H + AVATAR_H + 35, HEADER_H + GRID_H + 30);
 
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // Premium dark gradient background
+    // Pure black background with subtle gradient
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#0a0a1a');
-    bg.addColorStop(0.5, '#16213e');
-    bg.addColorStop(1, '#1a1a3e');
+    bg.addColorStop(0, '#000000');
+    bg.addColorStop(0.5, '#0a0a0a');
+    bg.addColorStop(1, '#050505');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
     // Decorative red glow on top-right (Roblox accent)
-    const glow = ctx.createRadialGradient(W - 100, 50, 0, W - 100, 50, 400);
-    glow.addColorStop(0, 'rgba(226, 35, 26, 0.15)');
+    const glow = ctx.createRadialGradient(W - 100, 50, 0, W - 100, 50, 450);
+    glow.addColorStop(0, 'rgba(226, 35, 26, 0.18)');
     glow.addColorStop(1, 'rgba(226, 35, 26, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
     // Subtle dot pattern
-    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
     for (let gx = 0; gx < W; gx += 30) {
         for (let gy = 0; gy < H; gy += 30) {
             ctx.fillRect(gx, gy, 2, 2);
@@ -150,26 +160,27 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     }
 
     // Header bar
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.fillRect(0, 0, W, HEADER_H);
     // Header bottom border
-    ctx.fillStyle = 'rgba(226, 35, 26, 0.6)';
+    ctx.fillStyle = 'rgba(226, 35, 26, 0.7)';
     ctx.fillRect(0, HEADER_H - 2, W, 2);
 
-    // Display name (big)
+    // Display name (big) — sanitized
+    const displayName = sanitizeText(profile.displayName || profile.name) || profile.name;
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 42px sans-serif';
-    ctx.fillText(profile.displayName || profile.name, SIDE_PAD, 52);
+    ctx.fillText(displayName, SIDE_PAD, 52);
 
     // Username
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = '18px sans-serif';
-    ctx.fillText(`@${profile.name}`, SIDE_PAD, 82);
+    ctx.fillText(`@${sanitizeText(profile.name) || profile.name}`, SIDE_PAD, 82);
 
     // Roblox badge (top right)
     ctx.fillStyle = '#E2231A';
     ctx.font = 'bold 18px sans-serif';
-    const badgeText = '🎮 ROBLOX';
+    const badgeText = 'ROBLOX';
     const badgeW = ctx.measureText(badgeText).width + 26;
     const badgeX = W - badgeW - SIDE_PAD;
     ctx.beginPath();
@@ -198,13 +209,13 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
 
     // Avatar background card with subtle gradient
     const avBg = ctx.createLinearGradient(avatarX, avatarY, avatarX, avatarY + AVATAR_H);
-    avBg.addColorStop(0, 'rgba(255,255,255,0.08)');
-    avBg.addColorStop(1, 'rgba(255,255,255,0.03)');
+    avBg.addColorStop(0, 'rgba(255,255,255,0.06)');
+    avBg.addColorStop(1, 'rgba(255,255,255,0.02)');
     ctx.fillStyle = avBg;
     ctx.beginPath();
     ctx.roundRect(avatarX, avatarY, avatarCardW, AVATAR_H, 20);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = 'rgba(226, 35, 26, 0.3)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -224,34 +235,17 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
         } catch (_) {}
     }
 
-    // Bio under avatar
-    const bioY = avatarY + AVATAR_H + 22;
-    if (profile.description) {
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.font = 'italic 14px sans-serif';
-        const bio = profile.description.slice(0, 55) + (profile.description.length > 55 ? '...' : '');
-        ctx.fillText(`"${bio}"`, avatarX, bioY);
-    }
-
-    // Joined date
-    const created = profile.created ? new Date(profile.created) : null;
-    if (created) {
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '13px sans-serif';
-        ctx.fillText(`📅 Joined ${created.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`, avatarX, bioY + 22);
-    }
-
     // Item grid (right side)
     const gridX = AVATAR_W + SIDE_PAD;
     const gridStartY = HEADER_H + 25;
 
-    // "Currently Wearing" header with accent line
+    // "Currently Wearing" header with accent line (no emoji — font can't render it)
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('👗 Currently Wearing', gridX, gridStartY + 8);
+    ctx.fillText('CURRENTLY WEARING', gridX, gridStartY + 8);
     // Accent underline
     ctx.fillStyle = '#E2231A';
-    ctx.fillRect(gridX, gridStartY + 16, 80, 3);
+    ctx.fillRect(gridX, gridStartY + 16, 90, 3);
 
     const startY = gridStartY + 38;
 
@@ -294,8 +288,8 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
             ctx.fillRect(x + 8, y + 8, ITEM_SIZE - 16, ITEM_SIZE - 16);
         }
 
-        // Item name (full, can wrap if needed)
-        const fullName = item.name || 'Unknown';
+        // Item name (full, can wrap if needed) — sanitized to avoid font boxes
+        const fullName = sanitizeText(item.name) || 'Unknown';
         const itemName = fullName.length > 18 ? fullName.slice(0, 18) + '...' : fullName;
         ctx.fillStyle = 'rgba(255,255,255,0.95)';
         ctx.font = 'bold 12px sans-serif';
@@ -303,7 +297,7 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
         ctx.fillText(itemName, x + (ITEM_SIZE - nameW) / 2, y + ITEM_SIZE + 18);
 
         // Item type label (small) — prefer real assetType name from API
-        const label = item.assetType?.name || ASSET_TYPE_SHORT[item.assetType?.id || 0] || 'Item';
+        const label = sanitizeText(item.assetType?.name || ASSET_TYPE_SHORT[item.assetType?.id || 0] || 'Item');
         ctx.fillStyle = '#E2231A';
         ctx.font = 'bold 10px sans-serif';
         const labelW = ctx.measureText(label).width;
