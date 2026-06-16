@@ -331,7 +331,7 @@ async function handleRobloxCommand(interaction) {
     const userId = userInfo.id;
 
     // Step 2: Fetch all data in parallel
-    const [profile, avatar, avatarUrl] = await Promise.all([
+    const [profile, avatarRaw, avatarUrl] = await Promise.all([
         getUserProfile(userId),
         getAvatarDetails(userId),
         getAvatarThumbnail(userId),
@@ -340,6 +340,15 @@ async function handleRobloxCommand(interaction) {
     if (!profile) {
         return interaction.editReply({ content: '⚠️ Gagal mengambil profil Roblox. Coba lagi nanti.' });
     }
+
+    // Filter out animation/emote items — only show wearable items
+    const isAnimation = (a) => {
+        const typeName = (a.assetType?.name || '').toLowerCase();
+        return typeName.includes('animation') || typeName.includes('emote') || typeName === 'mood';
+    };
+    const avatar = avatarRaw
+        ? { ...avatarRaw, assets: (avatarRaw.assets || []).filter(a => !isAnimation(a)) }
+        : null;
 
     // Step 3: Get item thumbnails (batch)
     const assetIds = (avatar?.assets || []).map(a => a.id).filter(Boolean);
