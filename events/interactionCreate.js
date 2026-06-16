@@ -910,6 +910,12 @@ async function routeInteraction(interaction) {
             return handleDivorceCommand(interaction);
         }
 
+        // ================= TAROT =================
+        if (command === 'tarot') {
+            const { handleTarotCommand } = require('../systems/tarot');
+            return handleTarotCommand(interaction);
+        }
+
         // ================= ANIME CARDS =================
         if (command === 'card') {
             const { handleCardPanelCommand } = require('../systems/cardGame');
