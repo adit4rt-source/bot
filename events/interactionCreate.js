@@ -890,6 +890,12 @@ async function routeInteraction(interaction) {
             return handleAfkCommand(interaction);
         }
 
+        // ================= ROBLOX PROFILE =================
+        if (command === 'roblox') {
+            const { handleRobloxCommand } = require('../systems/robloxProfile');
+            return handleRobloxCommand(interaction);
+        }
+
         // ================= ANIME CARDS =================
         if (command === 'card') {
             const { handleCardPanelCommand } = require('../systems/cardGame');

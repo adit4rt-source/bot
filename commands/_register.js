@@ -118,6 +118,8 @@ const commands = [
                 { name: '🧩 Teka-Teki', value: 'tekateki' },
                 { name: '🤫 Truth', value: 'truth' },
             )),
+    new SlashCommandBuilder().setName('roblox').setDescription('🎮 Roblox Profile — Lihat avatar & item yang dipakai')
+        .addStringOption(opt => opt.setName('username').setDescription('Username Roblox').setRequired(true)),
     new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
         .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
             .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
