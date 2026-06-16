@@ -159,6 +159,21 @@ const TOPICS = [
 ];
 const TOPIC_BY_ID = Object.fromEntries(TOPICS.map(t => [t.id, t]));
 
+// Bank kata level-kata (untuk soal "pilih arti" 3 opsi + match pairs) — lebih mudah
+const WORDS_BY_TOPIC = {
+    t1: [['water','air'],['coffee','kopi'],['tea','teh'],['juice','jus'],['milk','susu'],['sugar','gula'],['drink','minum'],['glass','gelas'],['cup','cangkir'],['cold','dingin']],
+    t2: [['from','dari'],['country','negara'],['city','kota'],['live','tinggal'],['born','lahir'],['home','rumah'],['near','dekat'],['far','jauh'],['place','tempat'],['world','dunia']],
+    t3: [['mother','ibu'],['father','ayah'],['sister','saudari'],['brother','saudara'],['family','keluarga'],['name','nama'],['friend','teman'],['child','anak'],['old','tua'],['young','muda']],
+    t4: [['airport','bandara'],['passport','paspor'],['ticket','tiket'],['flight','penerbangan'],['plane','pesawat'],['bag','tas'],['gate','gerbang'],['seat','kursi'],['luggage','koper'],['trip','perjalanan']],
+    t5: [['big','besar'],['small','kecil'],['hot','panas'],['cold','dingin'],['beautiful','indah'],['new','baru'],['clean','bersih'],['expensive','mahal'],['sweet','manis'],['tall','tinggi']],
+    t6: [['food','makanan'],['rice','nasi'],['soup','sup'],['menu','menu'],['spicy','pedas'],['bill','tagihan'],['eat','makan'],['order','pesan'],['delicious','enak'],['fork','garpu']],
+    t7: [['doctor','dokter'],['teacher','guru'],['engineer','insinyur'],['police','polisi'],['driver','sopir'],['job','pekerjaan'],['work','bekerja'],['bank','bank'],['cook','memasak'],['help','membantu']],
+    t8: [['eat','makan'],['drink','minum'],['read','membaca'],['write','menulis'],['play','bermain'],['walk','berjalan'],['run','berlari'],['study','belajar'],['sleep','tidur'],['watch','menonton']],
+    t9: [['sunny','cerah'],['rain','hujan'],['cold','dingin'],['hot','panas'],['cloudy','berawan'],['windy','berangin'],['snow','salju'],['sky','langit'],['umbrella','payung'],['weather','cuaca']],
+    t10:[['cat','kucing'],['dog','anjing'],['bird','burung'],['fish','ikan'],['rabbit','kelinci'],['pet','peliharaan'],['animal','binatang'],['cute','lucu'],['friendly','ramah'],['tail','ekor']],
+};
+for (const t of TOPICS) t.words = (WORDS_BY_TOPIC[t.id] || []).map(([en, id]) => ({ en, id }));
+
 const EXTRA_WORDS = ['you', 'they', 'big', 'red', 'now', 'here', 'good', 'day', 'very', 'and', 'the', 'with', 'is', 'are', 'my'];
 const HEARTS_MAX = 5;
 const EX_PER_LESSON = 10;
@@ -168,14 +183,25 @@ const sessions = new Map();
 function shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 // ==================== EXERCISE GEN ====================
+// MC kalimat (4 opsi) — agak sulit
 function makeMC(pool) {
     const correct = pool[Math.floor(Math.random() * pool.length)];
     const enToId = Math.random() < 0.5;
     const distract = shuffle(pool.filter(p => p.en !== correct.en)).slice(0, 3);
     const opts = shuffle([correct, ...distract]);
-    if (enToId) return { type: 'mc', prompt: `Apa arti dari:\n**"${correct.en}"**`, options: opts.map(p => p.id), correctIndex: opts.findIndex(p => p.en === correct.en) };
+    if (enToId) return { type: 'mc', prompt: `Apa arti kalimat ini?\n**"${correct.en}"**`, options: opts.map(p => p.id), correctIndex: opts.findIndex(p => p.en === correct.en) };
     return { type: 'mc', prompt: `Terjemahkan ke Inggris:\n**"${correct.id}"**`, options: opts.map(p => p.en), correctIndex: opts.findIndex(p => p.en === correct.en) };
 }
+// MC kata tunggal (3 opsi) — mudah
+function makeWord(words) {
+    const correct = words[Math.floor(Math.random() * words.length)];
+    const enToId = Math.random() < 0.5;
+    const distract = shuffle(words.filter(w => w.en !== correct.en)).slice(0, 2);
+    const opts = shuffle([correct, ...distract]);
+    if (enToId) return { type: 'mc', prompt: `Pilih arti dari kata:\n**"${correct.en}"**`, options: opts.map(w => w.id), correctIndex: opts.findIndex(w => w.en === correct.en) };
+    return { type: 'mc', prompt: `Bahasa Inggris dari kata:\n**"${correct.id}"**`, options: opts.map(w => w.en), correctIndex: opts.findIndex(w => w.en === correct.en) };
+}
+// Susun kalimat (tap tiles)
 function makeArrange(pool) {
     const phrase = pool[Math.floor(Math.random() * pool.length)];
     const correctWords = phrase.en.split(' ');
@@ -184,9 +210,38 @@ function makeArrange(pool) {
     const tiles = shuffle([...correctWords, ...extras]).map(w => ({ word: w, used: false }));
     return { type: 'arrange', promptId: phrase.id, correctWords, tiles, built: [] };
 }
-function buildLesson(topic) {
+// Pasangkan (match pairs) — 4 pasang
+function makeMatch(words) {
+    const chosen = shuffle(words).slice(0, 4);
+    const pairs = chosen.map(w => ({ en: w.en, id: w.id }));
+    const left = shuffle(pairs.map((_, i) => i));   // ID column order
+    const right = shuffle(pairs.map((_, i) => i));  // EN column order
+    return { type: 'match', pairs, left, right, matched: [], sel: null };
+}
+
+// Kesulitan bertahap: makin tinggi part, makin banyak kalimat & susun kata
+function pickType(part) {
+    const weights = [
+        ['word', 40],
+        ['match', 22],
+        ['mc', 14 + part * 2],
+        ['arrange', 6 + part * 3],
+    ];
+    const total = weights.reduce((s, [, w]) => s + w, 0);
+    let r = Math.random() * total;
+    for (const [t, w] of weights) { if ((r -= w) <= 0) return t; }
+    return 'word';
+}
+
+function buildLesson(topic, part) {
     const ex = [];
-    for (let i = 0; i < EX_PER_LESSON; i++) ex.push(Math.random() < 0.5 ? makeMC(topic.phrases) : makeArrange(topic.phrases));
+    for (let i = 0; i < EX_PER_LESSON; i++) {
+        const type = pickType(part);
+        if (type === 'word') ex.push(makeWord(topic.words));
+        else if (type === 'match') ex.push(makeMatch(topic.words));
+        else if (type === 'arrange') ex.push(makeArrange(topic.phrases));
+        else ex.push(makeMC(topic.phrases));
+    }
     return ex;
 }
 
@@ -204,8 +259,9 @@ function renderExercise(session, userId, feedback = '') {
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         return { embeds: [embed], components: [row] };
     }
-    const builtWords = ex.built.map(i => ex.tiles[i].word);
+    const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
     const builtLine = builtWords.length ? builtWords.join(' ') : '_( ketuk kata di bawah )_';
+    if (ex.type === 'arrange') {
     const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🧩 Susun Kalimat')
         .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Susun terjemahan Inggris dari:\n**"${ex.promptId}"**\n\n📝 **Jawabanmu:** ${builtLine}`)
         .setFooter({ text: head });
@@ -223,6 +279,33 @@ function renderExercise(session, userId, feedback = '') {
         new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel('✅ Cek').setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
     ));
     return { embeds: [embed], components: components.slice(0, 5) };
+    }
+
+    // match
+    const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🔗 Pasangkan Kata')
+        .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Cocokkan kata Inggris dengan artinya.\n\n✅ Cocok: **${ex.matched.length}/${ex.pairs.length}**`)
+        .setFooter({ text: head });
+    const leftRow = new ActionRowBuilder();
+    ex.left.forEach((pairIdx, slot) => {
+        const done = ex.matched.includes(pairIdx);
+        const selected = ex.sel && ex.sel.side === 'L' && ex.sel.slot === slot;
+        leftRow.addComponents(new ButtonBuilder()
+            .setCustomId(`belajar_mt_L_${slot}_${userId}`)
+            .setLabel(ex.pairs[pairIdx].id)
+            .setStyle(done ? ButtonStyle.Success : selected ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(done));
+    });
+    const rightRow = new ActionRowBuilder();
+    ex.right.forEach((pairIdx, slot) => {
+        const done = ex.matched.includes(pairIdx);
+        const selected = ex.sel && ex.sel.side === 'R' && ex.sel.slot === slot;
+        rightRow.addComponents(new ButtonBuilder()
+            .setCustomId(`belajar_mt_R_${slot}_${userId}`)
+            .setLabel(ex.pairs[pairIdx].en)
+            .setStyle(done ? ButtonStyle.Success : selected ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(done));
+    });
+    return { embeds: [embed], components: [leftRow, rightRow] };
 }
 
 // ==================== PANELS ====================
@@ -379,7 +462,7 @@ async function handleBelajarButton(interaction) {
         if (!topic) return interaction.reply({ content: '❌ Topik tidak ditemukan.', ephemeral: true });
         const unlocked = part === 1 || isPartDone(guildId, ownerId, topicId, part - 1);
         if (!unlocked) return interaction.reply({ content: '🔒 Part ini masih terkunci. Selesaikan part sebelumnya!', ephemeral: true });
-        const session = { topicId, part, extra: topic.extra.includes(part), exercises: buildLesson(topic), current: 0, hearts: HEARTS_MAX, correct: 0 };
+        const session = { topicId, part, extra: topic.extra.includes(part), exercises: buildLesson(topic, part), current: 0, hearts: HEARTS_MAX, correct: 0 };
         sessions.set(`${guildId}_${ownerId}`, session);
         return interaction.update(renderExercise(session, ownerId));
     }
@@ -414,6 +497,38 @@ async function handleBelajarButton(interaction) {
         if (correct) { session.correct++; fb = `✅ **Benar!** "${ex.correctWords.join(' ')}"`; }
         else { session.hearts--; fb = `❌ **Salah!** Jawaban: **"${ex.correctWords.join(' ')}"**`; }
         return advance(interaction, session, ownerId, guildId, fb);
+    }
+
+    // Match pairs: tap a tile (L/R)
+    if (customId.startsWith('belajar_mt_')) {
+        if (ex.type !== 'match') return interaction.deferUpdate();
+        const side = parts[2];          // 'L' or 'R'
+        const slot = parseInt(parts[3]);
+        const pairIdx = (side === 'L' ? ex.left : ex.right)[slot];
+        if (ex.matched.includes(pairIdx)) return interaction.deferUpdate();
+
+        if (!ex.sel) {
+            ex.sel = { side, slot, pairIdx };
+            return interaction.update(renderExercise(session, ownerId));
+        }
+        // same side → ganti pilihan
+        if (ex.sel.side === side) {
+            ex.sel = { side, slot, pairIdx };
+            return interaction.update(renderExercise(session, ownerId));
+        }
+        // sisi berbeda → cek cocok
+        const isMatch = ex.sel.pairIdx === pairIdx;
+        ex.sel = null;
+        if (isMatch) {
+            ex.matched.push(pairIdx);
+            if (ex.matched.length >= ex.pairs.length) {
+                session.correct++;
+                return advance(interaction, session, ownerId, guildId, `✅ **Semua pasangan cocok!**`);
+            }
+            return interaction.update(renderExercise(session, ownerId));
+        }
+        // salah → flash (tanpa kurangi nyawa, biar ramah)
+        return interaction.update(renderExercise(session, ownerId, '❌ Belum cocok, coba lagi!'));
     }
 }
 
