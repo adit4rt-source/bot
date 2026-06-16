@@ -39,7 +39,7 @@ function getConfig() {
         apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
         baseURL: (process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1').replace(/\/$/, ''),
         model: process.env.AI_MODEL || 'deepseek-v4-flash',
-        maxTokens: parseInt(process.env.AI_MAX_TOKENS || '800', 10),
+        maxTokens: parseInt(process.env.AI_MAX_TOKENS || '400', 10),
         contextChars: parseInt(process.env.AI_CONTEXT_CHARS || '22000', 10),
     };
 }
@@ -188,10 +188,10 @@ function buildSystemPrompt(question = '') {
         '',
         'CARA MENJAWAB (biar pintar & membantu):',
         '- Jawab Bahasa Indonesia yang santai tapi jelas.',
-        '- Beri penjelasan LENGKAP & runtut: kalau soal "cara", buat langkah bernomor; kalau soal daftar, pakai poin-poin.',
-        '- Sebutkan slash command / tombol / panel yang tepat (mis. `/fishing`, `/daily`, tombol di panel).',
-        '- Beri contoh konkret bila membantu. Boleh rangkum info dari beberapa bagian pengetahuan.',
-        '- Kalau pertanyaan ambigu, jawab kemungkinan paling relevan + tawarkan detail lanjutan.',
+        '- Jawab SINGKAT & PADAT — maksimal 3-4 kalimat per poin. Jangan bertele-tele.',
+        '- Sebutkan slash command / tombol yang tepat (mis. `/fishing`, `/daily`).',
+        '- Kalau perlu langkah, pakai nomor tapi tetap pendek per langkah.',
+        '- JANGAN buat paragraf panjang. User Discord baca di HP — singkat lebih baik.',
         '',
         'ATURAN:',
         '- Fokus HANYA pada bot ini. Kalau pertanyaan jelas di luar topik bot (coding umum, kehidupan, berita), tolak sopan: "Maaf, aku cuma bisa bantu soal fitur bot ini ya 🙂".',
