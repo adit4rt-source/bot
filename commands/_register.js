@@ -95,12 +95,11 @@ const commands = [
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quote').setRequired(false)
             .addChoices(
                 { name: '💔 Galau', value: 'galauquote' },
-                { name: '🔥 Motivasi', value: 'motivasi' },
-                { name: '💕 Bucin', value: 'bucin' },
-                { name: '🧠 Bijak', value: 'bijak' },
-                { name: '🕌 Islami', value: 'islami' },
-                { name: '🎌 Anime', value: 'anime' },
-                { name: '💻 Programming', value: 'programming' },
+                { name: '🔥 Motivasi', value: 'motivasiquote' },
+                { name: '💕 Bucin', value: 'bucinquote' },
+                { name: '🕌 Islami', value: 'islamiquote' },
+                { name: '🧠 Bijak', value: 'bijakquote' },
+                { name: '🎌 Anime', value: 'animequote' },
                 { name: '🤔 Truth', value: 'truth' },
                 { name: '🎯 Dare', value: 'dare' },
             )),
