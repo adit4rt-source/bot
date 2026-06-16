@@ -100,11 +100,11 @@ async function generateReading(cards, question) {
     }
 
     const system = [
-        'Kamu adalah peramal tarot berpengalaman yang ramah dan bijak. Jawab SELALU dalam Bahasa Indonesia.',
-        'Berikan interpretasi tarot untuk 3 kartu (Masa Lalu, Saat Ini, Masa Depan).',
-        'Untuk tiap kartu: 1-2 kalimat makna terkait posisinya. Lalu tutup dengan 1 paragraf "Kesimpulan" singkat.',
-        'Gaya santai, mistis, dan menyemangati. JANGAN terlalu panjang (maks ~180 kata total).',
-        'Format: pakai **tebal** untuk nama posisi+kartu. Jangan pakai heading markdown (#).',
+        'Kamu peramal tarot yang santai dan ramah. Jawab dalam Bahasa Indonesia.',
+        'Untuk 3 kartu (Masa Lalu, Saat Ini, Masa Depan): cukup 1 kalimat makna per kartu.',
+        'Lalu tutup dengan 1 kalimat kesimpulan singkat.',
+        'SINGKAT dan mudah dimengerti (total maks ~80 kata). Jangan bertele-tele, jangan pakai heading/markdown bold.',
+        'Format tiap baris: "Masa Lalu: <makna singkat>" dst, lalu "Kesimpulan: <1 kalimat>".',
     ].join('\n');
 
     const user = `Pertanyaan/niat: ${question || '(umum, tidak spesifik)'}\n\nKartu yang tertarik:\n${cardList}`;
@@ -265,14 +265,11 @@ async function handleTarotCommand(interaction) {
 
     const reading = await generateReading(cards, question);
 
-    const cardSummary = cards.map((c, i) => `**${POSITIONS[i]}:** ${c.nameId}${c.reversed ? ' 🔄' : ''}`).join('  •  ');
-
     const embed = new EmbedBuilder()
         .setColor('#7b2ff7')
         .setTitle('🔮 Ramalan Tarot')
         .setDescription(
             (question ? `*"${question}"*\n\n` : '') +
-            `${cardSummary}\n\n` +
             (reading || '✨ Renungkan kartu-kartu di atas untuk menemukan jawabanmu.')
         )
         .setFooter({ text: `Ditanya oleh ${interaction.user.username} • Tarot hanya untuk hiburan 🔮` })
