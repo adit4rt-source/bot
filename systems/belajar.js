@@ -182,6 +182,9 @@ const sessions = new Map();
 
 function shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
+// Tampilkan kalimat sebagai tile per-kata: `A` `cup` `of` `coffee`
+function tileText(s) { return String(s).trim().split(/\s+/).map(w => `\`${w}\``).join(' '); }
+
 // ==================== EXERCISE GEN ====================
 // MC kalimat (4 opsi) — agak sulit
 function makeMC(pool) {
@@ -189,8 +192,8 @@ function makeMC(pool) {
     const enToId = Math.random() < 0.5;
     const distract = shuffle(pool.filter(p => p.en !== correct.en)).slice(0, 3);
     const opts = shuffle([correct, ...distract]);
-    if (enToId) return { type: 'mc', prompt: `Apa arti kalimat ini?\n**"${correct.en}"**`, options: opts.map(p => p.id), correctIndex: opts.findIndex(p => p.en === correct.en) };
-    return { type: 'mc', prompt: `Terjemahkan ke Inggris:\n**"${correct.id}"**`, options: opts.map(p => p.en), correctIndex: opts.findIndex(p => p.en === correct.en) };
+    if (enToId) return { type: 'mc', prompt: `Apa arti kalimat ini?\n${tileText(correct.en)}`, options: opts.map(p => p.id), correctIndex: opts.findIndex(p => p.en === correct.en) };
+    return { type: 'mc', prompt: `Terjemahkan ke Inggris:\n${tileText(correct.id)}`, options: opts.map(p => p.en), correctIndex: opts.findIndex(p => p.en === correct.en) };
 }
 // MC kata tunggal (3 opsi) — mudah
 function makeWord(words) {
@@ -198,8 +201,8 @@ function makeWord(words) {
     const enToId = Math.random() < 0.5;
     const distract = shuffle(words.filter(w => w.en !== correct.en)).slice(0, 2);
     const opts = shuffle([correct, ...distract]);
-    if (enToId) return { type: 'mc', prompt: `Pilih arti dari kata:\n**"${correct.en}"**`, options: opts.map(w => w.id), correctIndex: opts.findIndex(w => w.en === correct.en) };
-    return { type: 'mc', prompt: `Bahasa Inggris dari kata:\n**"${correct.id}"**`, options: opts.map(w => w.en), correctIndex: opts.findIndex(w => w.en === correct.en) };
+    if (enToId) return { type: 'mc', prompt: `Pilih arti dari kata: \`${correct.en}\``, options: opts.map(w => w.id), correctIndex: opts.findIndex(w => w.en === correct.en) };
+    return { type: 'mc', prompt: `Bahasa Inggris dari kata: \`${correct.id}\``, options: opts.map(w => w.en), correctIndex: opts.findIndex(w => w.en === correct.en) };
 }
 // Susun kalimat (tap tiles)
 function makeArrange(pool) {
@@ -219,24 +222,30 @@ function makeMatch(words) {
     return { type: 'match', pairs, left, right, matched: [], sel: null };
 }
 
-// Kesulitan bertahap: makin tinggi part, makin banyak kalimat & susun kata
-function pickType(part) {
+// Kesulitan bertahap: berdasarkan part DAN posisi soal dalam lesson.
+// Soal awal selalu gampang (warmup), makin akhir & makin tinggi part makin sulit.
+function pickType(part, i) {
+    if (i === 0) return 'word';            // soal 1 selalu kata (paling mudah)
+    if (i === 1) return Math.random() < 0.5 ? 'word' : 'match';
+    const prog = i / (EX_PER_LESSON - 1);  // 0..1 posisi dalam lesson
+    const partF = (part - 1) / 7;          // 0..1 antar part
+    const hard = prog * 0.6 + partF * 0.4; // 0..1 tingkat kesulitan
     const weights = [
-        ['word', 40],
-        ['match', 22],
-        ['mc', 14 + part * 2],
-        ['arrange', 6 + part * 3],
+        ['word', (1 - hard) * 55 + 8],
+        ['match', 22 - hard * 8],
+        ['mc', hard * 32 + 6],
+        ['arrange', hard * 48],
     ];
-    const total = weights.reduce((s, [, w]) => s + w, 0);
+    const total = weights.reduce((s, [, w]) => s + Math.max(0, w), 0);
     let r = Math.random() * total;
-    for (const [t, w] of weights) { if ((r -= w) <= 0) return t; }
+    for (const [t, w] of weights) { if ((r -= Math.max(0, w)) <= 0) return t; }
     return 'word';
 }
 
 function buildLesson(topic, part) {
     const ex = [];
     for (let i = 0; i < EX_PER_LESSON; i++) {
-        const type = pickType(part);
+        const type = pickType(part, i);
         if (type === 'word') ex.push(makeWord(topic.words));
         else if (type === 'match') ex.push(makeMatch(topic.words));
         else if (type === 'arrange') ex.push(makeArrange(topic.phrases));
@@ -260,7 +269,7 @@ function renderExercise(session, userId, feedback = '') {
         return { embeds: [embed], components: [row] };
     }
     const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
-    const builtLine = builtWords.length ? builtWords.join(' ') : '_( ketuk kata di bawah )_';
+    const builtLine = builtWords.length ? builtWords.map(w => `\`${w}\``).join(' ') : '_( ketuk kata di bawah )_';
     if (ex.type === 'arrange') {
     const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🧩 Susun Kalimat')
         .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Susun terjemahan Inggris dari:\n**"${ex.promptId}"**\n\n📝 **Jawabanmu:** ${builtLine}`)
@@ -475,8 +484,8 @@ async function handleBelajarButton(interaction) {
         const chosen = parseInt(parts[2]);
         const correct = chosen === ex.correctIndex;
         let fb;
-        if (correct) { session.correct++; fb = `✅ **Benar!** ${ex.options[ex.correctIndex]}`; }
-        else { session.hearts--; fb = `❌ **Salah!** Jawaban: **${ex.options[ex.correctIndex]}**`; }
+        if (correct) { session.correct++; fb = `✅ **Benar!** ${tileText(ex.options[ex.correctIndex])}`; }
+        else { session.hearts--; fb = `❌ **Salah!** Jawaban: ${tileText(ex.options[ex.correctIndex])}`; }
         return advance(interaction, session, ownerId, guildId, fb);
     }
     if (customId.startsWith('belajar_tile_')) {
@@ -494,8 +503,8 @@ async function handleBelajarButton(interaction) {
         const correctSentence = ex.correctWords.join(' ').toLowerCase().trim();
         const correct = answer === correctSentence;
         let fb;
-        if (correct) { session.correct++; fb = `✅ **Benar!** "${ex.correctWords.join(' ')}"`; }
-        else { session.hearts--; fb = `❌ **Salah!** Jawaban: **"${ex.correctWords.join(' ')}"**`; }
+        if (correct) { session.correct++; fb = `✅ **Benar!** ${tileText(ex.correctWords.join(' '))}`; }
+        else { session.hearts--; fb = `❌ **Salah!** Jawaban: ${tileText(ex.correctWords.join(' '))}`; }
         return advance(interaction, session, ownerId, guildId, fb);
     }
 
