@@ -1,16 +1,17 @@
-// systems/robloxProfile.js — Roblox Avatar Viewer
+// systems/robloxProfile.js — Roblox Avatar Viewer (Canvas Card)
 //
-// Command /roblox <username> — shows user's avatar, currently wearing items,
-// and basic profile info. Uses public Roblox APIs (no key needed).
+// Command /roblox <username> — generates a canvas image showing the user's
+// avatar and a grid of all items they're currently wearing (with thumbnails).
 //
-// APIs used:
-//   - users.roblox.com/v1/usernames/users (username → userId)
-//   - users.roblox.com/v1/users/{id} (profile info)
-//   - avatar.roblox.com/v1/users/{id}/avatar (full avatar + items)
-//   - thumbnails.roblox.com/v1/users/avatar (avatar image)
-//   - economy.roblox.com/v1/users/{id}/currency (not used - private)
+// APIs (all public, no key):
+//   - users.roblox.com/v1/usernames/users
+//   - users.roblox.com/v1/users/{id}
+//   - avatar.roblox.com/v1/users/{id}/avatar
+//   - thumbnails.roblox.com/v1/users/avatar
+//   - thumbnails.roblox.com/v1/assets (batch item thumbnails)
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
@@ -35,7 +36,6 @@ async function robloxFetch(url, options = {}) {
     }
 }
 
-// Username → User ID
 async function resolveUserId(username) {
     const data = await robloxFetch('https://users.roblox.com/v1/usernames/users', {
         method: 'POST',
@@ -43,20 +43,17 @@ async function resolveUserId(username) {
         body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
     });
     if (!data || !data.data || !data.data.length) return null;
-    return data.data[0]; // { requestedUsername, name, id }
+    return data.data[0];
 }
 
-// Get user profile info
 async function getUserProfile(userId) {
     return await robloxFetch(`https://users.roblox.com/v1/users/${userId}`);
 }
 
-// Get avatar details (currently wearing items)
 async function getAvatarDetails(userId) {
     return await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`);
 }
 
-// Get avatar thumbnail URL
 async function getAvatarThumbnail(userId) {
     const data = await robloxFetch(
         `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=420x420&format=Png&isCircular=false`
@@ -65,121 +62,180 @@ async function getAvatarThumbnail(userId) {
     return data.data[0].imageUrl || null;
 }
 
-// Get headshot thumbnail
-async function getHeadshotThumbnail(userId) {
+// Get batch asset thumbnails (up to 100 at once)
+async function getAssetThumbnails(assetIds) {
+    if (!assetIds.length) return {};
+    const ids = assetIds.slice(0, 100).join(',');
     const data = await robloxFetch(
-        `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`
+        `https://thumbnails.roblox.com/v1/assets?assetIds=${ids}&size=150x150&format=Png&isCircular=false`
     );
-    if (!data || !data.data || !data.data.length) return null;
-    return data.data[0].imageUrl || null;
+    if (!data || !data.data) return {};
+    const map = {};
+    for (const item of data.data) {
+        if (item.imageUrl && item.state === 'Completed') {
+            map[item.targetId] = item.imageUrl;
+        }
+    }
+    return map;
 }
 
-// ==================== ITEM CATEGORIZATION ====================
-const ASSET_TYPE_NAMES = {
-    2: '👕 T-Shirt',
-    8: '🎩 Hat',
-    11: '👔 Shirt',
-    12: '👖 Pants',
-    17: '😊 Face',
-    18: '⚙️ Gear',
-    19: '🏷️ Badge',
-    27: '🦾 Torso',
-    28: '🦿 Right Arm',
-    29: '🦿 Left Arm',
-    30: '🦵 Right Leg',
-    31: '🦵 Left Leg',
-    41: '💇 Hair',
-    42: '🎒 Accessory (Face)',
-    43: '🎒 Accessory (Neck)',
-    44: '🎒 Accessory (Shoulder)',
-    45: '🎒 Accessory (Front)',
-    46: '🎒 Accessory (Back)',
-    47: '🎒 Accessory (Waist)',
-    48: '🧥 Jacket',
-    49: '👗 Sweater',
-    50: '👖 Shorts',
-    51: '🩳 Left Shoe',
-    52: '🩳 Right Shoe',
-    53: '👗 Dress/Skirt',
-    64: '👕 T-Shirt Accessory',
-    65: '👔 Shirt Accessory',
-    66: '👖 Pants Accessory',
-    67: '🧥 Jacket Accessory',
-    68: '👗 Sweater Accessory',
-    69: '👖 Shorts Accessory',
-    70: '🩳 Left Shoe Accessory',
-    71: '🩳 Right Shoe Accessory',
-    72: '👗 Dress/Skirt Accessory',
+// ==================== ASSET TYPE NAMES ====================
+const ASSET_TYPE_SHORT = {
+    2: 'T-Shirt', 8: 'Hat', 11: 'Shirt', 12: 'Pants', 17: 'Face', 18: 'Gear',
+    27: 'Torso', 28: 'R.Arm', 29: 'L.Arm', 30: 'R.Leg', 31: 'L.Leg',
+    41: 'Hair', 42: 'Face Acc', 43: 'Neck Acc', 44: 'Shoulder', 45: 'Front Acc',
+    46: 'Back Acc', 47: 'Waist Acc', 48: 'Jacket', 49: 'Sweater', 50: 'Shorts',
+    51: 'L.Shoe', 52: 'R.Shoe', 53: 'Dress', 64: 'T-Shirt', 65: 'Shirt',
+    66: 'Pants', 67: 'Jacket', 68: 'Sweater', 69: 'Shorts', 70: 'L.Shoe',
+    71: 'R.Shoe', 72: 'Dress', 79: 'Head',
 };
 
-function getAssetTypeName(typeId) {
-    return ASSET_TYPE_NAMES[typeId] || `🎮 Item (${typeId})`;
-}
+// ==================== CANVAS CARD GENERATOR ====================
+async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }) {
+    const items = (avatar && avatar.assets) || [];
+    const itemCount = items.length;
 
-// ==================== EMBED BUILDER ====================
-function buildRobloxEmbed(profile, avatar, thumbnailUrl, headshotUrl) {
-    const embed = new EmbedBuilder()
-        .setColor('#E2231A') // Roblox red
-        .setAuthor({ name: '🎮 Roblox Profile', iconURL: headshotUrl || undefined })
-        .setTitle(profile.displayName || profile.name)
-        .setURL(`https://www.roblox.com/users/${profile.id}/profile`)
-        .setTimestamp();
+    // Layout
+    const COLS = 4;
+    const ROWS = Math.max(2, Math.ceil(itemCount / COLS));
+    const ITEM_SIZE = 120;
+    const ITEM_PAD = 10;
+    const AVATAR_W = 300;
+    const HEADER_H = 80;
+    const GRID_W = COLS * (ITEM_SIZE + ITEM_PAD) + ITEM_PAD;
+    const GRID_H = ROWS * (ITEM_SIZE + 28 + ITEM_PAD) + ITEM_PAD;
+    const W = AVATAR_W + GRID_W + 40;
+    const H = Math.max(HEADER_H + 320 + 20, HEADER_H + GRID_H + 20);
 
-    if (thumbnailUrl) embed.setImage(thumbnailUrl);
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
 
-    // Description: basic info
-    const lines = [];
-    lines.push(`**Username:** \`${profile.name}\``);
-    if (profile.displayName && profile.displayName !== profile.name) {
-        lines.push(`**Display Name:** ${profile.displayName}`);
+    // Background gradient
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#1a1a2e');
+    bg.addColorStop(0.5, '#16213e');
+    bg.addColorStop(1, '#0f3460');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Header bar
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, W, HEADER_H);
+
+    // Username + display name
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(profile.displayName || profile.name, 20, 35);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`@${profile.name}`, 20, 60);
+
+    // Roblox badge
+    ctx.fillStyle = '#E2231A';
+    ctx.font = 'bold 14px sans-serif';
+    const badgeText = 'ROBLOX';
+    const badgeW = ctx.measureText(badgeText).width + 16;
+    const badgeX = W - badgeW - 15;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, 15, badgeW, 24, 4);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(badgeText, badgeX + 8, 33);
+
+    // Avatar image (left side)
+    const avatarX = 15;
+    const avatarY = HEADER_H + 10;
+    const avatarSize = 280;
+
+    if (avatarUrl) {
+        try {
+            const img = await loadImage(avatarUrl);
+            // Rounded rect clip for avatar
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(avatarX, avatarY, avatarSize, avatarSize, 16);
+            ctx.clip();
+            ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize);
+            ctx.restore();
+            // Border
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(avatarX, avatarY, avatarSize, avatarSize, 16);
+            ctx.stroke();
+        } catch (_) {}
     }
+
+    // Bio under avatar
     if (profile.description) {
-        lines.push(`**Bio:** ${profile.description.slice(0, 150)}${profile.description.length > 150 ? '...' : ''}`);
-    }
-    const created = profile.created ? new Date(profile.created) : null;
-    if (created) lines.push(`**Joined:** <t:${Math.floor(created.getTime() / 1000)}:D>`);
-    if (profile.isBanned) lines.push('⛔ **BANNED**');
-
-    embed.setDescription(lines.join('\n'));
-
-    // Currently wearing items
-    if (avatar && avatar.assets && avatar.assets.length) {
-        // Group by type
-        const grouped = {};
-        for (const asset of avatar.assets) {
-            const typeName = getAssetTypeName(asset.assetType?.id || 0);
-            if (!grouped[typeName]) grouped[typeName] = [];
-            grouped[typeName].push({
-                name: asset.name || `ID: ${asset.id}`,
-                id: asset.id,
-            });
-        }
-
-        let itemList = '';
-        for (const [type, items] of Object.entries(grouped)) {
-            const itemNames = items.map(i => `[${i.name}](https://www.roblox.com/catalog/${i.id})`).join(', ');
-            itemList += `${type}: ${itemNames}\n`;
-        }
-
-        // Discord embed field limit is 1024 chars
-        if (itemList.length > 1024) {
-            itemList = itemList.slice(0, 1020) + '...';
-        }
-        if (itemList) embed.addFields({ name: '👗 Currently Wearing', value: itemList, inline: false });
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px sans-serif';
+        const bio = profile.description.slice(0, 60) + (profile.description.length > 60 ? '...' : '');
+        ctx.fillText(bio, avatarX, avatarY + avatarSize + 20);
     }
 
-    // Body colors
-    if (avatar && avatar.bodyColors) {
-        const bc = avatar.bodyColors;
-        embed.addFields({
-            name: '🎨 Body Colors',
-            value: `Head: #${bc.headColorId || '?'} • Torso: #${bc.torsoColorId || '?'} • Legs: #${bc.leftLegColorId || '?'}`,
-            inline: false,
-        });
+    // Item grid (right side)
+    const gridX = AVATAR_W + 25;
+    const gridY = HEADER_H + 10;
+
+    // "Currently Wearing" label
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(`👗 Currently Wearing (${itemCount} items)`, gridX, gridY);
+
+    const startY = gridY + 20;
+
+    for (let i = 0; i < itemCount && i < COLS * ROWS; i++) {
+        const item = items[i];
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const x = gridX + col * (ITEM_SIZE + ITEM_PAD);
+        const y = startY + row * (ITEM_SIZE + 28 + ITEM_PAD);
+
+        // Item card background
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.roundRect(x, y, ITEM_SIZE, ITEM_SIZE + 24, 8);
+        ctx.fill();
+
+        // Item thumbnail
+        const thumbUrl = itemThumbnails[item.id];
+        if (thumbUrl) {
+            try {
+                const img = await loadImage(thumbUrl);
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8, 6);
+                ctx.clip();
+                ctx.drawImage(img, x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+                ctx.restore();
+            } catch (_) {
+                // Placeholder
+                ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                ctx.fillRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+            }
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.fillRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+        }
+
+        // Item type label
+        const typeId = item.assetType?.id || 0;
+        const label = ASSET_TYPE_SHORT[typeId] || 'Item';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '10px sans-serif';
+        const labelW = ctx.measureText(label).width;
+        ctx.fillText(label, x + (ITEM_SIZE - labelW) / 2, y + ITEM_SIZE + 14);
     }
 
-    embed.setFooter({ text: `Roblox User ID: ${profile.id}` });
-    return embed;
+    // If more items than grid can show
+    if (itemCount > COLS * ROWS) {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`+${itemCount - COLS * ROWS} more items...`, gridX, startY + ROWS * (ITEM_SIZE + 28 + ITEM_PAD) + 10);
+    }
+
+    return canvas.toBuffer('image/png');
 }
 
 // ==================== COMMAND HANDLER ====================
@@ -191,7 +247,7 @@ async function handleRobloxCommand(interaction) {
 
     await interaction.deferReply();
 
-    // Step 1: Resolve username → userId
+    // Step 1: Resolve username
     const userInfo = await resolveUserId(username.trim());
     if (!userInfo) {
         return interaction.editReply({ content: `❌ User Roblox **"${username}"** tidak ditemukan.` });
@@ -200,31 +256,63 @@ async function handleRobloxCommand(interaction) {
     const userId = userInfo.id;
 
     // Step 2: Fetch all data in parallel
-    const [profile, avatar, thumbnailUrl, headshotUrl] = await Promise.all([
+    const [profile, avatar, avatarUrl] = await Promise.all([
         getUserProfile(userId),
         getAvatarDetails(userId),
         getAvatarThumbnail(userId),
-        getHeadshotThumbnail(userId),
     ]);
 
     if (!profile) {
         return interaction.editReply({ content: '⚠️ Gagal mengambil profil Roblox. Coba lagi nanti.' });
     }
 
-    const embed = buildRobloxEmbed(profile, avatar, thumbnailUrl, headshotUrl);
+    // Step 3: Get item thumbnails (batch)
+    const assetIds = (avatar?.assets || []).map(a => a.id).filter(Boolean);
+    const itemThumbnails = await getAssetThumbnails(assetIds);
+
+    // Step 4: Generate canvas card
+    let cardBuffer = null;
+    try {
+        cardBuffer = await generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails });
+    } catch (e) {
+        log('WARN', `[roblox] Canvas generation failed: ${e.message}`);
+    }
+
+    // Build embed
+    const embed = new EmbedBuilder()
+        .setColor('#E2231A')
+        .setAuthor({ name: `🎮 ${profile.displayName || profile.name}`, url: `https://www.roblox.com/users/${userId}/profile` })
+        .setTimestamp();
+
+    const created = profile.created ? new Date(profile.created) : null;
+    const desc = [
+        `**@${profile.name}**`,
+        created ? `📅 Joined <t:${Math.floor(created.getTime() / 1000)}:D>` : '',
+        profile.description ? `> ${profile.description.slice(0, 100)}${profile.description.length > 100 ? '...' : ''}` : '',
+        `👗 **${assetIds.length}** items equipped`,
+    ].filter(Boolean).join('\n');
+    embed.setDescription(desc);
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setLabel('🔗 Buka Profil')
+            .setLabel('🔗 Profil')
             .setStyle(ButtonStyle.Link)
             .setURL(`https://www.roblox.com/users/${userId}/profile`),
         new ButtonBuilder()
-            .setLabel('🛒 Lihat Inventory')
+            .setLabel('🛒 Inventory')
             .setStyle(ButtonStyle.Link)
             .setURL(`https://www.roblox.com/users/${userId}/inventory`)
     );
 
-    return interaction.editReply({ embeds: [embed], components: [row] });
+    const files = [];
+    if (cardBuffer) {
+        files.push(new AttachmentBuilder(cardBuffer, { name: 'roblox-profile.png' }));
+        embed.setImage('attachment://roblox-profile.png');
+    } else if (avatarUrl) {
+        embed.setImage(avatarUrl);
+    }
+
+    return interaction.editReply({ embeds: [embed], files, components: [row] });
 }
 
 // ==================== EXPORTS ====================
@@ -234,4 +322,6 @@ module.exports = {
     getUserProfile,
     getAvatarDetails,
     getAvatarThumbnail,
+    getAssetThumbnails,
+    generateRobloxCard,
 };
