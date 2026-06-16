@@ -69,6 +69,31 @@ function checkAntiCaps(c) { if (c.length < 10) return false; return (c.match(/[A
 function checkAntiEmoji(c) { return (c.match(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu) || []).length > 10; }
 function checkAntiZalgo(c) { return /[\u0300-\u036f\u0489]{3,}/g.test(c); }
 
+// ==================== VIOLATION ESCALATION TRACKER ====================
+// Tracks recent violations per user. After `mute_threshold` violations within
+// VIOLATION_WINDOW, the member is timed out (muted) for `mute_minutes`.
+const violationTracker = new Map(); // `${guildId}_${userId}` -> [timestamps]
+const VIOLATION_WINDOW = 60 * 1000; // 60s
+
+function recordViolation(guildId, userId) {
+    const key = `${guildId}_${userId}`;
+    const now = Date.now();
+    let arr = (violationTracker.get(key) || []).filter(t => now - t < VIOLATION_WINDOW);
+    arr.push(now);
+    violationTracker.set(key, arr);
+    return arr.length;
+}
+
+const _violationSweep = setInterval(() => {
+    const now = Date.now();
+    for (const [key, arr] of violationTracker) {
+        const live = arr.filter(t => now - t < VIOLATION_WINDOW);
+        if (!live.length) violationTracker.delete(key);
+        else violationTracker.set(key, live);
+    }
+}, 60 * 1000);
+if (typeof _violationSweep.unref === 'function') _violationSweep.unref();
+
 // ==================== MAIN HANDLER ====================
 async function processAutomod(message) {
     if (!message.guild || message.author.bot) return null;
@@ -100,10 +125,28 @@ async function processAutomod(message) {
             if (w) setTimeout(() => w.delete().catch(() => {}), 5000);
         }
         logAutomodAction(guildId, userId, violation.module, violation.action, violation.reason);
+
+        // ---- Escalation: auto-mute (timeout) after repeated violations ----
+        const muteThreshold = parseInt(getAutomodSetting(guildId, 'mute_threshold', '3')) || 3;
+        const muteMinutes = parseInt(getAutomodSetting(guildId, 'mute_minutes', '10')) || 10;
+        const vcount = recordViolation(guildId, userId);
+        let muted = false;
+        if (muteThreshold > 0 && vcount >= muteThreshold) {
+            try {
+                if (message.member?.moderatable) {
+                    await message.member.timeout(muteMinutes * 60 * 1000, `AutoMod: ${vcount} pelanggaran dalam 60 detik`);
+                    muted = true;
+                    violationTracker.delete(`${guildId}_${userId}`); // reset after mute
+                    const m = await message.channel.send({ content: `🔇 <@${userId}> di-**mute ${muteMinutes} menit** karena ${vcount}x melanggar AutoMod.` }).catch(() => null);
+                    if (m) setTimeout(() => m.delete().catch(() => {}), 8000);
+                }
+            } catch (_) { /* missing perms / not moderatable */ }
+        }
+
         const logChannelId = getAutomodSetting(guildId, 'mod_log_channel');
         if (logChannelId) {
             const ch = message.guild.channels.cache.get(logChannelId);
-            if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`${modDef?.emoji || '🛡️'} AutoMod: ${modDef?.name || violation.module}`).setDescription(`**User:** <@${userId}>\n**Channel:** <#${message.channel.id}>\n**Reason:** ${violation.reason}\n**Action:** ${violation.action === 'delete_warn' ? 'Deleted + Warned' : 'Deleted'}`).addFields({ name: 'Content', value: content.substring(0, 500) || '[empty]' }).setTimestamp().setFooter({ text: `ID: ${userId}` })] }).catch(() => {});
+            if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#E74C3C').setTitle(`${modDef?.emoji || '🛡️'} AutoMod: ${modDef?.name || violation.module}`).setDescription(`**User:** <@${userId}>\n**Channel:** <#${message.channel.id}>\n**Reason:** ${violation.reason}\n**Action:** ${muted ? `🔇 Muted ${muteMinutes}m (${vcount}x)` : (violation.action === 'delete_warn' ? 'Deleted + Warned' : 'Deleted')}`).addFields({ name: 'Content', value: content.substring(0, 500) || '[empty]' }).setTimestamp().setFooter({ text: `ID: ${userId}` })] }).catch(() => {});
         }
         return violation;
     } catch (e) { return null; }
