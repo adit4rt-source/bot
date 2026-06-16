@@ -1,0 +1,323 @@
+// systems/social.js — Fun social commands: /ship, /marry, /divorce
+//
+// /ship @a [@b]  → canvas card with 2 avatars + love %, deterministic per pair
+// /marry @user   → propose marriage (accept/decline buttons)
+// /divorce       → end current marriage
+//
+// Marriage stored in `marriages` table (per guild).
+
+const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const path = require('path');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { db } = require('../database');
+let log;
+try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
+
+// ---- Fonts ----
+const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
+let FONTS_OK = false;
+try {
+    GlobalFonts.registerFromPath(path.join(FONT_DIR, 'Poppins-Bold.ttf'), 'PoppinsBold');
+    GlobalFonts.registerFromPath(path.join(FONT_DIR, 'Poppins-SemiBold.ttf'), 'PoppinsSemiBold');
+    FONTS_OK = true;
+} catch (_) {}
+const HEAD_FONT = FONTS_OK ? 'PoppinsBold' : 'sans-serif';
+const SUB_FONT = FONTS_OK ? 'PoppinsSemiBold' : 'sans-serif';
+
+// ==================== DATABASE ====================
+db.exec(`CREATE TABLE IF NOT EXISTS marriages (
+    guildId TEXT,
+    user1 TEXT,
+    user2 TEXT,
+    since INTEGER,
+    PRIMARY KEY (guildId, user1, user2)
+)`);
+
+function getMarriage(guildId, userId) {
+    return db.prepare('SELECT * FROM marriages WHERE guildId = ? AND (user1 = ? OR user2 = ?)').get(guildId, userId, userId);
+}
+function createMarriage(guildId, a, b) {
+    db.prepare('INSERT OR REPLACE INTO marriages (guildId, user1, user2, since) VALUES (?, ?, ?, ?)').run(guildId, a, b, Date.now());
+}
+function removeMarriage(guildId, userId) {
+    db.prepare('DELETE FROM marriages WHERE guildId = ? AND (user1 = ? OR user2 = ?)').run(guildId, userId, userId);
+}
+
+// ==================== LOVE % (deterministic per pair) ====================
+function loveScore(idA, idB) {
+    const pair = [String(idA), String(idB)].sort().join('-');
+    let hash = 0;
+    for (let i = 0; i < pair.length; i++) {
+        hash = (hash * 31 + pair.charCodeAt(i)) >>> 0;
+    }
+    return hash % 101; // 0..100
+}
+
+function loveComment(pct) {
+    if (pct >= 90) return '💞 Soulmate! Jodoh dunia akhirat!';
+    if (pct >= 75) return '💖 Cinta sejati, lanjutkan!';
+    if (pct >= 50) return '💗 Ada potensi nih, usaha dikit lagi!';
+    if (pct >= 30) return '💛 Hmm, masih ragu-ragu...';
+    if (pct >= 10) return '💔 Kayaknya cuma temenan deh.';
+    return '🥶 Zonk! Mending cari yang lain.';
+}
+
+// Combine two names into a "ship name"
+function shipName(a, b) {
+    const x = a.slice(0, Math.ceil(a.length / 2));
+    const y = b.slice(Math.floor(b.length / 2));
+    return (x + y).replace(/\s+/g, '');
+}
+
+// ==================== CANVAS: SHIP CARD ====================
+async function drawCircleAvatar(ctx, url, cx, cy, r) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    try {
+        const img = await loadImage(url);
+        ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+    } catch (_) {
+        ctx.fillStyle = '#2b2d31';
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    ctx.restore();
+    // ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+}
+
+async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
+    const W = 800, H = 420;
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    // Pink/red romantic gradient
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#2a0a2e');
+    bg.addColorStop(0.5, '#4a1042');
+    bg.addColorStop(1, '#7a1535');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft heart glow in center
+    const glow = ctx.createRadialGradient(W / 2, 150, 0, W / 2, 150, 220);
+    glow.addColorStop(0, 'rgba(255, 80, 120, 0.35)');
+    glow.addColorStop(1, 'rgba(255, 80, 120, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Avatars
+    const r = 95;
+    await drawCircleAvatar(ctx, avatarA, 165, 150, r);
+    await drawCircleAvatar(ctx, avatarB, 635, 150, r);
+
+    // Heart in center
+    drawHeart(ctx, W / 2, 150, 55, '#ff3b6b');
+
+    // Names under avatars
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `26px ${SUB_FONT}`;
+    ctx.fillText(truncate(nameA, 14), 165, 290);
+    ctx.fillText(truncate(nameB, 14), 635, 290);
+
+    // Percentage (big)
+    ctx.font = `bold 64px ${HEAD_FONT}`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(`${pct}%`, W / 2, 330);
+
+    // Progress bar
+    const barW = 600, barH = 26, barX = (W - barW) / 2, barY = 350;
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    roundRect(ctx, barX, barY, barW, barH, 13);
+    ctx.fill();
+    const fillW = Math.max(barH, (barW * pct) / 100);
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    grad.addColorStop(0, '#ff8fb0');
+    grad.addColorStop(1, '#ff3b6b');
+    ctx.fillStyle = grad;
+    roundRect(ctx, barX, barY, fillW, barH, 13);
+    ctx.fill();
+
+    // Comment
+    ctx.font = `22px ${SUB_FONT}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillText(sanitize(loveComment(pct)), W / 2, 405);
+
+    return canvas.toBuffer('image/png');
+}
+
+function drawHeart(ctx, cx, cy, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    const s = size / 16;
+    ctx.moveTo(cx, cy + 4 * s);
+    ctx.bezierCurveTo(cx, cy + 1 * s, cx - 2 * s, cy - 5 * s, cx - 8 * s, cy - 5 * s);
+    ctx.bezierCurveTo(cx - 16 * s, cy - 5 * s, cx - 16 * s, cy + 5 * s, cx - 16 * s, cy + 5 * s);
+    ctx.bezierCurveTo(cx - 16 * s, cy + 11 * s, cx - 8 * s, cy + 16 * s, cx, cy + 22 * s);
+    ctx.bezierCurveTo(cx + 8 * s, cy + 16 * s, cx + 16 * s, cy + 11 * s, cx + 16 * s, cy + 5 * s);
+    ctx.bezierCurveTo(cx + 16 * s, cy + 5 * s, cx + 16 * s, cy - 5 * s, cx + 8 * s, cy - 5 * s);
+    ctx.bezierCurveTo(cx + 2 * s, cy - 5 * s, cx, cy + 1 * s, cx, cy + 4 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+function sanitize(s) { return String(s || '').replace(/[^\x20-\x7E\u00A0-\u024F]/g, '').trim() || ''; }
+
+// ==================== /ship HANDLER ====================
+async function handleShipCommand(interaction) {
+    const userA = interaction.options.getUser('user1', true);
+    const userB = interaction.options.getUser('user2') || interaction.user;
+
+    if (userA.id === userB.id) {
+        return interaction.reply({ content: '❌ Gak bisa ship orang yang sama! Pilih 2 orang berbeda.', ephemeral: true });
+    }
+
+    await interaction.deferReply();
+
+    const pct = loveScore(userA.id, userB.id);
+    const nameA = userA.username;
+    const nameB = userB.username;
+
+    let buffer = null;
+    try {
+        buffer = await generateShipCard({
+            nameA, avatarA: userA.displayAvatarURL({ extension: 'png', size: 256 }),
+            nameB, avatarB: userB.displayAvatarURL({ extension: 'png', size: 256 }),
+            pct,
+        });
+    } catch (e) {
+        log('WARN', `[social] ship canvas failed: ${e.message}`);
+    }
+
+    const ship = shipName(nameA, nameB);
+    const embed = new EmbedBuilder()
+        .setColor('#ff3b6b')
+        .setTitle('💘 Love Calculator')
+        .setDescription(`**${nameA}** 💕 **${nameB}**\n\n🚢 Ship name: **${ship}**\n${loveComment(pct)}`)
+        .setTimestamp();
+
+    const files = [];
+    if (buffer) {
+        files.push(new AttachmentBuilder(buffer, { name: 'ship.png' }));
+        embed.setImage('attachment://ship.png');
+    }
+
+    return interaction.editReply({ embeds: [embed], files });
+}
+
+// ==================== /marry HANDLER ====================
+async function handleMarryCommand(interaction) {
+    const guildId = interaction.guild.id;
+    const proposer = interaction.user;
+    const target = interaction.options.getUser('user', true);
+
+    if (target.id === proposer.id) return interaction.reply({ content: '❌ Gak bisa nikah sama diri sendiri! 😅', ephemeral: true });
+    if (target.bot) return interaction.reply({ content: '❌ Gak bisa nikah sama bot! 🤖', ephemeral: true });
+
+    const proposerMarriage = getMarriage(guildId, proposer.id);
+    if (proposerMarriage) {
+        const partner = proposerMarriage.user1 === proposer.id ? proposerMarriage.user2 : proposerMarriage.user1;
+        return interaction.reply({ content: `❌ Kamu sudah menikah dengan <@${partner}>! Pakai \`/divorce\` dulu.`, ephemeral: true });
+    }
+    const targetMarriage = getMarriage(guildId, target.id);
+    if (targetMarriage) return interaction.reply({ content: `❌ <@${target.id}> sudah menikah dengan orang lain.`, ephemeral: true });
+
+    const embed = new EmbedBuilder()
+        .setColor('#ff3b6b')
+        .setTitle('💍 Lamaran Pernikahan!')
+        .setDescription(`<@${target.id}>, **${proposer.username}** melamarmu! 💖\n\nApakah kamu menerima? (60 detik)`)
+        .setThumbnail(proposer.displayAvatarURL({ size: 128 }))
+        .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`marry_accept_${proposer.id}_${target.id}`).setLabel('💍 Terima').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`marry_decline_${proposer.id}_${target.id}`).setLabel('💔 Tolak').setStyle(ButtonStyle.Danger),
+    );
+
+    return interaction.reply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
+}
+
+async function handleMarryButton(interaction) {
+    const parts = interaction.customId.split('_'); // marry_accept_<proposer>_<target>
+    const action = parts[1];
+    const proposerId = parts[2];
+    const targetId = parts[3];
+    const guildId = interaction.guild.id;
+
+    // Only the target can respond
+    if (interaction.user.id !== targetId) {
+        return interaction.reply({ content: '❌ Lamaran ini bukan untukmu!', ephemeral: true });
+    }
+
+    if (action === 'decline') {
+        const embed = new EmbedBuilder().setColor('#95A5A6').setTitle('💔 Lamaran Ditolak')
+            .setDescription(`<@${targetId}> menolak lamaran dari <@${proposerId}>. 😢`);
+        return interaction.update({ content: '', embeds: [embed], components: [] });
+    }
+
+    // accept — re-check both still single
+    if (getMarriage(guildId, proposerId) || getMarriage(guildId, targetId)) {
+        return interaction.update({ content: '❌ Salah satu sudah menikah sebelum lamaran diterima.', embeds: [], components: [] });
+    }
+
+    createMarriage(guildId, proposerId, targetId);
+    const embed = new EmbedBuilder()
+        .setColor('#ff3b6b')
+        .setTitle('💞 Selamat! Kalian Resmi Menikah!')
+        .setDescription(`<@${proposerId}> 💍 <@${targetId}>\n\nSemoga langgeng selamanya! 🎉💕`)
+        .setTimestamp();
+    return interaction.update({ content: '', embeds: [embed], components: [] });
+}
+
+// ==================== /divorce HANDLER ====================
+async function handleDivorceCommand(interaction) {
+    const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+    const marriage = getMarriage(guildId, userId);
+    if (!marriage) return interaction.reply({ content: '❌ Kamu belum menikah dengan siapa pun.', ephemeral: true });
+
+    const partner = marriage.user1 === userId ? marriage.user2 : marriage.user1;
+    removeMarriage(guildId, userId);
+    const embed = new EmbedBuilder()
+        .setColor('#95A5A6')
+        .setTitle('💔 Perceraian')
+        .setDescription(`<@${userId}> dan <@${partner}> telah bercerai. 😔\n\nSemoga menemukan yang lebih baik.`)
+        .setTimestamp();
+    return interaction.reply({ embeds: [embed] });
+}
+
+function isMarryButton(customId) {
+    return typeof customId === 'string' && customId.startsWith('marry_');
+}
+
+module.exports = {
+    handleShipCommand,
+    handleMarryCommand,
+    handleMarryButton,
+    handleDivorceCommand,
+    isMarryButton,
+    getMarriage,
+    loveScore,
+};

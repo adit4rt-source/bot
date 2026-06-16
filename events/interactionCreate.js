@@ -896,6 +896,20 @@ async function routeInteraction(interaction) {
             return handleRobloxCommand(interaction);
         }
 
+        // ================= SOCIAL: SHIP / MARRY / DIVORCE =================
+        if (command === 'ship') {
+            const { handleShipCommand } = require('../systems/social');
+            return handleShipCommand(interaction);
+        }
+        if (command === 'marry') {
+            const { handleMarryCommand } = require('../systems/social');
+            return handleMarryCommand(interaction);
+        }
+        if (command === 'divorce') {
+            const { handleDivorceCommand } = require('../systems/social');
+            return handleDivorceCommand(interaction);
+        }
+
         // ================= ANIME CARDS =================
         if (command === 'card') {
             const { handleCardPanelCommand } = require('../systems/cardGame');
@@ -1579,6 +1593,14 @@ async function routeInteraction(interaction) {
             const { isGamesButton, handleGamesButton } = require('../systems/quiz');
             if (isGamesButton(interaction.customId)) {
                 return handleGamesButton(interaction);
+            }
+        }
+
+        // --- MARRY BUTTONS ---
+        if (interaction.customId.startsWith('marry_')) {
+            const { isMarryButton, handleMarryButton } = require('../systems/social');
+            if (isMarryButton(interaction.customId)) {
+                return handleMarryButton(interaction);
             }
         }
 

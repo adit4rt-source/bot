@@ -120,6 +120,12 @@ const commands = [
             )),
     new SlashCommandBuilder().setName('roblox').setDescription('🎮 Roblox Profile — Lihat avatar & item yang dipakai')
         .addStringOption(opt => opt.setName('username').setDescription('Username Roblox').setRequired(true)),
+    new SlashCommandBuilder().setName('ship').setDescription('💘 Love Calculator — Hitung kecocokan 2 orang')
+        .addUserOption(opt => opt.setName('user1').setDescription('Orang pertama').setRequired(true))
+        .addUserOption(opt => opt.setName('user2').setDescription('Orang kedua (kosong = kamu)').setRequired(false)),
+    new SlashCommandBuilder().setName('marry').setDescription('💍 Lamar seseorang untuk menikah')
+        .addUserOption(opt => opt.setName('user').setDescription('Yang mau dilamar').setRequired(true)),
+    new SlashCommandBuilder().setName('divorce').setDescription('💔 Cerai dari pasangan saat ini'),
     new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
         .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
             .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
