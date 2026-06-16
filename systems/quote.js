@@ -19,17 +19,13 @@ const API_KEY = process.env.PITUCODE_API_KEY || '';
 
 // Available categories (endpoint name → display info)
 // Endpoint format: GET /random/<key>?apikey=...
-// Confirmed working: galauquote. Others are common pitucode endpoints — if any
-// returns 404, bot will say "kategori belum tersedia" and suggest alternatives.
+// Confirmed working endpoints from pitucode.com
 const CATEGORIES = {
-    galauquote:    { name: 'Galau',       emoji: '💔', color: '#8B5CF6', desc: 'Kata-kata galau yang menyentuh hati' },
-    motivasiquote: { name: 'Motivasi',    emoji: '🔥', color: '#F59E0B', desc: 'Kata-kata motivasi penyemangat' },
-    bucinquote:    { name: 'Bucin',       emoji: '💕', color: '#EC4899', desc: 'Kata-kata bucin yang bikin baper' },
-    islamiquote:   { name: 'Islami',      emoji: '🕌', color: '#10B981', desc: 'Kata-kata islami yang menenangkan' },
-    bijakquote:    { name: 'Bijak',       emoji: '🧠', color: '#3B82F6', desc: 'Kata-kata bijak penuh makna' },
-    animequote:    { name: 'Anime',       emoji: '🎌', color: '#EF4444', desc: 'Quote dari anime populer' },
-    truth:         { name: 'Truth',       emoji: '🤔', color: '#14B8A6', desc: 'Pertanyaan truth untuk game' },
-    dare:          { name: 'Dare',        emoji: '🎯', color: '#F97316', desc: 'Tantangan dare yang seru' },
+    galauquote:  { name: 'Galau',   emoji: '💔', color: '#8B5CF6', desc: 'Kata-kata galau yang menyentuh hati' },
+    bucinquote:  { name: 'Bucin',   emoji: '💕', color: '#EC4899', desc: 'Kata-kata bucin yang bikin baper' },
+    randomquote: { name: 'Random',  emoji: '🎲', color: '#6366F1', desc: 'Quote random dari berbagai tema' },
+    jawaquote:   { name: 'Jawa',    emoji: '🏝️', color: '#10B981', desc: 'Kata-kata bijak bahasa Jawa' },
+    dilanquote:  { name: 'Dilan',   emoji: '📖', color: '#F59E0B', desc: 'Quote dari novel/film Dilan' },
 };
 
 // Fallback category if invalid

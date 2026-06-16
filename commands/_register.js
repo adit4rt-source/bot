@@ -91,17 +91,32 @@ const commands = [
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
-    new SlashCommandBuilder().setName('quote').setDescription('💬 Random Quote — Galau, Motivasi, Bucin, Bijak, Anime, dll')
+    new SlashCommandBuilder().setName('quote').setDescription('💬 Random Quote — Galau, Bucin, Jawa, Dilan, Random')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quote').setRequired(false)
             .addChoices(
                 { name: '💔 Galau', value: 'galauquote' },
-                { name: '🔥 Motivasi', value: 'motivasiquote' },
                 { name: '💕 Bucin', value: 'bucinquote' },
-                { name: '🕌 Islami', value: 'islamiquote' },
-                { name: '🧠 Bijak', value: 'bijakquote' },
-                { name: '🎌 Anime', value: 'animequote' },
-                { name: '🤔 Truth', value: 'truth' },
-                { name: '🎯 Dare', value: 'dare' },
+                { name: '🎲 Random', value: 'randomquote' },
+                { name: '🏝️ Jawa', value: 'jawaquote' },
+                { name: '📖 Dilan', value: 'dilanquote' },
+            )),
+    new SlashCommandBuilder().setName('games').setDescription('🎮 Quiz Game — Jawab soal, dapet Money!')
+        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quiz').setRequired(false)
+            .addChoices(
+                { name: '🤔 Siapakah Aku', value: 'siapakahaku' },
+                { name: '🧠 Asah Otak', value: 'asahotak' },
+                { name: '🔤 Susun Kata', value: 'susunkata' },
+                { name: '🖼️ Tebak Gambar', value: 'tebakgambar' },
+                { name: '🗺️ Tebak Kabupaten', value: 'tebakkabupaten' },
+                { name: '😂 Cak Lontong', value: 'caklontong' },
+                { name: '📝 Tebak Kalimat', value: 'tebakkalimat' },
+                { name: '💬 Tebak Kata', value: 'tebakkata' },
+                { name: '⚗️ Tebak Kimia', value: 'tebakkimia' },
+                { name: '🎵 Tebak Lagu', value: 'tebaklagu' },
+                { name: '🎤 Tebak Lirik', value: 'tebaklirik' },
+                { name: '❓ Tebak-Tebakan', value: 'tebaktebakan' },
+                { name: '🧩 Teka-Teki', value: 'tekateki' },
+                { name: '🤫 Truth', value: 'truth' },
             )),
     new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
         .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')

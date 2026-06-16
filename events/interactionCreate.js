@@ -878,6 +878,12 @@ async function routeInteraction(interaction) {
             return handleQuoteCommand(interaction);
         }
 
+        // ================= GAMES (QUIZ) =================
+        if (command === 'games') {
+            const { handleGamesCommand } = require('../systems/quiz');
+            return handleGamesCommand(interaction);
+        }
+
         // ================= AFK =================
         if (command === 'afk') {
             const { handleAfkCommand } = require('../systems/afk');
@@ -1559,6 +1565,14 @@ async function routeInteraction(interaction) {
             const { isQuoteButton, handleQuoteButton } = require('../systems/quote');
             if (isQuoteButton(interaction.customId)) {
                 return handleQuoteButton(interaction);
+            }
+        }
+
+        // --- GAMES BUTTONS ---
+        if (interaction.customId.startsWith('games_')) {
+            const { isGamesButton, handleGamesButton } = require('../systems/quiz');
+            if (isGamesButton(interaction.customId)) {
+                return handleGamesButton(interaction);
             }
         }
 

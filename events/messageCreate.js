@@ -97,6 +97,11 @@ module.exports = async function handleMessageCreate(message) {
     const { maybeHandleVideo } = require('../systems/videoDownloader');
     maybeHandleVideo(message).catch(() => {});
 
+    // === QUIZ ANSWER CHECK ===
+    // Check if message is an answer to an active /games quiz in this channel.
+    const { checkQuizAnswer } = require('../systems/quiz');
+    if (checkQuizAnswer(message)) return; // answered correctly, stop further processing
+
     // Mini-event answer handling
     if (state.activeMiniEvents.has(guildId)) {
         const game = state.activeMiniEvents.get(guildId);
