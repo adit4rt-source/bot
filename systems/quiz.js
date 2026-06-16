@@ -74,16 +74,20 @@ async function fetchPuzzle(category) {
             return null;
         }
 
-        log('INFO', `[quiz] Response ${category}: ${JSON.stringify(json).slice(0, 300)}`);
-
         // Parse puzzle data — pitucode returns various formats
-        // Common patterns: { soal, jawaban } or { result: { soal, jawaban } }
-        // or { data: { ... } } or { pertanyaan, jawaban }
+        // Common patterns: { result: { soal, jawaban } } or { result: "string" (truth) }
         const data = json.result || json.data || json;
+
+        // Handle truth/dare where result is just a string (no soal/jawaban)
+        if (typeof data === 'string') {
+            // Truth/dare — no answer needed, just display
+            return { question: data, answer: null, image: null, noAnswer: true };
+        }
 
         let question = data.soal || data.pertanyaan || data.question || data.deskripsi || data.clue || null;
         let answer = data.jawaban || data.answer || data.jawab || null;
         let image = data.gambar || data.image || data.img || null;
+        let hint = data.tipe || data.hint || null;
 
         if (!question && !image) {
             log('WARN', `[quiz] Tidak bisa extract soal dari: ${JSON.stringify(json).slice(0, 300)}`);
@@ -98,6 +102,7 @@ async function fetchPuzzle(category) {
             question: question ? String(question).trim() : null,
             answer: String(answer).trim(),
             image: image || null,
+            hint: hint || null,
         };
     } catch (e) {
         log('WARN', `[quiz] fetchPuzzle error: ${e.name === 'AbortError' ? 'timeout' : e.message}`);
@@ -111,15 +116,25 @@ function buildQuizEmbed(puzzle, category, reward) {
     const embed = new EmbedBuilder()
         .setTitle(`${cat.emoji} ${cat.name}`)
         .setColor('#5865F2')
-        .setFooter({ text: `Hadiah: 🪙 ${reward.toLocaleString('id-ID')} • Waktu: 60 detik • Ketik jawabanmu di chat!` })
         .setTimestamp();
 
-    if (puzzle.question) {
+    // Truth: no answer needed, just display the prompt
+    if (puzzle.noAnswer) {
         embed.setDescription(`**${puzzle.question}**`);
+        embed.setFooter({ text: 'Truth — tidak perlu dijawab' });
+        return embed;
     }
-    if (puzzle.image) {
-        embed.setImage(puzzle.image);
-    }
+
+    let desc = '';
+    if (puzzle.question) desc += `**${puzzle.question}**\n`;
+    if (puzzle.hint) desc += `\n💡 Hint: *${puzzle.hint}*\n`;
+    desc += `\n🪙 **Hadiah: ${reward.toLocaleString('id-ID')} Money**`;
+    desc += `\n⏱️ Waktu: **60 detik**`;
+    desc += `\n\n-# Ketik jawabanmu langsung di chat!`;
+
+    embed.setDescription(desc);
+    if (puzzle.image) embed.setImage(puzzle.image);
+    embed.setFooter({ text: `${cat.name} • Siapa cepat dia dapat!` });
 
     return embed;
 }
@@ -163,6 +178,11 @@ async function handleGamesCommand(interaction) {
 
     const reward = getRandomInt(REWARD_MIN, REWARD_MAX);
     const embed = buildQuizEmbed(puzzle, category, reward);
+
+    // Truth: just display, no game timer needed
+    if (puzzle.noAnswer) {
+        return interaction.editReply({ embeds: [embed] });
+    }
 
     await interaction.editReply({ embeds: [embed] });
 
