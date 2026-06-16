@@ -310,7 +310,8 @@ function buildSettingSubPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_set_channels').setLabel('📡 Channels').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_toggles').setLabel('🎛️ Toggle Fitur').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_xp').setLabel('📈 XP & Level').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_set_quote').setLabel('💬 Auto Quote').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
@@ -901,13 +902,23 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
+    if (customId === 'admpnl_set_quote') {
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_quote').setTitle('Auto Quote Config');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel').setLabel('Channel ID (kosong = matikan)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_channel', '') || 'Channel ID')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('interval').setLabel('Interval (jam, mis. 6)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_interval', '6'))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('category').setLabel('Kategori (galauquote/bucinquote/dll)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_category', 'randomquote')))
+        );
+        return interaction.showModal(modal);
+    }
     if (customId === 'admpnl_set_misc') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_misc').setTitle('Settings Lainnya');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('log_ch').setLabel('Log Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'log_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('quest_reroll').setLabel('Quest Reroll Max/Hari').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_max', '3'))),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reroll_cost').setLabel('Quest Reroll Cost').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_cost', '500'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('blocked_channels').setLabel('🚫 Blocked Channels (ID, pisah koma)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(getSetting(guildId, 'blocked_channels', '') || '123456789,987654321'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('blocked_channels').setLabel('🚫 Blocked Channels (ID, pisah koma)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(getSetting(guildId, 'blocked_channels', '') || '123456789,987654321')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('serverlog_ch').setLabel('📝 Server Log Channel (kosong=OFF)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'serverlog_channel', '') || 'Channel ID untuk log'))
         );
         return interaction.showModal(modal);
     }
@@ -1266,6 +1277,19 @@ async function handleAdminModal(interaction) {
         return interaction.reply({ content: updated.length > 0 ? `✅ Media Config Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
+    // === SETTING: Auto Quote ===
+    if (customId === 'admpnl_modal_quote') {
+        const updated = [];
+        const ch = (interaction.fields.getTextInputValue('channel') || '').trim();
+        if (ch && /^\d+$/.test(ch)) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_channel', ch); updated.push(`Channel: <#${ch}>`); }
+        else if (ch === '') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_channel', ''); updated.push('Auto Quote: OFF'); }
+        const interval = (interaction.fields.getTextInputValue('interval') || '').trim();
+        if (interval && !isNaN(parseInt(interval)) && parseInt(interval) > 0) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_interval', String(parseInt(interval))); updated.push(`Interval: ${parseInt(interval)} jam`); }
+        const cat = (interaction.fields.getTextInputValue('category') || '').trim().toLowerCase();
+        if (cat) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_category', cat); updated.push(`Kategori: ${cat}`); }
+        return interaction.reply({ content: updated.length > 0 ? `✅ Auto Quote Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+    }
+
     // === SETTING: Misc ===
     if (customId === 'admpnl_modal_misc') {
         const updated = [];
@@ -1282,6 +1306,15 @@ async function handleAdminModal(interaction) {
             db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'blocked_channels', cleaned);
             if (cleaned) updated.push(`🚫 Blocked Channels: ${cleaned.split(',').map(id => `<#${id}>`).join(', ')}`);
             else updated.push('🚫 Blocked Channels: *dihapus (semua channel bisa)*');
+        }
+        const serverlogCh = (interaction.fields.getTextInputValue('serverlog_ch') || '').trim();
+        if (serverlogCh && /^\d+$/.test(serverlogCh)) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_channel', serverlogCh);
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_enabled', '1');
+            updated.push(`📝 Server Log: ON → <#${serverlogCh}>`);
+        } else if (serverlogCh === '') {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_enabled', '0');
+            updated.push('📝 Server Log: OFF');
         }
         return interaction.reply({ content: updated.length > 0 ? `✅ Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }

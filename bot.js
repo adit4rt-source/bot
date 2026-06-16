@@ -306,6 +306,7 @@ client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) =>
     log('INFO', `[event] GuildMemberAdd: ${member.user.tag} bergabung ke ${member.guild?.name} (${member.guild?.id})`);
     await handleInviteJoin(member);
     await handleWelcome(member);
+    try { require('./systems/serverLog').logMemberJoin(member); } catch (_) {}
     try {
         const { handleOnboarding } = require('./systems/onboarding');
         await handleOnboarding(member);
@@ -316,6 +317,18 @@ client.on(Events.GuildMemberRemove, wrapHandler('guildMemberRemove', async (memb
     const { handleMemberLeave } = require('./systems/inviteTracker');
     await handleMemberLeave(member);
     await handleGoodbye(member);
+    try { require('./systems/serverLog').logMemberLeave(member); } catch (_) {}
+}));
+
+// Server logging: message delete/edit + role changes
+client.on(Events.MessageDelete, wrapHandler('messageDelete', async (message) => {
+    try { require('./systems/serverLog').logMessageDelete(message); } catch (_) {}
+}));
+client.on(Events.MessageUpdate, wrapHandler('messageUpdate', async (oldMessage, newMessage) => {
+    try { require('./systems/serverLog').logMessageUpdate(oldMessage, newMessage); } catch (_) {}
+}));
+client.on(Events.GuildMemberUpdate, wrapHandler('guildMemberUpdate', async (oldMember, newMember) => {
+    try { require('./systems/serverLog').logMemberUpdate(oldMember, newMember); } catch (_) {}
 }));
 
 client.on(Events.InviteCreate, async (invite) => {

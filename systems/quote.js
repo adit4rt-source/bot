@@ -250,7 +250,7 @@ function startAutoQuote(client) {
 
                 if (now - lastSent < intervalHours * 3600 * 1000) continue;
 
-                const category = getSetting(guildId, 'quote_auto_category', 'motivasi');
+                const category = getSetting(guildId, 'quote_auto_category', 'randomquote');
                 const quote = await fetchQuote(category);
                 if (!quote) continue;
 
