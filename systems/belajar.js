@@ -1,147 +1,243 @@
-// systems/belajar.js — Pusat Belajar (interactive learning panel)
+// systems/belajar.js — Pusat Belajar (Duolingo-style)
 //
-// /belajar → kategori (Bahasa Inggris dulu) → mode kuis → 5 soal klik-klik.
-// Built-in question bank (no external API), Duolingo-style. Reward money per
-// jawaban benar. Mudah ditambah bahasa/kategori lain di masa depan.
+// /belajar → jalur belajar berunit (unlock bertahap). Tiap unit = 1 lesson
+// berisi campuran latihan:
+//   - Pilihan ganda (terjemah)
+//   - Susun kalimat (tap word tiles) ← khas Duolingo
+// Sistem nyawa (❤️x5). Selesai lesson → XP + Money + unlock unit berikutnya.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
-// ==================== WORD BANK (EN <-> ID) ====================
-const WORDS = [
-    { en: 'apple', id: 'apel' }, { en: 'book', id: 'buku' }, { en: 'water', id: 'air' },
-    { en: 'house', id: 'rumah' }, { en: 'friend', id: 'teman' }, { en: 'school', id: 'sekolah' },
-    { en: 'car', id: 'mobil' }, { en: 'cat', id: 'kucing' }, { en: 'dog', id: 'anjing' },
-    { en: 'food', id: 'makanan' }, { en: 'rice', id: 'nasi' }, { en: 'fish', id: 'ikan' },
-    { en: 'morning', id: 'pagi' }, { en: 'night', id: 'malam' }, { en: 'day', id: 'hari' },
-    { en: 'love', id: 'cinta' }, { en: 'happy', id: 'senang' }, { en: 'sad', id: 'sedih' },
-    { en: 'angry', id: 'marah' }, { en: 'tired', id: 'lelah' }, { en: 'big', id: 'besar' },
-    { en: 'small', id: 'kecil' }, { en: 'fast', id: 'cepat' }, { en: 'slow', id: 'lambat' },
-    { en: 'hot', id: 'panas' }, { en: 'cold', id: 'dingin' }, { en: 'beautiful', id: 'cantik' },
-    { en: 'expensive', id: 'mahal' }, { en: 'cheap', id: 'murah' }, { en: 'open', id: 'buka' },
-    { en: 'close', id: 'tutup' }, { en: 'run', id: 'lari' }, { en: 'walk', id: 'jalan' },
-    { en: 'eat', id: 'makan' }, { en: 'drink', id: 'minum' }, { en: 'sleep', id: 'tidur' },
-    { en: 'read', id: 'membaca' }, { en: 'write', id: 'menulis' }, { en: 'buy', id: 'membeli' },
-    { en: 'sell', id: 'menjual' }, { en: 'work', id: 'bekerja' }, { en: 'play', id: 'bermain' },
-    { en: 'study', id: 'belajar' }, { en: 'teacher', id: 'guru' }, { en: 'student', id: 'murid' },
-    { en: 'doctor', id: 'dokter' }, { en: 'money', id: 'uang' }, { en: 'time', id: 'waktu' },
-    { en: 'year', id: 'tahun' }, { en: 'month', id: 'bulan' }, { en: 'week', id: 'minggu' },
-    { en: 'red', id: 'merah' }, { en: 'blue', id: 'biru' }, { en: 'green', id: 'hijau' },
-    { en: 'black', id: 'hitam' }, { en: 'white', id: 'putih' }, { en: 'sun', id: 'matahari' },
-    { en: 'moon', id: 'bulan (langit)' }, { en: 'star', id: 'bintang' }, { en: 'sky', id: 'langit' },
-    { en: 'rain', id: 'hujan' }, { en: 'tree', id: 'pohon' }, { en: 'flower', id: 'bunga' },
-    { en: 'door', id: 'pintu' }, { en: 'window', id: 'jendela' }, { en: 'table', id: 'meja' },
-    { en: 'chair', id: 'kursi' }, { en: 'hand', id: 'tangan' }, { en: 'eye', id: 'mata' },
-    { en: 'head', id: 'kepala' }, { en: 'heart', id: 'hati/jantung' }, { en: 'city', id: 'kota' },
+// ==================== DATABASE ====================
+db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (
+    guildId TEXT, userId TEXT, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0,
+    PRIMARY KEY (guildId, userId)
+)`);
+function getProgress(guildId, userId) {
+    return db.prepare('SELECT * FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId) || { maxUnit: 0, xp: 0 };
+}
+function setProgress(guildId, userId, maxUnit, xp) {
+    db.prepare('INSERT OR REPLACE INTO belajar_progress (guildId, userId, maxUnit, xp) VALUES (?, ?, ?, ?)').run(guildId, userId, maxUnit, xp);
+}
+
+// ==================== CONTENT (units → phrases) ====================
+const UNITS = [
+    { id: 1, emoji: '👋', title: 'Dasar 1', phrases: [
+        { en: 'Good morning', id: 'Selamat pagi' },
+        { en: 'Thank you', id: 'Terima kasih' },
+        { en: 'How are you', id: 'Apa kabar' },
+        { en: 'I am fine', id: 'Saya baik' },
+        { en: 'See you later', id: 'Sampai jumpa' },
+    ]},
+    { id: 2, emoji: '👨‍👩‍👧', title: 'Keluarga', phrases: [
+        { en: 'My mother is kind', id: 'Ibu saya baik' },
+        { en: 'I love my family', id: 'Saya cinta keluarga saya' },
+        { en: 'He is my brother', id: 'Dia saudara saya' },
+        { en: 'We are happy', id: 'Kami senang' },
+        { en: 'This is my father', id: 'Ini ayah saya' },
+    ]},
+    { id: 3, emoji: '🍜', title: 'Makanan', phrases: [
+        { en: 'I want to eat', id: 'Saya mau makan' },
+        { en: 'The food is delicious', id: 'Makanannya enak' },
+        { en: 'I drink water', id: 'Saya minum air' },
+        { en: 'I am hungry', id: 'Saya lapar' },
+        { en: 'Rice is cheap', id: 'Nasi itu murah' },
+    ]},
+    { id: 4, emoji: '🏫', title: 'Sekolah', phrases: [
+        { en: 'I go to school', id: 'Saya pergi ke sekolah' },
+        { en: 'She is a teacher', id: 'Dia seorang guru' },
+        { en: 'I read a book', id: 'Saya membaca buku' },
+        { en: 'We study English', id: 'Kami belajar bahasa Inggris' },
+        { en: 'The lesson is easy', id: 'Pelajarannya mudah' },
+    ]},
+    { id: 5, emoji: '🛒', title: 'Belanja', phrases: [
+        { en: 'How much is this', id: 'Berapa harga ini' },
+        { en: 'It is too expensive', id: 'Ini terlalu mahal' },
+        { en: 'I want to buy it', id: 'Saya mau membelinya' },
+        { en: 'Do you have money', id: 'Apakah kamu punya uang' },
+        { en: 'The shop is open', id: 'Tokonya buka' },
+    ]},
 ];
 
-const REWARD_PER_CORRECT = 100;
-const QUESTIONS_PER_QUIZ = 5;
+// Extra distractor words for sentence-building tiles
+const EXTRA_WORDS = ['you', 'they', 'big', 'red', 'now', 'here', 'good', 'day', 'very', 'and', 'the', 'with'];
 
-// Active sessions: `${guildId}_${userId}` -> session
-const sessions = new Map();
+const HEARTS_MAX = 5;
+const EX_PER_LESSON = 6;
+
+const sessions = new Map(); // `${guildId}_${userId}` -> session
 
 function shuffle(arr) {
     const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
 }
 
-// Build a single question for the given mode.
-// mode: 'vocab' (EN->ID), 'translate' (ID->EN), 'mix'
-function buildQuestion(mode) {
-    const effectiveMode = mode === 'mix' ? (Math.random() < 0.5 ? 'vocab' : 'translate') : mode;
-    const correct = WORDS[Math.floor(Math.random() * WORDS.length)];
-    const distractors = shuffle(WORDS.filter(w => w.en !== correct.en)).slice(0, 3);
-    const pool = shuffle([correct, ...distractors]);
-
-    if (effectiveMode === 'vocab') {
-        // Show EN, choose ID
-        return {
-            prompt: `Apa arti dari kata **"${correct.en}"**?`,
-            options: pool.map(w => w.id),
-            correctIndex: pool.findIndex(w => w.en === correct.en),
-        };
+// ==================== EXERCISE GENERATION ====================
+function makeMC(unit) {
+    const correct = unit.phrases[Math.floor(Math.random() * unit.phrases.length)];
+    const enToId = Math.random() < 0.5;
+    const distract = shuffle(unit.phrases.filter(p => p.en !== correct.en)).slice(0, 3);
+    const pool = shuffle([correct, ...distract]);
+    if (enToId) {
+        return { type: 'mc', prompt: `Apa arti dari:\n**"${correct.en}"**`, options: pool.map(p => p.id), correctIndex: pool.findIndex(p => p.en === correct.en) };
     }
-    // translate: show ID, choose EN
-    return {
-        prompt: `Bahasa Inggris dari **"${correct.id}"** adalah?`,
-        options: pool.map(w => w.en),
-        correctIndex: pool.findIndex(w => w.en === correct.en),
-    };
+    return { type: 'mc', prompt: `Terjemahkan ke Inggris:\n**"${correct.id}"**`, options: pool.map(p => p.en), correctIndex: pool.findIndex(p => p.en === correct.en) };
 }
 
-function startSession(guildId, userId, mode) {
-    const questions = [];
-    for (let i = 0; i < QUESTIONS_PER_QUIZ; i++) questions.push(buildQuestion(mode));
-    const session = { mode, questions, current: 0, score: 0 };
-    sessions.set(`${guildId}_${userId}`, session);
-    return session;
+function makeArrange(unit) {
+    const phrase = unit.phrases[Math.floor(Math.random() * unit.phrases.length)];
+    const correctWords = phrase.en.split(' ');
+    const extras = shuffle(EXTRA_WORDS).slice(0, Math.min(2, Math.max(1, 8 - correctWords.length)));
+    const tiles = shuffle([...correctWords, ...extras]).map(w => ({ word: w, used: false }));
+    return { type: 'arrange', promptId: phrase.id, correctWords, tiles, built: [] };
 }
 
-const OPTION_LABELS = ['🇦', '🇧', '🇨', '🇩'];
+function buildLesson(unit) {
+    const ex = [];
+    for (let i = 0; i < EX_PER_LESSON; i++) {
+        ex.push(Math.random() < 0.5 ? makeMC(unit) : makeArrange(unit));
+    }
+    return ex;
+}
 
-function buildQuestionMessage(session, userId) {
-    const q = session.questions[session.current];
+// ==================== RENDER ====================
+const LBL = ['🇦', '🇧', '🇨', '🇩'];
+
+function heartsBar(h) {
+    return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h);
+}
+
+function renderExercise(session, userId, feedback = '') {
+    const ex = session.exercises[session.current];
+    const head = `${heartsBar(session.hearts)}  •  Soal ${session.current + 1}/${session.exercises.length}`;
+
+    if (ex.type === 'mc') {
+        const embed = new EmbedBuilder()
+            .setColor('#58CC02')
+            .setTitle('🇬🇧 Pilih Jawaban')
+            .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]} **${o}**`).join('\n'))
+            .setFooter({ text: head });
+        const row = new ActionRowBuilder().addComponents(
+            ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary))
+        );
+        return { embeds: [embed], components: [row] };
+    }
+
+    // arrange
+    const builtWords = ex.built.map(i => ex.tiles[i].word);
+    const builtLine = builtWords.length ? builtWords.join(' ') : '_( ketuk kata di bawah )_';
     const embed = new EmbedBuilder()
-        .setColor('#58CC02') // Duolingo green
-        .setTitle(`🇬🇧 Belajar Bahasa Inggris — Soal ${session.current + 1}/${session.questions.length}`)
-        .setDescription(`${q.prompt}\n\n` + q.options.map((o, i) => `${OPTION_LABELS[i]} **${o}**`).join('\n'))
-        .setFooter({ text: `Skor: ${session.score} • Klik jawaban di bawah` });
+        .setColor('#58CC02')
+        .setTitle('🧩 Susun Kalimat')
+        .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Susun terjemahan Inggris dari:\n**"${ex.promptId}"**\n\n📝 **Jawabanmu:** ${builtLine}`)
+        .setFooter({ text: head });
 
-    const row = new ActionRowBuilder().addComponents(
-        q.options.map((_, i) =>
-            new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(OPTION_LABELS[i]).setStyle(ButtonStyle.Secondary)
-        )
-    );
-    return { embeds: [embed], components: [row] };
+    const components = [];
+    let row = new ActionRowBuilder();
+    let count = 0;
+    ex.tiles.forEach((t, i) => {
+        if (t.used) return;
+        if (count > 0 && count % 5 === 0) { components.push(row); row = new ActionRowBuilder(); }
+        row.addComponents(new ButtonBuilder().setCustomId(`belajar_tile_${i}_${userId}`).setLabel(t.word).setStyle(ButtonStyle.Secondary));
+        count++;
+    });
+    if (row.components.length) components.push(row);
+    // control row
+    components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`belajar_undo_${userId}`).setLabel('↩️ Hapus').setStyle(ButtonStyle.Danger).setDisabled(ex.built.length === 0),
+        new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel('✅ Cek').setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
+    ));
+    return { embeds: [embed], components: components.slice(0, 5) };
 }
 
 // ==================== PANELS ====================
-function buildCategoryPanel(userId) {
+function buildPathPanel(guildId, userId) {
+    const prog = getProgress(guildId, userId);
+    const maxUnlocked = prog.maxUnit + 1; // next unit unlocked
+    const lines = UNITS.map(u => {
+        const done = u.id <= prog.maxUnit;
+        const unlocked = u.id <= maxUnlocked;
+        const status = done ? '✅' : unlocked ? '▶️' : '🔒';
+        return `${status} **Unit ${u.id}** ${u.emoji} ${u.title}${done ? ' *(selesai)*' : unlocked ? '' : ' *(terkunci)*'}`;
+    });
     const embed = new EmbedBuilder()
         .setColor('#1CB0F6')
-        .setTitle('📚 Pusat Belajar')
-        .setDescription(
-            'Pilih kategori yang mau kamu pelajari:\n\n' +
-            '🇬🇧 **Bahasa Inggris** — Kosakata & terjemahan\n' +
-            '🔜 Jepang, Korea, Arab *(segera hadir)*\n\n' +
-            '-# Jawab benar = dapat 🪙 Money!'
-        );
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`belajar_cat_en_${userId}`).setLabel('🇬🇧 Bahasa Inggris').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('belajar_soon').setLabel('🔜 Lainnya').setStyle(ButtonStyle.Secondary).setDisabled(true)
-    );
-    return { embeds: [embed], components: [row] };
-}
+        .setTitle('📚 Belajar Bahasa Inggris')
+        .setDescription(`Total XP: ⭐ **${prog.xp}**\n\n${lines.join('\n')}\n\n-# Selesaikan unit untuk membuka unit berikutnya. Jawaban benar = XP + Money!`)
+        .setFooter({ text: 'Pilih unit yang terbuka untuk mulai belajar' });
 
-function buildModePanel(userId) {
-    const embed = new EmbedBuilder()
-        .setColor('#58CC02')
-        .setTitle('🇬🇧 Bahasa Inggris — Pilih Mode')
-        .setDescription(
-            '📖 **Kosakata** — Tebak arti kata Inggris (EN → ID)\n' +
-            '✍️ **Terjemahan** — Tebak kata Inggrisnya (ID → EN)\n' +
-            '🎲 **Campur** — Campuran keduanya\n\n' +
-            `Tiap kuis berisi **${QUESTIONS_PER_QUIZ} soal**.`
-        );
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`belajar_mode_vocab_${userId}`).setLabel('📖 Kosakata').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`belajar_mode_translate_${userId}`).setLabel('✍️ Terjemahan').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`belajar_mode_mix_${userId}`).setLabel('🎲 Campur').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`belajar_back_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)
-    );
+    const row = new ActionRowBuilder();
+    let added = 0;
+    for (const u of UNITS) {
+        const unlocked = u.id <= maxUnlocked;
+        if (added < 5) {
+            row.addComponents(new ButtonBuilder()
+                .setCustomId(`belajar_unit_${u.id}_${userId}`)
+                .setLabel(`Unit ${u.id}`)
+                .setEmoji(u.id <= prog.maxUnit ? '✅' : (unlocked ? '▶️' : '🔒'))
+                .setStyle(unlocked ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setDisabled(!unlocked));
+            added++;
+        }
+    }
     return { embeds: [embed], components: [row] };
 }
 
 // ==================== HANDLERS ====================
 async function handleBelajarCommand(interaction) {
-    return interaction.reply(buildCategoryPanel(interaction.user.id));
+    return interaction.reply(buildPathPanel(interaction.guild.id, interaction.user.id));
+}
+
+function finishLesson(interaction, session, ownerId, guildId, success) {
+    sessions.delete(`${guildId}_${ownerId}`);
+    if (success) {
+        const prog = getProgress(guildId, ownerId);
+        const newMax = Math.max(prog.maxUnit, session.unitId);
+        const xpGain = session.correct * 10;
+        const moneyGain = session.correct * 100;
+        setProgress(guildId, ownerId, newMax, prog.xp + xpGain);
+        try {
+            const u = getOrCreateUser(guildId, ownerId);
+            u.balance += moneyGain;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
+            incrementUserStat(guildId, ownerId, 'belajar_correct', session.correct);
+        } catch (_) {}
+        const unlocked = newMax + 1 <= UNITS.length && newMax === session.unitId && session.unitId > prog.maxUnit;
+        const embed = new EmbedBuilder()
+            .setColor('#58CC02')
+            .setTitle('🎉 Lesson Selesai!')
+            .setDescription(
+                `Kamu menyelesaikan **Unit ${session.unitId}**!\n\n` +
+                `✅ Benar: **${session.correct}/${session.exercises.length}**\n` +
+                `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**` +
+                (unlocked ? `\n\n🔓 **Unit ${newMax + 1} terbuka!**` : '')
+            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`belajar_path_${ownerId}`).setLabel('📚 Jalur Belajar').setStyle(ButtonStyle.Primary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+    // failed (out of hearts)
+    const embed = new EmbedBuilder()
+        .setColor('#FF4B4B')
+        .setTitle('💔 Nyawa Habis!')
+        .setDescription(`Kamu kehabisan nyawa di **Unit ${session.unitId}**.\nBenar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya, kamu pasti bisa! 💪`);
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`belajar_unit_${session.unitId}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`belajar_path_${ownerId}`).setLabel('📚 Menu').setStyle(ButtonStyle.Secondary)
+    );
+    return interaction.update({ embeds: [embed], components: [row] });
+}
+
+function advance(interaction, session, ownerId, guildId, feedback) {
+    session.current++;
+    if (session.hearts <= 0) return finishLesson(interaction, session, ownerId, guildId, false);
+    if (session.current >= session.exercises.length) return finishLesson(interaction, session, ownerId, guildId, true);
+    return interaction.update(renderExercise(session, ownerId, feedback));
 }
 
 async function handleBelajarButton(interaction) {
@@ -150,85 +246,70 @@ async function handleBelajarButton(interaction) {
     const ownerId = parts[parts.length - 1];
     const guildId = interaction.guild.id;
 
-    // Ownership (except disabled soon button)
-    if (customId !== 'belajar_soon' && interaction.user.id !== ownerId) {
+    if (interaction.user.id !== ownerId) {
         return interaction.reply({ content: '❌ Ini bukan sesi belajar kamu! Ketik `/belajar` sendiri ya.', ephemeral: true });
     }
 
-    // Back to category
-    if (customId.startsWith('belajar_back_')) {
-        return interaction.update(buildCategoryPanel(ownerId));
+    // Back to path
+    if (customId.startsWith('belajar_path_')) {
+        return interaction.update(buildPathPanel(guildId, ownerId));
     }
 
-    // Category: English -> mode panel
-    if (customId.startsWith('belajar_cat_en_')) {
-        return interaction.update(buildModePanel(ownerId));
+    // Start unit lesson
+    if (customId.startsWith('belajar_unit_')) {
+        const unitId = parseInt(parts[2]);
+        const unit = UNITS.find(u => u.id === unitId);
+        if (!unit) return interaction.reply({ content: '❌ Unit tidak ditemukan.', ephemeral: true });
+        const prog = getProgress(guildId, ownerId);
+        if (unitId > prog.maxUnit + 1) return interaction.reply({ content: '🔒 Unit ini masih terkunci. Selesaikan unit sebelumnya dulu!', ephemeral: true });
+        const session = { unitId, exercises: buildLesson(unit), current: 0, hearts: HEARTS_MAX, correct: 0 };
+        sessions.set(`${guildId}_${ownerId}`, session);
+        return interaction.update(renderExercise(session, ownerId));
     }
 
-    // Start a mode
-    if (customId.startsWith('belajar_mode_')) {
-        const mode = parts[2]; // vocab/translate/mix
-        const session = startSession(guildId, ownerId, mode);
-        return interaction.update(buildQuestionMessage(session, ownerId));
+    const session = sessions.get(`${guildId}_${ownerId}`);
+    if (!session) {
+        return interaction.update({ content: '⚠️ Sesi sudah berakhir. Ketik `/belajar` untuk mulai lagi.', embeds: [], components: [] });
     }
+    const ex = session.exercises[session.current];
 
-    // Answer
+    // MC answer
     if (customId.startsWith('belajar_ans_')) {
         const chosen = parseInt(parts[2]);
-        const session = sessions.get(`${guildId}_${ownerId}`);
-        if (!session) {
-            return interaction.update({ content: '⚠️ Sesi sudah berakhir. Ketik `/belajar` untuk mulai lagi.', embeds: [], components: [] });
-        }
-        const q = session.questions[session.current];
-        const correct = chosen === q.correctIndex;
-        if (correct) session.score++;
-
-        session.current++;
-
-        // Feedback line
-        const feedback = correct
-            ? `✅ **Benar!** ${OPTION_LABELS[q.correctIndex]} ${q.options[q.correctIndex]}`
-            : `❌ **Salah!** Jawaban: ${OPTION_LABELS[q.correctIndex]} **${q.options[q.correctIndex]}**`;
-
-        // More questions?
-        if (session.current < session.questions.length) {
-            const next = buildQuestionMessage(session, ownerId);
-            next.embeds[0].setDescription(`${feedback}\n\n━━━━━━━━━━\n${next.embeds[0].data.description}`);
-            return interaction.update(next);
-        }
-
-        // Finished -> reward + summary
-        sessions.delete(`${guildId}_${ownerId}`);
-        const reward = session.score * REWARD_PER_CORRECT;
-        if (reward > 0) {
-            try {
-                const u = getOrCreateUser(guildId, ownerId);
-                u.balance += reward;
-                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
-                incrementUserStat(guildId, ownerId, 'belajar_correct', session.score);
-            } catch (_) {}
-        }
-
-        const pct = Math.round((session.score / session.questions.length) * 100);
-        const stars = pct >= 80 ? '🌟🌟🌟' : pct >= 50 ? '🌟🌟' : pct >= 20 ? '🌟' : '💪';
-        const embed = new EmbedBuilder()
-            .setColor('#58CC02')
-            .setTitle('🎓 Kuis Selesai!')
-            .setDescription(
-                `${feedback}\n\n━━━━━━━━━━\n` +
-                `**Skor:** ${session.score}/${session.questions.length} (${pct}%) ${stars}\n` +
-                `**Reward:** 🪙 **${reward.toLocaleString('id-ID')} Money**\n\n` +
-                `Mau coba lagi?`
-            );
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_mode_${session.mode}_${ownerId}`).setLabel('🔁 Main Lagi').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`belajar_back_${ownerId}`).setLabel('📚 Menu').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row] });
+        const correct = chosen === ex.correctIndex;
+        let fb;
+        if (correct) { session.correct++; fb = `✅ **Benar!** ${ex.options[ex.correctIndex]}`; }
+        else { session.hearts--; fb = `❌ **Salah!** Jawaban: **${ex.options[ex.correctIndex]}**`; }
+        return advance(interaction, session, ownerId, guildId, fb);
     }
 
-    if (customId === 'belajar_soon') {
-        return interaction.reply({ content: '🔜 Bahasa lain segera hadir! Sementara fokus Bahasa Inggris dulu ya. 😉', ephemeral: true });
+    // Arrange: tap tile
+    if (customId.startsWith('belajar_tile_')) {
+        const idx = parseInt(parts[2]);
+        if (ex.type === 'arrange' && ex.tiles[idx] && !ex.tiles[idx].used) {
+            ex.tiles[idx].used = true;
+            ex.built.push(idx);
+        }
+        return interaction.update(renderExercise(session, ownerId));
+    }
+    // Arrange: undo
+    if (customId.startsWith('belajar_undo_')) {
+        if (ex.type === 'arrange' && ex.built.length) {
+            const last = ex.built.pop();
+            ex.tiles[last].used = false;
+        }
+        return interaction.update(renderExercise(session, ownerId));
+    }
+    // Arrange: check
+    if (customId.startsWith('belajar_check_')) {
+        if (ex.type !== 'arrange') return interaction.deferUpdate();
+        const answer = ex.built.map(i => ex.tiles[i].word).join(' ').toLowerCase().trim();
+        const correctSentence = ex.correctWords.join(' ').toLowerCase().trim();
+        const correct = answer === correctSentence;
+        let fb;
+        if (correct) { session.correct++; fb = `✅ **Benar!** "${ex.correctWords.join(' ')}"`; }
+        else { session.hearts--; fb = `❌ **Salah!** Jawaban: **"${ex.correctWords.join(' ')}"**`; }
+        return advance(interaction, session, ownerId, guildId, fb);
     }
 }
 
@@ -236,4 +317,4 @@ function isBelajarButton(customId) {
     return typeof customId === 'string' && customId.startsWith('belajar_');
 }
 
-module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, WORDS };
+module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, UNITS };
