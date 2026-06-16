@@ -46,6 +46,20 @@ function buildProfilePanel(guildId, userId, username, member) {
     let loveCount = 0, loveEmoji = '❤️';
     try { const love = require('./love'); loveCount = love.getLoveCount(guildId, userId); loveEmoji = love.getEmoji(guildId); } catch (_) {}
 
+    // Marriage status (💍)
+    let marriageLine = '';
+    try {
+        const { getMarriage } = require('./social');
+        const m = getMarriage(guildId, userId);
+        if (m) {
+            const partner = m.user1 === userId ? m.user2 : m.user1;
+            const since = m.since ? ` (sejak <t:${Math.floor(m.since / 1000)}:R>)` : '';
+            marriageLine = `\n💍 **Menikah dengan** <@${partner}>${since}`;
+        } else {
+            marriageLine = `\n💍 **Status:** Jomblo 😔`;
+        }
+    } catch (_) {}
+
     const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
     const totalBadges = userAchs.length;
 
@@ -98,7 +112,7 @@ function buildProfilePanel(guildId, userId, username, member) {
             `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})\n` +
             `${ui.money(userData.balance)}\n` +
             `${streakEmoji} **Streak** ${streakCount} Hari\n` +
-            `${loveEmoji} **Love** ${loveCount}\n` +
+            `${loveEmoji} **Love** ${loveCount}${marriageLine}\n` +
             `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}${titleLine}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `${rankTitle.emoji} **Rank:** ${rankTitle.name}${progressLine}\n` +
