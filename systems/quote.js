@@ -37,11 +37,12 @@ const DEFAULT_CATEGORY = 'galauquote';
 async function fetchQuote(category = DEFAULT_CATEGORY) {
     const key = API_KEY;
     if (!key) {
-        log('WARN', '[quote] PITUCODE_API_KEY belum diset di env!');
+        log('WARN', '[quote] PITUCODE_API_KEY belum diset di env! Tambahkan di .env: PITUCODE_API_KEY=7C0dEa40447');
         return null;
     }
 
     const url = `${API_BASE}/${category}?apikey=${encodeURIComponent(key)}`;
+    log('INFO', `[quote] Fetching: ${url}`);
 
     try {
         const controller = new AbortController();
@@ -53,36 +54,49 @@ async function fetchQuote(category = DEFAULT_CATEGORY) {
         });
         clearTimeout(timer);
 
+        log('INFO', `[quote] HTTP ${res.status} dari pitucode (kategori: ${category})`);
+
         if (!res.ok) {
-            log('WARN', `[quote] API HTTP ${res.status} untuk kategori "${category}"`);
+            const body = await res.text().catch(() => '');
+            log('WARN', `[quote] API error HTTP ${res.status}: ${body.slice(0, 200)}`);
             return null;
         }
 
-        const json = await res.json();
+        const raw = await res.text();
+        log('INFO', `[quote] Raw response: ${raw.slice(0, 300)}`);
 
-        // pitucode API biasanya return { status, result/data/quote }
+        let json;
+        try { json = JSON.parse(raw); } catch (_) {
+            // Response mungkin plain text (bukan JSON)
+            if (raw && raw.trim()) return { text: raw.trim(), author: null, source: null };
+            log('WARN', '[quote] Response bukan JSON dan kosong');
+            return null;
+        }
+
         // Flexible parsing — ambil teks quote dari berbagai kemungkinan format
         let text = null;
         if (typeof json === 'string') text = json;
-        else if (json.result) text = typeof json.result === 'string' ? json.result : (json.result.quote || json.result.text || json.result.content || JSON.stringify(json.result));
-        else if (json.data) text = typeof json.data === 'string' ? json.data : (json.data.quote || json.data.text || json.data.content || JSON.stringify(json.data));
+        else if (json.result) text = typeof json.result === 'string' ? json.result : (json.result.quote || json.result.text || json.result.content || json.result.message || JSON.stringify(json.result));
+        else if (json.data) text = typeof json.data === 'string' ? json.data : (json.data.quote || json.data.text || json.data.content || json.data.message || JSON.stringify(json.data));
         else if (json.quote) text = json.quote;
         else if (json.text) text = json.text;
         else if (json.content) text = json.content;
         else if (json.message) text = json.message;
+        else if (json.kata) text = json.kata;
+        else if (json.quotes) text = typeof json.quotes === 'string' ? json.quotes : JSON.stringify(json.quotes);
 
         if (!text) {
-            log('WARN', `[quote] Format response tidak dikenali: ${JSON.stringify(json).slice(0, 200)}`);
+            log('WARN', `[quote] Tidak bisa extract teks dari response: ${JSON.stringify(json).slice(0, 300)}`);
             return null;
         }
 
         return {
             text: String(text).trim(),
-            author: json.author || json.result?.author || json.data?.author || null,
-            source: json.source || json.result?.source || json.data?.source || json.result?.anime || null,
+            author: json.author || json.result?.author || json.data?.author || json.pengarang || null,
+            source: json.source || json.result?.source || json.data?.source || json.result?.anime || json.sumber || null,
         };
     } catch (e) {
-        log('WARN', `[quote] fetchQuote error: ${e.message}`);
+        log('WARN', `[quote] fetchQuote error: ${e.name === 'AbortError' ? 'timeout (10s)' : e.message}`);
         return null;
     }
 }
