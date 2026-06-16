@@ -390,13 +390,9 @@ async function handleRobloxCommand(interaction) {
         embed.setImage(avatarUrl);
     }
 
-    // Send the main embed with canvas
-    await interaction.editReply({ embeds: [embed], files, components: [row] });
-
-    // Send item list as a clean follow-up — grouped by type
+    // Item list as compact INLINE embed fields, grouped by type (3 columns)
     const allItems = (avatar?.assets || []);
     if (allItems.length) {
-        // Group by type name
         const grouped = {};
         for (const a of allItems) {
             const type = a.assetType?.name || ASSET_TYPE_SHORT[a.assetType?.id || 0] || 'Other';
@@ -404,34 +400,17 @@ async function handleRobloxCommand(interaction) {
             grouped[type].push(a);
         }
 
-        let body = '';
-        for (const [type, list] of Object.entries(grouped)) {
-            body += `\n**${type}**\n`;
-            for (const a of list) {
-                const name = a.name && !a.name.startsWith('Item ') ? a.name : `Asset ${a.id}`;
-                body += `• [${name}](https://www.roblox.com/catalog/${a.id})\n`;
-            }
-        }
-
-        // Split into chunks (Discord 2000 char limit) on line boundaries
-        const lines = body.trim().split('\n');
-        const chunks = [];
-        let cur = `📋 **Item List — ${allItems.length} items**\n`;
-        for (const line of lines) {
-            if ((cur + '\n' + line).length > 1900) {
-                chunks.push(cur);
-                cur = '';
-            }
-            cur += (cur ? '\n' : '') + line;
-        }
-        if (cur.trim()) chunks.push(cur);
-
-        for (const chunk of chunks) {
-            await interaction.followUp({ content: chunk }).catch(() => {});
+        const entries = Object.entries(grouped).slice(0, 24); // max 25 fields total
+        for (const [type, list] of entries) {
+            let val = list
+                .map(a => `[${(a.name || 'Asset').slice(0, 40)}](https://www.roblox.com/catalog/${a.id})`)
+                .join('\n');
+            if (val.length > 1024) val = val.slice(0, 1010) + '\n…';
+            embed.addFields({ name: type, value: val, inline: true });
         }
     }
 
-    return;
+    return interaction.editReply({ embeds: [embed], files, components: [row] });
 }
 
 // ==================== EXPORTS ====================
