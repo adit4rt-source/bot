@@ -129,7 +129,7 @@ function buildQuizEmbed(puzzle, category, reward) {
     if (puzzle.question) desc += `**${puzzle.question}**\n`;
     if (puzzle.hint) desc += `\n💡 Hint: *${puzzle.hint}*\n`;
     desc += `\n🪙 **Hadiah: ${reward.toLocaleString('id-ID')} Money**`;
-    desc += `\n⏱️ Waktu: **60 detik**`;
+    desc += `\n⏱️ Berakhir: <t:${Math.floor((Date.now() + 60000) / 1000)}:R>`;
     desc += `\n\n-# Ketik jawabanmu langsung di chat!`;
 
     embed.setDescription(desc);
