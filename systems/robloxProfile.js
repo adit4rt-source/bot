@@ -51,17 +51,17 @@ async function getUserProfile(userId) {
 }
 
 async function getAvatarDetails(userId) {
-    // Retry up to 3 times — Roblox avatar endpoint can rate-limit (429)
-    for (let attempt = 0; attempt < 3; attempt++) {
-        const data = await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`);
-        if (data && data.assets && data.assets.length) return data;
-        // wait a bit before retry
-        await new Promise(r => setTimeout(r, 600));
-    }
-    // Final fallback: try the currently-wearing endpoint (asset IDs only)
-    const worn = await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/currently-wearing`);
-    if (worn && worn.assetIds && worn.assetIds.length) {
-        return { assets: worn.assetIds.map(id => ({ id, name: `Item ${id}`, assetType: { id: 0 } })) };
+    // Try official Roblox first, then roproxy mirror (no rate-limit), with retries.
+    const hosts = [
+        'https://avatar.roblox.com',
+        'https://avatar.roproxy.com',
+    ];
+    for (const host of hosts) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const data = await robloxFetch(`${host}/v1/users/${userId}/avatar`);
+            if (data && data.assets && data.assets.length) return data;
+            await new Promise(r => setTimeout(r, 400));
+        }
     }
     return null;
 }
@@ -302,9 +302,8 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
         const nameW = ctx.measureText(itemName).width;
         ctx.fillText(itemName, x + (ITEM_SIZE - nameW) / 2, y + ITEM_SIZE + 18);
 
-        // Item type label (small)
-        const typeId = item.assetType?.id || 0;
-        const label = ASSET_TYPE_SHORT[typeId] || 'Item';
+        // Item type label (small) — prefer real assetType name from API
+        const label = item.assetType?.name || ASSET_TYPE_SHORT[item.assetType?.id || 0] || 'Item';
         ctx.fillStyle = '#E2231A';
         ctx.font = 'bold 10px sans-serif';
         const labelW = ctx.measureText(label).width;
@@ -391,30 +390,41 @@ async function handleRobloxCommand(interaction) {
     // Send the main embed with canvas
     await interaction.editReply({ embeds: [embed], files, components: [row] });
 
-    // Send item list as follow-up message(s) — split if too long
+    // Send item list as a clean follow-up — grouped by type
     const allItems = (avatar?.assets || []);
     if (allItems.length) {
-        const itemLines = allItems.map(a => {
-            const type = ASSET_TYPE_SHORT[a.assetType?.id || 0] || 'Item';
-            const name = a.name || 'Unknown';
-            return `• **${type}:** [${name}](https://www.roblox.com/catalog/${a.id})`;
-        });
+        // Group by type name
+        const grouped = {};
+        for (const a of allItems) {
+            const type = a.assetType?.name || ASSET_TYPE_SHORT[a.assetType?.id || 0] || 'Other';
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push(a);
+        }
 
-        // Split into chunks of ~1900 chars (Discord message limit 2000)
+        let body = '';
+        for (const [type, list] of Object.entries(grouped)) {
+            body += `\n**${type}**\n`;
+            for (const a of list) {
+                const name = a.name && !a.name.startsWith('Item ') ? a.name : `Asset ${a.id}`;
+                body += `• [${name}](https://www.roblox.com/catalog/${a.id})\n`;
+            }
+        }
+
+        // Split into chunks (Discord 2000 char limit) on line boundaries
+        const lines = body.trim().split('\n');
         const chunks = [];
-        let cur = '📋 **Item List:**\n';
-        for (const line of itemLines) {
+        let cur = `📋 **Item List — ${allItems.length} items**\n`;
+        for (const line of lines) {
             if ((cur + '\n' + line).length > 1900) {
                 chunks.push(cur);
                 cur = '';
             }
             cur += (cur ? '\n' : '') + line;
         }
-        if (cur) chunks.push(cur);
+        if (cur.trim()) chunks.push(cur);
 
-        // Send each chunk as a follow-up message
         for (const chunk of chunks) {
-            await interaction.followUp({ content: chunk, ephemeral: false }).catch(() => {});
+            await interaction.followUp({ content: chunk }).catch(() => {});
         }
     }
 
