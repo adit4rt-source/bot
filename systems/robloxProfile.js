@@ -51,7 +51,19 @@ async function getUserProfile(userId) {
 }
 
 async function getAvatarDetails(userId) {
-    return await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`);
+    // Retry up to 3 times — Roblox avatar endpoint can rate-limit (429)
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const data = await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`);
+        if (data && data.assets && data.assets.length) return data;
+        // wait a bit before retry
+        await new Promise(r => setTimeout(r, 600));
+    }
+    // Final fallback: try the currently-wearing endpoint (asset IDs only)
+    const worn = await robloxFetch(`https://avatar.roblox.com/v1/users/${userId}/currently-wearing`);
+    if (worn && worn.assetIds && worn.assetIds.length) {
+        return { assets: worn.assetIds.map(id => ({ id, name: `Item ${id}`, assetType: { id: 0 } })) };
+    }
+    return null;
 }
 
 async function getAvatarThumbnail(userId) {
