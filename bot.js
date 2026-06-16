@@ -293,6 +293,13 @@ const { handleWelcome, handleGoodbye } = require('./systems/welcomer');
 client.once(Events.ClientReady, async () => {
     await cacheAllGuildInvites(client);
     console.log('📨 Invite cache loaded for all guilds');
+
+    // Start auto-quote scheduler
+    try {
+        const { startAutoQuote } = require('./systems/quote');
+        startAutoQuote(client);
+        console.log('💬 Auto-quote scheduler started');
+    } catch (_) {}
 });
 
 client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) => {

@@ -870,6 +870,12 @@ async function routeInteraction(interaction) {
             return handleQrCommand(interaction);
         }
 
+        // ================= QUOTE =================
+        if (command === 'quote') {
+            const { handleQuoteCommand } = require('../systems/quote');
+            return handleQuoteCommand(interaction);
+        }
+
         // ================= AFK =================
         if (command === 'afk') {
             const { handleAfkCommand } = require('../systems/afk');
@@ -1544,6 +1550,14 @@ async function routeInteraction(interaction) {
         // --- WELCOMER PANEL BUTTONS ---
         if (isWelcomerPanelButton(interaction.customId)) {
             return handleWelcomerButton(interaction);
+        }
+
+        // --- QUOTE BUTTONS ---
+        if (interaction.customId.startsWith('quote_')) {
+            const { isQuoteButton, handleQuoteButton } = require('../systems/quote');
+            if (isQuoteButton(interaction.customId)) {
+                return handleQuoteButton(interaction);
+            }
         }
 
         // --- SELF-ROLES PANEL BUTTONS ---

@@ -91,6 +91,19 @@ const commands = [
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
+    new SlashCommandBuilder().setName('quote').setDescription('💬 Random Quote — Galau, Motivasi, Bucin, Bijak, Anime, dll')
+        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quote').setRequired(false)
+            .addChoices(
+                { name: '💔 Galau', value: 'galauquote' },
+                { name: '🔥 Motivasi', value: 'motivasi' },
+                { name: '💕 Bucin', value: 'bucin' },
+                { name: '🧠 Bijak', value: 'bijak' },
+                { name: '🕌 Islami', value: 'islami' },
+                { name: '🎌 Anime', value: 'anime' },
+                { name: '💻 Programming', value: 'programming' },
+                { name: '🤔 Truth', value: 'truth' },
+                { name: '🎯 Dare', value: 'dare' },
+            )),
     new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
         .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
             .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
