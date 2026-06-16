@@ -368,18 +368,10 @@ async function handleRobloxCommand(interaction) {
         created ? `📅 Joined <t:${Math.floor(created.getTime() / 1000)}:D>` : '',
         profile.description ? `> ${profile.description.slice(0, 100)}${profile.description.length > 100 ? '...' : ''}` : '',
         `👗 **${assetIds.length}** items equipped`,
-        '',
-        `🎮 **Pakai outfit ini di Catalog Avatar Creator:**`,
-        `Buka game → menu **Search by Username** → ketik \`${profile.name}\` → pakai/beli semua item sekaligus!`,
     ].filter(Boolean).join('\n');
     embed.setDescription(desc);
 
-    const CAC_URL = 'https://www.roblox.com/games/4391382519/Catalog-Avatar-Creator';
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('🎮 Catalog Avatar Creator')
-            .setStyle(ButtonStyle.Link)
-            .setURL(CAC_URL),
         new ButtonBuilder()
             .setLabel('🔗 Profil')
             .setStyle(ButtonStyle.Link)
@@ -408,7 +400,7 @@ async function handleRobloxCommand(interaction) {
             grouped[type].push(a);
         }
 
-        const entries = Object.entries(grouped).slice(0, 23); // leave room for asset-IDs field
+        const entries = Object.entries(grouped).slice(0, 24); // max 25 fields total
         for (const [type, list] of entries) {
             let val = list
                 .map(a => `[${(a.name || 'Asset').slice(0, 40)}](https://www.roblox.com/catalog/${a.id})`)
@@ -416,11 +408,6 @@ async function handleRobloxCommand(interaction) {
             if (val.length > 1024) val = val.slice(0, 1010) + '\n…';
             embed.addFields({ name: type, value: val, inline: true });
         }
-
-        // Copyable asset ID list (for games that import by ID)
-        let idBlock = '```\n' + assetIds.join(', ') + '\n```';
-        if (idBlock.length > 1024) idBlock = '```\n' + assetIds.join(', ').slice(0, 1000) + '...\n```';
-        embed.addFields({ name: '🆔 Asset IDs (copy)', value: idBlock, inline: false });
     }
 
     return interaction.editReply({ embeds: [embed], files, components: [row] });
