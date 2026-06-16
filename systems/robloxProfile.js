@@ -95,107 +95,135 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
     const items = (avatar && avatar.assets) || [];
     const itemCount = items.length;
 
-    // Layout
-    const COLS = 4;
+    // Layout — wide landscape card
+    const COLS = 5;
     const ROWS = Math.max(2, Math.ceil(itemCount / COLS));
-    const ITEM_SIZE = 120;
-    const ITEM_PAD = 10;
-    const AVATAR_W = 300;
-    const HEADER_H = 80;
+    const ITEM_SIZE = 140;
+    const ITEM_PAD = 12;
+    const LABEL_H = 36; // space for item name + type
+    const AVATAR_W = 320;
+    const AVATAR_H = 380;
+    const HEADER_H = 90;
+    const SIDE_PAD = 30;
+
     const GRID_W = COLS * (ITEM_SIZE + ITEM_PAD) + ITEM_PAD;
-    const GRID_H = ROWS * (ITEM_SIZE + 28 + ITEM_PAD) + ITEM_PAD;
-    const W = AVATAR_W + GRID_W + 40;
-    const H = Math.max(HEADER_H + 320 + 20, HEADER_H + GRID_H + 20);
+    const GRID_H = ROWS * (ITEM_SIZE + LABEL_H + ITEM_PAD) + ITEM_PAD;
+    const W = AVATAR_W + GRID_W + SIDE_PAD * 3;
+    const H = Math.max(HEADER_H + AVATAR_H + 60, HEADER_H + GRID_H + 30);
 
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
     // Background gradient
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#1a1a2e');
-    bg.addColorStop(0.5, '#16213e');
-    bg.addColorStop(1, '#0f3460');
+    bg.addColorStop(0, '#0f0c29');
+    bg.addColorStop(0.5, '#1a1a3e');
+    bg.addColorStop(1, '#24243e');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
+    // Subtle grid pattern overlay
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    for (let gx = 0; gx < W; gx += 40) {
+        ctx.fillRect(gx, 0, 1, H);
+    }
+    for (let gy = 0; gy < H; gy += 40) {
+        ctx.fillRect(0, gy, W, 1);
+    }
+
     // Header bar
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, 0, W, HEADER_H);
 
-    // Username + display name
+    // Display name (large)
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillText(profile.displayName || profile.name, 20, 35);
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = '16px sans-serif';
-    ctx.fillText(`@${profile.name}`, 20, 60);
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText(profile.displayName || profile.name, SIDE_PAD, 40);
 
-    // Roblox badge
+    // Username
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`@${profile.name}`, SIDE_PAD, 68);
+
+    // Roblox badge (top right)
     ctx.fillStyle = '#E2231A';
-    ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 16px sans-serif';
     const badgeText = 'ROBLOX';
-    const badgeW = ctx.measureText(badgeText).width + 16;
-    const badgeX = W - badgeW - 15;
+    const badgeW = ctx.measureText(badgeText).width + 20;
+    const badgeX = W - badgeW - SIDE_PAD;
     ctx.beginPath();
-    ctx.roundRect(badgeX, 15, badgeW, 24, 4);
+    ctx.roundRect(badgeX, 20, badgeW, 30, 6);
     ctx.fill();
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(badgeText, badgeX + 8, 33);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(badgeText, badgeX + 10, 40);
 
-    // Avatar image (left side)
-    const avatarX = 15;
-    const avatarY = HEADER_H + 10;
-    const avatarSize = 280;
+    // Avatar (left, large)
+    const avatarX = SIDE_PAD;
+    const avatarY = HEADER_H + 15;
+
+    // Avatar background card
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath();
+    ctx.roundRect(avatarX, avatarY, AVATAR_W - 30, AVATAR_H, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
     if (avatarUrl) {
         try {
             const img = await loadImage(avatarUrl);
-            // Rounded rect clip for avatar
+            const imgSize = AVATAR_H - 20;
+            const imgX = avatarX + ((AVATAR_W - 30) - imgSize) / 2;
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(avatarX, avatarY, avatarSize, avatarSize, 16);
+            ctx.roundRect(avatarX + 4, avatarY + 4, AVATAR_W - 38, AVATAR_H - 8, 14);
             ctx.clip();
-            ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize);
+            ctx.drawImage(img, imgX, avatarY + 10, imgSize, imgSize);
             ctx.restore();
-            // Border
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(avatarX, avatarY, avatarSize, avatarSize, 16);
-            ctx.stroke();
         } catch (_) {}
     }
 
     // Bio under avatar
+    const bioY = avatarY + AVATAR_H + 16;
     if (profile.description) {
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = '13px sans-serif';
+        const bio = profile.description.slice(0, 50) + (profile.description.length > 50 ? '...' : '');
+        ctx.fillText(bio, avatarX, bioY);
+    }
+
+    // Joined date
+    const created = profile.created ? new Date(profile.created) : null;
+    if (created) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.font = '12px sans-serif';
-        const bio = profile.description.slice(0, 60) + (profile.description.length > 60 ? '...' : '');
-        ctx.fillText(bio, avatarX, avatarY + avatarSize + 20);
+        ctx.fillText(`Joined ${created.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`, avatarX, bioY + 18);
     }
 
     // Item grid (right side)
-    const gridX = AVATAR_W + 25;
-    const gridY = HEADER_H + 10;
+    const gridX = AVATAR_W + SIDE_PAD;
+    const gridStartY = HEADER_H + 15;
 
     // "Currently Wearing" label
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(`👗 Currently Wearing (${itemCount} items)`, gridX, gridY);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(`👗 Currently Wearing (${itemCount} items)`, gridX, gridStartY + 4);
 
-    const startY = gridY + 20;
+    const startY = gridStartY + 24;
 
     for (let i = 0; i < itemCount && i < COLS * ROWS; i++) {
         const item = items[i];
         const col = i % COLS;
         const row = Math.floor(i / COLS);
         const x = gridX + col * (ITEM_SIZE + ITEM_PAD);
-        const y = startY + row * (ITEM_SIZE + 28 + ITEM_PAD);
+        const y = startY + row * (ITEM_SIZE + LABEL_H + ITEM_PAD);
 
         // Item card background
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillStyle = 'rgba(255,255,255,0.07)';
         ctx.beginPath();
-        ctx.roundRect(x, y, ITEM_SIZE, ITEM_SIZE + 24, 8);
+        ctx.roundRect(x, y, ITEM_SIZE, ITEM_SIZE + LABEL_H, 10);
         ctx.fill();
 
         // Item thumbnail
@@ -205,34 +233,33 @@ async function generateRobloxCard({ profile, avatar, avatarUrl, itemThumbnails }
                 const img = await loadImage(thumbUrl);
                 ctx.save();
                 ctx.beginPath();
-                ctx.roundRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8, 6);
+                ctx.roundRect(x + 6, y + 6, ITEM_SIZE - 12, ITEM_SIZE - 12, 8);
                 ctx.clip();
-                ctx.drawImage(img, x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+                ctx.drawImage(img, x + 6, y + 6, ITEM_SIZE - 12, ITEM_SIZE - 12);
                 ctx.restore();
             } catch (_) {
-                // Placeholder
-                ctx.fillStyle = 'rgba(255,255,255,0.05)';
-                ctx.fillRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+                ctx.fillStyle = 'rgba(255,255,255,0.04)';
+                ctx.fillRect(x + 6, y + 6, ITEM_SIZE - 12, ITEM_SIZE - 12);
             }
         } else {
-            ctx.fillStyle = 'rgba(255,255,255,0.05)';
-            ctx.fillRect(x + 4, y + 4, ITEM_SIZE - 8, ITEM_SIZE - 8);
+            ctx.fillStyle = 'rgba(255,255,255,0.04)';
+            ctx.fillRect(x + 6, y + 6, ITEM_SIZE - 12, ITEM_SIZE - 12);
         }
+
+        // Item name (truncated)
+        const itemName = (item.name || 'Unknown').slice(0, 14) + ((item.name || '').length > 14 ? '..' : '');
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.font = '11px sans-serif';
+        const nameW = ctx.measureText(itemName).width;
+        ctx.fillText(itemName, x + (ITEM_SIZE - nameW) / 2, y + ITEM_SIZE + 14);
 
         // Item type label
         const typeId = item.assetType?.id || 0;
         const label = ASSET_TYPE_SHORT[typeId] || 'Item';
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
         ctx.font = '10px sans-serif';
         const labelW = ctx.measureText(label).width;
-        ctx.fillText(label, x + (ITEM_SIZE - labelW) / 2, y + ITEM_SIZE + 14);
-    }
-
-    // If more items than grid can show
-    if (itemCount > COLS * ROWS) {
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`+${itemCount - COLS * ROWS} more items...`, gridX, startY + ROWS * (ITEM_SIZE + 28 + ITEM_PAD) + 10);
+        ctx.fillText(label, x + (ITEM_SIZE - labelW) / 2, y + ITEM_SIZE + 28);
     }
 
     return canvas.toBuffer('image/png');
@@ -292,6 +319,23 @@ async function handleRobloxCommand(interaction) {
         `👗 **${assetIds.length}** items equipped`,
     ].filter(Boolean).join('\n');
     embed.setDescription(desc);
+
+    // Item list with names + catalog links (below the canvas image)
+    const allItems = (avatar?.assets || []);
+    if (allItems.length) {
+        let itemDesc = allItems
+            .slice(0, 20)
+            .map(a => {
+                const type = ASSET_TYPE_SHORT[a.assetType?.id || 0] || 'Item';
+                const name = (a.name || 'Unknown').slice(0, 30);
+                return `• **${type}:** [${name}](https://www.roblox.com/catalog/${a.id})`;
+            })
+            .join('\n');
+        if (allItems.length > 20) itemDesc += `\n*+${allItems.length - 20} more...*`;
+        // Discord field value limit 1024
+        if (itemDesc.length > 1024) itemDesc = itemDesc.slice(0, 1020) + '...';
+        embed.addFields({ name: '📋 Item List', value: itemDesc, inline: false });
+    }
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
