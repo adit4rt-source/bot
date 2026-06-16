@@ -257,42 +257,56 @@ function buildLesson(topic, part) {
 // ==================== RENDER ====================
 const LBL = ['🇦', '🇧', '🇨', '🇩'];
 function heartsBar(h) { return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h); }
+function progressBar(cur, total) {
+    const filled = Math.round((cur / total) * 10);
+    return '🟩'.repeat(filled) + '⬜'.repeat(10 - filled);
+}
 
-function renderExercise(session, userId, feedback = '') {
+function renderExercise(session, userId, note = '') {
     const ex = session.exercises[session.current];
-    const head = `${heartsBar(session.hearts)}  •  Soal ${session.current + 1}/${session.exercises.length}${session.extra ? '  •  ⭐2x' : ''}`;
+    const bar = progressBar(session.current, session.exercises.length);
+    const head = `${heartsBar(session.hearts)}  •  Soal ${session.current + 1}/${session.exercises.length}${session.extra ? '  •  ⭐ 2x' : ''}`;
+    const noteLine = note ? `${note}\n\n` : '';
+
     if (ex.type === 'mc') {
-        const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🇬🇧 Pilih Jawaban')
-            .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]} **${o}**`).join('\n'))
+        const embed = new EmbedBuilder().setColor('#1CB0F6')
+            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
+            .setTitle('Pilih jawaban yang benar')
+            .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]}  ${o}`).join('\n'))
             .setFooter({ text: head });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         return { embeds: [embed], components: [row] };
     }
-    const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
-    const builtLine = builtWords.length ? builtWords.map(w => `\`${w}\``).join(' ') : '_( ketuk kata di bawah )_';
+
     if (ex.type === 'arrange') {
-    const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🧩 Susun Kalimat')
-        .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Susun terjemahan Inggris dari:\n**"${ex.promptId}"**\n\n📝 **Jawabanmu:** ${builtLine}`)
-        .setFooter({ text: head });
-    const components = [];
-    let row = new ActionRowBuilder(); let count = 0;
-    ex.tiles.forEach((t, i) => {
-        if (t.used) return;
-        if (count > 0 && count % 5 === 0) { components.push(row); row = new ActionRowBuilder(); }
-        row.addComponents(new ButtonBuilder().setCustomId(`belajar_tile_${i}_${userId}`).setLabel(t.word).setStyle(ButtonStyle.Secondary));
-        count++;
-    });
-    if (row.components.length) components.push(row);
-    components.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`belajar_undo_${userId}`).setLabel('↩️ Hapus').setStyle(ButtonStyle.Danger).setDisabled(ex.built.length === 0),
-        new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel('✅ Cek').setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
-    ));
-    return { embeds: [embed], components: components.slice(0, 5) };
+        const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
+        const builtLine = builtWords.length ? builtWords.map(w => `\`${w}\``).join(' ') : '`___`';
+        const embed = new EmbedBuilder().setColor('#CE82FF')
+            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
+            .setTitle('🧩 Susun kalimatnya')
+            .setDescription(`${bar}\n\n${noteLine}Terjemahkan ke Inggris:\n**${ex.promptId}**\n\n📝 ${builtLine}`)
+            .setFooter({ text: head });
+        const components = [];
+        let row = new ActionRowBuilder(); let count = 0;
+        ex.tiles.forEach((t, i) => {
+            if (t.used) return;
+            if (count > 0 && count % 5 === 0) { components.push(row); row = new ActionRowBuilder(); }
+            row.addComponents(new ButtonBuilder().setCustomId(`belajar_tile_${i}_${userId}`).setLabel(t.word).setStyle(ButtonStyle.Secondary));
+            count++;
+        });
+        if (row.components.length) components.push(row);
+        components.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`belajar_undo_${userId}`).setLabel('↩️ Hapus').setStyle(ButtonStyle.Danger).setDisabled(ex.built.length === 0),
+            new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel('✅ Cek Jawaban').setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
+        ));
+        return { embeds: [embed], components: components.slice(0, 5) };
     }
 
     // match
-    const embed = new EmbedBuilder().setColor('#58CC02').setTitle('🔗 Pasangkan Kata')
-        .setDescription((feedback ? feedback + '\n━━━━━━━━━━\n' : '') + `Cocokkan kata Inggris dengan artinya.\n\n✅ Cocok: **${ex.matched.length}/${ex.pairs.length}**`)
+    const embed = new EmbedBuilder().setColor('#FF9600')
+        .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
+        .setTitle('🔗 Pasangkan kata yang cocok')
+        .setDescription(`${bar}\n\n${noteLine}Ketuk kata Indonesia lalu pasangan Inggrisnya.\n\n✅ Cocok: **${ex.matched.length}/${ex.pairs.length}**`)
         .setFooter({ text: head });
     const leftRow = new ActionRowBuilder();
     ex.left.forEach((pairIdx, slot) => {
@@ -397,7 +411,7 @@ async function handleBelajarCommand(interaction) {
     return interaction.reply(buildChapterPanel(interaction.guild.id, interaction.user.id));
 }
 
-function finishLesson(interaction, session, ownerId, guildId, success) {
+function buildFinishPayload(session, ownerId, guildId, success) {
     sessions.delete(`${guildId}_${ownerId}`);
     const topic = TOPIC_BY_ID[session.topicId];
     if (success) {
@@ -419,7 +433,7 @@ function finishLesson(interaction, session, ownerId, guildId, success) {
             .setTitle('🎉 Part Selesai!')
             .setDescription(
                 `${topic.emoji} **${topic.title}** — Part ${session.part}${session.extra ? ' 🌟' : ''}\n\n` +
-                `✅ Benar: **${session.correct}/${session.exercises.length}**\n` +
+                `✅ Benar: **${session.correct}/${session.exercises.length}**  ${heartsBar(session.hearts)}\n` +
                 `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**${session.extra ? '  *(2x Extra!)*' : ''}` +
                 (topicDone ? `\n\n🏆 **Topik selesai!** Topik berikutnya terbuka!` : nextPartUnlocked ? `\n\n🔓 **Part ${session.part + 1} terbuka!**` : '')
             );
@@ -427,22 +441,35 @@ function finishLesson(interaction, session, ownerId, guildId, success) {
             new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Lihat Part').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        return { embeds: [embed], components: [row] };
     }
     const embed = new EmbedBuilder().setColor('#FF4B4B').setTitle('💔 Nyawa Habis!')
-        .setDescription(`Kamu kehabisan nyawa di **${topic.title}** Part ${session.part}.\nBenar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya! 💪`);
+        .setDescription(`Kamu kehabisan nyawa di **${topic.title}** Part ${session.part}.\n✅ Benar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya, kamu pasti bisa! 💪`);
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Part').setStyle(ButtonStyle.Secondary),
     );
-    return interaction.update({ embeds: [embed], components: [row] });
+    return { embeds: [embed], components: [row] };
 }
 
-function advance(interaction, session, ownerId, guildId, feedback) {
-    session.current++;
-    if (session.hearts <= 0) return finishLesson(interaction, session, ownerId, guildId, false);
-    if (session.current >= session.exercises.length) return finishLesson(interaction, session, ownerId, guildId, true);
-    return interaction.update(renderExercise(session, ownerId, feedback));
+// Tampilkan layar feedback singkat (✅/❌) lalu lanjut ke soal berikutnya.
+async function resolveAnswer(interaction, session, ownerId, guildId, correct, answerText) {
+    if (correct) session.correct++; else session.hearts--;
+
+    const fbEmbed = correct
+        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut ke soal berikutnya...')
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban yang benar:\n${tileText(answerText)}`);
+    await interaction.update({ embeds: [fbEmbed], components: [] });
+
+    const delay = correct ? 900 : 1800;
+    setTimeout(() => {
+        session.current++;
+        let payload;
+        if (session.hearts <= 0) payload = buildFinishPayload(session, ownerId, guildId, false);
+        else if (session.current >= session.exercises.length) payload = buildFinishPayload(session, ownerId, guildId, true);
+        else payload = renderExercise(session, ownerId);
+        interaction.editReply(payload).catch(() => {});
+    }, delay);
 }
 
 async function handleBelajarButton(interaction) {
@@ -483,10 +510,7 @@ async function handleBelajarButton(interaction) {
     if (customId.startsWith('belajar_ans_')) {
         const chosen = parseInt(parts[2]);
         const correct = chosen === ex.correctIndex;
-        let fb;
-        if (correct) { session.correct++; fb = `✅ **Benar!** ${tileText(ex.options[ex.correctIndex])}`; }
-        else { session.hearts--; fb = `❌ **Salah!** Jawaban: ${tileText(ex.options[ex.correctIndex])}`; }
-        return advance(interaction, session, ownerId, guildId, fb);
+        return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.options[ex.correctIndex]);
     }
     if (customId.startsWith('belajar_tile_')) {
         const idx = parseInt(parts[2]);
@@ -502,42 +526,36 @@ async function handleBelajarButton(interaction) {
         const answer = ex.built.map(i => ex.tiles[i].word).join(' ').toLowerCase().trim();
         const correctSentence = ex.correctWords.join(' ').toLowerCase().trim();
         const correct = answer === correctSentence;
-        let fb;
-        if (correct) { session.correct++; fb = `✅ **Benar!** ${tileText(ex.correctWords.join(' '))}`; }
-        else { session.hearts--; fb = `❌ **Salah!** Jawaban: ${tileText(ex.correctWords.join(' '))}`; }
-        return advance(interaction, session, ownerId, guildId, fb);
+        return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.correctWords.join(' '));
     }
 
     // Match pairs: tap a tile (L/R)
     if (customId.startsWith('belajar_mt_')) {
         if (ex.type !== 'match') return interaction.deferUpdate();
-        const side = parts[2];          // 'L' or 'R'
+        const side = parts[2];
         const slot = parseInt(parts[3]);
         const pairIdx = (side === 'L' ? ex.left : ex.right)[slot];
         if (ex.matched.includes(pairIdx)) return interaction.deferUpdate();
 
-        if (!ex.sel) {
-            ex.sel = { side, slot, pairIdx };
-            return interaction.update(renderExercise(session, ownerId));
-        }
-        // same side → ganti pilihan
-        if (ex.sel.side === side) {
-            ex.sel = { side, slot, pairIdx };
-            return interaction.update(renderExercise(session, ownerId));
-        }
-        // sisi berbeda → cek cocok
+        if (!ex.sel) { ex.sel = { side, slot, pairIdx }; return interaction.update(renderExercise(session, ownerId)); }
+        if (ex.sel.side === side) { ex.sel = { side, slot, pairIdx }; return interaction.update(renderExercise(session, ownerId)); }
+
         const isMatch = ex.sel.pairIdx === pairIdx;
         ex.sel = null;
         if (isMatch) {
             ex.matched.push(pairIdx);
             if (ex.matched.length >= ex.pairs.length) {
-                session.correct++;
-                return advance(interaction, session, ownerId, guildId, `✅ **Semua pasangan cocok!**`);
+                // Selesai semua pasangan → benar → layar feedback lalu lanjut
+                return resolveAnswer(interaction, session, ownerId, guildId, true, 'Semua pasangan cocok!');
             }
-            return interaction.update(renderExercise(session, ownerId));
+            return interaction.update(renderExercise(session, ownerId, '✅ Cocok!'));
         }
-        // salah → flash (tanpa kurangi nyawa, biar ramah)
-        return interaction.update(renderExercise(session, ownerId, '❌ Belum cocok, coba lagi!'));
+        // Salah → kurangi nyawa (konsisten)
+        session.hearts--;
+        if (session.hearts <= 0) {
+            return interaction.update(buildFinishPayload(session, ownerId, guildId, false));
+        }
+        return interaction.update(renderExercise(session, ownerId, '❌ Belum cocok! -1 ❤️'));
     }
 }
 
