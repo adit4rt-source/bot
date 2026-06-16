@@ -107,28 +107,38 @@ async function resolveCobalt(videoUrl) {
                 });
                 clearTimeout(timer);
 
-                if (!res.ok) continue;
+                if (!res.ok) {
+                    log('INFO', `[videoDownloader] ${instance} → HTTP ${res.status} (skip)`);
+                    continue;
+                }
                 const json = await res.json();
 
                 // Success responses (v10+)
                 if ((json.status === 'tunnel' || json.status === 'redirect' || json.status === 'stream') && json.url) {
+                    log('INFO', `[videoDownloader] ✅ ${instance} berhasil resolve video`);
                     return { videoUrl: json.url, filename: json.filename || null };
                 }
 
                 // Picker (carousel — e.g. Instagram multi-photo/video)
                 if (json.status === 'picker' && Array.isArray(json.picker)) {
                     const vid = json.picker.find(p => p.type === 'video') || json.picker[0];
-                    if (vid && vid.url) return { videoUrl: vid.url, filename: vid.filename || null };
+                    if (vid && vid.url) {
+                        log('INFO', `[videoDownloader] ✅ ${instance} berhasil resolve (picker)`);
+                        return { videoUrl: vid.url, filename: vid.filename || null };
+                    }
                 }
 
                 // Older API format (v7/v8): { status: "stream"/"redirect", url: "..." }
                 if (json.url && !json.status) {
+                    log('INFO', `[videoDownloader] ✅ ${instance} berhasil (legacy format)`);
                     return { videoUrl: json.url, filename: null };
                 }
 
-                // Error — try next endpoint/instance
+                // Error response — log and try next
+                const errMsg = json.error?.code || json.text || json.status || 'unknown';
+                log('INFO', `[videoDownloader] ${instance} → error: ${errMsg}`);
             } catch (e) {
-                // Timeout / network error — try next
+                log('INFO', `[videoDownloader] ${instance} → ${e.name === 'AbortError' ? 'timeout' : e.message}`);
                 continue;
             }
         }
