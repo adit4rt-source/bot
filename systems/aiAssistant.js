@@ -37,8 +37,8 @@ function setAiSetting(guildId, key, value) {
 function getConfig() {
     return {
         apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
-        baseURL: (process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1').replace(/\/$/, ''),
-        model: process.env.AI_MODEL || 'gpt-4o-mini',
+        baseURL: (process.env.AI_BASE_URL || 'https://api.deepseek.com/v1').replace(/\/$/, ''),
+        model: process.env.AI_MODEL || 'deepseek-chat',
         maxTokens: parseInt(process.env.AI_MAX_TOKENS || '800', 10),
         contextChars: parseInt(process.env.AI_CONTEXT_CHARS || '22000', 10),
     };
