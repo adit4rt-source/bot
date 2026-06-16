@@ -19,8 +19,8 @@ const API_BASE = 'https://api.pitucode.com/puzzle';
 const API_KEY = process.env.PITUCODE_API_KEY || '';
 
 const ANSWER_TIMEOUT = 60_000; // 60 seconds to answer
-const REWARD_MIN = 1500;
-const REWARD_MAX = 4000;
+const REWARD_MIN = 500;
+const REWARD_MAX = 2000;
 
 // ==================== CATEGORIES ====================
 const CATEGORIES = {
