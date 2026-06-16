@@ -40,8 +40,6 @@ async function fetchQuote(category = DEFAULT_CATEGORY) {
     }
 
     const url = `${API_BASE}/${category}?apikey=${encodeURIComponent(key)}`;
-    log('INFO', `[quote] Fetching: ${url}`);
-
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 10000);
@@ -52,21 +50,16 @@ async function fetchQuote(category = DEFAULT_CATEGORY) {
         });
         clearTimeout(timer);
 
-        log('INFO', `[quote] HTTP ${res.status} dari pitucode (kategori: ${category})`);
-
         if (res.status === 404) {
-            log('WARN', `[quote] Kategori "${category}" tidak tersedia di pitucode API (404)`);
             return { text: null, _notFound: true };
         }
 
         if (!res.ok) {
-            const body = await res.text().catch(() => '');
-            log('WARN', `[quote] API error HTTP ${res.status}: ${body.slice(0, 200)}`);
+            log('WARN', `[quote] API HTTP ${res.status} untuk kategori "${category}"`);
             return null;
         }
 
         const raw = await res.text();
-        log('INFO', `[quote] Raw response: ${raw.slice(0, 300)}`);
 
         let json;
         try { json = JSON.parse(raw); } catch (_) {
