@@ -6,21 +6,86 @@
 // Progress (part selesai + XP) tersimpan permanen. Unlock bertahap.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, incrementUserStat } = require('../database');
+const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
 // ==================== DATABASE ====================
 db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (guildId TEXT, userId TEXT, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0, PRIMARY KEY (guildId, userId))`);
 db.exec(`CREATE TABLE IF NOT EXISTS belajar_done (guildId TEXT, userId TEXT, partKey TEXT, PRIMARY KEY (guildId, userId, partKey))`);
+try { db.exec("ALTER TABLE belajar_progress ADD COLUMN streak INTEGER DEFAULT 0"); } catch (_) {}
+try { db.exec("ALTER TABLE belajar_progress ADD COLUMN lastDay TEXT DEFAULT ''"); } catch (_) {}
 
+function jakartaDate(offsetDays = 0) {
+    return new Date(Date.now() + offsetDays * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+function ensureRow(guildId, userId) {
+    db.prepare("INSERT OR IGNORE INTO belajar_progress (guildId, userId, maxUnit, xp, streak, lastDay) VALUES (?, ?, 0, 0, 0, '')").run(guildId, userId);
+}
 function getXP(guildId, userId) {
     const r = db.prepare('SELECT xp FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId);
     return r ? r.xp : 0;
 }
 function addXP(guildId, userId, amount) {
-    const cur = getXP(guildId, userId);
-    db.prepare('INSERT OR REPLACE INTO belajar_progress (guildId, userId, maxUnit, xp) VALUES (?, ?, 0, ?)').run(guildId, userId, cur + amount);
+    ensureRow(guildId, userId);
+    db.prepare('UPDATE belajar_progress SET xp = xp + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+}
+function studyLevel(xp) { return Math.floor((xp || 0) / 500) + 1; }
+function getStudyStats(guildId, userId) {
+    ensureRow(guildId, userId);
+    const r = db.prepare('SELECT xp, streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId) || { xp: 0, streak: 0, lastDay: '' };
+    return { xp: r.xp || 0, streak: r.streak || 0, lastDay: r.lastDay || '', level: studyLevel(r.xp) };
+}
+function updateStreak(guildId, userId) {
+    ensureRow(guildId, userId);
+    const today = jakartaDate();
+    const r = db.prepare('SELECT streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (r.lastDay === today) return r.streak; // sudah belajar hari ini
+    const yesterday = jakartaDate(-1);
+    const newStreak = (r.lastDay === yesterday) ? (r.streak || 0) + 1 : 1;
+    db.prepare('UPDATE belajar_progress SET streak = ?, lastDay = ? WHERE guildId = ? AND userId = ?').run(newStreak, today, guildId, userId);
+    return newStreak;
+}
+
+// ==================== ACHIEVEMENTS ====================
+const ACHIEVEMENTS = [
+    { id: 'first', emoji: '🌱', name: 'Langkah Pertama', xp: 20, desc: 'Selesaikan 1 part' },
+    { id: 'perfect', emoji: '💯', name: 'Sempurna!', xp: 30, desc: 'Selesai part tanpa salah (nyawa penuh)' },
+    { id: 'streak7', emoji: '🔥', name: 'Rajin 7 Hari', xp: 70, desc: 'Streak belajar 7 hari' },
+    { id: 'streak30', emoji: '🏆', name: 'Master 30 Hari', xp: 300, desc: 'Streak belajar 30 hari' },
+    { id: 'correct100', emoji: '🎯', name: '100 Jawaban Benar', xp: 100, desc: 'Total 100 jawaban benar' },
+    { id: 'bab1', emoji: '🎓', name: 'Tamat BAB 1', xp: 500, desc: 'Selesaikan semua topik BAB 1' },
+];
+const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+
+function hasAch(guildId, userId, achId) {
+    return !!db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(guildId, userId, `ach:${achId}`);
+}
+function grantAch(guildId, userId, achId) {
+    db.prepare('INSERT OR IGNORE INTO belajar_done (guildId, userId, partKey) VALUES (?, ?, ?)').run(guildId, userId, `ach:${achId}`);
+}
+function allTopicsDone(guildId, userId) {
+    return TOPICS.every(t => topicDoneCount(guildId, userId, t.id) >= t.parts);
+}
+// Cek achievement baru; return array {emoji,name,xp}
+function checkAchievements(guildId, userId, ctx) {
+    const unlocked = [];
+    const tryGrant = (id, cond) => {
+        if (cond && !hasAch(guildId, userId, id)) {
+            grantAch(guildId, userId, id);
+            const a = ACH_BY_ID[id];
+            addXP(guildId, userId, a.xp);
+            unlocked.push(a);
+        }
+    };
+    const totalCorrect = getUserStat(guildId, userId, 'belajar_correct') || 0;
+    tryGrant('first', true);
+    tryGrant('perfect', ctx.perfect);
+    tryGrant('streak7', (ctx.streak || 0) >= 7);
+    tryGrant('streak30', (ctx.streak || 0) >= 30);
+    tryGrant('correct100', totalCorrect >= 100);
+    tryGrant('bab1', allTopicsDone(guildId, userId));
+    return unlocked;
 }
 function isPartDone(guildId, userId, topicId, part) {
     return !!db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(guildId, userId, `${topicId}:${part}`);
@@ -339,7 +404,7 @@ function topicUnlocked(guildId, userId, index) {
 }
 
 function buildChapterPanel(guildId, userId) {
-    const xp = getXP(guildId, userId);
+    const st = getStudyStats(guildId, userId);
     const lines = TOPICS.map((t, idx) => {
         const done = topicDoneCount(guildId, userId, t.id);
         const unlocked = topicUnlocked(guildId, userId, idx);
@@ -349,8 +414,11 @@ function buildChapterPanel(guildId, userId) {
     const embed = new EmbedBuilder()
         .setColor('#1CB0F6')
         .setTitle('📘 BAB 1 — Bahasa Inggris Dasar')
-        .setDescription(`Total XP Belajar: ⭐ **${xp}**\n\n${lines.join('\n')}\n\n🔜 *BAB 2 — Coming Soon*\n-# Pilih topik yang terbuka untuk lihat part-nya.`)
-        .setFooter({ text: 'Selesaikan semua part untuk membuka topik berikutnya' });
+        .setDescription(
+            `📊 Level **${st.level}**  •  ⭐ **${st.xp}** XP  •  🔥 Streak **${st.streak}** hari\n\n` +
+            `${lines.join('\n')}\n\n🔜 *BAB 2 — Coming Soon*\n-# Pilih topik terbuka, atau Review/Speed/Peringkat di bawah.`
+        )
+        .setFooter({ text: 'Belajar tiap hari untuk menjaga streak! 🔥' });
 
     const rows = [];
     let row = new ActionRowBuilder();
@@ -366,7 +434,34 @@ function buildChapterPanel(guildId, userId) {
             .setDisabled(!unlocked));
     });
     if (row.components.length) rows.push(row);
+    // Extra actions row (max 5 component rows total)
+    if (rows.length < 5) {
+        rows.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`belajar_review_${userId}`).setLabel('🔄 Review').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_speed_${userId}`).setLabel('⚡ Speed Round').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_lb_${userId}`).setLabel('🏆 Peringkat').setStyle(ButtonStyle.Secondary),
+        ));
+    }
     return { embeds: [embed], components: rows.slice(0, 5) };
+}
+
+function buildLeaderboardPanel(guildId, userId, guild) {
+    const rows = db.prepare('SELECT userId, xp FROM belajar_progress WHERE guildId = ? AND xp > 0 ORDER BY xp DESC LIMIT 10').all(guildId);
+    const medals = ['🥇', '🥈', '🥉'];
+    const lines = rows.length ? rows.map((r, i) => {
+        const tag = medals[i] || `**${i + 1}.**`;
+        const name = guild?.members?.cache?.get(r.userId)?.user?.username || `User`;
+        const lv = studyLevel(r.xp);
+        return `${tag} <@${r.userId}> — Lv.${lv} • ⭐ ${r.xp} XP`;
+    }).join('\n') : '*Belum ada yang belajar. Jadilah yang pertama!*';
+    const myRank = db.prepare('SELECT COUNT(*) AS c FROM belajar_progress WHERE guildId = ? AND xp > (SELECT xp FROM belajar_progress WHERE guildId = ? AND userId = ?)').get(guildId, guildId, userId).c + 1;
+    const myXp = getXP(guildId, userId);
+    const embed = new EmbedBuilder()
+        .setColor('#FFD700')
+        .setTitle('🏆 Peringkat XP Belajar')
+        .setDescription(`${lines}\n\n-# Peringkat kamu: **#${myRank}** (⭐ ${myXp} XP)`);
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+    return { embeds: [embed], components: [row] };
 }
 
 function buildTopicPanel(guildId, userId, topic) {
@@ -413,12 +508,15 @@ async function handleBelajarCommand(interaction) {
 
 function buildFinishPayload(session, ownerId, guildId, success) {
     sessions.delete(`${guildId}_${ownerId}`);
-    const topic = TOPIC_BY_ID[session.topicId];
-    if (success) {
-        markPartDone(guildId, ownerId, session.topicId, session.part);
-        const mult = session.extra ? 2 : 1;
-        const xpGain = session.correct * 10 * mult;
-        const moneyGain = session.correct * 100 * mult;
+
+    // ---- Speed Round finish (lag-tolerant: ukur waktu di server, tanpa countdown) ----
+    if (session.speed) {
+        const elapsed = Math.max(1, Math.round((Date.now() - session.startTime) / 1000));
+        const streak = updateStreak(guildId, ownerId);
+        const base = session.correct * 50;
+        const speedBonus = session.correct === session.exercises.length && elapsed < 60 ? 500 : 0;
+        const moneyGain = base + speedBonus;
+        const xpGain = session.correct * 5;
         addXP(guildId, ownerId, xpGain);
         try {
             const u = getOrCreateUser(guildId, ownerId);
@@ -426,35 +524,87 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
             incrementUserStat(guildId, ownerId, 'belajar_correct', session.correct);
         } catch (_) {}
-        const nextPartUnlocked = session.part < topic.parts;
-        const topicDone = topicDoneCount(guildId, ownerId, session.topicId) >= topic.parts;
-        const embed = new EmbedBuilder()
-            .setColor('#58CC02')
-            .setTitle('🎉 Part Selesai!')
+        const embed = new EmbedBuilder().setColor('#FF9600').setTitle('⚡ Speed Round Selesai!')
             .setDescription(
-                `${topic.emoji} **${topic.title}** — Part ${session.part}${session.extra ? ' 🌟' : ''}\n\n` +
-                `✅ Benar: **${session.correct}/${session.exercises.length}**  ${heartsBar(session.hearts)}\n` +
-                `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**${session.extra ? '  *(2x Extra!)*' : ''}` +
-                (topicDone ? `\n\n🏆 **Topik selesai!** Topik berikutnya terbuka!` : nextPartUnlocked ? `\n\n🔓 **Part ${session.part + 1} terbuka!**` : '')
+                `✅ Benar: **${session.correct}/${session.exercises.length}**\n` +
+                `⏱️ Waktu: **${elapsed} detik**\n` +
+                `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**` +
+                (speedBonus ? `\n🔥 **BONUS KILAT +500** (sempurna & cepat!)` : '') +
+                `\n🔥 Streak belajar: **${streak} hari**`
             );
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Lihat Part').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`belajar_speed_${ownerId}`).setLabel('⚡ Lagi').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
+        );
+        return { embeds: [embed], components: [row] };
+    }
+
+    const topic = TOPIC_BY_ID[session.topicId];
+    if (success) {
+        const isReview = !!session.review;
+        if (!isReview) markPartDone(guildId, ownerId, session.topicId, session.part);
+        const mult = (session.extra ? 2 : 1) * (isReview ? 0.5 : 1);
+        const xpGain = Math.round(session.correct * 10 * mult);
+        const moneyGain = Math.round(session.correct * 100 * mult);
+        addXP(guildId, ownerId, xpGain);
+        try {
+            const u = getOrCreateUser(guildId, ownerId);
+            u.balance += moneyGain;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
+            incrementUserStat(guildId, ownerId, 'belajar_correct', session.correct);
+        } catch (_) {}
+
+        // Streak harian + achievements
+        const streak = updateStreak(guildId, ownerId);
+        const perfect = !isReview && session.hearts === HEARTS_MAX && session.correct === session.exercises.length;
+        const newAch = checkAchievements(guildId, ownerId, { streak, perfect });
+
+        const nextPartUnlocked = !isReview && session.part < topic.parts;
+        const topicDone = !isReview && topicDoneCount(guildId, ownerId, session.topicId) >= topic.parts;
+        let desc =
+            `${topic.emoji} **${topic.title}** — ${isReview ? '🔄 Review' : `Part ${session.part}${session.extra ? ' 🌟' : ''}`}\n\n` +
+            `✅ Benar: **${session.correct}/${session.exercises.length}**  ${heartsBar(session.hearts)}\n` +
+            `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**${session.extra && !isReview ? '  *(2x Extra!)*' : ''}${isReview ? '  *(Review 0.5x)*' : ''}\n` +
+            `🔥 Streak belajar: **${streak} hari**`;
+        if (perfect) desc += `\n💯 **PERFECT!** Tanpa salah!`;
+        if (topicDone) desc += `\n\n🏆 **Topik selesai!** Topik berikutnya terbuka!`;
+        else if (nextPartUnlocked) desc += `\n\n🔓 **Part ${session.part + 1} terbuka!**`;
+        if (newAch.length) desc += `\n\n🎖️ **Achievement baru:**\n` + newAch.map(a => `${a.emoji} **${a.name}** (+${a.xp} XP)`).join('\n');
+
+        const embed = new EmbedBuilder().setColor('#58CC02').setTitle(isReview ? '🔄 Review Selesai!' : '🎉 Part Selesai!').setDescription(desc);
+        const row = new ActionRowBuilder().addComponents(
+            isReview
+                ? new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Primary)
+                : new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Lihat Part').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
         );
         return { embeds: [embed], components: [row] };
     }
     const embed = new EmbedBuilder().setColor('#FF4B4B').setTitle('💔 Nyawa Habis!')
-        .setDescription(`Kamu kehabisan nyawa di **${topic.title}** Part ${session.part}.\n✅ Benar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya, kamu pasti bisa! 💪`);
+        .setDescription(`Kamu kehabisan nyawa di **${topic.title}**${session.review ? ' (Review)' : ` Part ${session.part}`}.\n✅ Benar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya, kamu pasti bisa! 💪`);
+    const retryBtn = session.review
+        ? new ButtonBuilder().setCustomId(`belajar_review_${ownerId}`).setLabel('🔁 Review Lagi').setStyle(ButtonStyle.Success)
+        : new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success);
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Part').setStyle(ButtonStyle.Secondary),
+        retryBtn,
+        new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row] };
 }
 
 // Tampilkan layar feedback singkat (✅/❌) lalu lanjut ke soal berikutnya.
 async function resolveAnswer(interaction, session, ownerId, guildId, correct, answerText) {
-    if (correct) session.correct++; else session.hearts--;
+    if (correct) session.correct++;
+    else if (!session.speed) session.hearts--;
+
+    // Speed Round: lanjut instan tanpa layar feedback (biar waktu adil)
+    if (session.speed) {
+        session.current++;
+        const payload = session.current >= session.exercises.length
+            ? buildFinishPayload(session, ownerId, guildId, true)
+            : renderExercise(session, ownerId);
+        return interaction.update(payload);
+    }
 
     const fbEmbed = correct
         ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut ke soal berikutnya...')
@@ -484,6 +634,31 @@ async function handleBelajarButton(interaction) {
 
     if (customId.startsWith('belajar_home_')) {
         return interaction.update(buildChapterPanel(guildId, ownerId));
+    }
+    if (customId.startsWith('belajar_lb_')) {
+        return interaction.update(buildLeaderboardPanel(guildId, ownerId, interaction.guild));
+    }
+    if (customId.startsWith('belajar_review_')) {
+        // Pilih topik acak yang sudah ada progress untuk review
+        const completed = TOPICS.filter(t => topicDoneCount(guildId, ownerId, t.id) > 0);
+        if (!completed.length) {
+            return interaction.reply({ content: '🔄 Selesaikan minimal 1 part dulu sebelum bisa Review!', ephemeral: true });
+        }
+        const topic = completed[Math.floor(Math.random() * completed.length)];
+        const session = { topicId: topic.id, part: 0, review: true, extra: false, exercises: buildLesson(topic, 4), current: 0, hearts: HEARTS_MAX, correct: 0 };
+        sessions.set(`${guildId}_${ownerId}`, session);
+        return interaction.update(renderExercise(session, ownerId));
+    }
+    if (customId.startsWith('belajar_speed_')) {
+        // Speed Round: 10 soal kata dari semua topik yang sudah dibuka
+        const pool = [];
+        TOPICS.forEach((t, idx) => { if (topicUnlocked(guildId, ownerId, idx)) pool.push(...t.words); });
+        const words = pool.length ? pool : TOPICS[0].words;
+        const exercises = [];
+        for (let i = 0; i < EX_PER_LESSON; i++) exercises.push(makeWord(words));
+        const session = { speed: true, topicId: null, exercises, current: 0, hearts: HEARTS_MAX, correct: 0, startTime: Date.now() };
+        sessions.set(`${guildId}_${ownerId}`, session);
+        return interaction.update(renderExercise(session, ownerId));
     }
     if (customId.startsWith('belajar_topic_')) {
         const topic = TOPIC_BY_ID[parts[2]];
@@ -561,4 +736,4 @@ async function handleBelajarButton(interaction) {
 
 function isBelajarButton(customId) { return typeof customId === 'string' && customId.startsWith('belajar_'); }
 
-module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, TOPICS };
+module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, TOPICS, getStudyStats };

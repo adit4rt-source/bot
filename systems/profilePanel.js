@@ -63,6 +63,16 @@ function buildProfilePanel(guildId, userId, username, member) {
     const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
     const totalBadges = userAchs.length;
 
+    // Belajar (study) stats
+    let belajarLine = '';
+    try {
+        const { getStudyStats } = require('./belajar');
+        const st = getStudyStats(guildId, userId);
+        if (st.xp > 0 || st.streak > 0) {
+            belajarLine = `\n📚 **Belajar:** Lv.${st.level} • ⭐ ${st.xp} XP • 🔥 ${st.streak} hari`;
+        }
+    } catch (_) {}
+
     const activePet = getPetData(guildId, userId);
     const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level})` : '🐾 Pet'; })() : '*Belum punya pet*';
 
@@ -112,7 +122,7 @@ function buildProfilePanel(guildId, userId, username, member) {
             `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})\n` +
             `${ui.money(userData.balance)}\n` +
             `${streakEmoji} **Streak** ${streakCount} Hari\n` +
-            `${loveEmoji} **Love** ${loveCount}${marriageLine}\n` +
+            `${loveEmoji} **Love** ${loveCount}${marriageLine}${belajarLine}\n` +
             `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}${titleLine}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `${rankTitle.emoji} **Rank:** ${rankTitle.name}${progressLine}\n` +
