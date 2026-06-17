@@ -1544,10 +1544,23 @@ module.exports = function register() {
         return payload;
       };
       
-      if (ex.type === 'mc') {
+      if (ex.type === 'mc' || ex.type === 'listen') {
         const correctIdx = ex.correctIndex;
         itAns.customId = `belajar_ans_${correctIdx}_${u}`;
         await belajar.handleBelajarButton(itAns);
+      } else if (ex.type === 'type') {
+        const itModal = mockInteraction({ userId: u, guildId: g, customId: `belajar_typemodal_${u}` });
+        itModal.fields = { getTextInputValue: (id) => ex.answer };
+        itModal.update = async (payload) => {
+          itModal._cap.update = payload;
+          return payload;
+        };
+        itModal.editReply = async (payload) => {
+          itModal._cap.editReply = payload;
+          finalPayload = payload;
+          return payload;
+        };
+        await belajar.handleBelajarModal(itModal);
       } else if (ex.type === 'arrange') {
         for (const word of ex.correctWords) {
           const tileIdx = ex.tiles.findIndex(t => t.word === word && !t.used);

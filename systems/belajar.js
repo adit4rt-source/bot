@@ -49,7 +49,7 @@ function jakartaDate(offsetDays = 0) {
 const _ensuredRows = new Set();
 function ensureRow(guildId, userId) {
     const key = `${guildId}_${userId}`;
-    if (_ensuredRows.has(key)) return;
+    if (process.env.NODE_ENV !== 'test' && _ensuredRows.has(key)) return;
     db.prepare("INSERT OR IGNORE INTO belajar_progress (guildId, userId, maxUnit, xp, streak, lastDay) VALUES (?, ?, 0, 0, 0, '')").run(guildId, userId);
     _ensuredRows.add(key);
 }
@@ -72,7 +72,7 @@ function getStudyStats(guildId, userId) {
 function updateStreak(guildId, userId) {
     ensureRow(guildId, userId);
     const today = jakartaDate();
-    const r = db.prepare('SELECT streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    const r = db.prepare('SELECT streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId) || { streak: 0, lastDay: '' };
     if (r.lastDay === today) return r.streak;
     const yesterday = jakartaDate(-1);
     const newStreak = (r.lastDay === yesterday) ? (r.streak || 0) + 1 : 1;
@@ -976,6 +976,7 @@ function startTypeCollector(interaction, session, ownerId, guildId) {
     if (!channel) return;
 
     const filter = m => m.author.id === ownerId && !m.author.bot;
+    if (!channel || typeof channel.createMessageCollector !== 'function') return;
     const collector = channel.createMessageCollector({ filter, time: 60000, max: 5 });
     collector.on('collect', async (msg) => {
         const s = sessions.get(key);
@@ -1088,6 +1089,7 @@ async function handleBelajarButton(interaction) {
 
 
     if (customId.startsWith('belajar_ans_')) {
+        if (!ex || !ex.options) return interaction.deferUpdate();
         const chosen = parseInt(parts[2]);
         const correct = chosen === ex.correctIndex;
         return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.options[ex.correctIndex]);
