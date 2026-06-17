@@ -574,12 +574,11 @@ function buildLesson(topic, part, guildId, userId) {
 
 
 // ==================== RENDER ====================
-const LBL = ['①', '②', '③', '④'];
-function heartsBar(h) { return `❤️x${h}`; }
+const LBL = ['🇦', '🇧', '🇨', '🇩'];
+function heartsBar(h) { return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h); }
 function progressBar(cur, total) {
-    const pct = Math.round((cur / total) * 100);
-    const filled = Math.round((cur / total) * 10);
-    return '▰'.repeat(filled) + '▱'.repeat(10 - filled) + ` ${pct}%`;
+    const filled = Math.round((cur / total) * 12);
+    return '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 }
 
 function renderExercise(session, userId, note = '') {
@@ -588,14 +587,14 @@ function renderExercise(session, userId, note = '') {
     const bar = `**Soal ${session.current + 1}/${total}**  ${progressBar(session.current, total)}`;
     const head = `${heartsBar(session.hearts)}${session.extra ? '  •  ⭐ 2x' : ''}${session.review ? '  •  🔄 Review' : ''}${session.speed ? '  •  ⚡ Speed' : ''}`;
     const topic = session.topicId ? TOPIC_BY_ID[session.topicId] : null;
-    const footerText = topic ? `${topic.emoji} ${topic.title} • Part ${session.part || '?'}  |  ${head}` : head;
+    const footerText = `${head}${topic ? `  •  Part ${session.part || '?'}` : ''}`;
     const noteLine = note ? `${note}\n\n` : '';
 
     if (ex.type === 'mc') {
         const embed = new EmbedBuilder().setColor('#1CB0F6')
             .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
             .setTitle('Pilih jawaban yang benar')
-            .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]}  ${o}`).join('\n'))
+            .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         return { embeds: [embed], components: [row] };
@@ -605,7 +604,7 @@ function renderExercise(session, userId, note = '') {
         const embed = new EmbedBuilder().setColor('#FF9600')
             .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
             .setTitle('🎧 Dengarkan dan pilih artinya')
-            .setDescription(`${bar}\n\n${noteLine}🔊 Dengarkan audio lalu pilih **arti** yang benar:\n\n` + ex.options.map((o, i) => `${LBL[i]}  ${o}`).join('\n'))
+            .setDescription(`${bar}\n\n${noteLine}🔊 Dengarkan audio lalu pilih **arti** yang benar:\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         const result = { embeds: [embed], components: [row] };
