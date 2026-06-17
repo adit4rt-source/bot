@@ -1128,5 +1128,23 @@ async function handleBelajarButton(interaction) {
 }
 
 function isBelajarButton(customId) { return typeof customId === 'string' && customId.startsWith('belajar_'); }
+function isBelajarModal(customId) { return typeof customId === 'string' && customId.startsWith('belajar_typemodal_'); }
 
-module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, TOPICS, getStudyStats, sessions };
+async function handleBelajarModal(interaction) {
+    const parts = interaction.customId.split('_');
+    const ownerId = parts[parts.length - 1];
+    const guildId = interaction.guild.id;
+    if (interaction.user.id !== ownerId) return interaction.reply({ content: '❌', ephemeral: true });
+
+    const session = sessions.get(`${guildId}_${ownerId}`);
+    if (!session) return interaction.reply({ content: '⚠️ Sesi sudah berakhir. Ketik `/belajar` untuk mulai lagi.', ephemeral: true });
+    const ex = session.exercises[session.current];
+    if (!ex || ex.type !== 'type') return interaction.reply({ content: '⚠️ Soal sudah berganti.', ephemeral: true });
+
+    const typed = (interaction.fields.getTextInputValue('answer') || '').trim().toLowerCase();
+    const correct = typed === ex.answer;
+    await interaction.deferUpdate();
+    return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.answer);
+}
+
+module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, isBelajarModal, handleBelajarModal, TOPICS, getStudyStats, sessions };
