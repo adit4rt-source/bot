@@ -323,14 +323,15 @@ function buildLesson(topic, part) {
 const LBL = ['🇦', '🇧', '🇨', '🇩'];
 function heartsBar(h) { return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h); }
 function progressBar(cur, total) {
-    const filled = Math.round((cur / total) * 10);
-    return '🟩'.repeat(filled) + '⬜'.repeat(10 - filled);
+    const filled = Math.round((cur / total) * 12);
+    return '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 }
 
 function renderExercise(session, userId, note = '') {
     const ex = session.exercises[session.current];
-    const bar = progressBar(session.current, session.exercises.length);
-    const head = `${heartsBar(session.hearts)}  •  Soal ${session.current + 1}/${session.exercises.length}${session.extra ? '  •  ⭐ 2x' : ''}`;
+    const total = session.exercises.length;
+    const bar = `**Soal ${session.current + 1}/${total}**  ${progressBar(session.current, total)}`;
+    const head = `${heartsBar(session.hearts)}${session.extra ? '  •  ⭐ 2x' : ''}${session.review ? '  •  🔄 Review' : ''}${session.speed ? '  •  ⚡ Speed' : ''}`;
     const noteLine = note ? `${note}\n\n` : '';
 
     if (ex.type === 'mc') {
