@@ -1143,8 +1143,36 @@ async function handleBelajarModal(interaction) {
 
     const typed = (interaction.fields.getTextInputValue('answer') || '').trim().toLowerCase();
     const correct = typed === ex.answer;
-    await interaction.deferUpdate();
-    return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.answer);
+
+    // Modal sudah deferred otomatis setelah submit — langsung pakai editReply
+    if (correct) session.correct++;
+    else if (!session.speed) session.hearts--;
+
+    // Track weak words
+    if (!correct && ex._word) {
+        try { incrementWeakWord(guildId, ownerId, ex._word); } catch (_) {}
+    }
+
+    const fbEmbed = correct
+        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut...')
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban: \`${ex.answer}\``);
+
+    await interaction.update({ embeds: [fbEmbed], components: [], files: [] });
+
+    const isTest = process.env.NODE_ENV === 'test';
+    const delay = isTest ? 0 : (correct ? 900 : 1800);
+
+    const advanceFn = async () => {
+        session.current++;
+        let payload;
+        if (session.hearts <= 0) payload = buildFinishPayload(session, ownerId, guildId, false);
+        else if (session.current >= session.exercises.length) payload = buildFinishPayload(session, ownerId, guildId, true);
+        else payload = renderExercise(session, ownerId);
+        await sendExercise(interaction, session, payload, 'editReply');
+    };
+
+    if (isTest) await advanceFn();
+    else setTimeout(advanceFn, delay);
 }
 
 module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, isBelajarModal, handleBelajarModal, TOPICS, getStudyStats, sessions };
