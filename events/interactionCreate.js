@@ -289,7 +289,9 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
-            // === BONUS: 3 Pokemon Cards from daily ===
+            // === BONUS: 3 Pokemon Cards from daily (toggle: daily_card_bonus) ===
+            const cardBonusEnabled = getSetting(guildId, 'daily_card_bonus', '1') === '1';
+            if (cardBonusEnabled) {
             try {
                 const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
                 const { generateCardImage } = require('../systems/imageRenderer');
@@ -328,6 +330,7 @@ async function routeInteraction(interaction) {
                     console.error('[Daily] pullCards returned empty — cache likely empty. Run: node prefetch-cards.js');
                 }
             } catch (e) { console.error('[Daily] Card bonus FULL error:', e.message, e.stack); }
+            } // end cardBonusEnabled
 
             return interaction.editReply({ embeds: [embed] });
         }

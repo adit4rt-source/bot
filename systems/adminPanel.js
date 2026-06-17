@@ -1202,7 +1202,7 @@ async function handleAdminModal(interaction) {
 
     // === SETTING: Toggles ===
     if (customId === 'admpnl_modal_toggles') {
-        const map = { leveling: 'leveling_enabled', streak: 'streak_enabled', love: 'love_enabled', onboarding: 'onboarding_enabled', tiktok: 'tiktok_convert' };
+        const map = { leveling: 'leveling_enabled', streak: 'streak_enabled', love: 'love_enabled', onboarding: 'onboarding_enabled', tiktok: 'tiktok_convert', dailycard: 'daily_card_bonus' };
         const updated = [];
         for (const [field, key] of Object.entries(map)) {
             const val = (interaction.fields.getTextInputValue(field) || '').trim();
