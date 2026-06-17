@@ -215,14 +215,15 @@ async function routeInteraction(interaction) {
                 .setDescription(
                     `Halo **${interaction.user.username}**! 👋\nPilih kategori di bawah untuk akses cepat:\n\n` +
                     ui.menuList([
-                        { emoji: '💰', label: 'Economy', desc: 'Saldo, Casino, Gift, Redeem, Daily' },
-                        { emoji: '🎣', label: 'Fishing', desc: 'Mancing, koleksi, jual ikan' },
-                        { emoji: '🌾', label: 'Farming', desc: 'Tanam, panen, ternak, craft' },
-                        { emoji: '🐾', label: 'Pet & Battle', desc: 'Pet, Dungeon, Boss, PvP, Expedition' },
-                        { emoji: '📋', label: 'Profil', desc: 'Profile, Achievement, Quest, Streak' },
-                        { emoji: '🛒', label: 'Shop', desc: 'Beli item, rod, bibit, pet' },
+                        { emoji: '💰', label: 'Economy', desc: 'Saldo, Casino, Gift, Daily' },
+                        { emoji: '🎣', label: 'Fishing', desc: 'Mancing, koleksi, jual' },
+                        { emoji: '🌾', label: 'Farming', desc: 'Tanam, panen, ternak' },
+                        { emoji: '🐾', label: 'Pet & Battle', desc: 'Pet, Dungeon, Boss, PvP' },
+                        { emoji: '📋', label: 'Profil', desc: 'Profile, Achievement, Quest' },
+                        { emoji: '📚', label: 'Belajar', desc: 'Bahasa Inggris ala Duolingo' },
+                        { emoji: '🎮', label: 'Fun', desc: 'Ship, Tarot, Games, Roblox, Quote' },
                     ]) +
-                    `\n\n> 💡 *Baru di sini? Ketik \`/help\` untuk panduan lengkap.*`
+                    `\n\n> 💡 *Ketik \`/help\` untuk panduan lengkap.*`
                 )
                 .setFooter({ text: ui.footer(`Saldo: ${userData.balance.toLocaleString('id-ID')} • Lv.${userData.level}`) })
                 .setTimestamp();
@@ -231,13 +232,15 @@ async function routeInteraction(interaction) {
                 new ButtonBuilder().setCustomId('menu_economy').setLabel('💰 Economy').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('menu_fishing').setLabel('🎣 Fishing').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('menu_farming').setLabel('🌾 Farming').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('menu_pet').setLabel('🐾 Pet & Battle').setStyle(ButtonStyle.Primary)
+                new ButtonBuilder().setCustomId('menu_pet').setLabel('🐾 Pet & Battle').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('menu_profile').setLabel('📋 Profil').setStyle(ButtonStyle.Secondary)
             );
             const row2 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('menu_profile').setLabel('📋 Profil').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('menu_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('menu_daily').setLabel('🎁 Daily').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('menu_quest').setLabel('📜 Quest').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId('menu_quest').setLabel('📜 Quest').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('menu_belajar').setLabel('📚 Belajar').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('menu_fun').setLabel('🎮 Fun').setStyle(ButtonStyle.Secondary)
             );
             return interaction.reply({ embeds: [menuEmbed], components: [row1, row2] });
         }
@@ -286,7 +289,9 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
-            // === BONUS: 3 Pokemon Cards from daily ===
+            // === BONUS: 3 Pokemon Cards from daily (toggle: daily_card_bonus) ===
+            const cardBonusEnabled = getSetting(guildId, 'daily_card_bonus', '1') === '1';
+            if (cardBonusEnabled) {
             try {
                 const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
                 const { generateCardImage } = require('../systems/imageRenderer');
@@ -325,6 +330,7 @@ async function routeInteraction(interaction) {
                     console.error('[Daily] pullCards returned empty — cache likely empty. Run: node prefetch-cards.js');
                 }
             } catch (e) { console.error('[Daily] Card bonus FULL error:', e.message, e.stack); }
+            } // end cardBonusEnabled
 
             return interaction.editReply({ embeds: [embed] });
         }
@@ -1857,6 +1863,8 @@ async function routeInteraction(interaction) {
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
             else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';
             else if (cat === 'quest') content = '📜 **Quest:**\n\n> `/quest` — 📜 Quest Panel\n> Misi harian (3/hari) & mingguan (3/minggu)\n> Selesaikan untuk dapat money bonus!\n> Reset setiap 00:00 WIB';
+            else if (cat === 'belajar') content = '📚 **Belajar Bahasa Inggris:**\n\n> `/belajar` — 📚 Pusat Belajar (ala Duolingo)\n> 10 topik, 6 tipe soal, streak harian, XP\n> 🎧 Listening + ✍️ Ketik + 🧩 Susun + 🔗 Pasangkan\n> Speed Round ⚡ + Review 🔄 + Leaderboard 🏆';
+            else if (cat === 'fun') content = '🎮 **Fun & Social:**\n\n> `/ship @a @b` — 💘 Love Calculator (canvas)\n> `/marry @user` — 💍 Lamar seseorang\n> `/divorce` — 💔 Cerai\n> `/tarot` — 🔮 Ramalan Tarot\n> `/games` — 🎮 Quiz 14 kategori (reward money)\n> `/quote` — 💬 Random quotes\n> `/roblox <user>` — 🎮 Lihat avatar Roblox';
             return interaction.reply({ content, ephemeral: true });
         }
 
@@ -1985,6 +1993,11 @@ async function routeInteraction(interaction) {
         }
         if (isWelcomerPanelModal(interaction.customId)) {
             return handleWelcomerModal(interaction);
+        }
+        // --- BELAJAR TYPE MODAL ---
+        if (interaction.customId.startsWith('belajar_typemodal_')) {
+            const { isBelajarModal, handleBelajarModal } = require('../systems/belajar');
+            if (isBelajarModal(interaction.customId)) return handleBelajarModal(interaction);
         }
         // --- TOGEL / LOTTERY MODAL (one-click quick bet) ---
         if (isLotteryModal(interaction.customId)) {
