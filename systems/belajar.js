@@ -5,10 +5,29 @@
 // Latihan: pilihan ganda + susun kalimat (tap tiles). Sistem nyawa ❤️x5.
 // Progress (part selesai + XP) tersimpan permanen. Unlock bertahap.
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
+
+const TTS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
+const _ttsCache = new Map();
+async function getTTS(text) {
+    if (!text || typeof fetch !== 'function') return null;
+    if (_ttsCache.has(text)) return _ttsCache.get(text);
+    try {
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(text)}`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(url, { headers: { 'User-Agent': TTS_UA, Referer: 'https://translate.google.com/' }, signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (_ttsCache.size > 200) _ttsCache.clear();
+        _ttsCache.set(text, buf);
+        return buf;
+    } catch (_) { return null; }
+}
 
 // ==================== DATABASE ====================
 db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (guildId TEXT, userId TEXT, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0, PRIMARY KEY (guildId, userId))`);
@@ -394,20 +413,33 @@ function makeMatch(words) {
     const right = shuffle(pairs.map((_, i) => i));  // EN column order
     return { type: 'match', pairs, left, right, matched: [], sel: null };
 }
+// 🎧 Listening — dengar audio Inggris, pilih arti Indonesia (3 opsi)
+function makeListen(words) {
+    const correct = words[Math.floor(Math.random() * words.length)];
+    const distract = shuffle(words.filter(w => w.en !== correct.en)).slice(0, 2);
+    const opts = shuffle([correct, ...distract]);
+    return { type: 'listen', audioText: correct.en, options: opts.map(w => w.id), correctIndex: opts.findIndex(w => w.en === correct.en) };
+}
+// ✍️ Ketik — tampilkan kata Indonesia, user ketik Inggrisnya di chat
+function makeType(words) {
+    const correct = words[Math.floor(Math.random() * words.length)];
+    return { type: 'type', promptId: correct.id, answer: correct.en.toLowerCase() };
+}
 
-// Kesulitan bertahap: berdasarkan part DAN posisi soal dalam lesson.
-// Soal awal selalu gampang (warmup), makin akhir & makin tinggi part makin sulit.
+// Kesulitan bertahap
 function pickType(part, i) {
-    if (i === 0) return 'word';            // soal 1 selalu kata (paling mudah)
-    if (i === 1) return Math.random() < 0.5 ? 'word' : 'match';
-    const prog = i / (EX_PER_LESSON - 1);  // 0..1 posisi dalam lesson
-    const partF = (part - 1) / 7;          // 0..1 antar part
-    const hard = prog * 0.6 + partF * 0.4; // 0..1 tingkat kesulitan
+    if (i === 0) return 'word';
+    if (i === 1) return Math.random() < 0.5 ? 'word' : 'listen';
+    const prog = i / (EX_PER_LESSON - 1);
+    const partF = (part - 1) / 7;
+    const hard = prog * 0.6 + partF * 0.4;
     const weights = [
-        ['word', (1 - hard) * 55 + 8],
-        ['match', 22 - hard * 8],
-        ['mc', hard * 32 + 6],
-        ['arrange', hard * 48],
+        ['word', (1 - hard) * 40 + 5],
+        ['listen', 18 - hard * 6],
+        ['match', 16 - hard * 6],
+        ['type', hard * 20 + 4],
+        ['mc', hard * 28 + 4],
+        ['arrange', hard * 44],
     ];
     const total = weights.reduce((s, [, w]) => s + Math.max(0, w), 0);
     let r = Math.random() * total;
@@ -420,7 +452,9 @@ function buildLesson(topic, part) {
     for (let i = 0; i < EX_PER_LESSON; i++) {
         const type = pickType(part, i);
         if (type === 'word') ex.push(makeWord(topic.words));
+        else if (type === 'listen') ex.push(makeListen(topic.words));
         else if (type === 'match') ex.push(makeMatch(topic.words));
+        else if (type === 'type') ex.push(makeType(topic.words));
         else if (type === 'arrange') ex.push(makeArrange(topic.phrases));
         else ex.push(makeMC(topic.phrases));
     }
@@ -450,6 +484,27 @@ function renderExercise(session, userId, note = '') {
             .setFooter({ text: head });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         return { embeds: [embed], components: [row] };
+    }
+
+    if (ex.type === 'listen') {
+        const embed = new EmbedBuilder().setColor('#FF9600')
+            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
+            .setTitle('🎧 Dengarkan dan pilih artinya')
+            .setDescription(`${bar}\n\n${noteLine}🔊 Dengarkan audio lalu pilih **arti** yang benar:\n\n` + ex.options.map((o, i) => `${LBL[i]}  ${o}`).join('\n'))
+            .setFooter({ text: head });
+        const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
+        const result = { embeds: [embed], components: [row] };
+        result._ttsText = ex.audioText;
+        return result;
+    }
+
+    if (ex.type === 'type') {
+        const embed = new EmbedBuilder().setColor('#CE82FF')
+            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
+            .setTitle('✍️ Ketik jawabanmu')
+            .setDescription(`${bar}\n\n${noteLine}Tulis dalam bahasa Inggris:\n\n**"${ex.promptId}"**\n\n-# Ketik jawabanmu langsung di chat!`)
+            .setFooter({ text: head });
+        return { embeds: [embed], components: [] };
     }
 
     if (ex.type === 'arrange') {
@@ -706,37 +761,82 @@ async function resolveAnswer(interaction, session, ownerId, guildId, correct, an
     if (correct) session.correct++;
     else if (!session.speed) session.hearts--;
 
-    // Speed Round: lanjut instan tanpa layar feedback (biar waktu adil)
+    // Speed Round: lanjut instan
     if (session.speed) {
         session.current++;
         const payload = session.current >= session.exercises.length
             ? buildFinishPayload(session, ownerId, guildId, true)
             : renderExercise(session, ownerId);
-        return interaction.update(payload);
-    }
-
-    const ex = session.exercises[session.current];
-    let explanation = '';
-    if (ex.type === 'mc' || ex.type === 'arrange') {
-        explanation = `\n\n💡 **Kunci Jawaban:**\n🇬🇧 **Inggris:** ${ex.correctEn}\n🇮🇩 **Indonesia:** ${ex.correctId}`;
-    } else if (ex.type === 'match') {
-        explanation = `\n\n💡 **Pasangan kata yang benar:**\n` + ex.pairs.map(p => `• \`${p.en}\` ⇄ \`${p.id}\``).join('\n');
+        return sendExercise(interaction, session, payload, 'update');
     }
 
     const fbEmbed = correct
-        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription(`Mantap! Lanjut ke soal berikutnya...${explanation}`)
-        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`**Jawaban yang benar:**\n${tileText(answerText)}${explanation}`);
-    await interaction.update({ embeds: [fbEmbed], components: [] });
+        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut...')
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban: ${tileText(answerText)}`);
+    await interaction.update({ embeds: [fbEmbed], components: [], files: [] });
 
-    const delay = process.env.NODE_ENV === 'test' ? 0 : (correct ? 900 : 1800);
-    setTimeout(() => {
+    const isTest = process.env.NODE_ENV === 'test';
+    const delay = isTest ? 0 : (correct ? 900 : 1800);
+
+    const advanceFn = async () => {
         session.current++;
+        const key = `${guildId}_${ownerId}`;
         let payload;
         if (session.hearts <= 0) payload = buildFinishPayload(session, ownerId, guildId, false);
         else if (session.current >= session.exercises.length) payload = buildFinishPayload(session, ownerId, guildId, true);
         else payload = renderExercise(session, ownerId);
-        interaction.editReply(payload).catch(() => {});
-    }, delay);
+        await sendExercise(interaction, session, payload, 'editReply');
+        if (sessions.has(key)) {
+            const nextEx = session.exercises[session.current];
+            if (nextEx && nextEx.type === 'type') startTypeCollector(interaction, session, ownerId, guildId);
+        }
+    };
+
+    if (isTest) await advanceFn();
+    else setTimeout(advanceFn, delay);
+}
+
+// Send exercise — attach TTS audio for 'listen' type
+async function sendExercise(interaction, session, payload, method) {
+    const files = [];
+    if (payload && payload._ttsText) {
+        const buf = await getTTS(payload._ttsText);
+        if (buf) files.push(new AttachmentBuilder(buf, { name: 'listen.mp3' }));
+        delete payload._ttsText;
+    }
+    if (files.length) payload.files = files;
+    try {
+        if (method === 'update') return await interaction.update(payload);
+        if (method === 'editReply') return await interaction.editReply(payload);
+        return await interaction.reply(payload);
+    } catch (e) { /* graceful */ }
+}
+
+// Type collector — listen for typed answers
+const _typeCollectors = new Map();
+function startTypeCollector(interaction, session, ownerId, guildId) {
+    const key = `${guildId}_${ownerId}`;
+    if (_typeCollectors.has(key)) { try { _typeCollectors.get(key).stop(); } catch(_){} }
+    const ex = session.exercises[session.current];
+    if (!ex || ex.type !== 'type') return;
+    const channel = interaction.channel;
+    if (!channel) return;
+
+    const filter = m => m.author.id === ownerId && !m.author.bot;
+    const collector = channel.createMessageCollector({ filter, time: 60000, max: 5 });
+    collector.on('collect', async (msg) => {
+        const s = sessions.get(key);
+        if (!s) { collector.stop(); return; }
+        const curEx = s.exercises[s.current];
+        if (!curEx || curEx.type !== 'type') { collector.stop(); return; }
+        const typed = msg.content.trim().toLowerCase();
+        const correct = typed === curEx.answer;
+        msg.delete().catch(() => {});
+        collector.stop();
+        return resolveAnswer(interaction, s, ownerId, guildId, correct, curEx.answer);
+    });
+    collector.on('end', () => { _typeCollectors.delete(key); });
+    _typeCollectors.set(key, collector);
 }
 
 async function handleBelajarButton(interaction) {
@@ -792,7 +892,10 @@ async function handleBelajarButton(interaction) {
         if (!unlocked) return interaction.reply({ content: '🔒 Part ini masih terkunci. Selesaikan part sebelumnya!', ephemeral: true });
         const session = { topicId, part, extra: topic.extra.includes(part), exercises: buildLesson(topic, part), current: 0, hearts: HEARTS_MAX, correct: 0 };
         sessions.set(`${guildId}_${ownerId}`, session);
-        return interaction.update(renderExercise(session, ownerId));
+        const payload = renderExercise(session, ownerId);
+        await sendExercise(interaction, session, payload, 'update');
+        if (session.exercises[0] && session.exercises[0].type === 'type') startTypeCollector(interaction, session, ownerId, guildId);
+        return;
     }
 
     const session = sessions.get(`${guildId}_${ownerId}`);
