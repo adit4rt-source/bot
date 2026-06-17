@@ -5,7 +5,7 @@
 // Latihan: pilihan ganda + susun kalimat (tap tiles). Sistem nyawa ❤️x5.
 // Progress (part selesai + XP) tersimpan permanen. Unlock bertahap.
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
@@ -502,9 +502,12 @@ function renderExercise(session, userId, note = '') {
         const embed = new EmbedBuilder().setColor('#CE82FF')
             .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
             .setTitle('✍️ Ketik jawabanmu')
-            .setDescription(`${bar}\n\n${noteLine}Tulis dalam bahasa Inggris:\n\n**"${ex.promptId}"**\n\n-# Ketik jawabanmu langsung di chat!`)
+            .setDescription(`${bar}\n\n${noteLine}Tulis dalam bahasa Inggris:\n\n**"${ex.promptId}"**\n\n-# Klik tombol di bawah untuk menjawab`)
             .setFooter({ text: head });
-        return { embeds: [embed], components: [] };
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`belajar_typebtn_${userId}`).setLabel('✍️ Jawab').setStyle(ButtonStyle.Success)
+        );
+        return { embeds: [embed], components: [row] };
     }
 
     if (ex.type === 'arrange') {
@@ -906,6 +909,14 @@ async function handleBelajarButton(interaction) {
         const chosen = parseInt(parts[2]);
         const correct = chosen === ex.correctIndex;
         return resolveAnswer(interaction, session, ownerId, guildId, correct, ex.options[ex.correctIndex]);
+    }
+    if (customId.startsWith('belajar_typebtn_')) {
+        if (ex.type !== 'type') return interaction.deferUpdate();
+        const modal = new ModalBuilder().setCustomId(`belajar_typemodal_${ownerId}`).setTitle('✍️ Ketik Jawaban');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('answer').setLabel(`Bahasa Inggris dari "${ex.promptId}"`).setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ketik jawaban di sini...')
+        ));
+        return interaction.showModal(modal);
     }
     if (customId.startsWith('belajar_tile_')) {
         const idx = parseInt(parts[2]);

@@ -1986,6 +1986,11 @@ async function routeInteraction(interaction) {
         if (isWelcomerPanelModal(interaction.customId)) {
             return handleWelcomerModal(interaction);
         }
+        // --- BELAJAR TYPE MODAL ---
+        if (interaction.customId.startsWith('belajar_typemodal_')) {
+            const { isBelajarModal, handleBelajarModal } = require('../systems/belajar');
+            if (isBelajarModal(interaction.customId)) return handleBelajarModal(interaction);
+        }
         // --- TOGEL / LOTTERY MODAL (one-click quick bet) ---
         if (isLotteryModal(interaction.customId)) {
             return handleLotteryModal(interaction);
