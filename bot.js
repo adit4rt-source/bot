@@ -300,6 +300,12 @@ client.once(Events.ClientReady, async () => {
         startAutoQuote(client);
         console.log('💬 Auto-quote scheduler started');
     } catch (_) {}
+
+    // Auto-post changelog
+    try {
+        const { autoPostChangelog } = require('./systems/changelog');
+        autoPostChangelog(client);
+    } catch (_) {}
 });
 
 client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) => {

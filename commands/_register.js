@@ -122,7 +122,13 @@ const commands = [
         .addStringOption(opt => opt.setName('username').setDescription('Username Roblox').setRequired(true)),
     new SlashCommandBuilder().setName('ship').setDescription('💘 Love Calculator — Hitung kecocokan 2 orang')
         .addUserOption(opt => opt.setName('user1').setDescription('Orang pertama').setRequired(true))
-        .addUserOption(opt => opt.setName('user2').setDescription('Orang kedua (kosong = kamu)').setRequired(false)),
+        .addUserOption(opt => opt.setName('user2').setDescription('Orang kedua (kosong = kamu)').setRequired(false))
+        .addStringOption(opt => opt.setName('tema').setDescription('Tema card (dark/pink/light)').setRequired(false)
+            .addChoices(
+                { name: '🌙 Dark', value: 'dark' },
+                { name: '💗 Pink', value: 'pink' },
+                { name: '☀️ Light', value: 'light' },
+            )),
     new SlashCommandBuilder().setName('marry').setDescription('💍 Lamar seseorang untuk menikah')
         .addUserOption(opt => opt.setName('user').setDescription('Yang mau dilamar').setRequired(true)),
     new SlashCommandBuilder().setName('divorce').setDescription('💔 Cerai dari pasangan saat ini'),

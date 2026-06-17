@@ -132,16 +132,24 @@ function drawBgHearts(ctx, W, H) {
     ctx.globalAlpha = 1;
 }
 
-async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
+async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct, theme = 'dark' }) {
     const W = 860, H = 460;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
+    // Theme colors
+    const THEMES = {
+        dark: { bg: ['#1a0420', '#5c1242', '#8e1538'], glow: 'rgba(255, 90, 138, 0.40)', bar: ['#ffc2d6', '#ff5e8a', '#ff2d6f'], text: '#FFFFFF', heart: '#ff2d6f' },
+        pink: { bg: ['#ffe0ec', '#ffb3d1', '#ff85b5'], glow: 'rgba(255, 60, 100, 0.25)', bar: ['#ff6b9d', '#ff3b7a', '#e91e63'], text: '#4a0e2b', heart: '#e91e63' },
+        light: { bg: ['#f8f9fa', '#e9ecef', '#dee2e6'], glow: 'rgba(255, 80, 120, 0.20)', bar: ['#ff8fa3', '#ff5577', '#e63946'], text: '#212529', heart: '#e63946' },
+    };
+    const t = THEMES[theme] || THEMES.dark;
+
     // Romantic gradient background
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#1a0420');
-    bg.addColorStop(0.5, '#5c1242');
-    bg.addColorStop(1, '#8e1538');
+    bg.addColorStop(0, t.bg[0]);
+    bg.addColorStop(0.5, t.bg[1]);
+    bg.addColorStop(1, t.bg[2]);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -150,14 +158,14 @@ async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
 
     // Center radial glow
     const glow = ctx.createRadialGradient(W / 2, 175, 0, W / 2, 175, 260);
-    glow.addColorStop(0, 'rgba(255, 90, 138, 0.40)');
+    glow.addColorStop(0, t.glow);
     glow.addColorStop(1, 'rgba(255, 90, 138, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
     // Title
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.92)' : t.text;
     ctx.font = `bold 30px ${HEAD_FONT}`;
     ctx.fillText('LOVE CALCULATOR', W / 2, 52);
 
@@ -169,7 +177,7 @@ async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
 
     // Heart in center (sized slightly by score) with strong glow
     const heartSize = 60 + Math.round(pct / 100 * 20);
-    drawHeart(ctx, W / 2, ay - 5, heartSize, '#ff2d6f');
+    drawHeart(ctx, W / 2, ay - 5, heartSize, t.heart);
 
     // Names in pills under avatars
     drawNamePill(ctx, truncate(nameA, 14), 175, ay + r + 40);
@@ -180,7 +188,7 @@ async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(255, 45, 111, 0.8)';
     ctx.shadowBlur = 25;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = t.text;
     ctx.font = `bold 72px ${HEAD_FONT}`;
     ctx.fillText(`${pct}%`, W / 2, 360);
     ctx.restore();
@@ -192,9 +200,9 @@ async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
     ctx.fill();
     const fillW = Math.max(barH, (barW * pct) / 100);
     const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-    grad.addColorStop(0, '#ffc2d6');
-    grad.addColorStop(0.5, '#ff5e8a');
-    grad.addColorStop(1, '#ff2d6f');
+    grad.addColorStop(0, t.bar[0]);
+    grad.addColorStop(0.5, t.bar[1]);
+    grad.addColorStop(1, t.bar[2]);
     ctx.save();
     ctx.shadowColor = 'rgba(255, 45, 111, 0.6)';
     ctx.shadowBlur = 15;
@@ -206,7 +214,7 @@ async function generateShipCard({ nameA, avatarA, nameB, avatarB, pct }) {
     // Comment
     ctx.textAlign = 'center';
     ctx.font = `22px ${SUB_FONT}`;
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.95)' : t.text;
     ctx.fillText(sanitize(loveComment(pct)), W / 2, 440);
 
     return canvas.toBuffer('image/png');
@@ -263,6 +271,7 @@ function sanitize(s) { return String(s || '').replace(/[^\x20-\x7E\u00A0-\u024F]
 async function handleShipCommand(interaction) {
     const userA = interaction.options.getUser('user1', true);
     const userB = interaction.options.getUser('user2') || interaction.user;
+    const theme = interaction.options.getString('tema') || 'dark';
 
     if (userA.id === userB.id) {
         return interaction.reply({ content: '❌ Gak bisa ship orang yang sama! Pilih 2 orang berbeda.', ephemeral: true });
@@ -279,7 +288,7 @@ async function handleShipCommand(interaction) {
         buffer = await generateShipCard({
             nameA, avatarA: userA.displayAvatarURL({ extension: 'png', size: 256 }),
             nameB, avatarB: userB.displayAvatarURL({ extension: 'png', size: 256 }),
-            pct,
+            pct, theme,
         });
     } catch (e) {
         log('WARN', `[social] ship canvas failed: ${e.message}`);
