@@ -1,6 +1,18 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
+// Ensure Git identity is configured locally for Pterodactyl auto-update
+try {
+    const fs = require('fs');
+    if (fs.existsSync('.git')) {
+        const { execSync } = require('child_process');
+        execSync('git config user.name "adit4rt-source"');
+        execSync('git config user.email "adit4rt@icloud.com"');
+    }
+} catch (e) {
+    // Silently ignore
+}
+
 // ================= BOT VERSION =================
 const BOT_VERSION = '3.7.0';
 const BUILD_DATE = '2026-06-11';
