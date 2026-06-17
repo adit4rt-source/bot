@@ -688,20 +688,32 @@ function topicUnlocked(guildId, userId, index) {
 
 function buildChapterPanel(guildId, userId) {
     const st = getStudyStats(guildId, userId);
+
+    // Hitung progress keseluruhan BAB 1
+    const totalParts = TOPICS.reduce((s, t) => s + t.parts, 0);
+    const donePartsTotal = TOPICS.reduce((s, t) => s + topicDoneCount(guildId, userId, t.id), 0);
+    const doneTopics = TOPICS.filter((t, idx) => topicDoneCount(guildId, userId, t.id) >= t.parts).length;
+    const pct = totalParts ? Math.round((donePartsTotal / totalParts) * 100) : 0;
+    const filled = Math.round((pct / 100) * 12);
+    const overallBar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
+
     const lines = TOPICS.map((t, idx) => {
         const done = topicDoneCount(guildId, userId, t.id);
         const unlocked = topicUnlocked(guildId, userId, idx);
         const status = done >= t.parts ? '✅' : unlocked ? '▶️' : '🔒';
-        return `${status} ${t.emoji} **${t.title}** *(${done}/${t.parts})*`;
+        const num = `\`${String(idx + 1).padStart(2, ' ')}\``;
+        return `${num} ${status} ${t.emoji} **${t.title}** *(${done}/${t.parts})*`;
     });
+
     const embed = new EmbedBuilder()
         .setColor('#1CB0F6')
         .setTitle('📘 BAB 1 — Bahasa Inggris Dasar')
         .setDescription(
-            `📊 Level **${st.level}**  •  ⭐ **${st.xp}** XP  •  🔥 Streak **${st.streak}** hari\n\n` +
-            `${lines.join('\n')}\n\n🔜 *BAB 2 — Coming Soon*\n-# Pilih topik terbuka, atau Review/Speed/Peringkat di bawah.`
+            `📊 Level **${st.level}**  •  ⭐ **${st.xp}** XP  •  🔥 Streak **${st.streak}** hari\n` +
+            `📈 Progress BAB 1: \`${overallBar}\` **${pct}%**  *(${doneTopics}/${TOPICS.length} topik)*\n\n` +
+            `${lines.join('\n')}\n\n🔜 *BAB 2 — Coming Soon*`
         )
-        .setFooter({ text: 'Belajar tiap hari untuk menjaga streak! 🔥' });
+        .setFooter({ text: 'Klik nomor topik untuk mulai • Belajar tiap hari untuk jaga streak! 🔥' });
 
     const rows = [];
     let row = new ActionRowBuilder();
@@ -749,6 +761,11 @@ function buildLeaderboardPanel(guildId, userId, guild) {
 
 function buildTopicPanel(guildId, userId, topic) {
     const idx = TOPICS.findIndex(t => t.id === topic.id);
+    const donePartCount = topicDoneCount(guildId, userId, topic.id);
+    const pct = topic.parts ? Math.round((donePartCount / topic.parts) * 100) : 0;
+    const filled = Math.round((pct / 100) * 12);
+    const bar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
+
     const lines = [];
     for (let p = 1; p <= topic.parts; p++) {
         const done = isPartDone(guildId, userId, topic.id, p);
@@ -760,7 +777,10 @@ function buildTopicPanel(guildId, userId, topic) {
     const embed = new EmbedBuilder()
         .setColor('#58CC02')
         .setTitle(`${topic.emoji} ${topic.title}`)
-        .setDescription(`${lines.join('\n')}\n\n-# Tiap part = 10 soal. Part 🌟 kasih reward 2x lipat!`)
+        .setDescription(
+            `📈 Progress: \`${bar}\` **${pct}%**  *(${donePartCount}/${topic.parts} part)*\n\n` +
+            `${lines.join('\n')}\n\n-# Tiap part = 10 soal. Part 🌟 kasih reward 2x lipat!`
+        )
         .setFooter({ text: `BAB 1 • Topik ${idx + 1}/${TOPICS.length}` });
 
     const rows = [];
