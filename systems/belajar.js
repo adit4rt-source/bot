@@ -102,88 +102,158 @@ function topicDoneCount(guildId, userId, topicId) {
 // Tiap topik: parts (jumlah lesson), extra (part bonus 2x), phrases (bank kalimat)
 const TOPICS = [
     { id: 't1', emoji: '🥤', title: 'Menawarkan & menerima minuman', parts: 5, extra: [3], phrases: [
-        { en: 'Would you like a drink', id: 'Mau minum sesuatu' },
-        { en: 'Yes please', id: 'Ya mau' },
-        { en: 'No thank you', id: 'Tidak terima kasih' },
-        { en: 'I would like some water', id: 'Saya mau air putih' },
-        { en: 'Do you want coffee or tea', id: 'Kamu mau kopi atau teh' },
-        { en: 'A cup of coffee please', id: 'Tolong secangkir kopi' },
+        { en: 'Would you like a drink', id: 'Apakah Anda ingin minum' },
+        { en: 'Yes please', id: 'Ya, tolong' },
+        { en: 'No thank you', id: 'Tidak, terima kasih' },
+        { en: 'I would like some water', id: 'Saya ingin air putih' },
+        { en: 'Do you want coffee or tea', id: 'Apakah kamu ingin kopi atau teh' },
+        { en: 'A cup of coffee please', id: 'Secangkir kopi, tolong' },
         { en: 'I am thirsty', id: 'Saya haus' },
-        { en: 'Here is your drink', id: 'Ini minumanmu' },
-        { en: 'Can I have some tea', id: 'Boleh minta teh' },
-        { en: 'Sure here you go', id: 'Tentu silakan' },
+        { en: 'Here is your drink', id: 'Ini minuman Anda' },
+        { en: 'Can I have some tea', id: 'Boleh saya minta teh' },
+        { en: 'Sure here you go', id: 'Tentu, silakan' },
+        { en: 'Would you like some ice', id: 'Apakah Anda ingin es' },
+        { en: 'A bottle of water please', id: 'Sebotol air putih, tolong' },
+        { en: 'I want a cold drink', id: 'Saya ingin minuman dingin' },
+        { en: 'Do you have orange juice', id: 'Apakah Anda punya jus jeruk' },
+        { en: 'I do not like soda', id: 'Saya tidak suka soda' },
+        { en: 'She drinks warm milk', id: 'Dia minum susu hangat' },
+        { en: 'We need more sugar', id: 'Kita butuh lebih banyak gula' },
+        { en: 'Is the tea hot', id: 'Apakah tehnya panas' },
+        { en: 'A glass of milk please', id: 'Segelas susu, tolong' },
+        { en: 'I prefer hot coffee', id: 'Saya lebih suka kopi panas' },
     ]},
     { id: 't2', emoji: '🌍', title: 'Menceritakan dari mana asalmu', parts: 5, extra: [3], phrases: [
-        { en: 'Where are you from', id: 'Kamu berasal dari mana' },
+        { en: 'Where are you from', id: 'Dari mana asalmu' },
         { en: 'I am from Indonesia', id: 'Saya berasal dari Indonesia' },
         { en: 'She is from Japan', id: 'Dia berasal dari Jepang' },
         { en: 'I live in Jakarta', id: 'Saya tinggal di Jakarta' },
         { en: 'I am Indonesian', id: 'Saya orang Indonesia' },
-        { en: 'Where do you live', id: 'Kamu tinggal di mana' },
-        { en: 'He comes from America', id: 'Dia datang dari Amerika' },
+        { en: 'Where do you live', id: 'Di mana kamu tinggal' },
+        { en: 'He comes from America', id: 'Dia berasal dari Amerika' },
         { en: 'My city is beautiful', id: 'Kota saya indah' },
         { en: 'I was born in Bandung', id: 'Saya lahir di Bandung' },
-        { en: 'Which country are you from', id: 'Kamu dari negara mana' },
+        { en: 'Which country are you from', id: 'Dari negara mana asalmu' },
+        { en: 'We live in a village', id: 'Kami tinggal di desa' },
+        { en: 'They are from England', id: 'Mereka berasal dari Inggris' },
+        { en: 'Is this your city', id: 'Apakah ini kotamu' },
+        { en: 'I love my country', id: 'Saya mencintai negara saya' },
+        { en: 'He was born in Bali', id: 'Dia lahir di Bali' },
+        { en: 'Is Indonesia a big country', id: 'Apakah Indonesia negara yang besar' },
+        { en: 'I want to visit Japan', id: 'Saya ingin mengunjungi Jepang' },
+        { en: 'They live in a beautiful town', id: 'Mereka tinggal di kota kecil yang indah' },
+        { en: 'She travels to America', id: 'Dia bepergian ke Amerika' },
+        { en: 'My capital city is big', id: 'Ibu kota saya besar' },
     ]},
     { id: 't3', emoji: '👨‍👩‍👧', title: 'Memperkenalkan diri dan keluarga', parts: 5, extra: [3], phrases: [
         { en: 'My name is Budi', id: 'Nama saya Budi' },
         { en: 'Nice to meet you', id: 'Senang berkenalan denganmu' },
         { en: 'This is my mother', id: 'Ini ibu saya' },
         { en: 'He is my father', id: 'Dia ayah saya' },
-        { en: 'I have two sisters', id: 'Saya punya dua kakak perempuan' },
+        { en: 'I have two sisters', id: 'Saya punya dua saudara perempuan' },
         { en: 'What is your name', id: 'Siapa namamu' },
         { en: 'How old are you', id: 'Berapa umurmu' },
         { en: 'This is my family', id: 'Ini keluarga saya' },
-        { en: 'My brother is tall', id: 'Kakak laki-laki saya tinggi' },
-        { en: 'She is my best friend', id: 'Dia sahabat saya' },
+        { en: 'My brother is tall', id: 'Saudara laki-laki saya tinggi' },
+        { en: 'She is my best friend', id: 'Dia adalah sahabat saya' },
+        { en: 'I have a big family', id: 'Saya memiliki keluarga yang besar' },
+        { en: 'This is my little sister', id: 'Ini adik perempuan saya' },
+        { en: 'Who is that man', id: 'Siapa pria itu' },
+        { en: 'My parents are happy', id: 'Orang tua saya bahagia' },
+        { en: 'He is my grandfather', id: 'Dia kakek saya' },
+        { en: 'Who is your grandmother', id: 'Siapa nenekmu' },
+        { en: 'I have an older brother', id: 'Saya punya kakak laki-laki' },
+        { en: 'My aunt lives in Jakarta', id: 'Bibi saya tinggal di Jakarta' },
+        { en: 'This is my uncle', id: 'Ini paman saya' },
+        { en: 'We love our family', id: 'Kami menyayangi keluarga kami' },
     ]},
     { id: 't4', emoji: '✈️', title: 'Menjelajahi bandara', parts: 8, extra: [3, 6], phrases: [
-        { en: 'Where is the airport', id: 'Di mana bandaranya' },
+        { en: 'Where is the airport', id: 'Di mana bandara' },
         { en: 'Here is my passport', id: 'Ini paspor saya' },
         { en: 'What time is the flight', id: 'Jam berapa penerbangannya' },
-        { en: 'I have one suitcase', id: 'Saya bawa satu koper' },
-        { en: 'Where is the gate', id: 'Di mana gerbangnya' },
+        { en: 'I have one suitcase', id: 'Saya membawa satu koper' },
+        { en: 'Where is the gate', id: 'Di mana pintu gerbangnya' },
         { en: 'The plane is late', id: 'Pesawatnya terlambat' },
         { en: 'I need a ticket', id: 'Saya butuh tiket' },
-        { en: 'My flight is at noon', id: 'Penerbangan saya jam dua belas siang' },
-        { en: 'Can I see your passport', id: 'Boleh saya lihat paspor Anda' },
-        { en: 'Have a safe trip', id: 'Semoga perjalanannya aman' },
+        { en: 'My flight is at noon', id: 'Penerbangan saya tengah hari' },
+        { en: 'Can I see your passport', id: 'Boleh saya melihat paspor Anda' },
+        { en: 'Have a safe trip', id: 'Semoga perjalanan Anda aman' },
+        { en: 'Where is the terminal', id: 'Di mana terminalnya' },
+        { en: 'My luggage is heavy', id: 'Bagasi saya berat' },
+        { en: 'I want a window seat', id: 'Saya ingin kursi dekat jendela' },
+        { en: 'The flight is on time', id: 'Penerbangannya tepat waktu' },
+        { en: 'We are boarding now', id: 'Kita naik pesawat sekarang' },
+        { en: 'Do you have a ticket', id: 'Apakah Anda punya tiket' },
+        { en: 'I lost my suitcase', id: 'Saya kehilangan koper saya' },
+        { en: 'Where is the exit', id: 'Di mana jalan keluarnya' },
+        { en: 'The pilot is ready', id: 'Pilotnya sudah siap' },
+        { en: 'Please show your passport', id: 'Tolong tunjukkan paspor Anda' },
     ]},
     { id: 't5', emoji: '🎨', title: 'Deskripsi kata benda dengan kata sifat', parts: 8, extra: [3, 6], phrases: [
         { en: 'The house is big', id: 'Rumahnya besar' },
-        { en: 'A red car', id: 'Mobil merah' },
+        { en: 'A red car', id: 'Sebuah mobil merah' },
         { en: 'The book is interesting', id: 'Bukunya menarik' },
-        { en: 'She has a small dog', id: 'Dia punya anjing kecil' },
+        { en: 'She has a small dog', id: 'Dia memiliki seekor anjing kecil' },
         { en: 'The weather is hot', id: 'Cuacanya panas' },
-        { en: 'A beautiful flower', id: 'Bunga yang indah' },
+        { en: 'A beautiful flower', id: 'Sebuah bunga yang indah' },
         { en: 'The coffee is sweet', id: 'Kopinya manis' },
         { en: 'The water is cold', id: 'Airnya dingin' },
-        { en: 'A tall man', id: 'Pria yang tinggi' },
+        { en: 'A tall man', id: 'Seorang pria yang tinggi' },
         { en: 'The room is clean', id: 'Kamarnya bersih' },
+        { en: 'The new car is fast', id: 'Mobil baru itu cepat' },
+        { en: 'This bag is expensive', id: 'Tas ini mahal' },
+        { en: 'A dirty glass', id: 'Sebuah gelas kotor' },
+        { en: 'The street is busy', id: 'Jalannya ramai' },
+        { en: 'I have a blue shirt', id: 'Saya punya kemeja biru' },
+        { en: 'The coffee is too hot', id: 'Kopinya terlalu panas' },
+        { en: 'He has a cheap bicycle', id: 'Dia memiliki sepeda murah' },
+        { en: 'My room is quiet', id: 'Kamar saya tenang' },
+        { en: 'This is an easy test', id: 'Ini adalah ujian yang mudah' },
+        { en: 'The water is clean', id: 'Airnya bersih' },
     ]},
     { id: 't6', emoji: '🍽️', title: 'Memesan makanan dan minuman', parts: 8, extra: [3, 6], phrases: [
         { en: 'I would like to order', id: 'Saya ingin memesan' },
-        { en: 'Can I see the menu', id: 'Boleh saya lihat menunya' },
-        { en: 'I want fried rice', id: 'Saya mau nasi goreng' },
+        { en: 'Can I see the menu', id: 'Bolehkah saya melihat menunya' },
+        { en: 'I want fried rice', id: 'Saya ingin nasi goreng' },
         { en: 'One glass of orange juice', id: 'Satu gelas jus jeruk' },
-        { en: 'The bill please', id: 'Minta tagihannya' },
+        { en: 'The bill please', id: 'Tolong minta tagihannya' },
         { en: 'Is it spicy', id: 'Apakah ini pedas' },
         { en: 'This food is delicious', id: 'Makanan ini enak' },
-        { en: 'I would like some soup', id: 'Saya mau sup' },
+        { en: 'I would like some soup', id: 'Saya ingin sup' },
         { en: 'How much is it', id: 'Berapa harganya' },
-        { en: 'No sugar please', id: 'Tanpa gula ya' },
+        { en: 'No sugar please', id: 'Tolong jangan pakai gula' },
+        { en: 'Where is the restaurant', id: 'Di mana restorannya' },
+        { en: 'I want to order chicken', id: 'Saya ingin memesan ayam' },
+        { en: 'The food is too hot', id: 'Makanannya terlalu panas' },
+        { en: 'Can I have a spoon', id: 'Bolehkah saya minta sendok' },
+        { en: 'We want some dessert', id: 'Kami ingin makanan penutup' },
+        { en: 'Where is my fork', id: 'Di mana garpu saya' },
+        { en: 'I want a cup of tea', id: 'Saya ingin secangkir teh' },
+        { en: 'This restaurant is clean', id: 'Restoran ini bersih' },
+        { en: 'Can we have some salt', id: 'Bolehkah kami minta garam' },
+        { en: 'The chicken is delicious', id: 'Ayamnya enak' },
     ]},
     { id: 't7', emoji: '💼', title: 'Kata kerja sekarang untuk profesi', parts: 8, extra: [3, 6], phrases: [
         { en: 'She is a doctor', id: 'Dia seorang dokter' },
         { en: 'He works in a bank', id: 'Dia bekerja di bank' },
         { en: 'I am a teacher', id: 'Saya seorang guru' },
-        { en: 'They are engineers', id: 'Mereka insinyur' },
+        { en: 'They are engineers', id: 'Mereka adalah insinyur' },
         { en: 'She teaches English', id: 'Dia mengajar bahasa Inggris' },
-        { en: 'He drives a taxi', id: 'Dia mengemudi taksi' },
+        { en: 'He drives a taxi', id: 'Dia menyetir taksi' },
         { en: 'What is your job', id: 'Apa pekerjaanmu' },
-        { en: 'He is a police officer', id: 'Dia seorang polisi' },
+        { en: 'He is a police officer', id: 'Dia adalah seorang polisi' },
         { en: 'I help people', id: 'Saya membantu orang' },
         { en: 'We work together', id: 'Kami bekerja bersama' },
+        { en: 'My sister is a nurse', id: 'Saudara perempuan saya seorang perawat' },
+        { en: 'He writes interesting books', id: 'Dia menulis buku-buku menarik' },
+        { en: 'They build big bridges', id: 'Mereka membangun jembatan-jembatan besar' },
+        { en: 'She works at a hospital', id: 'Dia bekerja di rumah sakit' },
+        { en: 'A chef cooks delicious food', id: 'Seorang koki memasak makanan lezat' },
+        { en: 'He is a taxi driver', id: 'Dia seorang sopir taksi' },
+        { en: 'The manager is in the office', id: 'Manajernya ada di kantor' },
+        { en: 'She is a talented artist', id: 'Dia seorang seniman berbakat' },
+        { en: 'We want to be engineers', id: 'Kami ingin menjadi insinyur' },
+        { en: 'A doctor helps sick people', id: 'Seorang dokter membantu orang sakit' },
     ]},
     { id: 't8', emoji: '🏃', title: 'Menggunakan kata kerja sekarang', parts: 8, extra: [3, 6], phrases: [
         { en: 'I eat breakfast every morning', id: 'Saya sarapan setiap pagi' },
@@ -191,11 +261,21 @@ const TOPICS = [
         { en: 'They play football', id: 'Mereka bermain sepak bola' },
         { en: 'He watches television', id: 'Dia menonton televisi' },
         { en: 'We go to school', id: 'Kami pergi ke sekolah' },
-        { en: 'She walks to work', id: 'Dia berjalan kaki ke kantor' },
+        { en: 'She walks to work', id: 'Dia berjalan kaki ke tempat kerja' },
         { en: 'He studies at night', id: 'Dia belajar pada malam hari' },
         { en: 'I do not understand', id: 'Saya tidak mengerti' },
-        { en: 'Do you speak English', id: 'Apakah kamu bisa berbahasa Inggris' },
+        { en: 'Do you speak English', id: 'Apakah kamu berbicara bahasa Inggris' },
         { en: 'She likes music', id: 'Dia suka musik' },
+        { en: 'I listen to the radio', id: 'Saya mendengarkan radio' },
+        { en: 'We speak Indonesian at home', id: 'Kami berbicara bahasa Indonesia di rumah' },
+        { en: 'They run in the park', id: 'Mereka berlari di taman' },
+        { en: 'He writes a letter', id: 'Dia menulis surat' },
+        { en: 'She drives a car', id: 'Dia mengendarai mobil' },
+        { en: 'I swim in the pool', id: 'Saya berenang di kolam' },
+        { en: 'They learn English together', id: 'Mereka belajar bahasa Inggris bersama' },
+        { en: 'She sings a beautiful song', id: 'Dia menyanyikan lagu yang indah' },
+        { en: 'He drinks water after running', id: 'Dia minum air putih setelah berlari' },
+        { en: 'We sleep early at night', id: 'Kami tidur awal pada malam hari' },
     ]},
     { id: 't9', emoji: '🌦️', title: 'Membicarakan tentang cuaca', parts: 8, extra: [3, 6], phrases: [
         { en: 'It is sunny today', id: 'Hari ini cerah' },
@@ -206,36 +286,56 @@ const TOPICS = [
         { en: 'The sky is cloudy', id: 'Langitnya berawan' },
         { en: 'It is windy', id: 'Berangin' },
         { en: 'Take an umbrella', id: 'Bawa payung' },
-        { en: 'What is the weather like', id: 'Bagaimana cuacanya' },
+        { en: 'What is the weather like', id: 'Seperti apa cuacanya' },
         { en: 'Tomorrow will be hot', id: 'Besok akan panas' },
+        { en: 'I see a beautiful rainbow', id: 'Saya melihat pelangi yang indah' },
+        { en: 'The storm is coming', id: 'Badai akan datang' },
+        { en: 'It is warm outside', id: 'Di luar hangat' },
+        { en: 'The snow is white', id: 'Saljunya berwarna putih' },
+        { en: 'Why is the sky dark', id: 'Mengapa langitnya gelap' },
+        { en: 'I like warm weather', id: 'Saya suka cuaca hangat' },
+        { en: 'The wind is very strong', id: 'Anginnya sangat kencang' },
+        { en: 'We walk in the rain', id: 'Kami berjalan di tengah hujan' },
+        { en: 'It is cloudy today', id: 'Hari ini berawan' },
+        { en: 'Take your jacket', id: 'Bawa jaketmu' },
     ]},
     { id: 't10', emoji: '🐶', title: 'Membicarakan tentang hewan peliharaan', parts: 8, extra: [3, 6], phrases: [
-        { en: 'I have a cat', id: 'Saya punya kucing' },
+        { en: 'I have a cat', id: 'Saya memiliki seekor kucing' },
         { en: 'My dog is friendly', id: 'Anjing saya ramah' },
-        { en: 'Do you have a pet', id: 'Apakah kamu punya hewan peliharaan' },
+        { en: 'Do you have a pet', id: 'Apakah kamu memiliki hewan peliharaan' },
         { en: 'The cat is sleeping', id: 'Kucingnya sedang tidur' },
-        { en: 'I love animals', id: 'Saya sayang binatang' },
+        { en: 'I love animals', id: 'Saya menyayangi hewan' },
         { en: 'My rabbit is white', id: 'Kelinci saya berwarna putih' },
         { en: 'The bird can fly', id: 'Burung itu bisa terbang' },
         { en: 'My dog likes to play', id: 'Anjing saya suka bermain' },
-        { en: 'I walk my dog every day', id: 'Saya mengajak anjing jalan setiap hari' },
+        { en: 'I walk my dog every day', id: 'Saya mengajak anjing saya jalan-jalan setiap hari' },
         { en: 'Cats are cute', id: 'Kucing itu lucu' },
+        { en: 'The horse runs fast', id: 'Kuda itu berlari cepat' },
+        { en: 'I feed my fish', id: 'Saya memberi makan ikan saya' },
+        { en: 'The puppy is playing', id: 'Anak anjing itu sedang bermain' },
+        { en: 'Where does the monkey live', id: 'Di mana monyet itu tinggal' },
+        { en: 'She has a beautiful bird', id: 'Dia memiliki burung yang indah' },
+        { en: 'The mouse eats cheese', id: 'Tikus itu makan keju' },
+        { en: 'My horse is black', id: 'Kuda saya berwarna hitam' },
+        { en: 'I have a little hamster', id: 'Saya punya hamster kecil' },
+        { en: 'The dog barks loudly', id: 'Anjing itu menggonggong keras' },
+        { en: 'They love their puppies', id: 'Mereka menyayangi anak anjing mereka' },
     ]},
 ];
 const TOPIC_BY_ID = Object.fromEntries(TOPICS.map(t => [t.id, t]));
 
 // Bank kata level-kata (untuk soal "pilih arti" 3 opsi + match pairs) — lebih mudah
 const WORDS_BY_TOPIC = {
-    t1: [['water','air'],['coffee','kopi'],['tea','teh'],['juice','jus'],['milk','susu'],['sugar','gula'],['drink','minum'],['glass','gelas'],['cup','cangkir'],['cold','dingin']],
-    t2: [['from','dari'],['country','negara'],['city','kota'],['live','tinggal'],['born','lahir'],['home','rumah'],['near','dekat'],['far','jauh'],['place','tempat'],['world','dunia']],
-    t3: [['mother','ibu'],['father','ayah'],['sister','saudari'],['brother','saudara'],['family','keluarga'],['name','nama'],['friend','teman'],['child','anak'],['old','tua'],['young','muda']],
-    t4: [['airport','bandara'],['passport','paspor'],['ticket','tiket'],['flight','penerbangan'],['plane','pesawat'],['bag','tas'],['gate','gerbang'],['seat','kursi'],['luggage','koper'],['trip','perjalanan']],
-    t5: [['big','besar'],['small','kecil'],['hot','panas'],['cold','dingin'],['beautiful','indah'],['new','baru'],['clean','bersih'],['expensive','mahal'],['sweet','manis'],['tall','tinggi']],
-    t6: [['food','makanan'],['rice','nasi'],['soup','sup'],['menu','menu'],['spicy','pedas'],['bill','tagihan'],['eat','makan'],['order','pesan'],['delicious','enak'],['fork','garpu']],
-    t7: [['doctor','dokter'],['teacher','guru'],['engineer','insinyur'],['police','polisi'],['driver','sopir'],['job','pekerjaan'],['work','bekerja'],['bank','bank'],['cook','memasak'],['help','membantu']],
-    t8: [['eat','makan'],['drink','minum'],['read','membaca'],['write','menulis'],['play','bermain'],['walk','berjalan'],['run','berlari'],['study','belajar'],['sleep','tidur'],['watch','menonton']],
-    t9: [['sunny','cerah'],['rain','hujan'],['cold','dingin'],['hot','panas'],['cloudy','berawan'],['windy','berangin'],['snow','salju'],['sky','langit'],['umbrella','payung'],['weather','cuaca']],
-    t10:[['cat','kucing'],['dog','anjing'],['bird','burung'],['fish','ikan'],['rabbit','kelinci'],['pet','peliharaan'],['animal','binatang'],['cute','lucu'],['friendly','ramah'],['tail','ekor']],
+    t1: [['water','air'],['coffee','kopi'],['tea','teh'],['juice','jus'],['milk','susu'],['sugar','gula'],['drink','minum'],['glass','gelas'],['cup','cangkir'],['cold','dingin'],['ice','es'],['lemonade','limun'],['bottle','botol'],['soda','soda'],['orange','jeruk'],['honey','madu'],['warm','hangat'],['hot','panas'],['sweet','manis'],['teapot','teko']],
+    t2: [['from','dari'],['country','negara'],['city','kota'],['live','tinggal'],['born','lahir'],['home','rumah'],['near','dekat'],['far','jauh'],['place','tempat'],['world','dunia'],['village','desa'],['england','inggris'],['capital','ibu kota'],['province','provinsi'],['town','kota kecil'],['visit','mengunjungi'],['travel','bepergian'],['border','perbatasan'],['flag','bendera'],['island','pulau']],
+    t3: [['mother','ibu'],['father','ayah'],['sister','saudari'],['brother','saudara'],['family','keluarga'],['name','nama'],['friend','teman'],['child','anak'],['old','tua'],['young','muda'],['parents','orang tua'],['grandfather','kakek'],['grandmother','nenek'],['uncle','paman'],['aunt','bibi'],['cousin','sepupu'],['son','anak laki-laki'],['daughter','anak perempuan'],['husband','suami'],['wife','istri']],
+    t4: [['airport','bandara'],['passport','paspor'],['ticket','tiket'],['flight','penerbangan'],['plane','pesawat'],['bag','tas'],['gate','gerbang'],['seat','kursi'],['luggage','koper'],['trip','perjalanan'],['terminal','terminal'],['heavy','berat'],['window','jendela'],['boarding','naik pesawat'],['arrival','kedatangan'],['exit','jalan keluar'],['pilot','pilot'],['customs','bea cukai'],['delay','penundaan'],['security','keamanan']],
+    t5: [['big','besar'],['small','kecil'],['hot','panas'],['cold','dingin'],['beautiful','indah'],['new','baru'],['clean','bersih'],['expensive','mahal'],['sweet','manis'],['tall','tinggi'],['fast','cepat'],['dirty','kotor'],['busy','ramai'],['blue','biru'],['cheap','murah'],['quiet','tenang'],['easy','mudah'],['difficult','sulit'],['slow','lambat'],['soft','lembut']],
+    t6: [['food','makanan'],['rice','nasi'],['soup','sup'],['menu','menu'],['spicy','pedas'],['bill','tagihan'],['eat','makan'],['order','pesan'],['delicious','enak'],['fork','garpu'],['chicken','ayam'],['spoon','sendok'],['dessert','makanan penutup'],['restaurant','restoran'],['salt','garam'],['napkin','serbet'],['knife','pisau'],['plate','piring'],['bowl','mangkuk'],['waiter','pelayan']],
+    t7: [['doctor','dokter'],['teacher','guru'],['engineer','insinyur'],['police','polisi'],['driver','sopir'],['job','pekerjaan'],['work','bekerja'],['bank','bank'],['cook','memasak'],['help','membantu'],['nurse','perawat'],['hospital','rumah sakit'],['chef','koki'],['office','kantor'],['manager','manajer'],['artist','seniman'],['singer','penyanyi'],['soldier','tentara'],['farmer','petani'],['writer','penulis']],
+    t8: [['eat','makan'],['drink','minum'],['read','membaca'],['write','menulis'],['play','bermain'],['walk','berjalan'],['run','berlari'],['study','belajar'],['sleep','tidur'],['watch','menonton'],['listen','mendengar'],['speak','berbicara'],['sing','bernyanyi'],['swim','berenang'],['learn','belajar'],['dance','menari'],['jump','melompat'],['drive','mengendarai'],['buy','membeli'],['sell','menjual']],
+    t9: [['sunny','cerah'],['rain','hujan'],['cold','dingin'],['hot','panas'],['cloudy','berawan'],['windy','berangin'],['snow','salju'],['sky','langit'],['umbrella','payung'],['weather','cuaca'],['rainbow','pelangi'],['storm','badai'],['warm','hangat'],['dark','gelap'],['dry','kering'],['jacket','jaket'],['wind','angin'],['cloud','awan'],['season','musim'],['degree','derajat']],
+    t10:[['cat','kucing'],['dog','anjing'],['bird','burung'],['fish','ikan'],['rabbit','kelinci'],['pet','peliharaan'],['animal','binatang'],['cute','lucu'],['friendly','ramah'],['tail','ekor'],['horse','kuda'],['feed','memberi makan'],['puppy','anak anjing'],['monkey','monyet'],['mouse','tikus'],['hamster','hamster'],['bark','menggonggong'],['cheese','keju'],['wild','liar'],['cage','kandang']],
 };
 for (const t of TOPICS) t.words = (WORDS_BY_TOPIC[t.id] || []).map(([en, id]) => ({ en, id }));
 
@@ -257,8 +357,12 @@ function makeMC(pool) {
     const enToId = Math.random() < 0.5;
     const distract = shuffle(pool.filter(p => p.en !== correct.en)).slice(0, 3);
     const opts = shuffle([correct, ...distract]);
-    if (enToId) return { type: 'mc', prompt: `Apa arti kalimat ini?\n${tileText(correct.en)}`, options: opts.map(p => p.id), correctIndex: opts.findIndex(p => p.en === correct.en) };
-    return { type: 'mc', prompt: `Terjemahkan ke Inggris:\n${tileText(correct.id)}`, options: opts.map(p => p.en), correctIndex: opts.findIndex(p => p.en === correct.en) };
+    const correctIndex = opts.findIndex(p => p.en === correct.en);
+    const prompt = enToId 
+        ? `Apa arti kalimat ini?\n${tileText(correct.en)}` 
+        : `Terjemahkan ke Inggris:\n${tileText(correct.id)}`;
+    const options = enToId ? opts.map(p => p.id) : opts.map(p => p.en);
+    return { type: 'mc', prompt, options, correctIndex, correctEn: correct.en, correctId: correct.id };
 }
 // MC kata tunggal (3 opsi) — mudah
 function makeWord(words) {
@@ -266,8 +370,12 @@ function makeWord(words) {
     const enToId = Math.random() < 0.5;
     const distract = shuffle(words.filter(w => w.en !== correct.en)).slice(0, 2);
     const opts = shuffle([correct, ...distract]);
-    if (enToId) return { type: 'mc', prompt: `Pilih arti dari kata: \`${correct.en}\``, options: opts.map(w => w.id), correctIndex: opts.findIndex(w => w.en === correct.en) };
-    return { type: 'mc', prompt: `Bahasa Inggris dari kata: \`${correct.id}\``, options: opts.map(w => w.en), correctIndex: opts.findIndex(w => w.en === correct.en) };
+    const correctIndex = opts.findIndex(w => w.en === correct.en);
+    const prompt = enToId 
+        ? `Pilih arti dari kata: \`${correct.en}\`` 
+        : `Bahasa Inggris dari kata: \`${correct.id}\``;
+    const options = enToId ? opts.map(w => w.id) : opts.map(w => w.en);
+    return { type: 'mc', prompt, options, correctIndex, correctEn: correct.en, correctId: correct.id };
 }
 // Susun kalimat (tap tiles)
 function makeArrange(pool) {
@@ -276,7 +384,7 @@ function makeArrange(pool) {
     const room = Math.max(1, Math.min(3, 9 - correctWords.length));
     const extras = shuffle(EXTRA_WORDS.filter(w => !correctWords.includes(w))).slice(0, room);
     const tiles = shuffle([...correctWords, ...extras]).map(w => ({ word: w, used: false }));
-    return { type: 'arrange', promptId: phrase.id, correctWords, tiles, built: [] };
+    return { type: 'arrange', promptId: phrase.id, correctWords, tiles, built: [], correctEn: phrase.en, correctId: phrase.id };
 }
 // Pasangkan (match pairs) — 4 pasang
 function makeMatch(words) {
@@ -607,12 +715,20 @@ async function resolveAnswer(interaction, session, ownerId, guildId, correct, an
         return interaction.update(payload);
     }
 
+    const ex = session.exercises[session.current];
+    let explanation = '';
+    if (ex.type === 'mc' || ex.type === 'arrange') {
+        explanation = `\n\n💡 **Kunci Jawaban:**\n🇬🇧 **Inggris:** ${ex.correctEn}\n🇮🇩 **Indonesia:** ${ex.correctId}`;
+    } else if (ex.type === 'match') {
+        explanation = `\n\n💡 **Pasangan kata yang benar:**\n` + ex.pairs.map(p => `• \`${p.en}\` ⇄ \`${p.id}\``).join('\n');
+    }
+
     const fbEmbed = correct
-        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut ke soal berikutnya...')
-        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban yang benar:\n${tileText(answerText)}`);
+        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription(`Mantap! Lanjut ke soal berikutnya...${explanation}`)
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`**Jawaban yang benar:**\n${tileText(answerText)}${explanation}`);
     await interaction.update({ embeds: [fbEmbed], components: [] });
 
-    const delay = correct ? 900 : 1800;
+    const delay = process.env.NODE_ENV === 'test' ? 0 : (correct ? 900 : 1800);
     setTimeout(() => {
         session.current++;
         let payload;
@@ -737,4 +853,4 @@ async function handleBelajarButton(interaction) {
 
 function isBelajarButton(customId) { return typeof customId === 'string' && customId.startsWith('belajar_'); }
 
-module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, TOPICS, getStudyStats };
+module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, TOPICS, getStudyStats, sessions };

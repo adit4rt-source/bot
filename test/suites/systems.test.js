@@ -1457,4 +1457,181 @@ module.exports = function register() {
       throw new Error(`payout anomaly: total=${totalBalance}, p1=${balP1After}, p2=${balP2After}`);
     }
   });
+
+  // ---- Belajar (English Learning) ----
+  const belajar = botRequire('systems/belajar.js');
+
+  test('belajar: getStudyStats returns 0 initially', () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM belajar_progress WHERE guildId = ? AND userId = ?').run(g, u);
+    db.db.prepare('DELETE FROM belajar_done WHERE guildId = ? AND userId = ?').run(g, u);
+    const st = belajar.getStudyStats(g, u);
+    if (st.xp !== 0 || st.streak !== 0 || st.level !== 1) {
+      throw new Error(`expected initial stats to be zero: xp=${st.xp}, streak=${st.streak}, level=${st.level}`);
+    }
+  });
+
+  test('belajar: handleBelajarCommand renders the main panel', async () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    const it = mockInteraction({ userId: u, guildId: g, customId: 'belajar_cmd' });
+    it.isChatInputCommand = () => true;
+    
+    await belajar.handleBelajarCommand(it);
+    if (!it._cap.reply || !it._cap.reply.embeds || !it._cap.reply.embeds[0].data.title.includes('BAB 1')) {
+      throw new Error('expected main panel');
+    }
+  });
+
+  test('belajar: topic button click shows topic panel', async () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    const it = mockInteraction({ userId: u, guildId: g, customId: `belajar_topic_t1_${u}` });
+    it.isButton = () => true;
+    
+    await belajar.handleBelajarButton(it);
+    if (!it._cap.update || !it._cap.update.embeds || !it._cap.update.embeds[0].data.title.includes('Menawarkan & menerima minuman')) {
+      throw new Error('expected topic panel');
+    }
+  });
+
+  test('belajar: click locked topic returns locked warning', async () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    const it = mockInteraction({ userId: u, guildId: g, customId: `belajar_topic_t2_${u}` });
+    it.isButton = () => true;
+    
+    await belajar.handleBelajarButton(it);
+    if (!it._cap.reply || !it._cap.reply.content.includes('terkunci')) {
+      throw new Error('expected topic locked warning');
+    }
+  });
+
+  test('belajar: leaderboard works and displays rankings', async () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    const it = mockInteraction({ userId: u, guildId: g, customId: `belajar_lb_${u}` });
+    it.isButton = () => true;
+    
+    await belajar.handleBelajarButton(it);
+    if (!it._cap.update || !it._cap.update.embeds || !it._cap.update.embeds[0].data.title.includes('Peringkat XP')) {
+      throw new Error('expected leaderboard panel');
+    }
+  });
+
+  test('belajar: full lesson session flow (success)', async () => {
+    const g = 'BELAJARG', u = 'BELAJARU';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM belajar_progress WHERE guildId = ? AND userId = ?').run(g, u);
+    db.db.prepare('DELETE FROM belajar_done WHERE guildId = ? AND userId = ?').run(g, u);
+    
+    // Start lesson
+    const itStart = mockInteraction({ userId: u, guildId: g, customId: `belajar_part_t1_1_${u}` });
+    await belajar.handleBelajarButton(itStart);
+    
+    const key = `${g}_${u}`;
+    const session = belajar.sessions.get(key);
+    if (!session) throw new Error('session not created');
+    
+    let finalPayload = null;
+    for (let i = 0; i < session.exercises.length; i++) {
+      const ex = session.exercises[i];
+      const itAns = mockInteraction({ userId: u, guildId: g });
+      itAns.update = async (payload) => {
+        itAns._cap.update = payload;
+        return payload;
+      };
+      itAns.editReply = async (payload) => {
+        itAns._cap.editReply = payload;
+        finalPayload = payload;
+        return payload;
+      };
+      
+      if (ex.type === 'mc') {
+        const correctIdx = ex.correctIndex;
+        itAns.customId = `belajar_ans_${correctIdx}_${u}`;
+        await belajar.handleBelajarButton(itAns);
+      } else if (ex.type === 'arrange') {
+        for (const word of ex.correctWords) {
+          const tileIdx = ex.tiles.findIndex(t => t.word === word && !t.used);
+          if (tileIdx !== -1) {
+            const itTile = mockInteraction({ userId: u, guildId: g, customId: `belajar_tile_${tileIdx}_${u}` });
+            await belajar.handleBelajarButton(itTile);
+          }
+        }
+        itAns.customId = `belajar_check_${u}`;
+        await belajar.handleBelajarButton(itAns);
+      } else if (ex.type === 'match') {
+        for (let pairIdx = 0; pairIdx < ex.pairs.length; pairIdx++) {
+          const lSlot = ex.left.indexOf(pairIdx);
+          const rSlot = ex.right.indexOf(pairIdx);
+          
+          const itL = mockInteraction({ userId: u, guildId: g, customId: `belajar_mt_L_${lSlot}_${u}` });
+          await belajar.handleBelajarButton(itL);
+          
+          const itR = mockInteraction({ userId: u, guildId: g, customId: `belajar_mt_R_${rSlot}_${u}` });
+          await belajar.handleBelajarButton(itR);
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    
+    if (belajar.sessions.has(key)) throw new Error('session should be deleted on success');
+    if (!finalPayload || !finalPayload.embeds || !finalPayload.embeds[0].data.title.includes('Part Selesai')) {
+      throw new Error('expected success finish payload');
+    }
+    
+    const st = belajar.getStudyStats(g, u);
+    if (st.xp <= 0) throw new Error('xp not granted');
+    
+    const balance = db.getOrCreateUser(g, u).balance;
+    if (balance <= 0) throw new Error('money not credited');
+    
+    const hasFirst = db.db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(g, u, 'ach:first');
+    const hasPerfect = db.db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(g, u, 'ach:perfect');
+    if (!hasFirst || !hasPerfect) throw new Error('expected achievements to be unlocked');
+  });
+
+  test('belajar: full lesson session flow (failure)', async () => {
+    const g = 'BELAJARG', u = 'BELAJARUFAIL';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM belajar_progress WHERE guildId = ? AND userId = ?').run(g, u);
+    db.db.prepare('DELETE FROM belajar_done WHERE guildId = ? AND userId = ?').run(g, u);
+    
+    // Start lesson
+    const itStart = mockInteraction({ userId: u, guildId: g, customId: `belajar_part_t1_1_${u}` });
+    await belajar.handleBelajarButton(itStart);
+    
+    const key = `${g}_${u}`;
+    const session = belajar.sessions.get(key);
+    if (!session) throw new Error('session not created');
+    
+    let finalPayload = null;
+    for (let i = 0; i < 5; i++) {
+      // Force the current exercise to be MC for simple incorrect answers simulation
+      session.exercises[session.current] = {
+        type: 'mc',
+        prompt: 'Apa arti kata...',
+        options: ['A', 'B', 'C', 'D'],
+        correctIndex: 0
+      };
+      
+      const itAns = mockInteraction({ userId: u, guildId: g, customId: `belajar_ans_1_${u}` }); // index 1 is incorrect
+      itAns.update = async (payload) => {
+        itAns._cap.update = payload;
+        return payload;
+      };
+      itAns.editReply = async (payload) => {
+        itAns._cap.editReply = payload;
+        finalPayload = payload;
+        return payload;
+      };
+      
+      await belajar.handleBelajarButton(itAns);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    
+    if (belajar.sessions.has(key)) throw new Error('session should be deleted on failure');
+    if (!finalPayload || !finalPayload.embeds || !finalPayload.embeds[0].data.title.includes('Nyawa Habis')) {
+      throw new Error('expected failure finish payload');
+    }
+  });
 };
