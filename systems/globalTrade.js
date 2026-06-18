@@ -161,6 +161,9 @@ function createTrade(guildId, userId, username, offerType, offerId, wantKey) {
         return { ok: false, error: '❌ Tipe item tidak valid!' };
     }
 
+    // Capture details BEFORE escrow (item won't be in getOfferableItems after transfer)
+    const details = (getOfferableItems(guildId, userId).find(o => o.type === offerType && o.id === String(offerId)) || {}).details || '';
+
     // Escrow the offered item
     if (offerType === 'item') {
         const qty = db.prepare('SELECT quantity FROM item_inventory WHERE guildId = ? AND userId = ? AND itemId = ?').get(guildId, userId, offerId);
@@ -175,7 +178,6 @@ function createTrade(guildId, userId, username, offerType, offerId, wantKey) {
         transferItem(offerType, offerId, ESCROW_OWNER, guildId);
     }
 
-    const details = (getOfferableItems(guildId, userId).find(o => o.type === offerType && o.id === String(offerId)) || {}).details || '';
     db.prepare(`INSERT INTO global_trades (posterId, posterName, guildId, offerType, offerId, offerName, offerDetails, wantType, wantTier, wantAmount, listedAt, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`).run(
         userId, username, guildId, offerType, String(offerId), offerName, details,

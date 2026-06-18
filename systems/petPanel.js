@@ -1005,7 +1005,11 @@ async function handlePetButton(interaction) {
             return interaction.reply({ content: `❌ ${validation.error}`, ephemeral: true });
         }
 
-        validateAndConsumeIngredients(guildId, userId, recipe, 1, 'consume');
+        const txn = db.transaction(() => {
+            validateAndConsumeIngredients(guildId, userId, recipe, 1, 'validate');
+            validateAndConsumeIngredients(guildId, userId, recipe, 1, 'consume');
+        });
+        txn();
 
         addItem(guildId, userId, recipeId, 1);
         incrementUserStat(guildId, userId, 'total_cooked', 1);
@@ -2463,7 +2467,11 @@ async function handlePetModal(interaction) {
             return interaction.reply({ content: `❌ ${validation.error}`, ephemeral: true });
         }
 
-        validateAndConsumeIngredients(guildId, userId, recipe, quantity, 'consume');
+        const txn = db.transaction(() => {
+            validateAndConsumeIngredients(guildId, userId, recipe, quantity, 'validate');
+            validateAndConsumeIngredients(guildId, userId, recipe, quantity, 'consume');
+        });
+        txn();
 
         addItem(guildId, userId, recipeId, quantity);
         incrementUserStat(guildId, userId, 'total_cooked', quantity);

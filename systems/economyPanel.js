@@ -264,8 +264,8 @@ async function handleEconomyModal(interaction) {
         db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(vScope, code);
         db.prepare('INSERT INTO voucher_claims (guildId, code, userId) VALUES (?, ?, ?)').run(vScope, code, userId);
         const userData = getOrCreateUser(guildId, userId);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(voucher.reward, guildId, userId);
         userData.balance += voucher.reward;
-        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
         try { const { checkAchievements } = require("./achievements"); await checkAchievements(interaction.guild, userId, { type: "redeem" }); } catch (_) {}
         return interaction.reply({ content: `\u2705 Voucher **${code}** berhasil! Dapat \ud83e\ude99 **${voucher.reward.toLocaleString('id-ID')}**\n> Saldo: \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**` });
     }

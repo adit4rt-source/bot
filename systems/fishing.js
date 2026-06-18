@@ -5,7 +5,7 @@ const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPG
 
 function getEquipment(guildId, userId) {
     let eq = db.prepare('SELECT * FROM fish_equipment WHERE userId = ?').get(userId);
-    if (!eq) { db.prepare('INSERT INTO fish_equipment (userId) VALUES (?)').run(userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
+    if (!eq) { db.prepare('INSERT OR IGNORE INTO fish_equipment (guildId, userId) VALUES (?, ?)').run(guildId || 'global', userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
     if (!eq.location) eq.location = 'river';
     return eq;
 }
@@ -266,8 +266,8 @@ function rollSeaMonster(guildId, userId, location, rod) {
             // Lose 1 bait
             if (eq.bait !== 'none' && eq.bait_count > 0) {
                 const newCount = eq.bait_count - 1;
-                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
                 damageResult.amount = 1;
                 damageResult.detail = 'Umpan -1';
             } else {
@@ -280,8 +280,8 @@ function rollSeaMonster(guildId, userId, location, rod) {
             if (eq.bait !== 'none' && eq.bait_count > 0) {
                 const loss = Math.min(5, eq.bait_count);
                 const newCount = eq.bait_count - loss;
-                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
                 damageResult.amount = loss;
                 damageResult.detail = `Umpan -${loss}`;
             } else {
@@ -342,8 +342,8 @@ function catchFish(guildId, userId) {
     // Consume bait
     if (eq.bait !== 'none' && eq.bait_count > 0) {
         const newCount = eq.bait_count - 1;
-        if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-        else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+        if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+        else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
     }
 
     // === LUCK CALCULATION ===

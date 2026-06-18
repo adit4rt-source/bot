@@ -70,7 +70,7 @@ function getGiveableItems(guildId, userId) {
     out.push({ type: 'money', id: '0', label: '🪙 Money (masukkan jumlah)', desc: 'Tawarkan sejumlah uang' });
 
     // Relics
-    const relics = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    const relics = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ? AND (equipped_pet_id IS NULL OR equipped_pet_id <= 0)').all(guildId, userId);
     for (const r of relics) {
         out.push({ type: 'relic', id: String(r.id), label: `💎 ${r.name} [${r.rarity}]`, desc: `+${r.stat_value} ${r.stat_type}` });
     }

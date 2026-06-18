@@ -49,7 +49,21 @@ const DUPLICATE_THRESHOLD = 3;
 
 // ==================== CHECK FUNCTIONS ====================
 function checkAntiInvites(c) { return /(discord\.gg|discord\.com\/invite|discordapp\.com\/invite)\/[\w-]+/gi.test(c); }
-function checkAntiLinks(c) { return /https?:\/\/[^\s<]+/gi.test(c); }
+function checkAntiLinks(c) {
+    const SAFE_DOMAINS = ['discord.com', 'discord.gg', 'discordapp.com', 'cdn.discordapp.com', 'media.discordapp.net', 'tenor.com', 'giphy.com', 'imgur.com'];
+    const urls = c.match(/https?:\/\/[^\s<]+/gi);
+    if (!urls) return false;
+    for (const url of urls) {
+        try {
+            const hostname = new URL(url).hostname.toLowerCase();
+            if (SAFE_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))) continue;
+            return true;
+        } catch (_) {
+            return true;
+        }
+    }
+    return false;
+}
 function checkAntiSpam(guildId, userId, content) { const key = `${guildId}_${userId}`, now = Date.now(); if (!spamTracker.has(key)) spamTracker.set(key, { messages: [] }); const t = spamTracker.get(key); t.messages = t.messages.filter(m => now - m.time < SPAM_WINDOW); t.messages.push({ content, time: now }); if (t.messages.length >= SPAM_THRESHOLD) return { spam: true, reason: `${SPAM_THRESHOLD} messages in ${SPAM_WINDOW/1000}s` }; if (t.messages.filter(m => m.content === content).length >= DUPLICATE_THRESHOLD) return { spam: true, reason: `${DUPLICATE_THRESHOLD} duplicate messages` }; return { spam: false }; }
 
 // Periodically evict spam-tracker entries whose messages have all expired, so the

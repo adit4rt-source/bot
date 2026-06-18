@@ -310,7 +310,7 @@ function buildWorldBossPanel(guildId, userId, username) {
         .setTitle(`🗺️ WORLD BOSS — Weekly`)
         .setColor(boss.status === 'defeated' ? '#2ECC71' : '#E74C3C')
         .setDescription(desc)
-        .setFooter({ text: boss.status === 'defeated' ? 'Boss dikalahkan! Klaim reward!' : `Pet: ${pet ? pet.name + ' Lv.' + pet.level : 'Tidak ada'} | CD: 30 detik/attack` })
+        .setFooter({ text: boss.status === 'defeated' ? 'Boss dikalahkan! Klaim reward!' : `Pet: ${pet ? pet.name + ' Lv.' + pet.level : 'Tidak ada'} | CD: 5 detik/attack` })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(

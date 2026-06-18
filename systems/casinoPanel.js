@@ -326,6 +326,14 @@ async function handleCasinoButton(interaction) {
     if (action === 'cf' && (parts[2] === 'head' || parts[2] === 'tail')) {
         const choice = parts[2];
         const bet = parseInt(parts[3]);
+
+        // Cooldown check
+        const cdKey = `coinflip_${guildId}_${userId}`;
+        if (state.fishCooldowns.has(cdKey) && Date.now() < state.fishCooldowns.get(cdKey)) {
+            return interaction.reply({ content: '⏳ Tunggu 5 detik sebelum flip lagi!', ephemeral: true });
+        }
+        state.fishCooldowns.set(cdKey, Date.now() + 5000);
+
         const userData = getOrCreateUser(guildId, userId);
         if (userData.balance < bet) {
             return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });

@@ -4,6 +4,7 @@
 const { db } = require('../database');
 const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
 const { PRESTIGE_CROPS } = require('./farmMutation');
+const { getCropSeasonEffect, SEASON_CROP_EFFECTS } = require('./farmSeason');
 const { notifyFarmReady } = require('./notifications');
 
 let log = () => {};
@@ -22,7 +23,8 @@ function isPlotReady(plot) {
     const crop = findCrop(plot.cropId);
     if (!crop) return false;
     const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-    const growTime = crop.time * (1 - fert.speedBonus) * 60000;
+    const seasonEffect = (plot.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
+    const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
     return Date.now() - plot.plantedAt >= growTime;
 }
 

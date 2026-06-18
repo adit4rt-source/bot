@@ -310,7 +310,7 @@ async function handleGiveawayModal(interaction) {
         gv.updateGiveaway(gwId, { endsAt: g.endsAt + add });
         await refreshGiveawayMessage(interaction, gwId);
         const view = buildManageView(userId, interaction.guild, gwId);
-        return interaction.update(view || buildAdminPanel(guildId, userId, interaction.guild));
+        return interaction.reply({ ...(view || buildAdminPanel(guildId, userId, interaction.guild)), ephemeral: true });
     }
 
     if (kind === 'antialt') {
@@ -321,7 +321,7 @@ async function handleGiveawayModal(interaction) {
         gv.updateGiveaway(gwId, { minAccountAgeDays: days });
         await refreshGiveawayMessage(interaction, gwId);
         const view = buildManageView(userId, interaction.guild, gwId);
-        return interaction.update(view || buildAdminPanel(guildId, userId, interaction.guild));
+        return interaction.reply({ ...(view || buildAdminPanel(guildId, userId, interaction.guild)), ephemeral: true });
     }
 
     if (kind === 'bonusamt') {

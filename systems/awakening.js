@@ -104,18 +104,27 @@ function getAwakeningTitle(level) {
 }
 
 // ==================== CALCULATE BOOSTED STATS ====================
-function calculateBoostedStats(originalStats, awakeningLevel) {
+function calculateBoostedStats(originalStats, awakeningLevel, previousAwakeningLevel) {
     if (awakeningLevel <= 0) return originalStats;
     const tier = AWAKENING_TIERS.find(t => t.level === awakeningLevel);
     if (!tier) return originalStats;
 
-    const boost = tier.statBoost;
+    const newBoost = tier.statBoost;
+    // Determine the previous tier's boost factor to avoid exponential compounding.
+    // If previousAwakeningLevel is provided, use it; otherwise infer from awakeningLevel - 1.
+    const prevLevel = previousAwakeningLevel !== undefined ? previousAwakeningLevel : awakeningLevel - 1;
+    const prevTier = AWAKENING_TIERS.find(t => t.level === prevLevel);
+    const prevBoost = prevTier ? prevTier.statBoost : 0;
+
+    // Calculate the incremental multiplier relative to the previous tier's boost
+    const incrementalMultiplier = (1 + newBoost) / (1 + prevBoost);
+
     return {
-        hp: Math.floor(originalStats.hp * (1 + boost)),
-        atk: Math.floor(originalStats.atk * (1 + boost)),
-        def: Math.floor(originalStats.def * (1 + boost)),
-        spd: Math.floor(originalStats.spd * (1 + boost)),
-        crit: Math.min(50, Math.floor(originalStats.crit * (1 + boost * 0.5))), // Crit scales slower
+        hp: Math.floor(originalStats.hp * incrementalMultiplier),
+        atk: Math.floor(originalStats.atk * incrementalMultiplier),
+        def: Math.floor(originalStats.def * incrementalMultiplier),
+        spd: Math.floor(originalStats.spd * incrementalMultiplier),
+        crit: Math.min(50, Math.floor(originalStats.crit * ((1 + newBoost * 0.5) / (1 + prevBoost * 0.5)))), // Crit scales slower
     };
 }
 
@@ -178,10 +187,11 @@ function executeAwakening(guildId, userId) {
 
     // Calculate new boosted base stats
     const petDef = PET_DATA.find(p => p.id === pet.petId);
-    // We store the boost based on the CURRENT stats at Lv.200
+    // Apply incremental boost relative to previous tier to avoid exponential compounding
     const boostedStats = calculateBoostedStats(
         { hp: pet.hp, atk: pet.atk, def: pet.def, spd: pet.spd, crit: pet.crit },
-        nextTier.level
+        nextTier.level,
+        awakData.awakeningLevel
     );
 
     // Reset pet to level 1 BUT with boosted base stats
@@ -276,7 +286,8 @@ function buildAwakeningPanel(guildId, userId, username) {
         const reqs = checkRequirements(guildId, userId, pet, nextTier);
         const predictedStats = calculateBoostedStats(
             { hp: pet.hp, atk: pet.atk, def: pet.def, spd: pet.spd, crit: pet.crit },
-            nextTier.level
+            nextTier.level,
+            awakData.awakeningLevel
         );
 
         desc += `**⚡ Next: ${nextTier.stars} ${nextTier.name}**\n`;

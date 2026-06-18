@@ -766,7 +766,7 @@ async function handleLivestockButton(interaction) {
             const info = allBarn.map((a, i) => {
                 const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
                 const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
-                const icon = a.type === 'cow' ? '<:cow:1514062469276893356>' : '<:sheep:1514062467393781792>';
+                const icon = a.animalType === 'cow' ? '<:cow:1514062469276893356>' : '<:sheep:1514062467393781792>';
                 return `\`[${i + 1}]\` ${icon} Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
             }).join('\n');
             return interaction.reply({ content: `❌ Tidak ada hewan yang siap evolve!\n\n${info}`, ephemeral: true });
@@ -774,8 +774,8 @@ async function handleLivestockButton(interaction) {
         const { StringSelectMenuBuilder } = require('discord.js');
         const options = eligible.map(a => {
             const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
-            const icon = a.type === 'cow' ? '<:cow:1514062469276893356> Sapi' : '<:sheep:1514062467393781792> Domba';
-            return { label: `${icon} ${a.name || a.type} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
+            const icon = a.animalType === 'cow' ? '<:cow:1514062469276893356> Sapi' : '<:sheep:1514062467393781792> Domba';
+            return { label: `${icon} ${a.name || a.animalType} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
         }).slice(0, 25);
         const select = new StringSelectMenuBuilder().setCustomId(`farm_barn_evolveselect_${userId}`).setPlaceholder('Pilih hewan untuk evolve...').addOptions(options);
         const row = new ActionRowBuilder().addComponents(select);

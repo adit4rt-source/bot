@@ -209,6 +209,13 @@ async function handleTicketButton(interaction) {
         const ticket = db.prepare("SELECT * FROM tickets WHERE guildId = ? AND channelId = ?").get(guildId, interaction.channel.id);
         if (!ticket) return interaction.reply({ content: '❌ Ticket tidak ditemukan!', ephemeral: true });
 
+        // Permission check: only ticket creator or members with ManageChannels can close
+        const isCreator = interaction.user.id === ticket.userId;
+        const hasManageChannels = interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels);
+        if (!isCreator && !hasManageChannels) {
+            return interaction.reply({ content: '❌ Hanya pembuat ticket atau staff yang bisa menutup ticket ini!', ephemeral: true });
+        }
+
         // Confirm close
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('ticket_close_confirm').setLabel('✅ Ya, Tutup').setStyle(ButtonStyle.Danger),

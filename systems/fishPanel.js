@@ -696,7 +696,7 @@ async function handleFishingButton(interaction) {
 
         let embed;
         if (success) {
-            db.prepare('UPDATE fish_equipment SET rod = ? WHERE guildId = ? AND userId = ?').run(nextRod.id, guildId, userId);
+            db.prepare('UPDATE fish_equipment SET rod = ? WHERE userId = ?').run(nextRod.id, userId);
             const { addRodToInventory } = require('./fishing');
             addRodToInventory(userId, nextRod.id);
             embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎉 UPGRADE BERHASIL!')
@@ -840,7 +840,7 @@ async function handleFishingSelectMenu(interaction) {
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(totalPrice, guildId, userId);
         const eq = getEquipment(guildId, userId);
         const newCount = (eq.bait === baitId ? eq.bait_count : 0) + 10;
-        db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = ? WHERE guildId = ? AND userId = ?').run(baitId, newCount, guildId, userId);
+        db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = ? WHERE userId = ?').run(baitId, newCount, userId);
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✅ Umpan Dibeli!')
             .setDescription(`${baitDef.emoji} **${baitDef.name}** x10!\n> Total: **${newCount}** | +${baitDef.rareBonus}% rare\n> 💰 Saldo: 🪙 **${(userData.balance - totalPrice).toLocaleString('id-ID')}**`);
         const backRow = new ActionRowBuilder().addComponents(

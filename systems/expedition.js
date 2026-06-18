@@ -457,7 +457,8 @@ function claimExpeditionRewards(guildId, userId) {
     if (!activeExp) return { success: false, message: '❌ Tidak ada ekspedisi aktif!' };
     if (activeExp.endsAt > Date.now()) return { success: false, message: '⏳ Ekspedisi belum selesai!' };
 
-    const pet = getPetData(guildId, userId);
+    // Use the pet that was sent on the expedition (by ID), not the currently active pet
+    const pet = db.prepare('SELECT * FROM pets WHERE id = ?').get(activeExp.petId);
     if (!pet) return { success: false, message: '❌ Pet tidak ditemukan!' };
 
     const zone = EXPEDITION_ZONES.find(z => z.id === activeExp.zoneId);

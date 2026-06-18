@@ -1028,10 +1028,10 @@ async function handleAdminButton(interaction) {
         top.forEach((e, i) => {
             const fishDef = FISH_DATA.find(f => f.id === e.fishId);
             const prize = prizes[i] || 0;
-            desc += `${['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'][i]} <@${e.oderId}> \u2014 ${fishDef ? fishDef.emoji : '\ud83d\udc1f'} **${e.weight} kg** \u2192 \ud83e\ude99 +${prize.toLocaleString('id-ID')}\n`;
+            desc += `${['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'][i]} <@${e.userId}> \u2014 ${fishDef ? fishDef.emoji : '\ud83d\udc1f'} **${e.weight} kg** \u2192 \ud83e\ude99 +${prize.toLocaleString('id-ID')}\n`;
             if (prize > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.oderId);
-                addIncome(guildId, e.oderId, 'event', prize);
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.userId);
+                addIncome(guildId, e.userId, 'event', prize);
             }
         });
         if (top.length === 0) desc += '*Tidak ada peserta.*';

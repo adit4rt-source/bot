@@ -205,15 +205,20 @@ async function handleSelfRolePick(interaction) {
             }
         }
     } else {
-        // Multi: toggle each selected role; leave unselected roles untouched.
+        // Multi: Discord sends ALL currently selected values as the desired set.
+        // Remove menu roles NOT in values, add roles that ARE in values but not held.
         // Respect the optional per-menu cap (maxRoles, 0 = unlimited).
         const limit = menu.maxRoles && menu.maxRoles > 0 ? menu.maxRoles : null;
-        let owned = menuRoleIds.filter(r => member.roles.cache.has(r)).length;
-        for (const rid of selected) {
-            if (member.roles.cache.has(rid)) {
+        let owned = selected.filter(r => member.roles.cache.has(r)).length;
+        // Remove roles that are in the menu but NOT in the selected values
+        for (const rid of menuRoleIds) {
+            if (!selected.includes(rid)) {
                 await tryRemove(rid);
-                owned--;
-            } else {
+            }
+        }
+        // Add roles that ARE in selected values but not currently held
+        for (const rid of selected) {
+            if (!member.roles.cache.has(rid)) {
                 if (limit && owned >= limit) { limitHit = true; continue; }
                 await tryAdd(rid);
                 owned++;
