@@ -69,7 +69,7 @@ function createRun(guildId, leaderId, dungeonId = 'crypt', channelId = null) {
         createdAt: Date.now(),
     };
     activeDungeonRuns.set(key, run);
-    setTimeout(() => activeDungeonRuns.delete(key), 10 * 60 * 1000);
+    setTimeout(() => activeDungeonRuns.delete(key), 30 * 60 * 1000);
     return { ok: true, run };
 }
 
@@ -113,7 +113,7 @@ function resolveNextRoom(run) {
     const effectivePower = power * buffMult * (0.85 + Math.random() * 0.35);
 
     if (isBoss) {
-        const won = effectivePower >= target || run.hp >= 70;
+        const won = effectivePower >= target;
         if (won) {
             const money = getRandomInt(dungeon.reward[0], dungeon.reward[1]) * Math.max(1, run.members.length);
             run.loot.money += money;

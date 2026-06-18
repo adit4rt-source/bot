@@ -437,7 +437,7 @@ async function handleBlackjackButton(interaction) {
         if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
-        updateQuestProgress(guildId, userId, 'coinflip', 1); // counts as gambling activity
+        updateQuestProgress(guildId, userId, 'blackjack', 1); // counts as gambling activity
 
         const embed = buildGameEmbed(game, true, result);
         const row = buildGameButtons(userId, game, true);
