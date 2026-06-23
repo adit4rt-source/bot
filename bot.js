@@ -14,8 +14,8 @@ try {
 }
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.7.0';
-const BUILD_DATE = '2026-06-11';
+const BOT_VERSION = '3.9.0';
+const BUILD_DATE = '2026-06-23';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -244,48 +244,55 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#DC143C')
-            .setTitle(`📦 Update — v${BOT_VERSION}`)
+            .setColor('#FF6B35')
+            .setTitle(`🎉 MAJOR UPDATE — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `Update besar: fitur baru, perbaikan, & penyeimbangan! 🎉\n` +
+                `Update besar! Pet Stats Scaling, Boss Baru, dan Awakening Tier 6! ⚡\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#F1C40F')
-            .setTitle('✨ Fitur Baru')
+            .setColor('#E74C3C')
+            .setTitle('⚔️ Pet Level Stats Scaling (BARU!)')
             .setDescription(
-                `> 🎟️ **Togel** — \`/togel angka:<1-100>\` (5.000/angka), diundi **tiap 1 jam**, jackpot **carry-over** kalau belum ada yang tembus.\n` +
-                `> 🎬 **TikTok Converter** — paste link TikTok → bot kirim videonya **tanpa watermark** otomatis.\n` +
-                `> 📿 **Relic Manager** — equip/unequip relic per slot + **lebur** relic numpuk jadi Refine Stone. (Pet → More → 📿 Relic)\n` +
-                `> 📊 **Drop Rates** — lihat rate drop Dungeon/Boss/Expedition/Hunt di dalam bot. (Pet → More → 📊 Rates)\n` +
-                `> 🔔 **Notifikasi DM Opt-in** — bot **hanya** DM yang menyetujui. Atur di \`/profile\` → 🔔 Notifs.`
+                `Pet kamu sekarang **makin kuat** setiap naik level!\n\n` +
+                `**Bonus Per Level:**\n` +
+                `> ❤️ **HP** +5 per level\n` +
+                `> ⚔️ **ATK** +2 per level\n` +
+                `> 🛡️ **DEF** +1 per level\n` +
+                `> 💨 **SPD** +0.2 per level (1 setiap 5 level)\n` +
+                `> 🎯 **CRIT** +0.1% per level (1% setiap 10 level)\n\n` +
+                `*Stats scaling terlihat di panel pet — semakin tinggi level, semakin tangguh!*`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#E67E22')
-            .setTitle('🛠️ Perbaikan')
+            .setColor('#FFD700')
+            .setTitle('🔱 Boss Baru: Omega Genesis + Cosmic Deity Awakening')
             .setDescription(
-                `> 🐛 **Relic Refine** sekarang benar-benar menambah stats pet (sebelumnya tanpa efek).\n` +
-                `> 🛡️ **Protection Stone** kini berfungsi — refine gagal **tidak** turun level (stone dipakai).\n` +
-                `> 🧬 **Evolve pet** diperbaiki (tombolnya dulu tidak berfungsi).\n` +
-                `> 🏆 **Achievement** gaya Pokédex — pilih kategori untuk lihat **tugas + progress** tiap badge.\n` +
-                `> 🐛 Fix: resep **Super Bait** dulu menghasilkan umpan rusak.`
+                `**🔱 Omega Genesis** — Boss End-Game tertinggi!\n` +
+                `> 📈 Min Level: **200** | HP: **120.000** | ATK: **380**\n` +
+                `> 🎁 Reward: 🪙 150K–300K + 600 Pet EXP\n` +
+                `> 🔱 Drop: **Omega Core** (10%) — material ultra-langka!\n\n` +
+                `**★★★★★★ Cosmic Deity** — Awakening Tier 6!\n` +
+                `> ⚡ Stat Boost: **+150%** all base stats\n` +
+                `> 🎁 Bonus: **+25% All Reward** + COSMIC aura\n` +
+                `> 📦 Requirements: 🪙 10.000.000 + 🔱 Omega Core ×1 + 💫 Awakening Crystal ×3`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
             .setColor('#3498DB')
-            .setTitle('⚖️ Penyeimbangan & Crafting')
+            .setTitle('📚 English Learning & Perbaikan Lainnya')
             .setDescription(
-                `> ⚔️ **Dungeon & Boss** dibuat lebih kuat (reward tetap gacor — biar pantas).\n` +
-                `> 💰 Reward **World Boss / Expedition / Dungeon** dinaikkan + drop item lebih kaya.\n` +
-                `> 🛒 Harga **/shop** di-rebalance. **Refine Stone, Protection Stone, Rod Parts** kini **drop-only** (dari dungeon/boss/expedition/hunt).\n` +
-                `> 🔨 **Banyak resep crafting baru** (material relic, konversi Mystery Box, anti-monster, dll).\n` +
-                `> 🔁 **Trade** kini pakai **kategori** — bisa tawarkan jauh lebih banyak item (lewati batas 25).`
+                `**📚 Belajar Bahasa Inggris:**\n` +
+                `> 📖 **BAB 2** dibuka — topik dan soal baru!\n` +
+                `> 🛡️ **Streak Shield** — lindungi streak belajar jika skip 1 hari\n` +
+                `> 🏆 **7 Achievement** baru untuk Education\n\n` +
+                `**🐟 Fishing:** Chance ikan **Secret** dinaikkan\n\n` +
+                `**🛠️ Perbaikan:** 35+ bug fix, HP display, World Boss stats scaling, TTS error handling`
             )
             .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()

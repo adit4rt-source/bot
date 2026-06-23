@@ -4,8 +4,8 @@ const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
 const UPDATE_CHANNEL_ID = '1510705567944151150';
-const CURRENT_VERSION = '3.8.0';
-const RELEASE_DATE = '2026-06-13';
+const CURRENT_VERSION = '3.9.0';
+const RELEASE_DATE = '2026-06-23';
 
 // Ensure table
 try { db.exec(`CREATE TABLE IF NOT EXISTS bot_updates (version TEXT PRIMARY KEY, sentAt INTEGER)`); } catch (_) {}
@@ -37,56 +37,58 @@ async function sendUpdateAnnouncement(client) {
             .setTitle(`🎉 MAJOR UPDATE — v${CURRENT_VERSION}`)
             .setDescription(
                 `**Release ${CURRENT_VERSION}** — ${RELEASE_DATE}\n\n` +
-                `Update besar! Sistem Cooking Hub & Relic Socketing untuk Pet kamu.\n` +
+                `Update besar! Pet Stats Scaling, Boss Baru, dan Awakening Tier 6! ⚡\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp();
 
         const embed2 = new EmbedBuilder()
             .setColor('#E74C3C')
-            .setTitle('🍳 Cooking Hub (BARU!)')
+            .setTitle('⚔️ Pet Level Stats Scaling (BARU!)')
             .setDescription(
-                `Masak bahan makanan dari storage menjadi hidangan berguna!\nAkses via \`/pet\` → 🍳 **Cook**.\n\n` +
-                `**Resep Tersedia:**\n` +
-                `> 🥞 **Pancake** (2 Gandum + 1 Telur + 1 Susu)\n` +
-                `>    *Memulihkan 100% Hunger & Happiness pet.*\n` +
-                `> 🍜 **Spicy Fish Soup** (1 Rare Fish + 2 Pestisida)\n` +
-                `>    *Buff Pet: +10% ATK selama 1 jam.*\n` +
-                `> 🥗 **Veggie Salad** (3 Wortel + 2 Kentang)\n` +
-                `>    *Proteksi Farm: Kebal serangan hama selama 6 jam.*\n`
+                `Pet kamu sekarang **makin kuat** setiap naik level!\n\n` +
+                `**Bonus Per Level:**\n` +
+                `> ❤️ **HP** +5 per level\n` +
+                `> ⚔️ **ATK** +2 per level\n` +
+                `> 🛡️ **DEF** +1 per level\n` +
+                `> 💨 **SPD** +0.2 per level (1 setiap 5 level)\n` +
+                `> 🎯 **CRIT** +0.1% per level (1% setiap 10 level)\n\n` +
+                `*Stats scaling terlihat di panel pet — semakin tinggi level, semakin tangguh!*`
             );
 
         const embed3 = new EmbedBuilder()
             .setColor('#FFD700')
-            .setTitle('🧬 Relic Gem Socketing')
+            .setTitle('🔱 Boss Baru: Omega Genesis + Cosmic Deity Awakening')
             .setDescription(
-                `Perkuat Relic kamu dengan menyisipkan Permata!\nAkses via \`/pet\` → 📿 **Relic** → 🧬 **Socket**.\n\n` +
-                `**Slot Tersedia:**\n` +
-                `> 🟣 Epic: **1 Slot**\n` +
-                `> 🟡 Legendary: **2 Slot**\n` +
-                `> 🔴 Mythic / 👑 GOD: **3 Slot**\n\n` +
-                `**Efek Permata:**\n` +
-                `> 🧬 **DNA Shard**: +5% Max HP\n` +
-                `> 🧪 **Mutation Serum**: +5% ATK\n` +
-                `> 🪨 **Refine Stone**: +5% DEF\n` +
-                `> 🛡️ **Protection Stone**: +5% SPD\n` +
-                `> ✨ **Awakening Crystal**: +5% CRIT\n\n` +
-                `*Cabut permata kapan saja tanpa biaya untuk mengembalikannya ke tas.*`
+                `**🔱 Omega Genesis** — Boss End-Game tertinggi!\n` +
+                `> 📈 Min Level: **200** | HP: **120.000** | ATK: **380**\n` +
+                `> 🎁 Reward: 🪙 150K–300K + 600 Pet EXP\n` +
+                `> 🔱 Drop: **Omega Core** (10%) — material ultra-langka!\n\n` +
+                `**★★★★★★ Cosmic Deity** — Awakening Tier 6!\n` +
+                `> ⚡ Stat Boost: **+150%** all base stats\n` +
+                `> 🎁 Bonus: **+25% All Reward** + COSMIC aura\n` +
+                `> 📦 Requirements: 🪙 10.000.000 + 🔱 Omega Core ×1 + 💫 Awakening Crystal ×3\n\n` +
+                `*Omega Core hanya drop dari Boss Omega Genesis — tantang jika berani!*`
             );
 
         const embed4 = new EmbedBuilder()
             .setColor('#3498DB')
-            .setTitle('🔧 Perbaikan & Update Lainnya')
+            .setTitle('📚 English Learning & Perbaikan Lainnya')
             .setDescription(
-                `**🐛 Bug Fixed:**\n` +
-                `> ❌ SyntaxError \`finalCdSec\` di interactionCreate — **SOLVED!**\n\n` +
-                `**🆕 Fitur Lain:**\n` +
-                `> 🏆 **Achievement Baru:** First Cook, Chef (10x), Socket Master.\n` +
-                `> 📜 **Quest Baru:** Quest memasak (cook) & pasang gem (relic_socket).\n` +
-                `> 📖 **Guide Panel:** Update informasi Cooking & Farming di \`/guide\`.\n\n` +
-                `-# Selamat menikmati update terbaru!`
+                `**📚 Belajar Bahasa Inggris:**\n` +
+                `> 📖 **BAB 2** dibuka — topik dan soal baru!\n` +
+                `> 🛡️ **Streak Shield** — lindungi streak belajar jika skip 1 hari\n` +
+                `> 🏆 **7 Achievement** baru untuk Education\n` +
+                `> 🔊 TTS error handling — tidak crash lagi saat Google TTS gagal\n\n` +
+                `**🐟 Fishing:**\n` +
+                `> 🌟 Chance ikan **Secret** dinaikkan sedikit\n\n` +
+                `**🛠️ Perbaikan:**\n` +
+                `> 🐛 35+ bug fix dari audit komprehensif\n` +
+                `> 📊 HP kini ditampilkan dengan **(base X)** di panel pet\n` +
+                `> ⚔️ World Boss menggunakan stats scaling terbaru\n` +
+                `> 🔱 Omega Core ditambahkan ke daftar drop-only materials`
             )
-            .setFooter({ text: `Update oleh Tim Dev • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
+            .setFooter({ text: `idcommunity Bot v${CURRENT_VERSION} — ${RELEASE_DATE} | discord.gg/idcommunity` })
             .setTimestamp();
 
         await channel.send({ embeds: [embed1, embed2, embed3, embed4] });
