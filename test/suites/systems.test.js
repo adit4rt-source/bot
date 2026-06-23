@@ -386,7 +386,7 @@ module.exports = function register() {
   });
   test('shop: buyable list excludes drop-only materials', () => {
     const buyable = ITEMS.filter(i => i.price > 0).map(i => i.id);
-    for (const dropOnly of ['refine_stone', 'protection_stone', 'rod_part', 'mythic_fragment', 'awakening_crystal']) {
+    for (const dropOnly of ['refine_stone', 'protection_stone', 'rod_part', 'mythic_fragment', 'awakening_crystal', 'omega_core']) {
       if (buyable.includes(dropOnly)) throw new Error(dropOnly + ' must not be buyable');
     }
     for (const it of ITEMS.filter(i => i.price > 0)) {
@@ -705,8 +705,8 @@ module.exports = function register() {
 
     // Verify ATK buff active (combat integration)
     const baseStats = pets.getEffectiveStats(petAfter);
-    // Base ATK is 20, should be multiplied by 1.10 = 22
-    if (baseStats.atk !== 22) throw new Error('Expected effective ATK to be 22 (+10% buff), got ' + baseStats.atk);
+    // Base ATK is 20, level 10 adds +18 (9*2) = 38, then 10% buff = Math.floor(38*1.10) = 41
+    if (baseStats.atk !== 41) throw new Error('Expected effective ATK to be 41 (+10% buff on level-scaled 38), got ' + baseStats.atk);
 
     // 4. Test Veggie Salad: 3 Wortel + 2 Kentang -> 6 hours pest shield
     // Add ingredients

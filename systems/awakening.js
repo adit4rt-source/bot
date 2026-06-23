@@ -44,6 +44,13 @@ const AWAKENING_TIERS = [
         requirements: { petLevel: 200, money: 5000000, items: [{ id: 'awakening_crystal', qty: 1 }, { id: 'mythic_fragment', qty: 5 }] },
         reward: { desc: '+100% all base stats + 15% All Reward + Exclusive badge + RAINBOW aura', permanentBonus: { type: 'all_reward', value: 15 } }
     },
+    {
+        level: 6, stars: '★★★★★★', name: 'Cosmic Deity', title: '「Cosmic Deity」',
+        color: '#E74C3C',
+        statBoost: 1.5, // +150% all base stats
+        requirements: { petLevel: 200, money: 10000000, items: [{ id: 'omega_core', qty: 1 }, { id: 'awakening_crystal', qty: 3 }] },
+        reward: { desc: '+150% all base stats + 25% All Reward + COSMIC aura', permanentBonus: { type: 'all_reward', value: 25 } }
+    },
 ];
 
 // ==================== DATABASE ====================
@@ -170,7 +177,7 @@ function executeAwakening(guildId, userId) {
 
     const awakData = getAwakeningData(pet.id);
     const nextTier = getNextAwakeningTier(awakData.awakeningLevel);
-    if (!nextTier) return { success: false, error: '❌ Pet sudah mencapai Awakening maksimal (★★★★★)!' };
+    if (!nextTier) return { success: false, error: '❌ Pet sudah mencapai Awakening maksimal (★★★★★★)!' };
 
     // Verify requirements
     const reqs = checkRequirements(guildId, userId, pet, nextTier);
@@ -316,7 +323,7 @@ function buildAwakeningPanel(guildId, userId, username) {
         desc += `> ⚠️ **Level akan RESET ke 1!** (Skills & abilities tetap)\n`;
         desc += `> ⚠️ EXP required -10% per ★ (leveling lebih cepat)`;
     } else {
-        desc += `\n🏆 **MAX AWAKENING TERCAPAI!** ★★★★★\n`;
+        desc += `\n🏆 **MAX AWAKENING TERCAPAI!** ★★★★★★\n`;
         desc += `> Pet ini sudah mencapai puncak kekuatan.\n`;
         desc += `> Title: **${currentTier.title}**`;
     }
@@ -419,7 +426,8 @@ async function handleAwakeningButton(interaction) {
         desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
         desc += `> **Materials Langka:**\n`;
         desc += `> 🌟 Mythic Fragment — World Boss Top 3 / Expedition Menara Langit (5%)\n`;
-        desc += `> 💫 Awakening Crystal — World Boss #1 / Special Event`;
+        desc += `> 💫 Awakening Crystal — World Boss #1 / Special Event\n`;
+        desc += `> 🔱 Omega Core — Boss 🔱 Omega Genesis (10% drop)`;
 
         const embed = new EmbedBuilder()
             .setTitle('⚡ Awakening Tiers — Overview')
