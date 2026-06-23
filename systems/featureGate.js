@@ -25,6 +25,12 @@ const FEATURES = [
     { key: 'feature_aibot',        label: 'AI Bot',        emoji: '🤖', desc: '/tanya, /aibot', commands: ['tanya', 'aibot'] },
     { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
     { key: 'feature_belajar',      label: 'Belajar',       emoji: '📚', desc: '/belajar (Duolingo-style)', commands: ['belajar'] },
+    { key: 'leveling_enabled',     label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
+    { key: 'streak_enabled',       label: 'Streak System',   emoji: '🔥', desc: 'Sistem streak harian chat', commands: [] },
+    { key: 'love_enabled',         label: 'Love System',     emoji: '❤️', desc: 'Sistem status love, /love, /marry, /divorce', commands: ['love', 'marry', 'divorce'] },
+    { key: 'onboarding_enabled',   label: 'Onboarding DM',   emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
+    { key: 'tiktok_convert',       label: 'TikTok Auto-Convert', emoji: '🎵', desc: 'Deteksi link TikTok & convert mp4', commands: [] },
+    { key: 'video_convert',        label: 'Video Auto-Convert', emoji: '🎬', desc: 'Deteksi link YT/IG/X/FB & convert mp4', commands: [], default: '0' },
 ];
 
 const PAGE_SIZE = 8;
@@ -47,7 +53,9 @@ for (const f of FEATURES) {
  * @returns {boolean}
  */
 function isFeatureEnabled(guildId, featureKey) {
-    return getSetting(guildId, featureKey, '1') !== '0';
+    const f = FEATURES.find(x => x.key === featureKey);
+    const defVal = f?.default !== undefined ? f.default : '1';
+    return getSetting(guildId, featureKey, defVal) !== '0';
 }
 
 /**
