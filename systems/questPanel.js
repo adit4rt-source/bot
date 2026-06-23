@@ -279,13 +279,16 @@ async function handleQuestButton(interaction) {
 
         // Check streak bonus
         let bonusMsg = '';
-        const streakResult = checkDailyQuestStreak(guildId, userId);
+        const streakResult = await checkDailyQuestStreak(guildId, userId);
         if (streakResult) {
             addIncome(guildId, userId, 'quest', streakResult.bonus);
             if (streakResult.weeklyBonus) addIncome(guildId, userId, 'quest', 1000);
             bonusMsg = `\n\n\ud83c\udf81 **ALL DONE BONUS: +200 Money!**\n> \ud83c\udfc5 Perfect Days: ${streakResult.perfectDays}`;
             if (streakResult.weeklyBonus) {
                 bonusMsg += `\n\n\ud83c\udf89\ud83c\udf89 **7-DAY STREAK BONUS!** +1000 Money + \ud83d\udce6 Mystery Box! \ud83c\udf89\ud83c\udf89`;
+            }
+            if (streakResult.gotCardsText) {
+                bonusMsg += streakResult.gotCardsText;
             }
         }
 

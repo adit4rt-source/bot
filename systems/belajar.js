@@ -814,10 +814,13 @@ async function handleBelajarCommand(interaction) {
 }
 
 function buildFinishPayload(session, ownerId, guildId, success) {
-    sessions.delete(`${guildId}_${ownerId}`);
+    if (success) {
+        sessions.delete(`${guildId}_${ownerId}`);
+    }
 
     // ---- Speed Round finish ----
     if (session.speed) {
+        sessions.delete(`${guildId}_${ownerId}`);
         const elapsed = Math.max(1, Math.round((Date.now() - session.startTime) / 1000));
         const streak = updateStreak(guildId, ownerId);
         const base = session.correct * 50;
@@ -830,6 +833,11 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             u.balance += moneyGain;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
             incrementUserStat(guildId, ownerId, 'belajar_correct', session.correct);
+        } catch (_) {}
+        // Trigger quest progress: belajar
+        try {
+            const { updateQuestProgress } = require('./quests');
+            updateQuestProgress(guildId, ownerId, 'belajar', 1);
         } catch (_) {}
         const embed = new EmbedBuilder().setColor('#FF9600').setTitle('⚡ Speed Round Selesai!')
             .setDescription(
@@ -860,6 +868,11 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             u.balance += moneyGain;
             db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
             incrementUserStat(guildId, ownerId, 'belajar_correct', session.correct);
+        } catch (_) {}
+        // Trigger quest progress: belajar
+        try {
+            const { updateQuestProgress } = require('./quests');
+            updateQuestProgress(guildId, ownerId, 'belajar', 1);
         } catch (_) {}
 
         const streak = updateStreak(guildId, ownerId);
@@ -892,8 +905,13 @@ function buildFinishPayload(session, ownerId, guildId, success) {
     const retryBtn = session.review
         ? new ButtonBuilder().setCustomId(`belajar_review_${ownerId}`).setLabel('🔁 Review Lagi').setStyle(ButtonStyle.Success)
         : new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success);
+    const buyHeartsBtn = new ButtonBuilder()
+        .setCustomId(`belajar_buyhearts_${ownerId}`)
+        .setLabel('❤️ Beli Nyawa (+3 ❤️) — 💰1.000')
+        .setStyle(ButtonStyle.Danger);
     const row = new ActionRowBuilder().addComponents(
         retryBtn,
+        buyHeartsBtn,
         new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row] };
@@ -1008,12 +1026,41 @@ async function handleBelajarButton(interaction) {
     ensureRow(guildId, ownerId);
 
     if (customId.startsWith('belajar_home_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         return interaction.update(buildChapterPanel(guildId, ownerId));
     }
+    if (customId.startsWith('belajar_buyhearts_')) {
+        const u = getOrCreateUser(guildId, ownerId);
+        const cost = 1000;
+        if (u.balance < cost) {
+            return interaction.reply({ content: `❌ Uang tidak cukup! Butuh 🪙 **${cost}** untuk membeli nyawa tambahan.`, ephemeral: true });
+        }
+        const session = sessions.get(`${guildId}_${ownerId}`);
+        if (!session) {
+            return interaction.reply({ content: `⚠️ Sesi tidak ditemukan atau sudah kedaluwarsa.`, ephemeral: true });
+        }
+        
+        // Deduct money
+        u.balance -= cost;
+        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, ownerId);
+        
+        // Restore hearts
+        session.hearts = 3;
+        
+        // Resume lesson
+        const payload = renderExercise(session, ownerId);
+        await interaction.update(payload);
+        if (session.exercises[session.current] && session.exercises[session.current].type === 'type') {
+            startTypeCollector(interaction, session, ownerId, guildId);
+        }
+        return;
+    }
     if (customId.startsWith('belajar_lb_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         return interaction.update(buildLeaderboardPanel(guildId, ownerId, interaction.guild));
     }
     if (customId.startsWith('belajar_review_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         const completed = TOPICS.filter(t => topicDoneCount(guildId, ownerId, t.id) > 0);
         if (!completed.length) {
             return interaction.reply({ content: '🔄 Selesaikan minimal 1 part dulu sebelum bisa Review!', ephemeral: true });
@@ -1024,6 +1071,7 @@ async function handleBelajarButton(interaction) {
         return interaction.update(renderExercise(session, ownerId));
     }
     if (customId.startsWith('belajar_speed_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         const pool = [];
         TOPICS.forEach((t, idx) => { if (topicUnlocked(guildId, ownerId, idx)) pool.push(...t.words); });
         const words = pool.length ? pool : TOPICS[0].words;
@@ -1035,6 +1083,7 @@ async function handleBelajarButton(interaction) {
         return interaction.update(renderExercise(session, ownerId));
     }
     if (customId.startsWith('belajar_topic_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         const topic = TOPIC_BY_ID[parts[2]];
         if (!topic) return interaction.reply({ content: '❌ Topik tidak ditemukan.', ephemeral: true });
         const idx = TOPICS.findIndex(t => t.id === topic.id);
@@ -1043,6 +1092,7 @@ async function handleBelajarButton(interaction) {
     }
 
     if (customId.startsWith('belajar_part_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
         const topicId = parts[2]; const part = parseInt(parts[3]);
         const topic = TOPIC_BY_ID[topicId];
         if (!topic) return interaction.reply({ content: '❌ Topik tidak ditemukan.', ephemeral: true });

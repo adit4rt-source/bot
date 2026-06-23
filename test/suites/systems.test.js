@@ -1652,9 +1652,46 @@ module.exports = function register() {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     
-    if (belajar.sessions.has(key)) throw new Error('session should be deleted on failure');
+    if (!belajar.sessions.has(key)) throw new Error('session should be kept on failure for heart purchase');
     if (!finalPayload || !finalPayload.embeds || !finalPayload.embeds[0].data.title.includes('Nyawa Habis')) {
       throw new Error('expected failure finish payload');
+    }
+
+    // Test buy hearts flow
+    // 1. Not enough balance warning
+    db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(u);
+    const itBuyFail = mockInteraction({ userId: u, guildId: g, customId: `belajar_buyhearts_${u}` });
+    await belajar.handleBelajarButton(itBuyFail);
+    if (!itBuyFail._cap.reply || !itBuyFail._cap.reply.content.includes('Uang tidak cukup')) {
+      throw new Error('expected insufficient balance warning');
+    }
+
+    // 2. Successful purchase
+    db.db.prepare('UPDATE users SET balance = 2000 WHERE userId = ?').run(u);
+    const itBuySuccess = mockInteraction({ userId: u, guildId: g, customId: `belajar_buyhearts_${u}` });
+    itBuySuccess.update = async (payload) => {
+      itBuySuccess._cap.update = payload;
+      return payload;
+    };
+    await belajar.handleBelajarButton(itBuySuccess);
+    const sessionAfterBuy = belajar.sessions.get(key);
+    if (!sessionAfterBuy || sessionAfterBuy.hearts !== 3) {
+      throw new Error('hearts should be restored to 3');
+    }
+    const balanceAfterBuy = db.getOrCreateUser(g, u).balance;
+    if (balanceAfterBuy !== 1000) {
+      throw new Error('balance should be reduced by 1000, got: ' + balanceAfterBuy);
+    }
+
+    // 3. Exit to home and clean up session
+    const itHome = mockInteraction({ userId: u, guildId: g, customId: `belajar_home_${u}` });
+    itHome.update = async (payload) => {
+      itHome._cap.update = payload;
+      return payload;
+    };
+    await belajar.handleBelajarButton(itHome);
+    if (belajar.sessions.has(key)) {
+      throw new Error('session should be cleaned up on home navigation');
     }
   });
 };

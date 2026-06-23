@@ -49,6 +49,7 @@ const QUEST_POOL = [
     { type: 'arena', descFn: (q) => `⚔️ Bertarung di Arena ${q.target} kali`, targetRange: { easy: [2,3], medium: [3,5], hard: [5,8] } },
     { type: 'cook', descFn: (q) => `🍳 Masak ${q.target} hidangan di Cooking Hub`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
     { type: 'relic_socket', descFn: (q) => `🧬 Soket permata ke Relic`, targetRange: { easy: [1,1], medium: [1,1], hard: [1,1] } },
+    { type: 'belajar', descFn: (q) => `📚 Selesaikan ${q.target} kuis di Belajar Hub`, targetRange: { easy: [1,1], medium: [2,2], hard: [3,4] } },
 ];
 
 // ================= DIFFICULTY TIERS =================
@@ -205,7 +206,7 @@ function updateWeeklyQuestProgress(guildId, userId, questType, amount = 1, paylo
 }
 
 // ================= QUEST STREAK BONUS =================
-function checkDailyQuestStreak(guildId, userId) {
+async function checkDailyQuestStreak(guildId, userId) {
     // Check if all 3 daily quests are claimed → give bonus
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const row = db.prepare('SELECT * FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, userId);
@@ -221,6 +222,23 @@ function checkDailyQuestStreak(guildId, userId) {
     // Give bonus 200 money
     db.prepare('UPDATE users SET balance = balance + 200 WHERE guildId = ? AND userId = ?').run(guildId, userId);
     incrementUserStat(guildId, userId, bonusKey, 1);
+
+    // Give 3 random Pokemon cards as "All Done" bonus!
+    let gotCardsText = "";
+    try {
+        const { fetchRandomCards } = require('./cardGame');
+        const dailyPool = ['Common', 'Uncommon', 'Rare'];
+        const cards = await fetchRandomCards(dailyPool, 3, userId);
+        if (cards && cards.length > 0) {
+            for (const c of cards) {
+                db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
+                    userId, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
+            }
+            gotCardsText = `\n🃏 **Bonus 3 Kartu Pokemon:** Dimasukkan ke koleksi!`;
+        }
+    } catch (e) {
+        console.error('[Quest Bonus] Gagal memberikan kartu:', e.message);
+    }
 
     // Track perfect days
     const perfectDays = incrementUserStat(guildId, userId, 'quest_perfect_days', 1);
@@ -238,7 +256,7 @@ function checkDailyQuestStreak(guildId, userId) {
         weeklyBonus = true;
     }
 
-    return { bonus: 200, perfectDays, consecutiveDays, weeklyBonus };
+    return { bonus: 200, perfectDays, consecutiveDays, weeklyBonus, gotCardsText };
 }
 
 function resetConsecutivePerfect(guildId, userId) {
