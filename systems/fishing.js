@@ -395,7 +395,7 @@ function catchFish(guildId, userId) {
         }
         else if (t.tier === 'Secret') {
             if (!hasBait || rod.tier < 6) adj = 0;
-            else adj = Math.min(0.8, t.chance + rareBonus * 0.05);
+            else adj = Math.min(1.8, t.chance + rareBonus * 0.08);
         }
         else if (t.tier === 'God') {
             // God tier: requires rod tier 10+ AND high-tier bait

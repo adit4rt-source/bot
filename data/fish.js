@@ -45,7 +45,7 @@ const FISH_TIERS = [
     { tier: 'Epic', emoji: '🦈', chance: 4, minWeight: 5, maxWeight: 200, minValue: 60, maxValue: 200 },
     { tier: 'Legendary', emoji: '🐉', chance: 1.5, minWeight: 50, maxWeight: 1000, minValue: 150, maxValue: 600 },
     { tier: 'Mythic', emoji: '🌈', chance: 0.4, minWeight: 100, maxWeight: 5000, minValue: 400, maxValue: 1500 },
-    { tier: 'Secret', emoji: '🔮', chance: 0.1, minWeight: 500, maxWeight: 9999, minValue: 1000, maxValue: 5000 },
+    { tier: 'Secret', emoji: '🔮', chance: 0.2, minWeight: 500, maxWeight: 9999, minValue: 1000, maxValue: 5000 },
     { tier: 'God', emoji: '👑', chance: 0.02, minWeight: 2000, maxWeight: 50000, minValue: 5000, maxValue: 25000 },
 ];
 
