@@ -5,21 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-function runGlobalMigration(db) {
-    console.log('\n🔄 ============ GLOBAL MIGRATION SYSTEM ============');
-    
-    // Check if migration already done
-    const migratedFlag = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_status'").get();
-    if (!migratedFlag) {
-        db.exec(`CREATE TABLE migration_status (id INTEGER PRIMARY KEY, migration TEXT UNIQUE, completed INTEGER)`);
-    }
-    
-    const migrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'global_progression_v1'").get();
-    if (migrationDone) {
-        console.log('✅ Migration already completed');
-        return;
-    }
-    
+function runMainGlobalMigration(db) {
     console.log('⚠️  Starting global progression migration...\n');
     
     try {
@@ -368,6 +354,118 @@ function runGlobalMigration(db) {
     } catch (err) {
         console.error('❌ Migration failed:', err.message);
         throw err;
+    }
+}
+
+function runBelajarGlobalMigration(db) {
+    console.log('⚠️  Starting belajar global progression migration...\n');
+    try {
+        // ============ STEP 1: Create NEW global tables ============
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS belajar_progress_global (
+                userId TEXT PRIMARY KEY,
+                maxUnit INTEGER DEFAULT 0,
+                xp INTEGER DEFAULT 0,
+                streak INTEGER DEFAULT 0,
+                lastDay TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS belajar_done_global (
+                userId TEXT,
+                partKey TEXT,
+                PRIMARY KEY (userId, partKey)
+            );
+            CREATE TABLE IF NOT EXISTS belajar_weak_global (
+                userId TEXT,
+                word TEXT,
+                wrongCount INTEGER DEFAULT 1,
+                PRIMARY KEY (userId, word)
+            );
+        `);
+
+        // ============ STEP 2: Migrate data if old tables exist ============
+        const hasBelajarProgress = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_progress'").get();
+        if (hasBelajarProgress) {
+            console.log('  → Migrating belajar progress...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_progress_global (userId, maxUnit, xp, streak, lastDay)
+                SELECT userId, MAX(maxUnit) as maxUnit, MAX(xp) as xp, MAX(streak) as streak, MAX(lastDay) as lastDay
+                FROM belajar_progress
+                GROUP BY userId
+            `);
+        }
+
+        const hasBelajarDone = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_done'").get();
+        if (hasBelajarDone) {
+            console.log('  → Migrating belajar done parts...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_done_global (userId, partKey)
+                SELECT DISTINCT userId, partKey
+                FROM belajar_done
+            `);
+        }
+
+        const hasBelajarWeak = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_weak'").get();
+        if (hasBelajarWeak) {
+            console.log('  → Migrating belajar weak words...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_weak_global (userId, word, wrongCount)
+                SELECT userId, word, MAX(wrongCount) as wrongCount
+                FROM belajar_weak
+                GROUP BY userId, word
+            `);
+        }
+
+        // ============ STEP 3: Replace old tables with global ones ============
+        const tablesToRename = ['belajar_progress', 'belajar_done', 'belajar_weak'];
+        tablesToRename.forEach(table => {
+            try {
+                db.exec(`ALTER TABLE ${table} RENAME TO ${table}_old`);
+                console.log(`  ✓ Renamed ${table} → ${table}_old`);
+            } catch (e) {
+                // Table might not exist
+            }
+        });
+
+        tablesToRename.forEach(table => {
+            try {
+                db.exec(`ALTER TABLE ${table}_global RENAME TO ${table}`);
+                console.log(`  ✓ Renamed ${table}_global → ${table}`);
+            } catch (e) {
+                // Rename might fail
+            }
+        });
+
+        // ============ STEP 4: Mark migration as done ============
+        db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('belajar_global_v1', 1);
+        console.log('🎉 ============ BELAJAR MIGRATION SUCCESS ============\n');
+
+    } catch (err) {
+        console.error('❌ Belajar migration failed:', err.message);
+        throw err;
+    }
+}
+
+function runGlobalMigration(db) {
+    console.log('\n🔄 ============ GLOBAL MIGRATION SYSTEM ============');
+    
+    // Check if migration already done
+    const migratedFlag = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_status'").get();
+    if (!migratedFlag) {
+        db.exec(`CREATE TABLE migration_status (id INTEGER PRIMARY KEY, migration TEXT UNIQUE, completed INTEGER)`);
+    }
+    
+    const migrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'global_progression_v1'").get();
+    if (!migrationDone) {
+        runMainGlobalMigration(db);
+    } else {
+        console.log('✅ Main global progression migration already completed');
+    }
+
+    const belajarMigrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'belajar_global_v1'").get();
+    if (!belajarMigrationDone) {
+        runBelajarGlobalMigration(db);
+    } else {
+        console.log('✅ Belajar global progression migration already completed');
     }
 }
 

@@ -7,6 +7,7 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
+const i18n = require('./i18n');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
@@ -35,11 +36,18 @@ async function getTTS(text) {
 
 
 // ==================== DATABASE ====================
-db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (guildId TEXT, userId TEXT, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0, PRIMARY KEY (guildId, userId))`);
-db.exec(`CREATE TABLE IF NOT EXISTS belajar_done (guildId TEXT, userId TEXT, partKey TEXT, PRIMARY KEY (guildId, userId, partKey))`);
-db.exec(`CREATE TABLE IF NOT EXISTS belajar_weak (guildId TEXT, userId TEXT, word TEXT, wrongCount INTEGER DEFAULT 1, PRIMARY KEY (guildId, userId, word))`);
-try { db.exec("ALTER TABLE belajar_progress ADD COLUMN streak INTEGER DEFAULT 0"); } catch (_) {}
-try { db.exec("ALTER TABLE belajar_progress ADD COLUMN lastDay TEXT DEFAULT ''"); } catch (_) {}
+const isGlobal = !db.prepare("PRAGMA table_info(users)").all().some(col => col.name === 'guildId');
+if (isGlobal) {
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (userId TEXT PRIMARY KEY, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, lastDay TEXT DEFAULT '')`);
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_done (userId TEXT, partKey TEXT, PRIMARY KEY (userId, partKey))`);
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_weak (userId TEXT, word TEXT, wrongCount INTEGER DEFAULT 1, PRIMARY KEY (userId, word))`);
+} else {
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_progress (guildId TEXT, userId TEXT, maxUnit INTEGER DEFAULT 0, xp INTEGER DEFAULT 0, PRIMARY KEY (guildId, userId))`);
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_done (guildId TEXT, userId TEXT, partKey TEXT, PRIMARY KEY (guildId, userId, partKey))`);
+    db.exec(`CREATE TABLE IF NOT EXISTS belajar_weak (guildId TEXT, userId TEXT, word TEXT, wrongCount INTEGER DEFAULT 1, PRIMARY KEY (guildId, userId, word))`);
+    try { db.exec("ALTER TABLE belajar_progress ADD COLUMN streak INTEGER DEFAULT 0"); } catch (_) {}
+    try { db.exec("ALTER TABLE belajar_progress ADD COLUMN lastDay TEXT DEFAULT ''"); } catch (_) {}
+}
 
 function jakartaDate(offsetDays = 0) {
     return new Date(Date.now() + offsetDays * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
@@ -83,7 +91,8 @@ function updateStreak(guildId, userId) {
 
 // ==================== WEAK WORDS SYSTEM ====================
 function incrementWeakWord(guildId, userId, word) {
-    db.prepare(`INSERT INTO belajar_weak (guildId, userId, word, wrongCount) VALUES (?, ?, ?, 1) ON CONFLICT(guildId, userId, word) DO UPDATE SET wrongCount = wrongCount + 1`).run(guildId, userId, word);
+    db.prepare(`INSERT OR IGNORE INTO belajar_weak (guildId, userId, word, wrongCount) VALUES (?, ?, ?, 0)`).run(guildId, userId, word);
+    db.prepare(`UPDATE belajar_weak SET wrongCount = wrongCount + 1 WHERE guildId = ? AND userId = ? AND word = ?`).run(guildId, userId, word);
 }
 function getWeakWords(guildId, userId) {
     return db.prepare('SELECT word, wrongCount FROM belajar_weak WHERE guildId = ? AND userId = ? ORDER BY wrongCount DESC LIMIT 20').all(guildId, userId);
@@ -592,8 +601,8 @@ function renderExercise(session, userId, note = '') {
 
     if (ex.type === 'mc') {
         const embed = new EmbedBuilder().setColor('#1CB0F6')
-            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
-            .setTitle('Pilih jawaban yang benar')
+            .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
+            .setTitle(i18n.t(session.guildId, userId, 'belajar.mc_title'))
             .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
@@ -602,9 +611,9 @@ function renderExercise(session, userId, note = '') {
 
     if (ex.type === 'listen') {
         const embed = new EmbedBuilder().setColor('#FF9600')
-            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
-            .setTitle('🎧 Dengarkan dan pilih artinya')
-            .setDescription(`${bar}\n\n${noteLine}🔊 Dengarkan audio lalu pilih **arti** yang benar:\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
+            .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
+            .setTitle(i18n.t(session.guildId, userId, 'belajar.listen_title'))
+            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.listen_prompt')}\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         const result = { embeds: [embed], components: [row] };
@@ -612,15 +621,14 @@ function renderExercise(session, userId, note = '') {
         return result;
     }
 
-
     if (ex.type === 'type') {
         const embed = new EmbedBuilder().setColor('#CE82FF')
-            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
-            .setTitle('✍️ Ketik jawabanmu')
-            .setDescription(`${bar}\n\n${noteLine}Tulis dalam bahasa Inggris:\n\n**"${ex.promptId}"**\n\n-# Klik tombol di bawah untuk menjawab`)
+            .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
+            .setTitle(i18n.t(session.guildId, userId, 'belajar.type_title'))
+            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.type_prompt')}\n\n**"${ex.promptId}"**\n\n${i18n.t(session.guildId, userId, 'belajar.type_btn_click')}`)
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_typebtn_${userId}`).setLabel('✍️ Jawab').setStyle(ButtonStyle.Success)
+            new ButtonBuilder().setCustomId(`belajar_typebtn_${userId}`).setLabel(i18n.t(session.guildId, userId, 'belajar.type_btn_label')).setStyle(ButtonStyle.Success)
         );
         return { embeds: [embed], components: [row] };
     }
@@ -629,9 +637,9 @@ function renderExercise(session, userId, note = '') {
         const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
         const builtLine = builtWords.length ? builtWords.map(w => `\`${w}\``).join(' ') : '`___`';
         const embed = new EmbedBuilder().setColor('#CE82FF')
-            .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
-            .setTitle('🧩 Susun kalimatnya')
-            .setDescription(`${bar}\n\n${noteLine}Terjemahkan ke Inggris:\n**${ex.promptId}**\n\n📝 ${builtLine}`)
+            .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
+            .setTitle(i18n.t(session.guildId, userId, 'belajar.arrange_title'))
+            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.arrange_prompt')}\n**${ex.promptId}**\n\n📝 ${builtLine}`)
             .setFooter({ text: footerText });
         const components = [];
         let row = new ActionRowBuilder(); let count = 0;
@@ -643,17 +651,17 @@ function renderExercise(session, userId, note = '') {
         });
         if (row.components.length) components.push(row);
         components.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_undo_${userId}`).setLabel('↩️ Hapus').setStyle(ButtonStyle.Danger).setDisabled(ex.built.length === 0),
-            new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel('✅ Cek Jawaban').setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
+            new ButtonBuilder().setCustomId(`belajar_undo_${userId}`).setLabel(i18n.t(session.guildId, userId, 'belajar.arrange_undo')).setStyle(ButtonStyle.Danger).setDisabled(ex.built.length === 0),
+            new ButtonBuilder().setCustomId(`belajar_check_${userId}`).setLabel(i18n.t(session.guildId, userId, 'belajar.arrange_check')).setStyle(ButtonStyle.Success).setDisabled(ex.built.length === 0),
         ));
         return { embeds: [embed], components: components.slice(0, 5) };
     }
 
     // match
     const embed = new EmbedBuilder().setColor('#FF9600')
-        .setAuthor({ name: '🇬🇧 Bahasa Inggris' })
-        .setTitle('🔗 Pasangkan kata yang cocok')
-        .setDescription(`${bar}\n\n${noteLine}Ketuk kata Indonesia lalu pasangan Inggrisnya.\n\n✅ Cocok: **${ex.matched.length}/${ex.pairs.length}**`)
+        .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
+        .setTitle(i18n.t(session.guildId, userId, 'belajar.match_title'))
+        .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.match_prompt')}\n\n${i18n.t(session.guildId, userId, 'belajar.match_status', { current: ex.matched.length, total: ex.pairs.length })}`)
         .setFooter({ text: footerText });
     const leftRow = new ActionRowBuilder();
     ex.left.forEach((pairIdx, slot) => {
@@ -707,13 +715,13 @@ function buildChapterPanel(guildId, userId) {
 
     const embed = new EmbedBuilder()
         .setColor('#1CB0F6')
-        .setTitle('📘 BAB 1 — Bahasa Inggris Dasar')
+        .setTitle(i18n.t(guildId, userId, 'belajar.chapter_title'))
         .setDescription(
-            `📊 Level **${st.level}**  •  ⭐ **${st.xp}** XP  •  🔥 Streak **${st.streak}** hari\n` +
-            `📈 Progress BAB 1: \`${overallBar}\` **${pct}%**  *(${doneTopics}/${TOPICS.length} topik)*\n\n` +
-            `${lines.join('\n')}\n\n🔜 *BAB 2 — Coming Soon*`
+            i18n.t(guildId, userId, 'belajar.chapter_stats', { level: st.level, xp: st.xp, streak: st.streak }) + '\n' +
+            i18n.t(guildId, userId, 'belajar.chapter_progress', { bar: overallBar, pct: pct, done: doneTopics, total: TOPICS.length }) + '\n\n' +
+            `${lines.join('\n')}\n\n` + i18n.t(guildId, userId, 'belajar.chapter_coming_soon')
         )
-        .setFooter({ text: 'Klik nomor topik untuk mulai • Belajar tiap hari untuk jaga streak! 🔥' });
+        .setFooter({ text: i18n.t(guildId, userId, 'belajar.chapter_footer') });
 
     const rows = [];
     let row = new ActionRowBuilder();
@@ -731,9 +739,9 @@ function buildChapterPanel(guildId, userId) {
     if (row.components.length) rows.push(row);
     if (rows.length < 5) {
         rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_review_${userId}`).setLabel('🔄 Review').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`belajar_speed_${userId}`).setLabel('⚡ Speed Round').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`belajar_lb_${userId}`).setLabel('🏆 Peringkat').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_review_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_review')).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_speed_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_speed')).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_lb_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_leaderboard')).setStyle(ButtonStyle.Secondary),
         ));
     }
     return { embeds: [embed], components: rows.slice(0, 5) };
@@ -745,17 +753,16 @@ function buildLeaderboardPanel(guildId, userId, guild) {
     const medals = ['🥇', '🥈', '🥉'];
     const lines = rows.length ? rows.map((r, i) => {
         const tag = medals[i] || `**${i + 1}.**`;
-        const name = guild?.members?.cache?.get(r.userId)?.user?.username || `User`;
         const lv = studyLevel(r.xp);
         return `${tag} <@${r.userId}> — Lv.${lv} • ⭐ ${r.xp} XP`;
-    }).join('\n') : '*Belum ada yang belajar. Jadilah yang pertama!*';
+    }).join('\n') : i18n.t(guildId, userId, 'belajar.lb_empty');
     const myRank = db.prepare('SELECT COUNT(*) AS c FROM belajar_progress WHERE guildId = ? AND xp > (SELECT xp FROM belajar_progress WHERE guildId = ? AND userId = ?)').get(guildId, guildId, userId).c + 1;
     const myXp = getXP(guildId, userId);
     const embed = new EmbedBuilder()
         .setColor('#FFD700')
-        .setTitle('🏆 Peringkat XP Belajar')
-        .setDescription(`${lines}\n\n-# Peringkat kamu: **#${myRank}** (⭐ ${myXp} XP)`);
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary));
+        .setTitle(i18n.t(guildId, userId, 'belajar.lb_title'))
+        .setDescription(`${lines}\n\n` + i18n.t(guildId, userId, 'belajar.lb_footer', { rank: myRank, xp: myXp }));
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_back')).setStyle(ButtonStyle.Secondary));
     return { embeds: [embed], components: [row] };
 }
 
@@ -778,10 +785,10 @@ function buildTopicPanel(guildId, userId, topic) {
         .setColor('#58CC02')
         .setTitle(`${topic.emoji} ${topic.title}`)
         .setDescription(
-            `📈 Progress: \`${bar}\` **${pct}%**  *(${donePartCount}/${topic.parts} part)*\n\n` +
-            `${lines.join('\n')}\n\n-# Tiap part = 10 soal. Part 🌟 kasih reward 2x lipat!`
+            i18n.t(guildId, userId, 'belajar.topic_progress', { bar: bar, pct: pct, done: donePartCount, total: topic.parts }) + '\n\n' +
+            `${lines.join('\n')}\n\n` + i18n.t(guildId, userId, 'belajar.topic_note')
         )
-        .setFooter({ text: `BAB 1 • Topik ${idx + 1}/${TOPICS.length}` });
+        .setFooter({ text: i18n.t(guildId, userId, 'belajar.topic_footer', { current: idx + 1, total: TOPICS.length }) });
 
     const rows = [];
     let row = new ActionRowBuilder();
@@ -800,7 +807,7 @@ function buildTopicPanel(guildId, userId, topic) {
         cnt++;
     }
     if (row.components.length) rows.push(row);
-    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel('🔙 Kembali ke BAB 1').setStyle(ButtonStyle.Secondary)));
+    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary)));
     return { embeds: [embed], components: rows.slice(0, 5) };
 }
 
@@ -839,17 +846,22 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             const { updateQuestProgress } = require('./quests');
             updateQuestProgress(guildId, ownerId, 'belajar', 1);
         } catch (_) {}
-        const embed = new EmbedBuilder().setColor('#FF9600').setTitle('⚡ Speed Round Selesai!')
+        const speedBonusStr = speedBonus ? i18n.t(guildId, ownerId, 'belajar.speed_bonus_kilat') : '';
+        const embed = new EmbedBuilder().setColor('#FF9600').setTitle(i18n.t(guildId, ownerId, 'belajar.speed_finish_title'))
             .setDescription(
-                `✅ Benar: **${session.correct}/${session.exercises.length}**\n` +
-                `⏱️ Waktu: **${elapsed} detik**\n` +
-                `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**` +
-                (speedBonus ? `\n🔥 **BONUS KILAT +500** (sempurna & cepat!)` : '') +
-                `\n🔥 Streak belajar: **${streak} hari**`
+                i18n.t(guildId, ownerId, 'belajar.speed_finish_desc', {
+                    correct: session.correct,
+                    total: session.exercises.length,
+                    time: elapsed,
+                    xp: xpGain,
+                    money: moneyGain.toLocaleString('id-ID'),
+                    bonus: speedBonusStr,
+                    streak: streak
+                })
             );
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`belajar_speed_${ownerId}`).setLabel('⚡ Lagi').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_speed_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_speed')).setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
         );
         return { embeds: [embed], components: [row] };
     }
@@ -881,38 +893,62 @@ function buildFinishPayload(session, ownerId, guildId, success) {
 
         const nextPartUnlocked = !isReview && session.part < topic.parts;
         const topicDone = !isReview && topicDoneCount(guildId, ownerId, session.topicId) >= topic.parts;
-        let desc =
-            `${topic.emoji} **${topic.title}** — ${isReview ? '🔄 Review' : `Part ${session.part}${session.extra ? ' 🌟' : ''}`}\n\n` +
-            `✅ Benar: **${session.correct}/${session.exercises.length}**  ${heartsBar(session.hearts)}\n` +
-            `⭐ XP: **+${xpGain}**  •  🪙 Money: **+${moneyGain.toLocaleString('id-ID')}**${session.extra && !isReview ? '  *(2x Extra!)*' : ''}${isReview ? '  *(Review 0.5x)*' : ''}\n` +
-            `🔥 Streak belajar: **${streak} hari**`;
-        if (perfect) desc += `\n💯 **PERFECT!** Tanpa salah!`;
-        if (topicDone) desc += `\n\n🏆 **Topik selesai!** Topik berikutnya terbuka!`;
-        else if (nextPartUnlocked) desc += `\n\n🔓 **Part ${session.part + 1} terbuka!**`;
-        if (newAch.length) desc += `\n\n🎖️ **Achievement baru:**\n` + newAch.map(a => `${a.emoji} **${a.name}** (+${a.xp} XP)`).join('\n');
 
-        const embed = new EmbedBuilder().setColor('#58CC02').setTitle(isReview ? '🔄 Review Selesai!' : '🎉 Part Selesai!').setDescription(desc);
+        const subTitle = isReview ? i18n.t(guildId, ownerId, 'belajar.btn_review') : `Part ${session.part}${session.extra ? ' 🌟' : ''}`;
+        const notesStr = (session.extra && !isReview ? '  *(2x Extra!)*' : '') + (isReview ? '  *(Review 0.5x)*' : '');
+        const perfectStr = perfect ? i18n.t(guildId, ownerId, 'belajar.perfect_note') : '';
+        const topicDoneStr = topicDone ? i18n.t(guildId, ownerId, 'belajar.topic_done_note') : '';
+        const partUnlockedStr = nextPartUnlocked ? i18n.t(guildId, ownerId, 'belajar.part_unlocked_note', { part: session.part + 1 }) : '';
+        let newAchStr = '';
+        if (newAch.length) {
+            newAchStr = i18n.t(guildId, ownerId, 'belajar.new_ach_note') + newAch.map(a => `${a.emoji} **${a.name}** (+${a.xp} XP)`).join('\n');
+        }
+
+        const desc = i18n.t(guildId, ownerId, 'belajar.part_finish_desc', {
+            emoji: topic.emoji,
+            title: topic.title,
+            subtitle: subTitle,
+            correct: session.correct,
+            total: session.exercises.length,
+            hearts: heartsBar(session.hearts),
+            xp: xpGain,
+            money: moneyGain.toLocaleString('id-ID'),
+            notes: notesStr,
+            streak: streak,
+            perfect: perfectStr,
+            topic_done: topicDoneStr,
+            part_unlocked: partUnlockedStr,
+            new_ach: newAchStr
+        });
+
+        const embed = new EmbedBuilder().setColor('#58CC02').setTitle(isReview ? i18n.t(guildId, ownerId, 'belajar.review_finish_title') : i18n.t(guildId, ownerId, 'belajar.part_finish_title')).setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
             isReview
-                ? new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Primary)
-                : new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel('📋 Lihat Part').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
+                ? new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Primary)
+                : new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_view_parts')).setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
         );
         return { embeds: [embed], components: [row] };
     }
-    const embed = new EmbedBuilder().setColor('#FF4B4B').setTitle('💔 Nyawa Habis!')
-        .setDescription(`Kamu kehabisan nyawa di **${topic.title}**${session.review ? ' (Review)' : ` Part ${session.part}`}.\n✅ Benar: ${session.correct}/${session.exercises.length}\n\nCoba lagi ya, kamu pasti bisa! 💪`);
+    const partSub = session.review ? ' (Review)' : ` Part ${session.part}`;
+    const embed = new EmbedBuilder().setColor('#FF4B4B').setTitle(i18n.t(guildId, ownerId, 'belajar.hearts_depleted_title'))
+        .setDescription(i18n.t(guildId, ownerId, 'belajar.hearts_depleted_desc', {
+            title: topic.title,
+            part: partSub,
+            correct: session.correct,
+            total: session.exercises.length
+        }));
     const retryBtn = session.review
-        ? new ButtonBuilder().setCustomId(`belajar_review_${ownerId}`).setLabel('🔁 Review Lagi').setStyle(ButtonStyle.Success)
-        : new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel('🔁 Ulangi').setStyle(ButtonStyle.Success);
+        ? new ButtonBuilder().setCustomId(`belajar_review_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_review_retry')).setStyle(ButtonStyle.Success)
+        : new ButtonBuilder().setCustomId(`belajar_part_${session.topicId}_${session.part}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_retry')).setStyle(ButtonStyle.Success);
     const buyHeartsBtn = new ButtonBuilder()
         .setCustomId(`belajar_buyhearts_${ownerId}`)
-        .setLabel('❤️ Beli Nyawa (+3 ❤️) — 💰1.000')
+        .setLabel(i18n.t(guildId, ownerId, 'belajar.btn_buy_hearts'))
         .setStyle(ButtonStyle.Danger);
     const row = new ActionRowBuilder().addComponents(
         retryBtn,
         buyHeartsBtn,
-        new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel('📘 BAB 1').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row] };
 }
@@ -941,8 +977,8 @@ async function resolveAnswer(interaction, session, ownerId, guildId, correct, an
     }
 
     const fbEmbed = correct
-        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut...')
-        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban: ${tileText(answerText)}`);
+        ? new EmbedBuilder().setColor('#58CC02').setTitle(i18n.t(guildId, ownerId, 'belajar.correct_feedback')).setDescription(i18n.t(guildId, ownerId, 'belajar.correct_feedback_desc'))
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle(i18n.t(guildId, ownerId, 'belajar.incorrect_feedback')).setDescription(i18n.t(guildId, ownerId, 'belajar.incorrect_feedback_desc', { answer: tileText(answerText) }));
     await interaction.update({ embeds: [fbEmbed], components: [], files: [] });
 
     const isTest = process.env.NODE_ENV === 'test';
@@ -1019,7 +1055,7 @@ async function handleBelajarButton(interaction) {
     const guildId = interaction.guild.id;
 
     if (interaction.user.id !== ownerId) {
-        return interaction.reply({ content: '❌ Ini bukan sesi belajar kamu! Ketik `/belajar` sendiri ya.', ephemeral: true });
+        return interaction.reply({ content: i18n.t(guildId, interaction.user.id, 'belajar.not_your_session'), ephemeral: true });
     }
 
     // Ensure row once per interaction session
@@ -1033,11 +1069,11 @@ async function handleBelajarButton(interaction) {
         const u = getOrCreateUser(guildId, ownerId);
         const cost = 1000;
         if (u.balance < cost) {
-            return interaction.reply({ content: `❌ Uang tidak cukup! Butuh 🪙 **${cost}** untuk membeli nyawa tambahan.`, ephemeral: true });
+            return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.money_insufficient', { cost: cost.toLocaleString('id-ID') }), ephemeral: true });
         }
         const session = sessions.get(`${guildId}_${ownerId}`);
         if (!session) {
-            return interaction.reply({ content: `⚠️ Sesi tidak ditemukan atau sudah kedaluwarsa.`, ephemeral: true });
+            return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.session_expired'), ephemeral: true });
         }
         
         // Deduct money
@@ -1063,10 +1099,10 @@ async function handleBelajarButton(interaction) {
         sessions.delete(`${guildId}_${ownerId}`);
         const completed = TOPICS.filter(t => topicDoneCount(guildId, ownerId, t.id) > 0);
         if (!completed.length) {
-            return interaction.reply({ content: '🔄 Selesaikan minimal 1 part dulu sebelum bisa Review!', ephemeral: true });
+            return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.review_locked'), ephemeral: true });
         }
         const topic = completed[Math.floor(Math.random() * completed.length)];
-        const session = { topicId: topic.id, part: 0, review: true, extra: false, exercises: buildLesson(topic, 4, guildId, ownerId), current: 0, hearts: HEARTS_MAX, correct: 0 };
+        const session = { topicId: topic.id, part: 0, review: true, extra: false, exercises: buildLesson(topic, 4, guildId, ownerId), current: 0, hearts: HEARTS_MAX, correct: 0, guildId };
         sessions.set(`${guildId}_${ownerId}`, session);
         return interaction.update(renderExercise(session, ownerId));
     }
@@ -1078,7 +1114,7 @@ async function handleBelajarButton(interaction) {
         const exercises = [];
         const shuffledWords = shuffle(words);
         for (let i = 0; i < EX_PER_LESSON; i++) exercises.push(makeWord(shuffledWords.length >= 3 ? shuffledWords : words));
-        const session = { speed: true, topicId: null, exercises, current: 0, hearts: HEARTS_MAX, correct: 0, startTime: Date.now() };
+        const session = { speed: true, topicId: null, exercises, current: 0, hearts: HEARTS_MAX, correct: 0, startTime: Date.now(), guildId };
         sessions.set(`${guildId}_${ownerId}`, session);
         return interaction.update(renderExercise(session, ownerId));
     }
@@ -1087,7 +1123,7 @@ async function handleBelajarButton(interaction) {
         const topic = TOPIC_BY_ID[parts[2]];
         if (!topic) return interaction.reply({ content: '❌ Topik tidak ditemukan.', ephemeral: true });
         const idx = TOPICS.findIndex(t => t.id === topic.id);
-        if (!topicUnlocked(guildId, ownerId, idx)) return interaction.reply({ content: '🔒 Topik ini masih terkunci.', ephemeral: true });
+        if (!topicUnlocked(guildId, ownerId, idx)) return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.topic_locked'), ephemeral: true });
         return interaction.update(buildTopicPanel(guildId, ownerId, topic));
     }
 
@@ -1097,8 +1133,8 @@ async function handleBelajarButton(interaction) {
         const topic = TOPIC_BY_ID[topicId];
         if (!topic) return interaction.reply({ content: '❌ Topik tidak ditemukan.', ephemeral: true });
         const unlocked = part === 1 || isPartDone(guildId, ownerId, topicId, part - 1);
-        if (!unlocked) return interaction.reply({ content: '🔒 Part ini masih terkunci. Selesaikan part sebelumnya!', ephemeral: true });
-        const session = { topicId, part, extra: topic.extra.includes(part), exercises: buildLesson(topic, part, guildId, ownerId), current: 0, hearts: HEARTS_MAX, correct: 0 };
+        if (!unlocked) return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.part_locked'), ephemeral: true });
+        const session = { topicId, part, extra: topic.extra.includes(part), exercises: buildLesson(topic, part, guildId, ownerId), current: 0, hearts: HEARTS_MAX, correct: 0, guildId };
         sessions.set(`${guildId}_${ownerId}`, session);
 
         // Show grammar tip before starting (rotate based on part number)
@@ -1134,7 +1170,7 @@ async function handleBelajarButton(interaction) {
     }
 
     const session = sessions.get(`${guildId}_${ownerId}`);
-    if (!session) return interaction.update({ content: '⚠️ Sesi sudah berakhir. Ketik `/belajar` untuk mulai lagi.', embeds: [], components: [] });
+    if (!session) return interaction.update({ content: i18n.t(guildId, ownerId, 'belajar.session_ended'), embeds: [], components: [] });
     const ex = session.exercises[session.current];
 
 
@@ -1146,9 +1182,9 @@ async function handleBelajarButton(interaction) {
     }
     if (customId.startsWith('belajar_typebtn_')) {
         if (ex.type !== 'type') return interaction.deferUpdate();
-        const modal = new ModalBuilder().setCustomId(`belajar_typemodal_${ownerId}`).setTitle('✍️ Ketik Jawaban');
+        const modal = new ModalBuilder().setCustomId(`belajar_typemodal_${ownerId}`).setTitle(i18n.t(guildId, ownerId, 'belajar.type_modal_title'));
         modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('answer').setLabel(`Bahasa Inggris dari "${ex.promptId}"`).setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ketik jawaban di sini...')
+            new TextInputBuilder().setCustomId('answer').setLabel(i18n.t(guildId, ownerId, 'belajar.type_modal_label', { prompt: ex.promptId })).setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(i18n.t(guildId, ownerId, 'belajar.type_modal_placeholder'))
         ));
         return interaction.showModal(modal);
     }
@@ -1186,7 +1222,7 @@ async function handleBelajarButton(interaction) {
         if (isMatch) {
             ex.matched.push(pairIdx);
             if (ex.matched.length >= ex.pairs.length) {
-                return resolveAnswer(interaction, session, ownerId, guildId, true, 'Semua pasangan cocok!');
+                return resolveAnswer(interaction, session, ownerId, guildId, true, i18n.t(guildId, ownerId, 'belajar.match_success'));
             }
             return interaction.update(renderExercise(session, ownerId, '✅ Cocok!'));
         }
@@ -1195,7 +1231,7 @@ async function handleBelajarButton(interaction) {
         if (session.hearts <= 0) {
             return interaction.update(buildFinishPayload(session, ownerId, guildId, false));
         }
-        return interaction.update(renderExercise(session, ownerId, '❌ Belum cocok! -1 ❤️'));
+        return interaction.update(renderExercise(session, ownerId, i18n.t(guildId, ownerId, 'belajar.match_fail_heart')));
     }
 }
 
@@ -1209,9 +1245,9 @@ async function handleBelajarModal(interaction) {
     if (interaction.user.id !== ownerId) return interaction.reply({ content: '❌', ephemeral: true });
 
     const session = sessions.get(`${guildId}_${ownerId}`);
-    if (!session) return interaction.reply({ content: '⚠️ Sesi sudah berakhir. Ketik `/belajar` untuk mulai lagi.', ephemeral: true });
+    if (!session) return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.session_ended'), ephemeral: true });
     const ex = session.exercises[session.current];
-    if (!ex || ex.type !== 'type') return interaction.reply({ content: '⚠️ Soal sudah berganti.', ephemeral: true });
+    if (!ex || ex.type !== 'type') return interaction.reply({ content: i18n.t(guildId, ownerId, 'belajar.question_stale'), ephemeral: true });
 
     const typed = (interaction.fields.getTextInputValue('answer') || '').trim().toLowerCase();
     const correct = typed === ex.answer;
@@ -1226,8 +1262,8 @@ async function handleBelajarModal(interaction) {
     }
 
     const fbEmbed = correct
-        ? new EmbedBuilder().setColor('#58CC02').setTitle('✅ Benar!').setDescription('Mantap! Lanjut...')
-        : new EmbedBuilder().setColor('#FF4B4B').setTitle('❌ Kurang tepat').setDescription(`Jawaban: \`${ex.answer}\``);
+        ? new EmbedBuilder().setColor('#58CC02').setTitle(i18n.t(guildId, ownerId, 'belajar.correct_feedback')).setDescription(i18n.t(guildId, ownerId, 'belajar.correct_feedback_desc'))
+        : new EmbedBuilder().setColor('#FF4B4B').setTitle(i18n.t(guildId, ownerId, 'belajar.incorrect_feedback')).setDescription(i18n.t(guildId, ownerId, 'belajar.incorrect_feedback_desc', { answer: `\`${ex.answer}\`` }));
 
     await interaction.update({ embeds: [fbEmbed], components: [], files: [] });
 

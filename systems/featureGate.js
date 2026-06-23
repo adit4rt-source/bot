@@ -24,6 +24,7 @@ const FEATURES = [
     { key: 'feature_tempvoice',    label: 'TempVoice',     emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
     { key: 'feature_aibot',        label: 'AI Bot',        emoji: '🤖', desc: '/tanya, /aibot', commands: ['tanya', 'aibot'] },
     { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
+    { key: 'feature_belajar',      label: 'Belajar',       emoji: '📚', desc: '/belajar (Duolingo-style)', commands: ['belajar'] },
 ];
 
 const PAGE_SIZE = 8;
@@ -146,6 +147,8 @@ const INTERACTION_PREFIX_MAP = {
     'tv_':             'feature_tempvoice',
     // AI Bot
     'aibot_':          'feature_aibot',
+    // Belajar
+    'belajar_':        'feature_belajar',
 };
 
 /**
