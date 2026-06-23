@@ -1608,8 +1608,8 @@ module.exports = function register() {
     const balance = db.getOrCreateUser(g, u).balance;
     if (balance <= 0) throw new Error('money not credited');
     
-    const hasFirst = db.db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(g, u, 'ach:first');
-    const hasPerfect = db.db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(g, u, 'ach:perfect');
+    const hasFirst = db.db.prepare('SELECT 1 FROM achievements WHERE guildId = ? AND userId = ? AND achievementId = ?').get(g, u, 'belajar_first');
+    const hasPerfect = db.db.prepare('SELECT 1 FROM achievements WHERE guildId = ? AND userId = ? AND achievementId = ?').get(g, u, 'belajar_perfect');
     if (!hasFirst || !hasPerfect) throw new Error('expected achievements to be unlocked');
   });
 
@@ -1692,6 +1692,40 @@ module.exports = function register() {
     await belajar.handleBelajarButton(itHome);
     if (belajar.sessions.has(key)) {
       throw new Error('session should be cleaned up on home navigation');
+    }
+  });
+
+  test('belajar: streak shield protection works', async () => {
+    const g = 'BELAJARSG', u = 'BELAJARSU';
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM belajar_progress WHERE guildId = ? AND userId = ?').run(g, u);
+    db.db.prepare('INSERT INTO belajar_progress (guildId, userId, streak, lastDay) VALUES (?, ?, 5, ?)').run(g, u, '2026-06-01');
+    db.addItem(g, u, 'streak_shield', 1);
+    
+    const { updateStreak } = botRequire('systems/belajar.js');
+    const res = updateStreak(g, u);
+    
+    if (res.streak !== 6 || !res.shieldUsed) {
+      throw new Error(`expected streak to be protected and incremented to 6, got ${res.streak}, shieldUsed: ${res.shieldUsed}`);
+    }
+    
+    const shieldCount = db.getItemCount(g, u, 'streak_shield');
+    if (shieldCount !== 0) {
+      throw new Error(`expected streak_shield to be consumed, got: ${shieldCount}`);
+    }
+  });
+
+  test('belajar: chapter toggle works', async () => {
+    const g = 'BELAJARCHG', u = 'BELAJARCHU';
+    const it = mockInteraction({ userId: u, guildId: g, customId: `belajar_page_2_${u}` });
+    it.update = async (payload) => {
+      it._cap.update = payload;
+      return payload;
+    };
+    await belajar.handleBelajarButton(it);
+    const updated = it._cap.update;
+    if (!updated || !updated.embeds || !updated.embeds[0].data.title.includes('BAB 2') && !updated.embeds[0].data.title.includes('Chapter 2')) {
+      throw new Error('expected page navigation to load Chapter 2 panel');
     }
   });
 };

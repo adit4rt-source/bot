@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 132, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 139, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -171,7 +171,14 @@ const ACHIEVEMENTS = [
     { id: 'cook_first', name: 'Asisten Dapur', emoji: '🍳', desc: 'Pertama kali memasak hidangan di Cooking Hub', category: 'Farming', reward: 200 },
     { id: 'cook_10', name: 'Kopi & Roti', emoji: '👨‍🍳', desc: 'Masak 10 hidangan di Cooking Hub', category: 'Farming', reward: 1000 },
     { id: 'relic_socket_first', name: 'Relic Artificer', emoji: '💠', desc: 'Soket permata pertama ke Relic', category: 'Battle', reward: 500 },
-
+    // --- EDUCATION ---
+    { id: 'belajar_first', name: 'Langkah Pertama', emoji: '🌱', desc: 'Selesaikan 1 part belajar', category: 'Education', reward: 100 },
+    { id: 'belajar_perfect', name: 'Sempurna!', emoji: '💯', desc: 'Selesai part belajar tanpa salah', category: 'Education', reward: 200 },
+    { id: 'belajar_streak7', name: 'Rajin Belajar', emoji: '🔥', desc: 'Streak belajar mencapai 7 hari', category: 'Education', reward: 300 },
+    { id: 'belajar_streak30', name: 'Master Belajar', emoji: '🏆', desc: 'Streak belajar mencapai 30 hari', category: 'Education', reward: 1500 },
+    { id: 'belajar_correct100', name: '100 Jawaban Benar', emoji: '🎯', desc: 'Mencapai total 100 jawaban benar di belajar', category: 'Education', reward: 1000 },
+    { id: 'belajar_bab1', name: 'Tamat BAB 1', emoji: '🎓', desc: 'Selesaikan semua topik BAB 1 belajar', category: 'Education', reward: 2000 },
+    { id: 'belajar_bab2', name: 'Tamat BAB 2', emoji: '🎖️', desc: 'Selesaikan semua topik BAB 2 belajar', category: 'Education', reward: 3000 },
 ];
 
 function hasAchievement(guildId, userId, achievementId) {
@@ -555,6 +562,7 @@ const ACH_PROGRESS = {
     livestock_first: { special: 'livestock', target: 1 },
     cook_first: { stat: 'total_cooked', target: 1 }, cook_10: { stat: 'total_cooked', target: 10 },
     relic_socket_first: { stat: 'relic_gems_socketed', target: 1 },
+    belajar_correct100: { stat: 'belajar_correct', target: 100 },
 };
 
 // Returns { raw, current, target } for a countable achievement, or null.

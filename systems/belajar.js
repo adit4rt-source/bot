@@ -6,7 +6,7 @@
 // Progress (part selesai + XP) tersimpan permanen. Unlock bertahap.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, incrementUserStat, getUserStat } = require('../database');
+const { db, getOrCreateUser, incrementUserStat, getUserStat, getItemCount, removeItem } = require('../database');
 const i18n = require('./i18n');
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
@@ -81,11 +81,24 @@ function updateStreak(guildId, userId) {
     ensureRow(guildId, userId);
     const today = jakartaDate();
     const r = db.prepare('SELECT streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId) || { streak: 0, lastDay: '' };
-    if (r.lastDay === today) return r.streak;
+    if (r.lastDay === today) return { streak: r.streak || 0, shieldUsed: false };
     const yesterday = jakartaDate(-1);
-    const newStreak = (r.lastDay === yesterday) ? (r.streak || 0) + 1 : 1;
+    let newStreak;
+    let shieldUsed = false;
+    if (r.lastDay === yesterday || r.lastDay === '') {
+        newStreak = (r.streak || 0) + 1;
+    } else {
+        const shieldCount = getItemCount(guildId, userId, 'streak_shield') || 0;
+        if (shieldCount > 0) {
+            removeItem(guildId, userId, 'streak_shield', 1);
+            newStreak = (r.streak || 0) + 1;
+            shieldUsed = true;
+        } else {
+            newStreak = 1;
+        }
+    }
     db.prepare('UPDATE belajar_progress SET streak = ?, lastDay = ? WHERE guildId = ? AND userId = ?').run(newStreak, today, guildId, userId);
-    return newStreak;
+    return { streak: newStreak, shieldUsed };
 }
 
 
@@ -99,43 +112,34 @@ function getWeakWords(guildId, userId) {
 }
 
 // ==================== ACHIEVEMENTS ====================
-const ACHIEVEMENTS = [
-    { id: 'first', emoji: '🌱', name: 'Langkah Pertama', xp: 20, desc: 'Selesaikan 1 part' },
-    { id: 'perfect', emoji: '💯', name: 'Sempurna!', xp: 30, desc: 'Selesai part tanpa salah (nyawa penuh)' },
-    { id: 'streak7', emoji: '🔥', name: 'Rajin 7 Hari', xp: 70, desc: 'Streak belajar 7 hari' },
-    { id: 'streak30', emoji: '🏆', name: 'Master 30 Hari', xp: 300, desc: 'Streak belajar 30 hari' },
-    { id: 'correct100', emoji: '🎯', name: '100 Jawaban Benar', xp: 100, desc: 'Total 100 jawaban benar' },
-    { id: 'bab1', emoji: '🎓', name: 'Tamat BAB 1', xp: 500, desc: 'Selesaikan semua topik BAB 1' },
-];
-const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
-
-
-function hasAch(guildId, userId, achId) {
-    return !!db.prepare('SELECT 1 FROM belajar_done WHERE guildId = ? AND userId = ? AND partKey = ?').get(guildId, userId, `ach:${achId}`);
+function allTopicsDone(guildId, userId, chapter) {
+    const chapterTopics = TOPICS.filter(t => t.chapter === chapter);
+    if (chapterTopics.length === 0) return false;
+    return chapterTopics.every(t => topicDoneCount(guildId, userId, t.id) >= t.parts);
 }
-function grantAch(guildId, userId, achId) {
-    db.prepare('INSERT OR IGNORE INTO belajar_done (guildId, userId, partKey) VALUES (?, ?, ?)').run(guildId, userId, `ach:${achId}`);
-}
-function allTopicsDone(guildId, userId) {
-    return TOPICS.every(t => topicDoneCount(guildId, userId, t.id) >= t.parts);
-}
-function checkAchievements(guildId, userId, ctx) {
+async function checkAchievements(guildOrId, userId, ctx) {
+    const achievements = require('./achievements');
     const unlocked = [];
-    const tryGrant = (id, cond) => {
-        if (cond && !hasAch(guildId, userId, id)) {
-            grantAch(guildId, userId, id);
-            const a = ACH_BY_ID[id];
-            addXP(guildId, userId, a.xp);
-            unlocked.push(a);
+    const guildId = typeof guildOrId === 'string' ? guildOrId : (guildOrId ? guildOrId.id : null);
+    const guildObj = typeof guildOrId === 'string' ? { id: guildOrId } : guildOrId;
+
+    const tryGrant = async (id, cond) => {
+        if (cond && guildObj) {
+            const ok = await achievements.grantAchievement(guildObj, userId, id);
+            if (ok) {
+                const a = achievements.ACHIEVEMENTS.find(x => x.id === id);
+                if (a) unlocked.push(a);
+            }
         }
     };
     const totalCorrect = getUserStat(guildId, userId, 'belajar_correct') || 0;
-    tryGrant('first', true);
-    tryGrant('perfect', ctx.perfect);
-    tryGrant('streak7', (ctx.streak || 0) >= 7);
-    tryGrant('streak30', (ctx.streak || 0) >= 30);
-    tryGrant('correct100', totalCorrect >= 100);
-    tryGrant('bab1', allTopicsDone(guildId, userId));
+    await tryGrant('belajar_first', true);
+    await tryGrant('belajar_perfect', ctx.perfect);
+    await tryGrant('belajar_streak7', (ctx.streak || 0) >= 7);
+    await tryGrant('belajar_streak30', (ctx.streak || 0) >= 30);
+    await tryGrant('belajar_correct100', totalCorrect >= 100);
+    await tryGrant('belajar_bab1', allTopicsDone(guildId, userId, 1));
+    await tryGrant('belajar_bab2', allTopicsDone(guildId, userId, 2));
     return unlocked;
 }
 function isPartDone(guildId, userId, topicId, part) {
@@ -149,10 +153,10 @@ function topicDoneCount(guildId, userId, topicId) {
 }
 
 
-// ==================== CONTENT: BAB 1 (10 topik) ====================
-// Tiap topik: parts (jumlah lesson), extra (part bonus 2x), phrases (bank kalimat), tips (grammar tips in Indonesian)
+// ==================== CONTENT: BAB 1 & 2 ====================
+// Tiap topik: chapter, parts (jumlah lesson), extra (part bonus 2x), phrases (bank kalimat), tips (grammar tips in Indonesian)
 const TOPICS = [
-    { id: 't1', emoji: '🥤', title: 'Menawarkan & menerima minuman', parts: 5, extra: [3], tips: [
+    { id: 't1', chapter: 1, emoji: '🥤', title: 'Menawarkan & menerima minuman', parts: 5, extra: [3], tips: [
         "'Would you like...' digunakan untuk menawarkan sesuatu dengan sopan.",
         "'Please' di akhir kalimat Inggris = 'Tolong' di awal kalimat Indonesia.",
         "'Some' dipakai untuk menawarkan/meminta sesuatu yang tak tentu jumlahnya."
@@ -179,7 +183,7 @@ const TOPICS = [
         { en: 'I prefer hot coffee', id: 'Aku lebih suka kopi panas' },
     ]},
 
-    { id: 't2', emoji: '🌍', title: 'Menceritakan dari mana asalmu', parts: 5, extra: [3], tips: [
+    { id: 't2', chapter: 1, emoji: '🌍', title: 'Menceritakan dari mana asalmu', parts: 5, extra: [3], tips: [
         "'Where are you from?' artinya 'Dari mana asalmu?' — jawab dengan 'I am from...'",
         "'Live' = tinggal (sekarang), 'Born' = lahir (dulu). Perhatikan konteks waktunya.",
         "Untuk negara/kota, gunakan 'in' setelah 'live': I live in Jakarta."
@@ -198,204 +202,204 @@ const TOPICS = [
         { en: 'They are from England', id: 'Mereka dari Inggris' },
         { en: 'Is this your city', id: 'Ini kotamu' },
         { en: 'I love my country', id: 'Aku cinta negaraku' },
-        { en: 'He was born in Bali', id: 'Dia lahir di Bali' },
-        { en: 'Is Indonesia a big country', id: 'Indonesia negara besar tidak' },
-        { en: 'I want to visit Japan', id: 'Aku mau berkunjung ke Jepang' },
-        { en: 'They live in a beautiful town', id: 'Mereka tinggal di kota kecil yang indah' },
-        { en: 'She travels to America', id: 'Dia bepergian ke Amerika' },
-        { en: 'My capital city is big', id: 'Ibu kota negaraku besar' },
+        { en: 'She lives in a small town', id: 'Dia tinggal di kota kecil' },
+        { en: 'We visit the capital', id: 'Kami mengunjungi ibu kota' },
+        { en: 'I want to travel the world', id: 'Aku ingin bepergian keliling dunia' },
+        { en: 'My house is near the border', id: 'Rumahku dekat perbatasan' },
+        { en: 'This island is large', id: 'Pulau ini besar' },
+        { en: 'Show me your flag', id: 'Tunjukkan bendera kalian padaku' },
     ]},
 
-    { id: 't3', emoji: '👨‍👩‍👧', title: 'Memperkenalkan diri dan keluarga', parts: 5, extra: [3], tips: [
-        "'My name is...' = 'Namaku...' — cara paling umum memperkenalkan diri.",
-        "'This is my...' dipakai untuk memperkenalkan orang lain: 'Ini... saya'.",
-        "Kata ganti 'He/She' dalam bahasa Indonesia sama-sama 'Dia'."
+    { id: 't3', chapter: 1, emoji: '👨‍👩‍👧‍👦', title: 'Memperkenalkan diri dan keluarga', parts: 5, extra: [3], tips: [
+        "'My name is...' atau 'I am...' untuk nama. Untuk keluarga, gunakan Possessive (my, his, her).",
+        "'Parents' = orang tua (ayah & ibu), 'Grandparents' = kakek & nenek.",
+        "Gunakan 'is' untuk satu orang (He is my father) dan 'are' untuk lebih (They are my siblings)."
     ], phrases: [
-        { en: 'My name is Budi', id: 'Namaku Budi' },
-        { en: 'Nice to meet you', id: 'Senang berkenalan denganmu' },
+        { en: 'Hello my name is Alex', id: 'Halo namaku Alex' },
         { en: 'This is my mother', id: 'Ini ibuku' },
         { en: 'He is my father', id: 'Dia ayahku' },
-        { en: 'I have two sisters', id: 'Aku punya dua saudara perempuan' },
-        { en: 'What is your name', id: 'Siapa namamu' },
-        { en: 'How old are you', id: 'Berapa umurmu' },
-        { en: 'This is my family', id: 'Ini keluargaku' },
-        { en: 'My brother is tall', id: 'Kakak laki-lakiku tinggi' },
-        { en: 'She is my best friend', id: 'Dia sahabatku' },
-        { en: 'I have a big family', id: 'Aku punya keluarga besar' },
-        { en: 'This is my little sister', id: 'Ini adik perempuanku' },
-        { en: 'Who is that man', id: 'Siapa pria itu' },
-        { en: 'My parents are happy', id: 'Orang tuaku bahagia' },
-        { en: 'He is my grandfather', id: 'Dia kakekku' },
-        { en: 'Who is your grandmother', id: 'Siapa nenekmu' },
-        { en: 'I have an older brother', id: 'Aku punya kakak laki-laki' },
-        { en: 'My aunt lives in Jakarta', id: 'Bibiku tinggal di Jakarta' },
+        { en: 'I have one sister', id: 'Aku punya satu saudara perempuan' },
+        { en: 'She is my brother', id: 'Dia adalah saudara laki-lakiku' },
+        { en: 'How old are you', id: 'Berapa usiamu' },
+        { en: 'I am twenty years old', id: 'Aku berusia dua puluh tahun' },
+        { en: 'We are a happy family', id: 'Kami adalah keluarga yang bahagia' },
+        { en: 'He is my best friend', id: 'Dia adalah teman baikku' },
+        { en: 'My parents love me', id: 'Orang tuaku menyayangiku' },
+        { en: 'Do you have children', id: 'Apakah kamu punya anak' },
+        { en: 'My grandfather is old', id: 'Kakekku sudah tua' },
+        { en: 'She is my cousin', id: 'Dia sepupuku' },
+        { en: 'I love my grandmother', id: 'Aku sayang nenekku' },
         { en: 'This is my uncle', id: 'Ini pamanku' },
-        { en: 'We love our family', id: 'Kami menyayangi keluarga kami' },
+        { en: 'My aunt is nice', id: 'Bibiku baik' },
+        { en: 'He has two sons', id: 'Dia punya dua anak laki-laki' },
+        { en: 'My daughter is young', id: 'Anak perempuanku masih muda' },
+        { en: 'Is he your husband', id: 'Apakah dia suamimu' },
+        { en: 'My wife is beautiful', id: 'Istriku cantik' },
     ]},
 
-    { id: 't4', emoji: '✈️', title: 'Menjelajahi bandara', parts: 8, extra: [3, 6], tips: [
-        "'Can I...' dipakai untuk minta izin. 'Could I...' lebih sopan lagi.",
-        "'Where is...?' = 'Di mana...?' — untuk menanyakan lokasi.",
-        "Kata 'Please' bisa di awal atau akhir kalimat. Di Indonesia jadi 'Tolong' di awal."
+    { id: 't4', chapter: 1, emoji: '✈️', title: 'Menjelajahi bandara', parts: 8, extra: [3, 6], tips: [
+        "Kosakata wajib bandara: 'gate' (gerbang), 'boarding' (naik pesawat), 'flight' (penerbangan).",
+        "'Where is...?' sangat berguna di bandara. Contoh: Where is the exit?",
+        "Gunakan 'please' untuk meminta tolong secara sopan kepada petugas bandara."
     ], phrases: [
-        { en: 'Where is the airport', id: 'Di mana bandara' },
-        { en: 'Here is my passport', id: 'Ini pasporku' },
-        { en: 'What time is the flight', id: 'Jam berapa penerbangannya' },
-        { en: 'I have one suitcase', id: 'Aku bawa satu koper' },
-        { en: 'Where is the gate', id: 'Di mana pintu gerbangnya' },
-        { en: 'The plane is late', id: 'Pesawatnya terlambat' },
-        { en: 'I need a ticket', id: 'Aku butuh tiket' },
-        { en: 'My flight is at noon', id: 'Penerbanganku tengah hari' },
-        { en: 'Can I see your passport', id: 'Boleh aku lihat paspormu' },
-        { en: 'Have a safe trip', id: 'Semoga perjalananmu aman' },
-        { en: 'Where is the terminal', id: 'Di mana terminalnya' },
-        { en: 'My luggage is heavy', id: 'Bagasiku berat' },
-        { en: 'I want a window seat', id: 'Aku mau kursi dekat jendela' },
-        { en: 'The flight is on time', id: 'Penerbangannya tepat waktu' },
-        { en: 'We are boarding now', id: 'Kita naik pesawat sekarang' },
-        { en: 'Do you have a ticket', id: 'Kamu punya tiket' },
-        { en: 'I lost my suitcase', id: 'Aku kehilangan koperku' },
-        { en: 'Where is the exit', id: 'Di mana jalan keluarnya' },
-        { en: 'The pilot is ready', id: 'Pilotnya sudah siap' },
+        { en: 'Where is the airport', id: 'Di mana bandaranya' },
         { en: 'Please show your passport', id: 'Tolong tunjukkan paspormu' },
+        { en: 'Here is my ticket', id: 'Ini tiket saya' },
+        { en: 'Which gate is for our flight', id: 'Gerbang mana untuk penerbangan kita' },
+        { en: 'The plane is big', id: 'Pesawatnya besar' },
+        { en: 'I have two bags', id: 'Saya punya dua tas' },
+        { en: 'Is my luggage heavy', id: 'Apakah koper saya berat' },
+        { en: 'We need to board now', id: 'Kita harus naik pesawat sekarang' },
+        { en: 'My seat is near the window', id: 'Kursi saya dekat jendela' },
+        { en: 'Enjoy your trip', id: 'Nikmati perjalananmu' },
+        { en: 'The flight is delayed', id: 'Penerbangannya ditunda' },
+        { en: 'Where is the security check', id: 'Di mana pemeriksaan keamanan' },
+        { en: 'Terminal one is busy', id: 'Terminal satu ramai' },
+        { en: 'I lost my boarding pass', id: 'Boarding pass saya hilang' },
+        { en: 'Which way is the exit', id: 'Ke arah mana jalan keluarnya' },
+        { en: 'The pilot is ready', id: 'Pilotnya sudah siap' },
+        { en: 'Where is customs', id: 'Di mana bea cukai' },
+        { en: 'We arrived early', id: 'Kita tiba awal' },
+        { en: 'Can I change my seat', id: 'Boleh saya ganti kursi' },
+        { en: 'Welcome to our country', id: 'Selamat datang di negara kami' },
     ]},
 
-    { id: 't5', emoji: '🎨', title: 'Deskripsi kata benda dengan kata sifat', parts: 8, extra: [3, 6], tips: [
-        "Dalam bahasa Inggris, kata sifat SEBELUM kata benda: 'a red car'. Di Indonesia: 'mobil merah'.",
-        "'Too' = terlalu (negatif), 'very' = sangat (netral). 'The coffee is too hot' = terlalu panas.",
-        "'A/An' dipakai untuk benda tak tentu. 'The' untuk benda spesifik yang sudah diketahui."
+    { id: 't5', chapter: 1, emoji: '👜', title: 'Deskripsi kata benda dengan kata sifat', parts: 8, extra: [3, 6], tips: [
+        "Di Inggris, Kata Sifat ditulis SEBELUM Kata Benda. Contoh: 'a big dog' (anjing besar).",
+        "Gunakan 'is' (tunggal) atau 'are' (jamak) untuk menghubungkan subjek dengan kata sifat.",
+        "Beberapa kata sifat berlawanan: big-small, hot-cold, clean-dirty, expensive-cheap."
     ], phrases: [
-        { en: 'The house is big', id: 'Rumahnya besar' },
-        { en: 'A red car', id: 'Sebuah mobil merah' },
-        { en: 'The book is interesting', id: 'Bukunya menarik' },
-        { en: 'She has a small dog', id: 'Dia punya anjing kecil' },
-        { en: 'The weather is hot', id: 'Cuacanya panas' },
-        { en: 'A beautiful flower', id: 'Sebuah bunga yang indah' },
-        { en: 'The coffee is sweet', id: 'Kopinya manis' },
-        { en: 'The water is cold', id: 'Airnya dingin' },
-        { en: 'A tall man', id: 'Seorang pria tinggi' },
-        { en: 'The room is clean', id: 'Kamarnya bersih' },
-        { en: 'The new car is fast', id: 'Mobil baru itu cepat' },
         { en: 'This bag is expensive', id: 'Tas ini mahal' },
-        { en: 'A dirty glass', id: 'Sebuah gelas kotor' },
-        { en: 'The street is busy', id: 'Jalannya ramai' },
+        { en: 'I want a small cup', id: 'Aku mau cangkir kecil' },
+        { en: 'The water is cold', id: 'Airnya dingin' },
+        { en: 'We live in a beautiful city', id: 'Kami tinggal di kota yang indah' },
+        { en: 'He has a new car', id: 'Dia punya mobil baru' },
+        { en: 'The room is clean', id: 'Kamarnya bersih' },
+        { en: 'Is the tea sweet', id: 'Tehnya manis tidak' },
+        { en: 'She is a tall girl', id: 'Dia gadis yang tinggi' },
+        { en: 'The dog is fast', id: 'Anjing itu cepat' },
+        { en: 'My shoes are kotor', id: 'Sepatuku kotor' },
+        { en: 'This is an easy question', id: 'Ini pertanyaan yang mudah' },
+        { en: 'English is not difficult', id: 'Bahasa Inggris tidak sulit' },
+        { en: 'The street is kotor', id: 'Jalannya kotor' },
+        { en: 'The restaurant is busy', id: 'Restorannya ramai' },
+        { en: 'I like quiet places', id: 'Aku suka tempat yang tenang' },
+        { en: 'The laptop is cheap', id: 'Laptopnya murah' },
+        { en: 'He is a slow driver', id: 'Dia sopir yang lambat' },
+        { en: 'The bed is soft', id: 'Tempat tidurnya empuk' },
+        { en: 'They buy hot bread', id: 'Mereka membeli roti hangat' },
         { en: 'I have a blue shirt', id: 'Aku punya kemeja biru' },
-        { en: 'The coffee is too hot', id: 'Kopinya terlalu panas' },
-        { en: 'He has a cheap bicycle', id: 'Dia punya sepeda murah' },
-        { en: 'My room is quiet', id: 'Kamarku tenang' },
-        { en: 'This is an easy test', id: 'Ini ujian yang mudah' },
-        { en: 'The water is clean', id: 'Airnya bersih' },
     ]},
 
-    { id: 't6', emoji: '🍽️', title: 'Memesan makanan dan minuman', parts: 8, extra: [3, 6], tips: [
-        "'I would like...' lebih sopan dari 'I want...' saat memesan di restoran.",
-        "'Can I have...?' = 'Boleh aku minta...?' — cara kasual meminta sesuatu.",
-        "'The bill please' = 'Tolong minta tagihannya' — frasa wajib di restoran."
+    { id: 't6', chapter: 1, emoji: '🍜', title: 'Memesan makanan dan minuman', parts: 8, extra: [3, 6], tips: [
+        "'Can I order...?' atau 'I would like...' digunakan untuk memesan makanan dengan sopan.",
+        "Minta tagihan pembayaran dengan ungkapan 'The bill please' di akhir makan.",
+        "Untuk makanan pedas gunakan 'spicy', dan jika tidak mau gula gunakan 'no sugar please'."
     ], phrases: [
-        { en: 'I would like to order', id: 'Aku mau pesan' },
-        { en: 'Can I see the menu', id: 'Boleh aku lihat menunya' },
-        { en: 'I want fried rice', id: 'Aku mau nasi goreng' },
-        { en: 'One glass of orange juice', id: 'Satu gelas jus jeruk' },
         { en: 'The bill please', id: 'Tolong minta tagihannya' },
-        { en: 'Is it spicy', id: 'Ini pedas tidak' },
-        { en: 'This food is delicious', id: 'Makanan ini enak' },
-        { en: 'I would like some soup', id: 'Aku mau sup' },
-        { en: 'How much is it', id: 'Berapa harganya' },
         { en: 'No sugar please', id: 'Tolong jangan pakai gula' },
-        { en: 'Where is the restaurant', id: 'Di mana restorannya' },
-        { en: 'I want to order chicken', id: 'Aku mau pesan ayam' },
-        { en: 'The food is too hot', id: 'Makanannya terlalu panas' },
+        { en: 'I want to order food', id: 'Aku mau pesan makanan' },
+        { en: 'This soup is delicious', id: 'Sup ini enak' },
+        { en: 'Do you want rice or bread', id: 'Kamu mau nasi atau roti' },
+        { en: 'I like spicy chicken', id: 'Aku suka ayam pedas' },
         { en: 'Can I have a spoon', id: 'Boleh aku minta sendok' },
-        { en: 'We want some dessert', id: 'Kami mau makanan penutup' },
-        { en: 'Where is my fork', id: 'Di mana garpuku' },
-        { en: 'I want a cup of tea', id: 'Aku mau secangkir teh' },
-        { en: 'This restaurant is clean', id: 'Restoran ini bersih' },
-        { en: 'Can we have some salt', id: 'Boleh kami minta garam' },
-        { en: 'The chicken is delicious', id: 'Ayamnya enak' },
+        { en: 'We need a fork and knife', id: 'Kami butuh garpu dan pisau' },
+        { en: 'Where is the menu', id: 'Di mana menunya' },
+        { en: 'I prefer this restaurant', id: 'Aku lebih suka restoran ini' },
+        { en: 'A glass of cold juice please', id: 'Tolong segelas jus dingin' },
+        { en: 'The waiter is friendly', id: 'Pelayannya ramah' },
+        { en: 'Is there salt in the soup', id: 'Apakah ada garam di supnya' },
+        { en: 'We need more napkins', id: 'Kita butuh lebih banyak serbet' },
+        { en: 'I want a plate of rice', id: 'Aku mau sepiring nasi' },
+        { en: 'He orders hot tea', id: 'Dia memesan teh panas' },
+        { en: 'She wants a sweet dessert', id: 'Dia ingin makanan penutup yang manis' },
+        { en: 'Here is your bowl of soup', id: 'Ini mangkuk supmu' },
+        { en: 'We love eating here', id: 'Kami suka makan di sini' },
+        { en: 'Is this food fresh', id: 'Apakah makanan ini segar' },
     ]},
 
-    { id: 't7', emoji: '💼', title: 'Kata kerja sekarang untuk profesi', parts: 8, extra: [3, 6], tips: [
-        "'He/She is a...' dipakai untuk menyebut profesi seseorang. Tambahkan 'a/an' sebelum profesi.",
-        "Kata kerja orang ketiga (he/she/it) di present tense ditambah '-s': 'She teaches'.",
-        "'Work at' = bekerja di tempat spesifik, 'Work as' = bekerja sebagai profesi."
+    { id: 't7', chapter: 1, emoji: '👮', title: 'Kata kerja sekarang untuk profesi', parts: 8, extra: [3, 6], tips: [
+        "Present Tense: tambahkan '-s' atau '-es' di kata kerja jika subjeknya He, She, atau It.",
+        "Contoh: He works (dia bekerja), She teaches (dia mengajar). Subjek I/You/We/They tidak ditambah '-s'.",
+        "Kosakata profesi: doctor (dokter), teacher (guru), writer (penulis), driver (sopir)."
     ], phrases: [
-        { en: 'She is a doctor', id: 'Dia seorang dokter' },
-        { en: 'He works in a bank', id: 'Dia bekerja di bank' },
-        { en: 'I am a teacher', id: 'Aku seorang guru' },
-        { en: 'They are engineers', id: 'Mereka insinyur' },
+        { en: 'The doctor works in a hospital', id: 'Dokter itu bekerja di rumah sakit' },
+        { en: 'My mother is a teacher', id: 'Ibuku adalah seorang guru' },
         { en: 'She teaches English', id: 'Dia mengajar bahasa Inggris' },
-        { en: 'He drives a taxi', id: 'Dia menyetir taksi' },
-        { en: 'What is your job', id: 'Apa pekerjaanmu' },
-        { en: 'He is a police officer', id: 'Dia seorang polisi' },
-        { en: 'I help people', id: 'Aku membantu orang' },
-        { en: 'We work together', id: 'Kami bekerja bersama' },
-        { en: 'My sister is a nurse', id: 'Kakakku seorang perawat' },
-        { en: 'He writes interesting books', id: 'Dia menulis buku-buku menarik' },
-        { en: 'They build big bridges', id: 'Mereka membangun jembatan besar' },
-        { en: 'She works at a hospital', id: 'Dia bekerja di rumah sakit' },
-        { en: 'A chef cooks delicious food', id: 'Seorang koki memasak makanan enak' },
-        { en: 'He is a taxi driver', id: 'Dia seorang sopir taksi' },
-        { en: 'The manager is in the office', id: 'Manajernya ada di kantor' },
-        { en: 'She is a talented artist', id: 'Dia seniman berbakat' },
-        { en: 'We want to be engineers', id: 'Kami ingin jadi insinyur' },
-        { en: 'A doctor helps sick people', id: 'Seorang dokter membantu orang sakit' },
+        { en: 'The police officer helps people', id: 'Polisi itu membantu orang-off' },
+        { en: 'He is a taxi driver', id: 'Dia adalah sopir taksi' },
+        { en: 'Where does the manager work', id: 'Di mana manajer itu bekerja' },
+        { en: 'The engineer builds bridges', id: 'Insinyur itu membangun jembatan' },
+        { en: 'My brother works in a bank', id: 'Saudara laki-lakiku bekerja di bank' },
+        { en: 'She is a talented singer', id: 'Dia adalah penyanyi yang berbakat' },
+        { en: 'The chef cooks delicious food', id: 'Koki itu memasak makanan yang enak' },
+        { en: 'I want to be an artist', id: 'Aku ingin menjadi seorang seniman' },
+        { en: 'The nurse works today', id: 'Perawat itu bekerja hari ini' },
+        { en: 'He writes interesting books', id: 'Dia menulis buku-buku yang menarik' },
+        { en: 'The writer lives in Bali', id: 'Penulis itu tinggal di Bali' },
+        { en: 'We respect the soldiers', id: 'Kami menghormati para tentara' },
+        { en: 'My father is a farmer', id: 'Ayahku adalah seorang petani' },
+        { en: 'The office is big', id: 'Kantornya besar' },
+        { en: 'He loves his job', id: 'Dia menyukai pekerjaannya' },
+        { en: 'She helps the doctor', id: 'Dia membantu dokter' },
+        { en: 'They work every day', id: 'Mereka bekerja setiap hari' },
     ]},
 
-    { id: 't8', emoji: '🏃', title: 'Menggunakan kata kerja sekarang', parts: 8, extra: [3, 6], tips: [
-        "Present Simple untuk kebiasaan: 'I eat breakfast every morning' = tiap hari.",
-        "Tambah 'do not' / 'does not' untuk kalimat negatif. 'I do not understand'.",
-        "'Do you...?' di awal kalimat untuk membuat pertanyaan yes/no."
+    { id: 't8', chapter: 1, emoji: '🏃', title: 'Kata kerja aktivitas sehari-hari', parts: 8, extra: [3, 6], tips: [
+        "Gunakan present tense untuk aktivitas rutin/sehari-hari.",
+        "Contoh kata kerja dasar: read (membaca), sleep (tidur), run (berlari), study (belajar).",
+        "Aturan He/She/It tetap berlaku: He reads a book, She sleeps early."
     ], phrases: [
-        { en: 'I eat breakfast every morning', id: 'Aku sarapan setiap pagi' },
-        { en: 'She reads books', id: 'Dia membaca buku' },
-        { en: 'They play football', id: 'Mereka bermain sepak bola' },
-        { en: 'He watches television', id: 'Dia menonton televisi' },
-        { en: 'We go to school', id: 'Kami pergi ke sekolah' },
-        { en: 'She walks to work', id: 'Dia berjalan kaki ke kantor' },
-        { en: 'He studies at night', id: 'Dia belajar di malam hari' },
-        { en: 'I do not understand', id: 'Aku tidak mengerti' },
-        { en: 'Do you speak English', id: 'Kamu bisa bicara bahasa Inggris' },
-        { en: 'She likes music', id: 'Dia suka musik' },
-        { en: 'I listen to the radio', id: 'Aku mendengarkan radio' },
-        { en: 'We speak Indonesian at home', id: 'Kami bicara bahasa Indonesia di rumah' },
-        { en: 'They run in the park', id: 'Mereka berlari di taman' },
-        { en: 'He writes a letter', id: 'Dia menulis surat' },
-        { en: 'She drives a car', id: 'Dia mengendarai mobil' },
-        { en: 'I swim in the pool', id: 'Aku berenang di kolam' },
-        { en: 'They learn English together', id: 'Mereka belajar bahasa Inggris bersama' },
-        { en: 'She sings a beautiful song', id: 'Dia menyanyikan lagu yang indah' },
-        { en: 'He drinks water after running', id: 'Dia minum air putih setelah berlari' },
-        { en: 'We sleep early at night', id: 'Kami tidur lebih awal' },
+        { en: 'I read a book every night', id: 'Aku membaca buku setiap malam' },
+        { en: 'She sleeps early', id: 'Dia tidur awal' },
+        { en: 'He runs in the park', id: 'Dia berlari di taman' },
+        { en: 'We study English together', id: 'Kita belajar bahasa Inggris bersama' },
+        { en: 'They play football on Sundays', id: 'Mereka bermain sepak bola pada hari Minggu' },
+        { en: 'I write a letter', id: 'Aku menulis surat' },
+        { en: 'Do you watch television', id: 'Apakah kamu menonton televisi' },
+        { en: 'She listens to music', id: 'Dia mendengarkan musik' },
+        { en: 'He speaks English well', id: 'Dia berbicara bahasa Inggris dengan baik' },
+        { en: 'We walk to school', id: 'Kami berjalan kaki ke sekolah' },
+        { en: 'They sing a beautiful song', id: 'Mereka menyanyikan lagu yang indah' },
+        { en: 'I drink water in the morning', id: 'Aku minum air di pagi hari' },
+        { en: 'She swims in the pool', id: 'Dia berenang di kolam renang' },
+        { en: 'My mother cooks breakfast', id: 'Ibuku memasak sarapan' },
+        { en: 'He drives a blue car', id: 'Dia mengendarai mobil biru' },
+        { en: 'We learn new words', id: 'Kita belajar kata-kata baru' },
+        { en: 'They buy fresh fruits', id: 'Mereka membeli buah-buahan segar' },
+        { en: 'I sell ice cream', id: 'Aku menjual es krim' },
+        { en: 'The boy jumps high', id: 'Anak laki-laki itu melompat tinggi' },
+        { en: 'She walks with her friend', id: 'Dia berjalan dengan temannya' },
     ]},
 
-    { id: 't9', emoji: '🌦️', title: 'Membicarakan tentang cuaca', parts: 8, extra: [3, 6], tips: [
-        "'It is...' dipakai untuk cuaca. 'It is raining' = sedang hujan. Subjek 'It' wajib di Inggris.",
-        "'Going to' menunjukkan prediksi/rencana: 'It is going to rain' = akan hujan.",
-        "Kata sifat cuaca: sunny, cloudy, windy, rainy — tambahkan '-y' pada kata benda."
+    { id: 't9', chapter: 1, emoji: '🌦️', title: 'Membicarakan tentang cuaca', parts: 8, extra: [3, 6], tips: [
+        "Gunakan 'It is...' untuk mendeskripsikan cuaca saat ini. Contoh: 'It is sunny'.",
+        "Kosakata cuaca: rain (hujan), sunny (cerah), cloudy (berawan), wind (angin).",
+        "Gunakan 'need' untuk kebutuhan, contoh: 'I need an umbrella' (saya butuh payung)."
     ], phrases: [
         { en: 'It is sunny today', id: 'Hari ini cerah' },
-        { en: 'It is raining', id: 'Sedang hujan' },
-        { en: 'The weather is cold', id: 'Cuacanya dingin' },
-        { en: 'It is very hot', id: 'Sangat panas' },
-        { en: 'Is it going to rain', id: 'Mau hujan tidak' },
-        { en: 'The sky is cloudy', id: 'Langitnya berawan' },
-        { en: 'It is windy', id: 'Berangin' },
-        { en: 'Take an umbrella', id: 'Bawa payung' },
-        { en: 'What is the weather like', id: 'Cuacanya bagaimana' },
-        { en: 'Tomorrow will be hot', id: 'Besok akan panas' },
-        { en: 'I see a beautiful rainbow', id: 'Aku melihat pelangi yang indah' },
+        { en: 'I need an umbrella', id: 'Aku butuh payung' },
+        { en: 'It is raining outside', id: 'Di luar sedang hujan' },
+        { en: 'The sky is blue', id: 'Langitnya berwarna biru' },
+        { en: 'It is very cold', id: 'Sangat dingin' },
+        { en: 'The wind is strong', id: 'Anginnya kencang' },
+        { en: 'Is it hot in Jakarta', id: 'Apakah di Jakarta panas' },
+        { en: 'Look at the beautiful rainbow', id: 'Lihatlah pelangi yang indah' },
+        { en: 'The weather is warm', id: 'Cuacanya hangat' },
+        { en: 'I like cloudy days', id: 'Aku suka hari yang berawan' },
+        { en: 'We wear warm jackets', id: 'Kami memakai jaket hangat' },
         { en: 'The storm is coming', id: 'Badai akan datang' },
-        { en: 'It is warm outside', id: 'Di luar hangat' },
-        { en: 'The snow is white', id: 'Saljunya putih' },
-        { en: 'Why is the sky dark', id: 'Kenapa langitnya gelap' },
-        { en: 'I like warm weather', id: 'Aku suka cuaca hangat' },
-        { en: 'The wind is very strong', id: 'Anginnya sangat kencang' },
-        { en: 'We walk in the rain', id: 'Kami berjalan di tengah hujan' },
-        { en: 'It is cloudy today', id: 'Hari ini berawan' },
-        { en: 'Take your jacket', id: 'Bawa jaketmu' },
+        { en: 'The night is dark', id: 'Malam ini gelap' },
+        { en: 'The ground is dry', id: 'Tanahnya kering' },
+        { en: 'It is snow in winter', id: 'Ada salju di musim dingin' },
+        { en: 'The clouds are white', id: 'Awan-awannya berwarna putih' },
+        { en: 'I love this season', id: 'Aku suka musim ini' },
+        { en: 'What is the temperature', id: 'Berapa suhunya' },
+        { en: 'It is thirty degrees', id: 'Suhunya tiga puluh derajat' },
+        { en: 'We stay home when it rains', id: 'Kami tinggal di rumah saat hujan' },
     ]},
 
-    { id: 't10', emoji: '🐶', title: 'Membicarakan tentang hewan peliharaan', parts: 8, extra: [3, 6], tips: [
+    { id: 't10', chapter: 1, emoji: '🐶', title: 'Membicarakan tentang hewan peliharaan', parts: 8, extra: [3, 6], tips: [
         "'Do you have...?' untuk bertanya kepemilikan. Jawab: 'Yes, I have...' atau 'No, I do not'.",
         "'Can' = bisa/mampu. 'The bird can fly' = Burung itu bisa terbang.",
         "Plural (jamak) di Inggris pakai '-s': 'cats', 'dogs'. Di Indonesia tidak berubah atau diulang."
@@ -421,6 +425,91 @@ const TOPICS = [
         { en: 'The dog barks loudly', id: 'Anjing itu menggonggong keras' },
         { en: 'They love their puppies', id: 'Mereka menyayangi anak anjing mereka' },
     ]},
+
+    { id: 't11', chapter: 2, emoji: '🛍️', title: 'Belanja & Tawar-menawar', parts: 5, extra: [3], tips: [
+        "'How much does it cost?' digunakan untuk menanyakan harga barang secara spesifik.",
+        "'Can I get a discount?' digunakan jika ingin meminta potongan harga secara sopan.",
+        "'Receipt' (struk belanja) dibaca 'ri-sit', huruf 'p' tidak diucapkan."
+    ], phrases: [
+        { en: "How much does this shirt cost", id: "Berapa harga kemeja ini" },
+        { en: "Is there a discount for this", id: "Apakah ada diskon untuk ini" },
+        { en: "I would like to buy this bag", id: "Saya ingin membeli tas ini" },
+        { en: "Where is the fitting room", id: "Di mana kamar pas" },
+        { en: "Can I pay by credit card", id: "Boleh saya bayar pakai kartu kredit" },
+        { en: "Please give me the receipt", id: "Tolong berikan struk belanjanya" },
+        { en: "This price is too expensive", id: "Harga ini terlalu mahal" },
+        { en: "Do you have a cheaper one", id: "Apakah kamu punya yang lebih murah" },
+        { en: "I am just looking around", id: "Saya hanya sedang melihat-lihat" },
+        { en: "I want to return this item", id: "Saya ingin mengembalikan barang ini" }
+    ]},
+
+    { id: 't12', chapter: 2, emoji: '🗺️', title: 'Menanyakan & Menunjukkan Arah', parts: 5, extra: [3], tips: [
+        "'Turn left' = belok kiri, 'Turn right' = belok kanan, 'Go straight' = jalan terus.",
+        "Gunakan 'excuse me' di awal kalimat sebelum bertanya kepada orang asing.",
+        "'Next to' berarti di sebelah, sedangkan 'across from' berarti di seberang."
+    ], phrases: [
+        { en: "Excuse me where is the station", id: "Permisi di mana stasiunnya" },
+        { en: "Go straight and turn left", id: "Jalan terus dan belok kiri" },
+        { en: "The hotel is next to the bank", id: "Hotelnya di sebelah bank" },
+        { en: "Is the museum far from here", id: "Apakah museumnya jauh dari sini" },
+        { en: "You will see a post office", id: "Kamu akan melihat kantor pos" },
+        { en: "Turn right at the traffic light", id: "Belok kanan di lampu merah" },
+        { en: "The restaurant is across from school", id: "Restorannya di seberang sekolah" },
+        { en: "How do I get to the airport", id: "Bagaimana cara ke bandara" },
+        { en: "It is about ten minutes walk", id: "Jaraknya sekitar sepuluh menit jalan kaki" },
+        { en: "Thank you for your help", id: "Terima kasih atas bantuanmu" }
+    ]},
+
+    { id: 't13', chapter: 2, emoji: '🏨', title: 'Perjalanan & Reservasi Hotel', parts: 5, extra: [3], tips: [
+        "'Check-in' adalah proses mendaftar saat tiba, 'Check-out' saat keluar.",
+        "'Double room' mempunyai satu kasur besar, 'Twin room' mempunyai dua kasur terpisah.",
+        "'Reservation' = pemesanan tempat, 'Book' = memesan (kata kerja)."
+    ], phrases: [
+        { en: "I have a reservation under my name", id: "Saya punya reservasi atas nama saya" },
+        { en: "What time is checkout", id: "Jam berapa waktu checkout" },
+        { en: "Does the room have free wifi", id: "Apakah kamarnya ada wifi gratis" },
+        { en: "I would like a double room", id: "Saya ingin kamar dengan satu kasur besar" },
+        { en: "We need two room keys please", id: "Tolong kami butuh dua kunci kamar" },
+        { en: "Is breakfast included in the price", id: "Apakah sarapan sudah termasuk dalam harga" },
+        { en: "Can you wake me up at seven", id: "Bisa bangunkan saya jam tujuh" },
+        { en: "Where can I leave my luggage", id: "Di mana saya bisa titip bagasi" },
+        { en: "I want to book a taxi", id: "Saya ingin memesan taksi" },
+        { en: "We enjoyed our stay here", id: "Kami menikmati masa tinggal kami di sini" }
+    ]},
+
+    { id: 't14', chapter: 2, emoji: '🩺', title: 'Kesehatan & Keluhan Medis', parts: 5, extra: [3], tips: [
+        "Gunakan kata 'ache' untuk rasa sakit di bagian tubuh, contoh: 'headache' (sakit kepala), 'stomachache' (sakit perut).",
+        "'Should' digunakan untuk memberikan saran medis atau umum.",
+        "'Prescription' adalah resep obat dari dokter."
+    ], phrases: [
+        { en: "I have a terrible headache", id: "Saya sakit kepala parah" },
+        { en: "You should see a doctor", id: "Kamu harus pergi ke dokter" },
+        { en: "Where is the nearest pharmacy", id: "Di mana apotek terdekat" },
+        { en: "I need some medicine for cold", id: "Saya butuh obat flu" },
+        { en: "Does it hurt here", id: "Apakah sakit di bagian sini" },
+        { en: "Take this pill after eating", id: "Minum pil ini setelah makan" },
+        { en: "I feel dizzy and weak", id: "Saya merasa pusing dan lemas" },
+        { en: "My throat is very sore", id: "Tenggorokan saya sangat sakit" },
+        { en: "You need to rest today", id: "Kamu perlu istirahat hari ini" },
+        { en: "I hope you feel better soon", id: "Semoga kamu lekas sembuh" }
+    ]},
+
+    { id: 't15', chapter: 2, emoji: '💼', title: 'Dunia Kerja & Karir', parts: 5, extra: [3], tips: [
+        "'Apply for a job' = melamar pekerjaan, 'Hire' = mempekerjakan.",
+        "'Resume' atau 'CV' adalah daftar riwayat hidup untuk melamar kerja.",
+        "'Colleague' adalah rekan kerja, 'Boss' atau 'Manager' adalah atasan."
+    ], phrases: [
+        { en: "I have a job interview tomorrow", id: "Saya ada wawancara kerja besok" },
+        { en: "She works in a big company", id: "Dia bekerja di perusahaan besar" },
+        { en: "What is your current profession", id: "Apa pekerjaanmu saat ini" },
+        { en: "We have a meeting at ten", id: "Kita ada rapat jam sepuluh" },
+        { en: "He is my favorite colleague", id: "Dia adalah rekan kerja favorit saya" },
+        { en: 'I need to send an email', id: 'Saya harus mengirim email' },
+        { en: 'We are working on a project', id: 'Kami sedang mengerjakan sebuah proyek' },
+        { en: 'She got promoted last week', id: 'Dia naik jabatan minggu lalu' },
+        { en: 'I want to apply for this job', id: 'Saya ingin melamar pekerjaan ini' },
+        { en: 'He has a lot of experience', id: 'Dia punya banyak pengalaman' }
+    ]}
 ];
 const TOPIC_BY_ID = Object.fromEntries(TOPICS.map(t => [t.id, t]));
 
@@ -437,6 +526,11 @@ const WORDS_BY_TOPIC = {
     t8: [['eat','makan'],['drink','minum'],['read','membaca'],['write','menulis'],['play','bermain'],['walk','berjalan'],['run','berlari'],['study','belajar'],['sleep','tidur'],['watch','menonton'],['listen','mendengar'],['speak','berbicara'],['sing','bernyanyi'],['swim','berenang'],['learn','belajar'],['dance','menari'],['jump','melompat'],['drive','mengendarai'],['buy','membeli'],['sell','menjual']],
     t9: [['sunny','cerah'],['rain','hujan'],['cold','dingin'],['hot','panas'],['cloudy','berawan'],['windy','berangin'],['snow','salju'],['sky','langit'],['umbrella','payung'],['weather','cuaca'],['rainbow','pelangi'],['storm','badai'],['warm','hangat'],['dark','gelap'],['dry','kering'],['jacket','jaket'],['wind','angin'],['cloud','awan'],['season','musim'],['degree','derajat']],
     t10:[['cat','kucing'],['dog','anjing'],['bird','burung'],['fish','ikan'],['rabbit','kelinci'],['pet','peliharaan'],['animal','binatang'],['cute','lucu'],['friendly','ramah'],['tail','ekor'],['horse','kuda'],['feed','memberi makan'],['puppy','anak anjing'],['monkey','monyet'],['mouse','tikus'],['hamster','hamster'],['bark','menggonggong'],['cheese','keju'],['wild','liar'],['cage','kandang']],
+    t11:[['discount','diskon'],['expensive','mahal'],['cheap','murah'],['shirt','kemeja'],['bag','tas'],['price','harga'],['receipt','struk belanja'],['card','kartu kredit'],['fitting','kamar pas'],['buy','membeli'],['return','mengembalikan'],['shop','toko'],['market','pasar'],['cashier','kasir'],['sell','menjual'],['change','kembalian'],['customer','pelanggan'],['store','toko'],['wallet','dompet'],['coin','koin']],
+    t12:[['left','kiri'],['right','kanan'],['straight','lurus'],['directions','arah'],['station','stasiun'],['hotel','hotel'],['bank','bank'],['museum','museum'],['airport','bandara'],['restaurant','restoran'],['school','sekolah'],['street','jalan'],['bridge','jembatan'],['corner','pojok'],['traffic','lampu merah'],['turn','belok'],['map','peta'],['walk','jalan kaki'],['minutes','menit'],['help','bantuan']],
+    t13:[['reservation','reservasi'],['checkout','checkout'],['wifi','wifi'],['keys','kunci kamar'],['breakfast','sarapan'],['price','harga'],['luggage','bagasi'],['taxi','taksi'],['stay','tinggal'],['double','kasur besar'],['room','kamar'],['bed','tempat tidur'],['hotel','hotel'],['lobby','lobi'],['pillow','bantal'],['blanket','selimut'],['shower','pancuran mandi'],['towel','handuk'],['service','layanan'],['passport','paspor']],
+    t14:[['headache','sakit kepala'],['doctor','dokter'],['medicine','obat'],['pharmacy','apotek'],['hurt','sakit'],['pill','pil'],['rest','istirahat'],['dizzy','pusing'],['weak','lemas'],['sore','sore (sakit/luka)'],['hospital','rumah sakit'],['nurse','perawat'],['clinic','klinik'],['pain','rasa sakit'],['fever','demam'],['cough','batuk'],['stomachache','sakit perut'],['health','kesehatan'],['sick','sakit'],['cold','pilek']],
+    t15:[['interview','wawancara kerja'],['company','perusahaan'],['profession','pekerjaan'],['meeting','rapat'],['colleague','rekan kerja'],['email','email'],['project','proyek'],['promoted','naik jabatan'],['apply','melamar'],['experience','pengalaman'],['office','kantor'],['boss','atasan'],['manager','manajer'],['career','karir'],['resume','riwayat hidup'],['salary','gaji'],['business','bisnis'],['team','tim'],['client','klien'],['contract','kontrak']],
 };
 for (const t of TOPICS) t.words = (WORDS_BY_TOPIC[t.id] || []).map(([en, id]) => ({ en, id }));
 
@@ -694,18 +788,20 @@ function topicUnlocked(guildId, userId, index) {
     return topicDoneCount(guildId, userId, prev.id) >= prev.parts;
 }
 
-function buildChapterPanel(guildId, userId) {
+function buildChapterPanel(guildId, userId, chapter = 1) {
     const st = getStudyStats(guildId, userId);
+    const chapterTopics = TOPICS.filter(t => t.chapter === chapter);
 
-    // Hitung progress keseluruhan BAB 1
-    const totalParts = TOPICS.reduce((s, t) => s + t.parts, 0);
-    const donePartsTotal = TOPICS.reduce((s, t) => s + topicDoneCount(guildId, userId, t.id), 0);
-    const doneTopics = TOPICS.filter((t, idx) => topicDoneCount(guildId, userId, t.id) >= t.parts).length;
+    // Hitung progress keseluruhan chapter
+    const totalParts = chapterTopics.reduce((s, t) => s + t.parts, 0);
+    const donePartsTotal = chapterTopics.reduce((s, t) => s + topicDoneCount(guildId, userId, t.id), 0);
+    const doneTopics = chapterTopics.filter(t => topicDoneCount(guildId, userId, t.id) >= t.parts).length;
     const pct = totalParts ? Math.round((donePartsTotal / totalParts) * 100) : 0;
     const filled = Math.round((pct / 100) * 12);
     const overallBar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 
-    const lines = TOPICS.map((t, idx) => {
+    const lines = chapterTopics.map(t => {
+        const idx = TOPICS.indexOf(t);
         const done = topicDoneCount(guildId, userId, t.id);
         const unlocked = topicUnlocked(guildId, userId, idx);
         const status = done >= t.parts ? '✅' : unlocked ? '▶️' : '🔒';
@@ -715,18 +811,19 @@ function buildChapterPanel(guildId, userId) {
 
     const embed = new EmbedBuilder()
         .setColor('#1CB0F6')
-        .setTitle(i18n.t(guildId, userId, 'belajar.chapter_title'))
+        .setTitle(i18n.t(guildId, userId, `belajar.chapter_title_${chapter}`))
         .setDescription(
             i18n.t(guildId, userId, 'belajar.chapter_stats', { level: st.level, xp: st.xp, streak: st.streak }) + '\n' +
-            i18n.t(guildId, userId, 'belajar.chapter_progress', { bar: overallBar, pct: pct, done: doneTopics, total: TOPICS.length }) + '\n\n' +
-            `${lines.join('\n')}\n\n` + i18n.t(guildId, userId, 'belajar.chapter_coming_soon')
+            i18n.t(guildId, userId, `belajar.chapter_progress_${chapter}`, { bar: overallBar, pct: pct, done: doneTopics, total: chapterTopics.length }) + '\n\n' +
+            `${lines.join('\n')}`
         )
         .setFooter({ text: i18n.t(guildId, userId, 'belajar.chapter_footer') });
 
     const rows = [];
     let row = new ActionRowBuilder();
-    TOPICS.forEach((t, idx) => {
-        if (idx > 0 && idx % 5 === 0) { rows.push(row); row = new ActionRowBuilder(); }
+    chapterTopics.forEach(t => {
+        const idx = TOPICS.indexOf(t);
+        if (row.components.length > 0 && row.components.length % 5 === 0) { rows.push(row); row = new ActionRowBuilder(); }
         const unlocked = topicUnlocked(guildId, userId, idx);
         const done = topicDoneCount(guildId, userId, t.id) >= t.parts;
         row.addComponents(new ButtonBuilder()
@@ -737,8 +834,14 @@ function buildChapterPanel(guildId, userId) {
             .setDisabled(!unlocked));
     });
     if (row.components.length) rows.push(row);
+
     if (rows.length < 5) {
+        const toggleBtn = chapter === 1 
+            ? new ButtonBuilder().setCustomId(`belajar_page_2_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_next_chapter')).setStyle(ButtonStyle.Primary)
+            : new ButtonBuilder().setCustomId(`belajar_page_1_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_prev_chapter')).setStyle(ButtonStyle.Primary);
+        
         rows.push(new ActionRowBuilder().addComponents(
+            toggleBtn,
             new ButtonBuilder().setCustomId(`belajar_review_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_review')).setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`belajar_speed_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_speed')).setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`belajar_lb_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_leaderboard')).setStyle(ButtonStyle.Secondary),
@@ -788,7 +891,7 @@ function buildTopicPanel(guildId, userId, topic) {
             i18n.t(guildId, userId, 'belajar.topic_progress', { bar: bar, pct: pct, done: donePartCount, total: topic.parts }) + '\n\n' +
             `${lines.join('\n')}\n\n` + i18n.t(guildId, userId, 'belajar.topic_note')
         )
-        .setFooter({ text: i18n.t(guildId, userId, 'belajar.topic_footer', { current: idx + 1, total: TOPICS.length }) });
+        .setFooter({ text: i18n.t(guildId, userId, 'belajar.topic_footer', { chapter: topic.chapter, current: idx + 1, total: TOPICS.length }) });
 
     const rows = [];
     let row = new ActionRowBuilder();
@@ -807,7 +910,7 @@ function buildTopicPanel(guildId, userId, topic) {
         cnt++;
     }
     if (row.components.length) rows.push(row);
-    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary)));
+    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belajar_home_${topic.chapter}_${userId}`).setLabel(i18n.t(guildId, userId, 'belajar.btn_back_chapter', { chapter: topic.chapter })).setStyle(ButtonStyle.Secondary)));
     return { embeds: [embed], components: rows.slice(0, 5) };
 }
 
@@ -820,16 +923,19 @@ async function handleBelajarCommand(interaction) {
     return interaction.reply(buildChapterPanel(guildId, userId));
 }
 
-function buildFinishPayload(session, ownerId, guildId, success) {
+async function buildFinishPayload(session, ownerId, guildId, success, guild) {
     if (success) {
         sessions.delete(`${guildId}_${ownerId}`);
     }
+
+    const topic = TOPIC_BY_ID[session.topicId];
+    const chapter = topic ? topic.chapter : 1;
 
     // ---- Speed Round finish ----
     if (session.speed) {
         sessions.delete(`${guildId}_${ownerId}`);
         const elapsed = Math.max(1, Math.round((Date.now() - session.startTime) / 1000));
-        const streak = updateStreak(guildId, ownerId);
+        const { streak, shieldUsed } = updateStreak(guildId, ownerId);
         const base = session.correct * 50;
         const speedBonus = session.correct === session.exercises.length && elapsed < 60 ? 500 : 0;
         const moneyGain = base + speedBonus;
@@ -847,6 +953,7 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             updateQuestProgress(guildId, ownerId, 'belajar', 1);
         } catch (_) {}
         const speedBonusStr = speedBonus ? i18n.t(guildId, ownerId, 'belajar.speed_bonus_kilat') : '';
+        const shieldStr = shieldUsed ? i18n.t(guildId, ownerId, 'belajar.streak_shield_used') : '';
         const embed = new EmbedBuilder().setColor('#FF9600').setTitle(i18n.t(guildId, ownerId, 'belajar.speed_finish_title'))
             .setDescription(
                 i18n.t(guildId, ownerId, 'belajar.speed_finish_desc', {
@@ -857,17 +964,16 @@ function buildFinishPayload(session, ownerId, guildId, success) {
                     money: moneyGain.toLocaleString('id-ID'),
                     bonus: speedBonusStr,
                     streak: streak
-                })
+                }) + shieldStr
             );
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`belajar_speed_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_speed')).setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_home_1_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter', { chapter: 1 })).setStyle(ButtonStyle.Secondary),
         );
         return { embeds: [embed], components: [row] };
     }
 
 
-    const topic = TOPIC_BY_ID[session.topicId];
     if (success) {
         const isReview = !!session.review;
         if (!isReview) markPartDone(guildId, ownerId, session.topicId, session.part);
@@ -887,9 +993,9 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             updateQuestProgress(guildId, ownerId, 'belajar', 1);
         } catch (_) {}
 
-        const streak = updateStreak(guildId, ownerId);
+        const { streak, shieldUsed } = updateStreak(guildId, ownerId);
         const perfect = !isReview && session.hearts === HEARTS_MAX && session.correct === session.exercises.length;
-        const newAch = checkAchievements(guildId, ownerId, { streak, perfect });
+        const newAch = await checkAchievements(guild || { id: guildId }, ownerId, { streak, perfect });
 
         const nextPartUnlocked = !isReview && session.part < topic.parts;
         const topicDone = !isReview && topicDoneCount(guildId, ownerId, session.topicId) >= topic.parts;
@@ -901,8 +1007,9 @@ function buildFinishPayload(session, ownerId, guildId, success) {
         const partUnlockedStr = nextPartUnlocked ? i18n.t(guildId, ownerId, 'belajar.part_unlocked_note', { part: session.part + 1 }) : '';
         let newAchStr = '';
         if (newAch.length) {
-            newAchStr = i18n.t(guildId, ownerId, 'belajar.new_ach_note') + newAch.map(a => `${a.emoji} **${a.name}** (+${a.xp} XP)`).join('\n');
+            newAchStr = i18n.t(guildId, ownerId, 'belajar.new_ach_note') + newAch.map(a => `${a.emoji} **${a.name}** (+🪙${a.reward} Money)`).join('\n');
         }
+        const shieldStr = shieldUsed ? i18n.t(guildId, ownerId, 'belajar.streak_shield_used') : '';
 
         const desc = i18n.t(guildId, ownerId, 'belajar.part_finish_desc', {
             emoji: topic.emoji,
@@ -919,14 +1026,14 @@ function buildFinishPayload(session, ownerId, guildId, success) {
             topic_done: topicDoneStr,
             part_unlocked: partUnlockedStr,
             new_ach: newAchStr
-        });
+        }) + shieldStr;
 
         const embed = new EmbedBuilder().setColor('#58CC02').setTitle(isReview ? i18n.t(guildId, ownerId, 'belajar.review_finish_title') : i18n.t(guildId, ownerId, 'belajar.part_finish_title')).setDescription(desc);
         const row = new ActionRowBuilder().addComponents(
             isReview
-                ? new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Primary)
+                ? new ButtonBuilder().setCustomId(`belajar_home_${chapter}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter', { chapter })).setStyle(ButtonStyle.Primary)
                 : new ButtonBuilder().setCustomId(`belajar_topic_${session.topicId}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_view_parts')).setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`belajar_home_${chapter}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter', { chapter })).setStyle(ButtonStyle.Secondary),
         );
         return { embeds: [embed], components: [row] };
     }
@@ -948,7 +1055,7 @@ function buildFinishPayload(session, ownerId, guildId, success) {
     const row = new ActionRowBuilder().addComponents(
         retryBtn,
         buyHeartsBtn,
-        new ButtonBuilder().setCustomId(`belajar_home_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter')).setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`belajar_home_${chapter}_${ownerId}`).setLabel(i18n.t(guildId, ownerId, 'belajar.btn_back_chapter', { chapter })).setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row] };
 }
@@ -971,7 +1078,7 @@ async function resolveAnswer(interaction, session, ownerId, guildId, correct, an
     if (session.speed) {
         session.current++;
         const payload = session.current >= session.exercises.length
-            ? buildFinishPayload(session, ownerId, guildId, true)
+            ? await buildFinishPayload(session, ownerId, guildId, true, interaction.guild)
             : renderExercise(session, ownerId);
         return sendExercise(interaction, session, payload, 'update');
     }
@@ -988,8 +1095,8 @@ async function resolveAnswer(interaction, session, ownerId, guildId, correct, an
         session.current++;
         const key = `${guildId}_${ownerId}`;
         let payload;
-        if (session.hearts <= 0) payload = buildFinishPayload(session, ownerId, guildId, false);
-        else if (session.current >= session.exercises.length) payload = buildFinishPayload(session, ownerId, guildId, true);
+        if (session.hearts <= 0) payload = await buildFinishPayload(session, ownerId, guildId, false, interaction.guild);
+        else if (session.current >= session.exercises.length) payload = await buildFinishPayload(session, ownerId, guildId, true, interaction.guild);
         else payload = renderExercise(session, ownerId);
         await sendExercise(interaction, session, payload, 'editReply');
         if (sessions.has(key)) {
@@ -1008,7 +1115,16 @@ async function sendExercise(interaction, session, payload, method) {
     const files = [];
     if (payload && payload._ttsText) {
         const buf = await getTTS(payload._ttsText);
-        if (buf) files.push(new AttachmentBuilder(buf, { name: 'listen.mp3' }));
+        if (buf) {
+            files.push(new AttachmentBuilder(buf, { name: 'listen.mp3' }));
+        } else {
+            const embed = payload.embeds && payload.embeds[0];
+            if (embed) {
+                const warningMsg = i18n.t(interaction.guildId, interaction.user.id, 'belajar.tts_failed_warning');
+                const currentDesc = embed.data.description || '';
+                embed.setDescription(`⚠️ **${warningMsg}**\n\n${currentDesc}`);
+            }
+        }
         delete payload._ttsText;
     }
     if (files.length) payload.files = files;
@@ -1063,7 +1179,13 @@ async function handleBelajarButton(interaction) {
 
     if (customId.startsWith('belajar_home_')) {
         sessions.delete(`${guildId}_${ownerId}`);
-        return interaction.update(buildChapterPanel(guildId, ownerId));
+        const chapterNum = parseInt(parts[2], 10) || 1;
+        return interaction.update(buildChapterPanel(guildId, ownerId, chapterNum));
+    }
+    if (customId.startsWith('belajar_page_')) {
+        sessions.delete(`${guildId}_${ownerId}`);
+        const chapterNum = parseInt(parts[2], 10) || 1;
+        return interaction.update(buildChapterPanel(guildId, ownerId, chapterNum));
     }
     if (customId.startsWith('belajar_buyhearts_')) {
         const u = getOrCreateUser(guildId, ownerId);
@@ -1229,7 +1351,7 @@ async function handleBelajarButton(interaction) {
         // Salah → kurangi nyawa
         session.hearts--;
         if (session.hearts <= 0) {
-            return interaction.update(buildFinishPayload(session, ownerId, guildId, false));
+            return interaction.update(await buildFinishPayload(session, ownerId, guildId, false, interaction.guild));
         }
         return interaction.update(renderExercise(session, ownerId, i18n.t(guildId, ownerId, 'belajar.match_fail_heart')));
     }
@@ -1273,8 +1395,8 @@ async function handleBelajarModal(interaction) {
     const advanceFn = async () => {
         session.current++;
         let payload;
-        if (session.hearts <= 0) payload = buildFinishPayload(session, ownerId, guildId, false);
-        else if (session.current >= session.exercises.length) payload = buildFinishPayload(session, ownerId, guildId, true);
+        if (session.hearts <= 0) payload = await buildFinishPayload(session, ownerId, guildId, false, interaction.guild);
+        else if (session.current >= session.exercises.length) payload = await buildFinishPayload(session, ownerId, guildId, true, interaction.guild);
         else payload = renderExercise(session, ownerId);
         await sendExercise(interaction, session, payload, 'editReply');
     };
@@ -1283,4 +1405,4 @@ async function handleBelajarModal(interaction) {
     else setTimeout(advanceFn, delay);
 }
 
-module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, isBelajarModal, handleBelajarModal, TOPICS, getStudyStats, sessions };
+module.exports = { handleBelajarCommand, handleBelajarButton, isBelajarButton, isBelajarModal, handleBelajarModal, TOPICS, getStudyStats, updateStreak, sessions };
