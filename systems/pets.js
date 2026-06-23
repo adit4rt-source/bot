@@ -165,11 +165,21 @@ function meltRelic(guildId, userId, relicId) {
 // Base pet stats + EQUIPPED relic bonuses (used for display and battle).
 function getEffectiveStats(pet) {
     const b = getRelicBonus(pet && pet.userId, pet && pet.id);
-    let hp = (pet.hp || 0) + b.hp;
-    let atk = (pet.atk || 0) + b.atk;
-    let def = (pet.def || 0) + b.def;
-    let spd = (pet.spd || 0) + b.spd;
-    let crit = (pet.crit || 0) + b.crit;
+    const lvl = pet && pet.level ? pet.level : 1;
+    const levelBonus = Math.max(0, lvl - 1);
+
+    const lvlHp = levelBonus * 5;
+    const lvlAtk = levelBonus * 2;
+    const lvlDef = levelBonus * 1;
+    const lvlSpd = Math.floor(levelBonus * 0.2);
+    const lvlCrit = Math.floor(levelBonus * 0.1);
+
+    let hp = (pet.hp || 0) + lvlHp + b.hp;
+    let atk = (pet.atk || 0) + lvlAtk + b.atk;
+    let def = (pet.def || 0) + lvlDef + b.def;
+    let spd = (pet.spd || 0) + lvlSpd + b.spd;
+    let crit = (pet.crit || 0) + lvlCrit + b.crit;
+
     if (b.percent) {
         hp = Math.floor(hp * (1 + (b.percent.hp || 0) / 100));
         atk = Math.floor(atk * (1 + (b.percent.atk || 0) / 100));
@@ -205,11 +215,11 @@ function withRelics(pet) {
 }
 
 function simulateBattle(pet, petDef, enemies) {
-    pet = withRelics(pet); // fold equipped/owned relic bonuses into stats
-    let petHp = pet.hp + (pet.level * 3);
+    pet = withRelics(pet); // fold equipped/owned relic bonuses and level scaling into stats
+    let petHp = pet.hp;
     const maxPetHp = petHp;
-    const petAtk = pet.atk + (pet.level * 1);
-    const petDef2 = pet.def + Math.floor(pet.level * 0.5);
+    const petAtk = pet.atk;
+    const petDef2 = pet.def;
     const petCrit = pet.crit;
     const petEl = pet.element;
     let log = [], wave = 0, alive = true;
@@ -327,11 +337,11 @@ function simulateBattle(pet, petDef, enemies) {
 }
 
 function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
-    pet1 = withRelics(pet1); pet2 = withRelics(pet2); // fold relic bonuses into both
-    let hp1 = pet1.hp + (pet1.level * 3), hp2 = pet2.hp + (pet2.level * 3);
+    pet1 = withRelics(pet1); pet2 = withRelics(pet2); // fold relic bonuses and level scaling into both
+    let hp1 = pet1.hp, hp2 = pet2.hp;
     const maxHp1 = hp1, maxHp2 = hp2;
-    const atk1 = pet1.atk + pet1.level, atk2 = pet2.atk + pet2.level;
-    const def1 = pet1.def + Math.floor(pet1.level*0.5), def2 = pet2.def + Math.floor(pet2.level*0.5);
+    const atk1 = pet1.atk, atk2 = pet2.atk;
+    const def1 = pet1.def, def2 = pet2.def;
     let log = [], round = 0;
     const first = pet1.spd >= pet2.spd ? 1 : 2;
     const el1 = pet1.element, el2 = pet2.element;

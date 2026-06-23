@@ -918,7 +918,7 @@ function buildMainPanel(guildId, userId, username) {
             `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
             `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
             `⚔️ ATK: ${statFmt(eff.atk, pet.atk)} | 🛡️ DEF: ${statFmt(eff.def, pet.def)} | 💨 SPD: ${statFmt(eff.spd, pet.spd)}\n` +
-            `❤️ HP: **${pet.hp}** | 🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (base ${pet.crit}%)` : `**${pet.crit}%**`}\n` +
+            `❤️ HP: ${eff.hp !== pet.hp ? `**${eff.hp}** (base ${pet.hp})` : `**${pet.hp}**`} | 🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (base ${pet.crit}%)` : `**${pet.crit}%**`}\n` +
             (hasRelic ? `📿 *Bonus relic aktif — naikkan dengan 📿 Refine!*\n` : '') +
             `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` + mutationLine +
             huntInfo + evoInfo

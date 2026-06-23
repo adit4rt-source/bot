@@ -26,6 +26,7 @@ const ITEMS = [
     // Awakening materials (not buyable)
     { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '<:mythic_fragment:1514055768733909064>', menuEmoji: '🌟', desc: 'Material langka Awakening (World Boss/Expedition)', price: 0, category: 'Special' },
     { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', menuEmoji: '💫', desc: 'Material ultra-langka Awakening (World Boss #1)', price: 0, category: 'Special' },
+    { id: 'omega_core', name: 'Omega Core', emoji: '🔱', menuEmoji: '🔱', desc: 'Material legendaris untuk Awakening Cosmic — Hanya dari Boss Omega Genesis', price: 0, category: 'Special' },
     // Pet Mutation Lab materials (drop-only)
     { id: 'dna_shard', name: 'DNA Shard', emoji: '🧬', menuEmoji: '🧬', desc: 'Material dasar Mutation Lab — drop dari dungeon/boss/co-op', price: 0, category: 'Pet' },
     { id: 'mutation_serum', name: 'Mutation Serum', emoji: '🧪', menuEmoji: '🧪', desc: 'Katalis mutation pet — drop dari dungeon co-op dan boss', price: 0, category: 'Pet' },

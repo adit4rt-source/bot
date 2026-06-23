@@ -5,7 +5,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, addItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getPetData, getRelicBonus } = require('./pets');
+const { getPetData, getRelicBonus, getEffectiveStats } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
 const { updateQuestProgress } = require('./quests');
@@ -136,9 +136,9 @@ function attackWorldBoss(guildId, userId, username) {
     const bossDef = getBossDefinition(boss.bossId);
 
     // Calculate damage
-    const relicBonus = getRelicBonus(userId, pet.id); // equipped relic bonus applies here too
-    const baseAtk = pet.atk + (pet.level * 2) + relicBonus.atk;
-    const critChance = pet.crit + Math.floor(pet.level / 10) + relicBonus.crit;
+    const eff = getEffectiveStats(pet);
+    const baseAtk = eff.atk;
+    const critChance = eff.crit;
     const isCrit = Math.random() * 100 < critChance;
     
     let damage = Math.max(10, baseAtk - Math.floor(bossDef.def * 0.3));

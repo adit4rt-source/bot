@@ -53,7 +53,11 @@ const BOSS_LIST = [
     { id: 'ancient', name: '☠️ Ancient God', minLevel: 150, hp: 66000, atk: 260, def: 140, reward: [70000, 150000], exp: 400,
       element: 'light',
       penaltyCap: 5000, relicChance: 0.50, relicRareBonus: true,
-      loot: [ { item: 'refine_stone', chance: 1, min: 3, max: 6 }, { item: 'protection_stone', chance: 0.50, min: 1, max: 2 }, { item: 'mythic_fragment', chance: 0.35, min: 1, max: 2 }, { item: 'lucky_charm', chance: 0.25, min: 1, max: 1 }, { item: 'awakening_crystal', chance: 0.10, min: 1, max: 1 }, { item: 'dna_shard', chance: 1, min: 3, max: 6 }, { item: 'mutation_serum', chance: 0.35, min: 1, max: 2 }, { item: 'ancient_core', chance: 0.12, min: 1, max: 1 }, { item: 'trait_stabilizer', chance: 0.12, min: 1, max: 1 } ] }
+      loot: [ { item: 'refine_stone', chance: 1, min: 3, max: 6 }, { item: 'protection_stone', chance: 0.50, min: 1, max: 2 }, { item: 'mythic_fragment', chance: 0.35, min: 1, max: 2 }, { item: 'lucky_charm', chance: 0.25, min: 1, max: 1 }, { item: 'awakening_crystal', chance: 0.10, min: 1, max: 1 }, { item: 'dna_shard', chance: 1, min: 3, max: 6 }, { item: 'mutation_serum', chance: 0.35, min: 1, max: 2 }, { item: 'ancient_core', chance: 0.12, min: 1, max: 1 }, { item: 'trait_stabilizer', chance: 0.12, min: 1, max: 1 } ] },
+    { id: 'omega_genesis', name: '🔱 Omega Genesis', minLevel: 200, hp: 120000, atk: 380, def: 200, reward: [150000, 300000], exp: 600,
+      element: 'light',
+      penaltyCap: 8000, relicChance: 0.65, relicRareBonus: true,
+      loot: [ { item: 'refine_stone', chance: 1, min: 5, max: 10 }, { item: 'protection_stone', chance: 0.60, min: 2, max: 4 }, { item: 'awakening_crystal', chance: 0.25, min: 1, max: 2 }, { item: 'omega_core', chance: 0.10, min: 1, max: 1 } ] }
 ];
 
 module.exports = { DUNGEON_TIERS, BOSS_LIST };
