@@ -320,12 +320,8 @@ function buildSettingSubPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
-    const dailyCardOn = getSetting(guildId, 'daily_card_bonus', '1') === '1';
-    const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_tog_dailycard').setLabel(`🃏 Daily Card: ${dailyCardOn ? 'ON' : 'OFF'}`).setStyle(dailyCardOn ? ButtonStyle.Success : ButtonStyle.Secondary),
-    );
 
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 
@@ -907,10 +903,7 @@ async function handleAdminButton(interaction) {
         return interaction.showModal(modal);
     }
     if (customId === 'admpnl_tog_dailycard') {
-        const cur = getSetting(guildId, 'daily_card_bonus', '1');
-        const newVal = cur === '1' ? '0' : '1';
-        db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'daily_card_bonus', newVal);
-        return interaction.reply({ content: `🃏 Daily Card Bonus: **${newVal === '1' ? 'ON ✅' : 'OFF ❌'}**`, ephemeral: true });
+        return interaction.reply({ content: `🃏 Fitur Daily Card Bonus sudah dinonaktifkan secara permanen.`, ephemeral: true });
     }
     if (customId === 'admpnl_set_quote') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_quote').setTitle('Auto Quote Config');
@@ -1212,7 +1205,7 @@ async function handleAdminModal(interaction) {
 
     // === SETTING: Toggles ===
     if (customId === 'admpnl_modal_toggles') {
-        const map = { leveling: 'leveling_enabled', streak: 'streak_enabled', love: 'love_enabled', onboarding: 'onboarding_enabled', tiktok: 'tiktok_convert', dailycard: 'daily_card_bonus' };
+        const map = { leveling: 'leveling_enabled', streak: 'streak_enabled', love: 'love_enabled', onboarding: 'onboarding_enabled', tiktok: 'tiktok_convert' };
         const updated = [];
         for (const [field, key] of Object.entries(map)) {
             const val = (interaction.fields.getTextInputValue(field) || '').trim();

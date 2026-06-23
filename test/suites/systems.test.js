@@ -1577,9 +1577,19 @@ module.exports = function register() {
           const rSlot = ex.right.indexOf(pairIdx);
           
           const itL = mockInteraction({ userId: u, guildId: g, customId: `belajar_mt_L_${lSlot}_${u}` });
+          itL.editReply = async (payload) => {
+            itL._cap.editReply = payload;
+            finalPayload = payload;
+            return payload;
+          };
           await belajar.handleBelajarButton(itL);
           
           const itR = mockInteraction({ userId: u, guildId: g, customId: `belajar_mt_R_${rSlot}_${u}` });
+          itR.editReply = async (payload) => {
+            itR._cap.editReply = payload;
+            finalPayload = payload;
+            return payload;
+          };
           await belajar.handleBelajarButton(itR);
         }
       }

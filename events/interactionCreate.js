@@ -289,49 +289,6 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
-            // === BONUS: 3 Pokemon Cards from daily (toggle: daily_card_bonus) ===
-            const cardBonusEnabled = getSetting(guildId, 'daily_card_bonus', '1') === '1';
-            if (cardBonusEnabled) {
-            try {
-                const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
-                const { generateCardImage } = require('../systems/imageRenderer');
-                const { AttachmentBuilder } = require('discord.js');
-                const dailyPool = ['Common', 'Uncommon', 'Rare'];
-                const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);
-                if (cards && cards.length > 0) {
-                    // Save to collection
-                    for (const c of cards) {
-                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
-                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
-                    }
-                    let att;
-                    try {
-                        const img = await generateCardImage(cards);
-                        att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
-                    } catch(imgErr) {
-                        console.error('[Daily] Card image gen failed:', imgErr.message);
-                    }
-                    const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
-                    const cardList = cards.map((c, i) => {
-                        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
-                        return `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${priceTag}`;
-                    }).join('\n');
-                    const cardEmbed = new EmbedBuilder()
-                        .setColor('#FF6B35')
-                        .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
-                        .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
-                        .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
-                    if (att) {
-                        cardEmbed.setImage('attachment://daily_cards.png');
-                        return interaction.editReply({ embeds: [embed, cardEmbed], files: [att] });
-                    }
-                    return interaction.editReply({ embeds: [embed, cardEmbed] });
-                } else {
-                    console.error('[Daily] pullCards returned empty — cache likely empty. Run: node prefetch-cards.js');
-                }
-            } catch (e) { console.error('[Daily] Card bonus FULL error:', e.message, e.stack); }
-            } // end cardBonusEnabled
-
             return interaction.editReply({ embeds: [embed] });
         }
 
@@ -1405,45 +1362,6 @@ async function routeInteraction(interaction) {
                 .setFooter({ text: 'Makin panjang streak chat, makin gede reward /daily!' });
             // Delete the reminder message
             try { interaction.message.delete().catch(() => {}); } catch (_) {}
-
-            // === BONUS: 3 Pokemon Cards from daily ===
-            try {
-                const { fetchRandomCards, RARITIES } = require('../systems/cardGame');
-                const { generateCardImage } = require('../systems/imageRenderer');
-                const { AttachmentBuilder } = require('discord.js');
-                const dailyPool = ['Common', 'Uncommon', 'Rare'];
-                const cards = await fetchRandomCards(dailyPool, 3, interaction.user.id);
-                if (cards && cards.length > 0) {
-                    for (const c of cards) {
-                        db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
-                            interaction.user.id, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
-                    }
-                    let att;
-                    try {
-                        const img = await generateCardImage(cards);
-                        att = new AttachmentBuilder(img, { name: 'daily_cards.png' });
-                    } catch(imgErr) {
-                        console.error('[Daily-Btn] Card image gen failed:', imgErr.message);
-                    }
-                    const rdata = (rar) => RARITIES[rar] || { emoji: '⚪' };
-                    const cardList = cards.map((c, i) => {
-                        const priceTag = c.marketPrice > 0 ? ` 💰$${c.marketPrice.toFixed(2)}` : '';
-                        return `**${i+1}.** ${rdata(c.rarity).emoji} **${c.name}** — *${c.setName}* [${c.rarity}]${priceTag}`;
-                    }).join('\n');
-                    const cardEmbed = new EmbedBuilder()
-                        .setColor('#FF6B35')
-                        .setTitle('🃏 Bonus Daily — 3 Kartu Pokemon!')
-                        .setDescription(`Selamat! Kamu mendapatkan kartu:\n\n${cardList}`)
-                        .setFooter({ text: 'Bonus harian • Lihat koleksi di /card → Collection' });
-                    if (att) {
-                        cardEmbed.setImage('attachment://daily_cards.png');
-                        return interaction.editReply({ embeds: [embed, cardEmbed], files: [att] });
-                    }
-                    return interaction.editReply({ embeds: [embed, cardEmbed] });
-                } else {
-                    console.error('[Daily-Btn] pullCards returned empty — cache likely empty');
-                }
-            } catch (e) { console.error('[Daily-Btn] Card bonus FULL error:', e.message, e.stack); }
 
             return interaction.editReply({ embeds: [embed] });
         }
