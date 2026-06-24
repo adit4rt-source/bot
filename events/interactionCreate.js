@@ -250,7 +250,7 @@ async function routeInteraction(interaction) {
             const user = getOrCreateUser(guildId, interaction.user.id);
             if (user.lastDaily === today) return interaction.reply({ content: '⏳ Sudah klaim hari ini! Tunggu besok (00:00 WIB).', ephemeral: true });
 
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral: true });
 
             const { claimDaily } = require('../systems/dailyReward');
             const r = await claimDaily(guildId, interaction.user.id, { today });
@@ -1351,7 +1351,7 @@ async function routeInteraction(interaction) {
             const user = getOrCreateUser(guildId, interaction.user.id);
             if (user.lastDaily === today) return interaction.reply({ content: '❌ Kamu sudah claim /daily hari ini!', ephemeral: true });
             
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral: true });
 
             const { claimDaily } = require('../systems/dailyReward');
             const r = await claimDaily(guildId, interaction.user.id, { today });
