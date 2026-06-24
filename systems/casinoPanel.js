@@ -45,10 +45,10 @@ function buildCasinoPanel(guildId, userId, username) {
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('Coinflip').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('Slot').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('Roulette').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_blackjack_${userId}`).setLabel('Blackjack').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('🪙 Coinflip').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('🎰 Slot').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('🎯 Roulette').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_blackjack_${userId}`).setLabel('🃏 Blackjack').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -76,7 +76,7 @@ function buildCoinflipBetPanel(guildId, userId) {
         new ButtonBuilder().setCustomId(`casino_cf_bet_2000_${userId}`).setLabel('2000').setStyle(ButtonStyle.Secondary)
     );
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row, navRow] };
@@ -95,11 +95,11 @@ function buildCoinflipChoicePanel(guildId, userId, bet) {
         .setFooter({ text: 'Pilih dalam 30 detik atau taruhan dikembalikan' });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_cf_head_${bet}_${userId}`).setLabel('Head').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`casino_cf_tail_${bet}_${userId}`).setLabel('Tail').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`casino_cf_head_${bet}_${userId}`).setLabel('\ud83e\ude99 Head').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`casino_cf_tail_${bet}_${userId}`).setLabel('\ud83e\udda5 Tail').setStyle(ButtonStyle.Danger)
     );
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('Ganti Bet').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('\ud83d\udd19 Ganti Bet').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row, navRow] };
@@ -127,7 +127,7 @@ function buildSlotBetPanel(guildId, userId) {
         new ButtonBuilder().setCustomId(`casino_slot_bet_1000_${userId}`).setLabel('1000').setStyle(ButtonStyle.Secondary)
     );
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row, navRow] };
@@ -165,7 +165,7 @@ function buildRouletteBetPanel(guildId, userId) {
 
     const selectRow = new ActionRowBuilder().addComponents(selectMenu);
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [selectRow, navRow] };
@@ -193,8 +193,8 @@ function buildRouletteBetButtons(guildId, userId, choice) {
         new ButtonBuilder().setCustomId(`casino_rl_spin_${choice}_2000_${userId}`).setLabel('2000').setStyle(ButtonStyle.Secondary)
     );
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('Ganti Pilihan').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Menu Casino').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('\ud83d\udd19 Ganti Pilihan').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83c\udfb0 Menu Casino').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row, navRow] };
@@ -224,7 +224,7 @@ function buildBlackjackBetPanel(guildId, userId) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`casino_blackjack_bet_100000_${userId}`).setLabel('100K').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row, row2] };
@@ -387,8 +387,8 @@ async function handleCasinoButton(interaction) {
                 .setFooter({ text: interaction.user.username });
 
             const playAgainRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('Main Lagi').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Menu Casino').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`casino_coinflip_${userId}`).setLabel('\ud83d\udd04 Main Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83c\udfb0 Menu Casino').setStyle(ButtonStyle.Secondary)
             );
             interaction.editReply({ embeds: [embed], components: [playAgainRow] }).catch(() => {});
         }, 2000);
@@ -468,8 +468,8 @@ async function handleCasinoButton(interaction) {
             embed.setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} | ${interaction.user.username}` });
 
             const playAgainRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('Spin Lagi').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Menu Casino').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`casino_slot_${userId}`).setLabel('\ud83d\udd04 Spin Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83c\udfb0 Menu Casino').setStyle(ButtonStyle.Secondary)
             );
             interaction.editReply({ embeds: [embed], components: [playAgainRow] }).catch(() => {});
         }, 2000);
@@ -557,8 +557,8 @@ async function handleCasinoButton(interaction) {
                 .setFooter({ text: `Saldo: ${freshData.balance.toLocaleString('id-ID')} | ${interaction.user.username}` });
 
             const playAgainRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('Main Lagi').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('Menu Casino').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`casino_roulette_${userId}`).setLabel('\ud83d\udd04 Main Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`casino_back_${userId}`).setLabel('\ud83c\udfb0 Menu Casino').setStyle(ButtonStyle.Secondary)
             );
             interaction.editReply({ embeds: [embed], components: [playAgainRow] }).catch(() => {});
         }, 2500);

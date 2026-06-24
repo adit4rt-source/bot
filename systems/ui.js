@@ -128,7 +128,7 @@ function medal(index) {
 
 // ==================== BUTTONS ====================
 // Standard "Back" button. customId is caller-supplied so routing is preserved.
-function backButton(customId, label = 'Kembali') {
+function backButton(customId, label = '🔙 Kembali') {
     return new ButtonBuilder().setCustomId(customId).setLabel(label).setStyle(ButtonStyle.Secondary);
 }
 
