@@ -556,8 +556,8 @@ function makeMC(pool) {
     const opts = shuffle([correct, ...distract]);
     const correctIndex = opts.findIndex(p => p.en === correct.en);
     const prompt = enToId 
-        ? `Apa arti kalimat ini?\n${tileText(correct.en)}` 
-        : `Terjemahkan ke Inggris:\n${tileText(correct.id)}`;
+        ? `💬 **Apa arti kalimat ini?**\n> ➡️ ${tileText(correct.en)}` 
+        : `💬 **Terjemahkan ke Inggris:**\n> ➡️ ${tileText(correct.id)}`;
     const options = enToId ? opts.map(p => p.id) : opts.map(p => p.en);
     return { type: 'mc', prompt, options, correctIndex, correctEn: correct.en, correctId: correct.id };
 }
@@ -569,8 +569,8 @@ function makeWord(words) {
     const opts = shuffle([correct, ...distract]);
     const correctIndex = opts.findIndex(w => w.en === correct.en);
     const prompt = enToId 
-        ? `Pilih arti dari kata: \`${correct.en}\`` 
-        : `Bahasa Inggris dari kata: \`${correct.id}\``;
+        ? `🔍 **Pilih arti dari kata:**\n> 🔤 \`${correct.en}\`` 
+        : `🔍 **Bahasa Inggris dari kata:**\n> 🔤 \`${correct.id}\``;
     const options = enToId ? opts.map(w => w.id) : opts.map(w => w.en);
     return { type: 'mc', prompt, options, correctIndex, correctEn: correct.en, correctId: correct.id, _word: correct.en };
 }
@@ -581,8 +581,8 @@ function makeWordFromTarget(targetWord, allWords) {
     const opts = shuffle([targetWord, ...distract]);
     const correctIndex = opts.findIndex(w => w.en === targetWord.en);
     const prompt = enToId 
-        ? `Pilih arti dari kata: \`${targetWord.en}\`` 
-        : `Bahasa Inggris dari kata: \`${targetWord.id}\``;
+        ? `🔍 **Pilih arti dari kata:**\n> 🔤 \`${targetWord.en}\`` 
+        : `🔍 **Bahasa Inggris dari kata:**\n> 🔤 \`${targetWord.id}\``;
     const options = enToId ? opts.map(w => w.id) : opts.map(w => w.en);
     return { type: 'mc', prompt, options, correctIndex, correctEn: targetWord.en, correctId: targetWord.id, _word: targetWord.en };
 }
@@ -680,14 +680,14 @@ function buildLesson(topic, part, guildId, userId) {
 const LBL = ['🇦', '🇧', '🇨', '🇩'];
 function heartsBar(h) { return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h); }
 function progressBar(cur, total) {
-    const filled = Math.round((cur / total) * 12);
-    return '▰'.repeat(filled) + '▱'.repeat(12 - filled);
+    const filled = Math.round((cur / total) * 10);
+    return '█'.repeat(filled) + '░'.repeat(Math.max(0, 10 - filled));
 }
 
 function renderExercise(session, userId, note = '') {
     const ex = session.exercises[session.current];
     const total = session.exercises.length;
-    const bar = `**Soal ${session.current + 1}/${total}**  ${progressBar(session.current, total)}`;
+    const bar = `**Soal ${session.current + 1}/${total}** • \`${progressBar(session.current, total)}\``;
     const head = `${heartsBar(session.hearts)}${session.extra ? '  •  ⭐ 2x' : ''}${session.review ? '  •  🔄 Review' : ''}${session.speed ? '  •  ⚡ Speed' : ''}`;
     const topic = session.topicId ? TOPIC_BY_ID[session.topicId] : null;
     const footerText = `${head}${topic ? `  •  Part ${session.part || '?'}` : ''}`;
@@ -697,17 +697,18 @@ function renderExercise(session, userId, note = '') {
         const embed = new EmbedBuilder().setColor('#1CB0F6')
             .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
             .setTitle(i18n.t(session.guildId, userId, 'belajar.mc_title'))
-            .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
+            .setDescription(`${bar}\n\n${noteLine}${ex.prompt}\n\n` + ex.options.map((o, i) => `> ${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         return { embeds: [embed], components: [row] };
     }
 
     if (ex.type === 'listen') {
+        const promptText = i18n.t(session.guildId, userId, 'belajar.listen_prompt');
         const embed = new EmbedBuilder().setColor('#FF9600')
             .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
             .setTitle(i18n.t(session.guildId, userId, 'belajar.listen_title'))
-            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.listen_prompt')}\n\n` + ex.options.map((o, i) => `${LBL[i]}  **${o}**`).join('\n'))
+            .setDescription(`${bar}\n\n${noteLine}${promptText}\n\n` + ex.options.map((o, i) => `> ${LBL[i]}  **${o}**`).join('\n'))
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(ex.options.map((_, i) => new ButtonBuilder().setCustomId(`belajar_ans_${i}_${userId}`).setLabel(LBL[i]).setStyle(ButtonStyle.Primary)));
         const result = { embeds: [embed], components: [row] };
@@ -716,10 +717,12 @@ function renderExercise(session, userId, note = '') {
     }
 
     if (ex.type === 'type') {
+        const promptText = i18n.t(session.guildId, userId, 'belajar.type_prompt');
+        const btnClickText = i18n.t(session.guildId, userId, 'belajar.type_btn_click');
         const embed = new EmbedBuilder().setColor('#CE82FF')
             .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
             .setTitle(i18n.t(session.guildId, userId, 'belajar.type_title'))
-            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.type_prompt')}\n\n**"${ex.promptId}"**\n\n${i18n.t(session.guildId, userId, 'belajar.type_btn_click')}`)
+            .setDescription(`${bar}\n\n${noteLine}✍️ **${promptText}**\n> ➡️ **"${ex.promptId}"**\n\n${btnClickText}`)
             .setFooter({ text: footerText });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`belajar_typebtn_${userId}`).setLabel(i18n.t(session.guildId, userId, 'belajar.type_btn_label')).setStyle(ButtonStyle.Success)
@@ -730,10 +733,11 @@ function renderExercise(session, userId, note = '') {
     if (ex.type === 'arrange') {
         const builtWords = (ex.built || []).map(i => ex.tiles[i].word);
         const builtLine = builtWords.length ? builtWords.map(w => `\`${w}\``).join(' ') : '`___`';
+        const promptText = i18n.t(session.guildId, userId, 'belajar.arrange_prompt');
         const embed = new EmbedBuilder().setColor('#CE82FF')
             .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
             .setTitle(i18n.t(session.guildId, userId, 'belajar.arrange_title'))
-            .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.arrange_prompt')}\n**${ex.promptId}**\n\n📝 ${builtLine}`)
+            .setDescription(`${bar}\n\n${noteLine}🧩 **${promptText}**\n> ➡️ **${ex.promptId}**\n\n📝 ${builtLine}`)
             .setFooter({ text: footerText });
         const components = [];
         let row = new ActionRowBuilder(); let count = 0;
@@ -752,10 +756,12 @@ function renderExercise(session, userId, note = '') {
     }
 
     // match
+    const promptText = i18n.t(session.guildId, userId, 'belajar.match_prompt');
+    const statusText = i18n.t(session.guildId, userId, 'belajar.match_status', { current: ex.matched.length, total: ex.pairs.length });
     const embed = new EmbedBuilder().setColor('#FF9600')
         .setAuthor({ name: i18n.t(session.guildId, userId, 'belajar.mc_author') })
         .setTitle(i18n.t(session.guildId, userId, 'belajar.match_title'))
-        .setDescription(`${bar}\n\n${noteLine}${i18n.t(session.guildId, userId, 'belajar.match_prompt')}\n\n${i18n.t(session.guildId, userId, 'belajar.match_status', { current: ex.matched.length, total: ex.pairs.length })}`)
+        .setDescription(`${bar}\n\n${noteLine}🔗 **${promptText}**\n\n> 📈 ${statusText}`)
         .setFooter({ text: footerText });
     const leftRow = new ActionRowBuilder();
     ex.left.forEach((pairIdx, slot) => {
@@ -798,7 +804,7 @@ function buildChapterPanel(guildId, userId, chapter = 1) {
     const doneTopics = chapterTopics.filter(t => topicDoneCount(guildId, userId, t.id) >= t.parts).length;
     const pct = totalParts ? Math.round((donePartsTotal / totalParts) * 100) : 0;
     const filled = Math.round((pct / 100) * 12);
-    const overallBar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
+    const overallBar = '█'.repeat(filled) + '░'.repeat(Math.max(0, 12 - filled));
 
     const lines = chapterTopics.map(t => {
         const idx = TOPICS.indexOf(t);
@@ -874,7 +880,7 @@ function buildTopicPanel(guildId, userId, topic) {
     const donePartCount = topicDoneCount(guildId, userId, topic.id);
     const pct = topic.parts ? Math.round((donePartCount / topic.parts) * 100) : 0;
     const filled = Math.round((pct / 100) * 12);
-    const bar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
+    const bar = '█'.repeat(filled) + '░'.repeat(Math.max(0, 12 - filled));
 
     const lines = [];
     for (let p = 1; p <= topic.parts; p++) {
