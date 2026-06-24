@@ -251,7 +251,7 @@ function getGiantFishStats(guildId, userId) {
 function buildGiantFishSpawnEmbed(giantFish, hitsRequired, userId) {
     const embed = new EmbedBuilder()
         .setColor('#FF0000')
-        .setTitle(`🐋💥 GIANT FISH MUNCUL! 💥🐋`)
+        .setTitle('🐋 Giant Fish Muncul')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** telah muncul!\n\n` +
             `> *${giantFish.desc}*\n\n` +
@@ -315,7 +315,7 @@ function buildGiantFishDefeatedEmbed(result, userId) {
 
     const embed = new EmbedBuilder()
         .setColor('#FFD700')
-        .setTitle(`🐋🏆 GIANT FISH TERTANGKAP! 🏆🐋`)
+        .setTitle('🏆 Giant Fish Tertangkap')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** berhasil ditangkap!\n\n` +
             `> *${giantFish.desc}*\n\n` +
@@ -341,7 +341,7 @@ function buildGiantFishDefeatedEmbed(result, userId) {
 function buildGiantFishEscapedEmbed(giantFish, hitsLanded, hitsRequired, userId) {
     const embed = new EmbedBuilder()
         .setColor('#95A5A6')
-        .setTitle(`💨 GIANT FISH KABUR!`)
+        .setTitle('💨 Giant Fish Kabur')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** berhasil melarikan diri!\n\n` +
             `> ⏱️ Waktu habis!\n` +

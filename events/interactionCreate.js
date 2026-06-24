@@ -287,11 +287,11 @@ async function routeInteraction(interaction) {
                     `${bonusDesc}> 🪙 **Money:** +${r.money.toLocaleString('id-ID')}\n` +
                     `> 🐾 **Pet EXP:** +${r.petExp}\n` +
                     `> ✨ **XP Bonus:** +${r.xp}${itemLines}${randomReward}\n\n` +
-                    `> 🔥 **Streak:** ${r.streak} hari *(ikut streak chat 🔥)*\n` +
-                    `> 📈 **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n` +
+                    `> 🔥 **Streak:** ${r.streak} hari *(ikut streak chat)*\n` +
+                    `> **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n` +
                     `> 💡 **Besok:** 🪙 ~${r.nextMoney.toLocaleString('id-ID')}${nextIsMilestone ? ' + 🎉 BONUS!' : ''}`
                 )
-                .setFooter({ text: 'Makin panjang streak chat 🔥 kamu, makin gede reward /daily!' })
+                .setFooter({ text: 'Makin panjang streak chat kamu, makin gede reward /daily!' })
                 .setTimestamp();
 
             return interaction.editReply({ embeds: [embed] });
@@ -305,6 +305,25 @@ async function routeInteraction(interaction) {
             if (fishCooldowns.has(cdKey) && Date.now() < fishCooldowns.get(cdKey)) { const remaining = Math.ceil((fishCooldowns.get(cdKey) - Date.now()) / 1000); return interaction.reply({ content: `⏳ Pancingmu masih basah! Tunggu **${remaining} detik** lagi.`, ephemeral: true }); }
             const finalCdSec = getFishingCooldown(interaction.user.id, rod);
             fishCooldowns.set(cdKey, Date.now() + finalCdSec * 1000);
+
+            // Clean up previous fishing message to avoid spam
+            try {
+                const messages = await interaction.channel.messages.fetch({ limit: 20 }).catch(() => null);
+                if (messages) {
+                    const prevMsg = messages.find(m =>
+                        m.author.id === interaction.client.user.id &&
+                        m.components.some(row =>
+                            row.components.some(c => {
+                                if (!c.customId || !c.customId.startsWith('fish_')) return false;
+                                const parts = c.customId.split('_');
+                                return parts[2] === interaction.user.id;
+                            })
+                        )
+                    );
+                    if (prevMsg) await prevMsg.delete().catch(() => {});
+                }
+            } catch (_) {}
+
 
             // === GIANT FISH: Check active encounter ===
             const { checkGiantFishSpawn, getActiveGiantFish, startGiantFishEncounter, hitGiantFish, buildGiantFishSpawnEmbed, buildGiantFishHitEmbed, buildGiantFishDefeatedEmbed } = require('../systems/giantFish');
@@ -370,17 +389,17 @@ async function routeInteraction(interaction) {
             const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
             const embed = new EmbedBuilder()
                 .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
-                .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`)
-                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
+                .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Tangkapan Sampah' : 'Ikan Tertangkap'}`)
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> **Tier:** ${result.tier.tier}\n> **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> Joran: **${rod.name}**\n> Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
                 .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${finalCdSec}s | Max combo: ${comboData.maxCombo}x` });
-            if (result.tier.tier === 'Secret') embed.setTitle('🔮💫 SECRET CATCH!!! 💫🔮');
-            else if (result.tier.tier === 'Mythic') embed.setTitle('🌈✨ MYTHIC CATCH!! ✨🌈');
-            else if (result.tier.tier === 'Legendary') embed.setTitle('🐉⚡ LEGENDARY CATCH! ⚡🐉');
+            if (result.tier.tier === 'Secret') embed.setTitle('🔮 Secret Catch');
+            else if (result.tier.tier === 'Mythic') embed.setTitle('🌈 Mythic Catch');
+            else if (result.tier.tier === 'Legendary') embed.setTitle('🐉 Legendary Catch');
             const afterCatchRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`fish_cast_${interaction.user.id}`).setLabel('🎣 Lagi').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`fish_inv_${interaction.user.id}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`fish_shop_${interaction.user.id}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`fish_back_${interaction.user.id}`).setLabel('📋 Panel').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`fish_cast_${interaction.user.id}`).setLabel('Lagi').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`fish_inv_${interaction.user.id}`).setLabel('Inventory').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`fish_shop_${interaction.user.id}`).setLabel('Shop').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`fish_back_${interaction.user.id}`).setLabel('Panel').setStyle(ButtonStyle.Secondary)
             );
             await interaction.reply({ embeds: [embed], components: [afterCatchRow] });
             await checkAchievements(interaction.guild, interaction.user.id, { type: 'fishing', tier: result.tier.tier, weight: result.weight });
@@ -683,7 +702,7 @@ async function routeInteraction(interaction) {
             if (result.immediate) {
                 // Natural blackjack or immediate result
                 const embed = new EmbedBuilder()
-                    .setTitle(result.result.result === 'blackjack' ? '🃏✨ BLACKJACK! ✨🃏' : '🃏 Blackjack')
+                    .setTitle(result.result.result === 'blackjack' ? '🃏 Blackjack!' : '🃏 Blackjack')
                     .setColor(result.result.result === 'blackjack' || result.result.result === 'win' ? '#2ECC71' : result.result.result === 'push' ? '#F1C40F' : '#E74C3C')
                     .setDescription(
                         `━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1676,17 +1695,17 @@ async function routeInteraction(interaction) {
             await interaction.update({ components: [] });
             
             // Animation stage 1
-            const anim1 = new EmbedBuilder().setColor('#F1C40F').setTitle('🪙 Coinflip — Melempar...').setDescription(`> 🪙 *Koin melayang...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+            const anim1 = new EmbedBuilder().setColor('#F1C40F').setTitle('Coinflip — Melempar...').setDescription(`> *Koin melayang...*\n>\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
             await interaction.editReply({ embeds: [anim1], components: [] });
             
             setTimeout(async () => {
                 // Animation stage 2
-                const anim2 = new EmbedBuilder().setColor('#F39C12').setTitle('🪙 Coinflip — Berputar...').setDescription(`> 🌀 *Koin berputar di udara...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+                const anim2 = new EmbedBuilder().setColor('#F39C12').setTitle('Coinflip — Berputar...').setDescription(`> *Koin berputar di udara...*\n>\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
                 await interaction.editReply({ embeds: [anim2], components: [] }).catch(()=>{});
                 
                 setTimeout(async () => {
                     // Animation stage 3
-                    const anim3 = new EmbedBuilder().setColor('#E67E22').setTitle('🪙 Coinflip — Mendarat...').setDescription(`> ✨ *Koin hampir mendarat...*\n>\n> 💰 Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
+                    const anim3 = new EmbedBuilder().setColor('#E67E22').setTitle('Coinflip — Mendarat...').setDescription(`> *Koin hampir mendarat...*\n>\n> Taruhan: 🪙 **${taruhan.toLocaleString('id-ID')}**\n> Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
                     await interaction.editReply({ embeds: [anim3], components: [] }).catch(()=>{});
                     
                     setTimeout(async () => {
@@ -1703,8 +1722,8 @@ async function routeInteraction(interaction) {
                             const freshData = getOrCreateUser(guildId, interaction.user.id);
                             const winEmbed = new EmbedBuilder()
                                 .setColor('#2ECC71')
-                                .setTitle(`${resultEmoji} ${resultName} — MENANG! 🎉`)
-                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ✅\n\n> 💰 Dapat: 🪙 **+${taruhan.toLocaleString('id-ID')}**\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
+                                .setTitle(`${resultEmoji} ${resultName} — Menang`)
+                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ✅\n\n> Dapat: 🪙 **+${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
                                 .setFooter({ text: interaction.user.username });
                             interaction.editReply({ embeds: [winEmbed], components: [] }).catch(()=>{});
                         } else {
@@ -1712,8 +1731,8 @@ async function routeInteraction(interaction) {
                             const freshData = getOrCreateUser(guildId, interaction.user.id);
                             const loseEmbed = new EmbedBuilder()
                                 .setColor('#E74C3C')
-                                .setTitle(`${resultEmoji} ${resultName} — KALAH! 💀`)
-                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ❌\n\n> 💸 Hilang: 🪙 **-${taruhan.toLocaleString('id-ID')}**\n> 💳 Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
+                                .setTitle(`${resultEmoji} ${resultName} — Kalah`)
+                                .setDescription(`> Koin mendarat: ${resultEmoji} **${resultName}**\n> Pilihan kamu: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}** ❌\n\n> Hilang: 🪙 **-${taruhan.toLocaleString('id-ID')}**\n> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**`)
                                 .setFooter({ text: interaction.user.username });
                             interaction.editReply({ embeds: [loseEmbed], components: [] }).catch(()=>{});
                         }

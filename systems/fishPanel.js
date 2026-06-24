@@ -75,10 +75,10 @@ function buildFishingPanel(guildId, userId, username) {
             `╰──────────────────╯\n\n` +
 
             `╭─── 📊 **STATS** ───╮\n` +
-            `┃ 🐟 Tangkapan: **${totalCaught.toLocaleString('id-ID')}**\n` +
-            `┃ 📖 Pokédex: **${collected.c}/${totalFish}** \`${dexBar}\` ${dexPercent}%\n` +
-            `┃ 💰 Dijual: ${ui.money(totalSoldValue)}\n` +
-            `┃ 🔥 Combo: ${comboDisplay}\n` +
+            `┃ Tangkapan: **${totalCaught.toLocaleString('id-ID')}**\n` +
+            `┃ Pokédex: **${collected.c}/${totalFish}** \`${dexBar}\` ${dexPercent}%\n` +
+            `┃ Dijual: ${ui.money(totalSoldValue)}\n` +
+            `┃ Combo: ${comboDisplay}\n` +
             `╰──────────────────╯\n\n` +
 
             `> 💳 Saldo: ${ui.money(userData.balance)}\n` +
@@ -87,22 +87,22 @@ function buildFishingPanel(guildId, userId, username) {
         .setFooter({ text: ui.footer('Mancing beruntun nambah combo — makin tinggi combo, makin cuan!') });
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Cast').setEmoji('🎣').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('Inventory').setEmoji('📦').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('Shop').setEmoji('🛒').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('Location').setEmoji('📍').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('Contest').setEmoji('🏆').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Cast').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('Inventory').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('Shop').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('Location').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('Contest').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('Pokédex').setEmoji('📖').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('Unlock').setEmoji('🔓').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('Stats').setEmoji('📊').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('Sell All').setEmoji('💰').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('Pokédex').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('Lock').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('Unlock').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('Stats').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('Sell All').setStyle(ButtonStyle.Danger)
     );
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('Upgrade Rod').setEmoji('🔧').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('Equip Rod').setEmoji('🎋').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('Upgrade Rod').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('Equip Rod').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2, row3] };
 }
@@ -380,15 +380,15 @@ async function handleFishingButton(interaction) {
 
         // Tier-specific title and flair
         const tierTitles = {
-            'Trash':     { title: '🗑️ Tangkapan... Sampah', sub: '*Yah... cuma sampah. Coba lagi!*' },
-            'Common':    { title: '🐟 Ikan Tertangkap!', sub: '*Lumayan, ikan biasa.*' },
-            'Uncommon':  { title: '🐠 Tangkapan Bagus!', sub: '*Tidak buruk! Ikan yang cukup langka.*' },
-            'Rare':      { title: '🐡✨ Tangkapan Langka!', sub: '*Wow! Ikan yang cukup sulit ditemukan!*' },
-            'Epic':      { title: '🦈💜 TANGKAPAN EPIC!', sub: '*Luar biasa! Ikan langka dan berharga!*' },
-            'Legendary': { title: '🐉⚡ LEGENDARY CATCH!', sub: '*GILA! Ikan legenda sangat jarang tertangkap!*' },
-            'Mythic':    { title: '🌈✨ MYTHIC CATCH!!', sub: '*MUSTAHIL! Ikan dari dimensi lain!!*' },
-            'Secret':    { title: '🔮💫 SECRET CATCH!!!', sub: '*RAHASIA TERUNGKAP! Ikan misterius nan langka!!!*' },
-            'God':       { title: '👑⚡ GOD TIER CATCH!!! ⚡👑', sub: '*DEWA LAUT TERSEGEL! Tangkapan seumur hidup!!!*' },
+            'Trash':     { title: '🗑️ Tangkapan Sampah', sub: '*Yah... cuma sampah. Coba lagi!*' },
+            'Common':    { title: '🐟 Ikan Tertangkap', sub: '*Lumayan, ikan biasa.*' },
+            'Uncommon':  { title: '🐠 Tangkapan Bagus', sub: '*Tidak buruk! Ikan yang cukup langka.*' },
+            'Rare':      { title: '🐡 Tangkapan Langka', sub: '*Wow! Ikan yang cukup sulit ditemukan!*' },
+            'Epic':      { title: '🦈 Tangkapan Epic', sub: '*Luar biasa! Ikan langka dan berharga!*' },
+            'Legendary': { title: '🐉 Legendary Catch', sub: '*GILA! Ikan legenda sangat jarang tertangkap!*' },
+            'Mythic':    { title: '🌈 Mythic Catch', sub: '*MUSTAHIL! Ikan dari dimensi lain!!*' },
+            'Secret':    { title: '🔮 Secret Catch', sub: '*RAHASIA TERUNGKAP! Ikan misterius nan langka!!!*' },
+            'God':       { title: '👑 God Tier Catch', sub: '*DEWA LAUT TERSEGEL! Tangkapan seumur hidup!!!*' },
         };
         const tierInfo = tierTitles[result.tier.tier] || tierTitles['Common'];
 
@@ -423,20 +423,22 @@ async function handleFishingButton(interaction) {
                 `${tierInfo.sub}\n` +
                 `${accent}\n\n` +
                 `${result.tier.emoji} **${result.fish.name}**\n\n` +
-                `┃ 📊 Tier: **${result.tier.tier}**\n` +
-                `┃ ⚖️ Berat: **${result.weight.toLocaleString('id-ID')} kg** ${weightLabel}\n` +
+                `┃ Tier: **${result.tier.tier}**\n` +
+                `┃ Berat: **${result.weight.toLocaleString('id-ID')} kg** ${weightLabel}\n` +
                 `┃ \`${weightBar}\` ${Math.floor(weightRatio * 100)}% of max\n` +
-                `┃ 💰 Nilai: 🪙 **${result.value.toLocaleString('id-ID')}**\n` +
+                `┃ Nilai: 🪙 **${result.value.toLocaleString('id-ID')}**\n` +
                 `${accent}\n\n` +
-                `-# 🎋 ${rod.name} • 🪱 ${baitUsed.name}${eq.bait !== 'none' ? ` (${baitRemaining})` : ''} • 📍 ${result.location.name}` +
+                `-# ${rod.name} • ${baitUsed.name}${eq.bait !== 'none' ? ` (${baitRemaining})` : ''} • ${result.location.name}` +
                 weatherMsg +
-                (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
+                (result.droppedPart ? '\n\n> +1 Rod Part! *(material upgrade joran)*' : '') +
                 contestMsg + comboMsg + secretUnlockMsg
             );
 
         const afterCatchRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Cast Lagi').setEmoji('🎣').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('Panel').setEmoji('📋').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Lagi').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('Inventory').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('Shop').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('Panel').setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.update({ embeds: [embed], components: [afterCatchRow] });
