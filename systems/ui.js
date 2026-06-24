@@ -115,9 +115,9 @@ function progressLine(value, max, length = 10, style = 'block') {
 }
 
 // ==================== SECTION HEADER ====================
-// Styled section header: "━━━ ⚔️ COMBAT STATS ━━━"
+// Styled section header: "╭──── ⚔️ COMBAT STATS ────╮"
 function sectionHeader(emoji, label) {
-    return `━━━ ${emoji} **${label}** ━━━`;
+    return `╭──── ${emoji} **${label}** ────╮`;
 }
 
 // ==================== MEDAL ====================
