@@ -385,10 +385,10 @@ async function handleFishingButton(interaction) {
             'Uncommon':  { title: '🐠 Tangkapan Bagus!', sub: '*Tidak buruk! Ikan yang cukup langka.*' },
             'Rare':      { title: '🐡 Tangkapan Langka!', sub: '*Wow! Ikan yang cukup sulit ditemukan!*' },
             'Epic':      { title: '🦈 Tangkapan Epic!', sub: '*Luar biasa! Ikan langka dan berharga!*' },
-            'Legendary': { title: '🐉 ✧ LEGENDARY CATCH ✧', sub: '*GILA! Ikan legenda sangat jarang tertangkap!*' },
-            'Mythic':    { title: '🌈 ✧ MYTHIC CATCH ✧', sub: '*MUSTAHIL! Ikan dari dimensi lain!!*' },
-            'Secret':    { title: '🔮 ✧ SECRET CATCH ✧', sub: '*RAHASIA TERUNGKAP! Ikan misterius nan langka!!!*' },
-            'God':       { title: '👑 ✧ GOD TIER CATCH ✧', sub: '*DEWA LAUT TERSEGEL! Tangkapan seumur hidup!!!*' },
+            'Legendary': { title: '✧ LEGENDARY CATCH ✧', sub: '*GILA! Ikan legenda sangat jarang tertangkap!*' },
+            'Mythic':    { title: '✧ MYTHIC CATCH ✧', sub: '*MUSTAHIL! Ikan dari dimensi lain!!*' },
+            'Secret':    { title: '✧ SECRET CATCH ✧', sub: '*RAHASIA TERUNGKAP! Ikan misterius nan langka!!!*' },
+            'God':       { title: '✧ GOD TIER CATCH ✧', sub: '*DEWA LAUT TERSEGEL! Tangkapan seumur hidup!!!*' },
         };
         const tierInfo = tierTitles[result.tier.tier] || tierTitles['Common'];
 
