@@ -26,41 +26,83 @@ function buildFishingPanel(guildId, userId, username) {
     const totalCaught = getUserStat(guildId, userId, 'total_fish_caught');
     const collected = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE guildId = ? AND userId = ?').get(guildId, userId);
     const totalFish = FISH_DATA.length;
+    const totalSoldValue = getUserStat(guildId, userId, 'total_fish_sold_value');
 
     const finalCdSec = getFishingCooldown(userId, rod);
+    const rareTotal = rod.rareBonus + bait.rareBonus + location.bonusRare;
+    const dexPercent = totalFish > 0 ? Math.floor((collected.c / totalFish) * 100) : 0;
+    const dexBar = ui.progressBar(collected.c, totalFish, 10, 'block');
+
+    // Combo info
+    const comboTracker = getComboTracker(guildId, userId);
+    const comboFeatures = JSON.parse(comboTracker.features || '[]');
+    const isActive = (Date.now() - comboTracker.lastAction) < 600000;
+    const comboMult = getComboMultiplier(guildId, userId);
+    const comboDisplay = isActive && comboFeatures.length > 0
+        ? `🔥 **x${comboMult}** (${comboFeatures.length} fitur aktif)`
+        : `💤 Tidak aktif`;
+
+    // Weather for advanced locations
+    let weatherLine = '';
+    if (location.monsterChance && location.monsterChance > 0) {
+        try {
+            const { weather, nextChange } = getFishingWeather();
+            const minsLeft = Math.max(0, Math.ceil((nextChange - Date.now()) / 60000));
+            weatherLine = `\n${weather.emoji} **${weather.name}** — *${weather.desc}*\n-# ⏳ Berubah dalam ${minsLeft} menit`;
+        } catch (e) {}
+    }
+
+    // Bait display
+    const baitCount = eq.bait !== 'none' ? eq.bait_count : 0;
+    const baitDisplay = eq.bait !== 'none'
+        ? `${bait.emoji} **${bait.name}** \`${baitCount} sisa\``
+        : `❌ *Tanpa Umpan*`;
+
     const embed = new EmbedBuilder()
-        .setTitle(ui.title('🎣', 'FISHING', username))
+        .setTitle(`🎣 FISHING — ${username}`)
         .setColor(ui.COLORS.fishing)
         .setDescription(
-            `Lempar pancingmu dan lihat apa yang nyangkut! 🐟\n` +
-            ui.statBlock([
-                `📍 Lokasi: **${location.name}** — *${location.desc}*`,
-                `🎋 Joran: **${rod.emoji} ${rod.name}**  •  🪱 Umpan: **${bait.emoji} ${bait.name}** (sisa ${eq.bait !== 'none' ? eq.bait_count : 0})`,
-                `🐟 Tertangkap: **${totalCaught}**  •  📖 Pokédex: **${collected.c}/${totalFish}** spesies`,
-                `⏱️ Jeda lempar: ${finalCdSec}s  •  Peluang langka: +${rod.rareBonus + bait.rareBonus + location.bonusRare}%`,
-                `${ui.money(userData.balance)}`,
-            ]) +
-            `\n> 🎣 Tekan **Cast** untuk mulai mancing. Kelola koleksi, ganti lokasi, & upgrade joran lewat tombol di bawah!`
+            `*Lempar pancingmu dan lihat apa yang nyangkut!* 🌊\n` +
+            `${ui.DIVIDER}\n` +
+            `📍 Lokasi: ${location.name}\n` +
+            `-# *${location.desc}*${weatherLine}\n` +
+            `${ui.DIVIDER}\n\n` +
+
+            `╭─── ⚙️ **EQUIPMENT** ───╮\n` +
+            `┃ 🎋 Joran: ${rod.emoji} **${rod.name}**\n` +
+            `┃ 🪱 Umpan: ${baitDisplay}\n` +
+            `┃ ⏱️ Cooldown: **${finalCdSec}s** ┃ 🍀 Rare: **+${rareTotal}%**\n` +
+            `╰──────────────────╯\n\n` +
+
+            `╭─── 📊 **STATS** ───╮\n` +
+            `┃ 🐟 Tangkapan: **${totalCaught.toLocaleString('id-ID')}**\n` +
+            `┃ 📖 Pokédex: **${collected.c}/${totalFish}** \`${dexBar}\` ${dexPercent}%\n` +
+            `┃ 💰 Dijual: ${ui.money(totalSoldValue)}\n` +
+            `┃ 🔥 Combo: ${comboDisplay}\n` +
+            `╰──────────────────╯\n\n` +
+
+            `> 💳 Saldo: ${ui.money(userData.balance)}\n` +
+            `> 🎣 Tekan **Cast** untuk mulai mancing!`
         )
         .setFooter({ text: ui.footer('Mancing beruntun nambah combo — makin tinggi combo, makin cuan!') });
 
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('📍 Location').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('🏆 Contest').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Cast').setEmoji('🎣').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`fish_inv_${userId}`).setLabel('Inventory').setEmoji('📦').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_shop_${userId}`).setLabel('Shop').setEmoji('🛒').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_location_${userId}`).setLabel('Location').setEmoji('📍').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_contest_${userId}`).setLabel('Contest').setEmoji('🏆').setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('📖 Pokédex').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('🔒 Lock').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('🔓 Unlock').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('💰 Sell All').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`fish_collection_${userId}`).setLabel('Pokédex').setEmoji('📖').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_lock_${userId}`).setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_unlock_${userId}`).setLabel('Unlock').setEmoji('🔓').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_stats_${userId}`).setLabel('Stats').setEmoji('📊').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_sellall_${userId}`).setLabel('Sell All').setEmoji('💰').setStyle(ButtonStyle.Danger)
     );
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('🔧 Upgrade Rod').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('🎋 Equip Rod').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('Upgrade Rod').setEmoji('🔧').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('Equip Rod').setEmoji('🎋').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row1, row2, row3] };
 }
@@ -334,32 +376,67 @@ async function handleFishingButton(interaction) {
             weatherMsg = `\n> ${w.emoji} **${w.name}**${w.effects.valueMult !== 1 ? ` (Value ${w.effects.valueMult}x)` : ''}`;
         }
 
-        const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF', 'God': '#FFD700' };
-        let title = `🎣 ${result.tier.tier === 'Trash' ? 'Kamu menangkap sampah...' : 'IKAN TERTANGKAP!'}`;
-        if (result.tier.tier === 'God') title = '👑⚡ GOD TIER CATCH!!! ⚡👑';
-        else if (result.tier.tier === 'Secret') title = '🔮💫 SECRET CATCH!!! 💫🔮';
-        else if (result.tier.tier === 'Mythic') title = '🌈✨ MYTHIC CATCH!! ✨🌈';
-        else if (result.tier.tier === 'Legendary') title = '🐉⚡ LEGENDARY CATCH! ⚡🐉';
+        const tierColors = { 'Trash': '#808080', 'Common': '#95A5A6', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF', 'God': '#FFD700' };
+
+        // Tier-specific title and flair
+        const tierTitles = {
+            'Trash':     { title: '🗑️ Tangkapan... Sampah', sub: '*Yah... cuma sampah. Coba lagi!*' },
+            'Common':    { title: '🐟 Ikan Tertangkap!', sub: '*Lumayan, ikan biasa.*' },
+            'Uncommon':  { title: '🐠 Tangkapan Bagus!', sub: '*Tidak buruk! Ikan yang cukup langka.*' },
+            'Rare':      { title: '🐡✨ Tangkapan Langka!', sub: '*Wow! Ikan yang cukup sulit ditemukan!*' },
+            'Epic':      { title: '🦈💜 TANGKAPAN EPIC!', sub: '*Luar biasa! Ikan langka dan berharga!*' },
+            'Legendary': { title: '🐉⚡ LEGENDARY CATCH!', sub: '*GILA! Ikan legenda sangat jarang tertangkap!*' },
+            'Mythic':    { title: '🌈✨ MYTHIC CATCH!!', sub: '*MUSTAHIL! Ikan dari dimensi lain!!*' },
+            'Secret':    { title: '🔮💫 SECRET CATCH!!!', sub: '*RAHASIA TERUNGKAP! Ikan misterius nan langka!!!*' },
+            'God':       { title: '👑⚡ GOD TIER CATCH!!! ⚡👑', sub: '*DEWA LAUT TERSEGEL! Tangkapan seumur hidup!!!*' },
+        };
+        const tierInfo = tierTitles[result.tier.tier] || tierTitles['Common'];
+
+        // Weight gauge bar
+        const weightRange = result.tier.maxWeight - result.tier.minWeight;
+        const weightRatio = weightRange > 0 ? Math.min(1, Math.max(0, (result.weight - result.tier.minWeight) / weightRange)) : 0;
+        const weightBar = ui.progressBar(result.weight - result.tier.minWeight, weightRange, 10, 'block');
+        const weightLabel = weightRatio >= 0.9 ? '🏆 MAX!' : weightRatio >= 0.7 ? '🔥 Heavy' : weightRatio >= 0.4 ? '⚖️ Medium' : '🪶 Light';
+
+        // Tier accent decoration
+        const tierAccent = {
+            'Trash': '░░░░░░░░░░░░░░░░░░░░',
+            'Common': '━━━━━━━━━━━━━━━━━━━━',
+            'Uncommon': '═══════════════════',
+            'Rare': '◆━━━━━━━━━━━━━━━━━◆',
+            'Epic': '◈━━━━━━━━━━━━━━━━━◈',
+            'Legendary': '★━━━━━━━━━━━━━━━━━★',
+            'Mythic': '✦═══════════════════✦',
+            'Secret': '◇═══════✧═══════✧═══════◇',
+            'God': '👑════════✦════════👑',
+        };
+        const accent = tierAccent[result.tier.tier] || ui.DIVIDER;
+
+        // Equipment summary line
+        const baitUsed = BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0];
+        const baitRemaining = eq.bait !== 'none' ? Math.max(0, eq.bait_count - 1) : 0;
 
         const embed = new EmbedBuilder()
             .setColor(tierColors[result.tier.tier] || '#2B2D31')
-            .setTitle(title)
+            .setTitle(tierInfo.title)
             .setDescription(
+                `${tierInfo.sub}\n` +
+                `${accent}\n\n` +
                 `${result.tier.emoji} **${result.fish.name}**\n\n` +
-                `> 📊 **Tier:** ${result.tier.tier}\n` +
-                `> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n` +
-                `> 💰 **Nilai Jual:** 🪙 ${result.value.toLocaleString('id-ID')}\n\n` +
-                `> 🎋 Joran: **${rod.name}**\n` +
-                `> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${Math.max(0, eq.bait_count - 1)} sisa)` : ''}\n` +
-                `> 📍 Lokasi: **${result.location.name}**` +
+                `┃ 📊 Tier: **${result.tier.tier}**\n` +
+                `┃ ⚖️ Berat: **${result.weight.toLocaleString('id-ID')} kg** ${weightLabel}\n` +
+                `┃ \`${weightBar}\` ${Math.floor(weightRatio * 100)}% of max\n` +
+                `┃ 💰 Nilai: 🪙 **${result.value.toLocaleString('id-ID')}**\n` +
+                `${accent}\n\n` +
+                `-# 🎋 ${rod.name} • 🪱 ${baitUsed.name}${eq.bait !== 'none' ? ` (${baitRemaining})` : ''} • 📍 ${result.location.name}` +
                 weatherMsg +
                 (result.droppedPart ? '\n\n> 🔧 **+1 Rod Part!** *(material upgrade joran)*' : '') +
                 contestMsg + comboMsg + secretUnlockMsg
             );
 
         const afterCatchRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Lagi').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('📋 Panel').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('Cast Lagi').setEmoji('🎣').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('Panel').setEmoji('📋').setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.update({ embeds: [embed], components: [afterCatchRow] });
