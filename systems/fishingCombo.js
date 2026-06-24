@@ -9,12 +9,12 @@ const { getRandomInt } = require('../utils');
 const COMBO_TIMEOUT = 2 * 60 * 1000; // 2 menit — break combo jika lebih dari ini
 const COMBO_TIERS = [
     { min: 1, mult: 1.0, label: '' },
-    { min: 3, mult: 1.2, label: '🔥 x3 (+20%)' },
-    { min: 5, mult: 1.5, label: '🔥🔥 x5 (+50%)' },
-    { min: 8, mult: 1.8, label: '🔥🔥🔥 x8 (+80%)' },
-    { min: 10, mult: 2.0, label: '💥 x10 (2x!)' },
-    { min: 15, mult: 2.5, label: '💥💥 x15 (2.5x!!)' },
-    { min: 20, mult: 3.0, label: '⚡ x20 (3x!!!)' },
+    { min: 3, mult: 1.2, label: '🔥 Combo Chain: x3 (+20%)' },
+    { min: 5, mult: 1.5, label: '🔥 Combo Chain: x5 (+50%)' },
+    { min: 8, mult: 1.8, label: '🔥 Combo Chain: x8 (+80%)' },
+    { min: 10, mult: 2.0, label: '✧ COMBO MULTIPLIER: x10 (2x!) ✧' },
+    { min: 15, mult: 2.5, label: '✧ COMBO MULTIPLIER: x15 (2.5x!!) ✧' },
+    { min: 20, mult: 3.0, label: '👑 ✧ MAX COMBO CHAIN: x20 (3x!!!) ✧ 👑' },
 ];
 
 // ==================== TREASURE DROPS ====================

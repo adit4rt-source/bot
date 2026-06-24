@@ -504,7 +504,7 @@ async function addXpAndMoney(member, type, multiplier = 1) {
                         .replace(/{user\.xp}/g, String(user.xp));
                     channel.send(`${lvlMsg}${teksHadiah}`).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 } else {
-                    channel.send(`🎉 **LEVEL UP!** <@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
+                    channel.send(`✧ **LEVEL UP** ✧\n<@${member.id}> telah mencapai **Level ${user.level}**!${teksHadiah}`).then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
                 }
             }
         }

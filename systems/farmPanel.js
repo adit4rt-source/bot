@@ -1752,8 +1752,9 @@ async function handleFarmModal(interaction) {
 
         const freshData = getOrCreateUser(guildId, userId);
         const ingredients = recipe.ingredients.map(ing => { const c = ALL_CROPS.find(cr => cr.id === ing.id); return `${c ? c.emoji : '📦'} ${c ? c.name : ing.id} x${ing.qty * toCraft}`; }).join(' + ');
-        const embed = new EmbedBuilder().setColor('#9B59B6').setTitle(`${recipe.emoji} ${recipe.name} x${toCraft} Crafted!`)
+        const embed = new EmbedBuilder().setColor('#9B59B6').setTitle('✧ ITEM CRAFTED ✧')
             .setDescription(
+                `**${recipe.emoji} ${recipe.name} x${toCraft}**\n\n` +
                 `> Bahan: ${ingredients}\n` +
                 `> 💰 Total: 🪙 **${totalMoney.toLocaleString('id-ID')}** (${recipe.sellPrice.toLocaleString('id-ID')} × ${toCraft})\n` +
                 `> Saldo: 🪙 **${freshData.balance.toLocaleString('id-ID')}**` +

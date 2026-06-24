@@ -642,7 +642,7 @@ async function handleExpeditionButton(interaction) {
         }
 
         if (result.expResult && result.expResult.leveledUp) {
-            desc += `\n🎉 **PET LEVEL UP!** → Lv.${result.expResult.newLevel}!`;
+            desc += `\n✧ **PET LEVEL UP** ✧\n→ Lv.${result.expResult.newLevel}!`;
         }
         if (result.expResult && result.expResult.newSkill) {
             desc += `\n🌟 **SKILL UNLOCKED:** ${result.expResult.newSkill.skill.name}!`;

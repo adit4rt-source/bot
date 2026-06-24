@@ -1286,7 +1286,7 @@ async function handlePetButton(interaction) {
         db.prepare('UPDATE pets SET happiness = ?, hunger = ? WHERE id = ?').run(newHappy, newHunger, pet.id);
         const expResult = addPetExp(guildId, userId, 8);
         let lvlUpMsg = '';
-        if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
+        if (expResult && expResult.leveledUp) lvlUpMsg = `\n\n✧ **LEVEL UP** ✧\n${expResult.petName} → Lv.${expResult.newLevel}!`;
         if (expResult && expResult.newSkill) lvlUpMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
         const activities = ['bermain kejar-kejaran', 'bermain bola', 'bermain petak umpet', 'berguling-guling', 'melompat-lompat'];
         const activity = activities[Math.floor(Math.random() * activities.length)];
@@ -1333,7 +1333,7 @@ async function handlePetButton(interaction) {
                 addIncome(guildId, userId, 'battle', reward);
                 const expResult = addPetExp(guildId, userId, 20);
                 let lvlMsg = '';
-                if (expResult && expResult.leveledUp) lvlMsg = `\n> 🎉 **LEVEL UP!** ${expResult.petName} → Lv.${expResult.newLevel}!`;
+                if (expResult && expResult.leveledUp) lvlMsg = `\n> ✧ **LEVEL UP** ✧\n> ${expResult.petName} → Lv.${expResult.newLevel}!`;
                 if (expResult && expResult.newSkill) lvlMsg += `\n> 🌟 **SKILL UNLOCKED:** ${expResult.newSkill.skill.name}!`;
                 const huntLoot = rollLoot(guildId, userId, [
                     { item: 'refine_stone', chance: 0.12, min: 1, max: 1 },
@@ -1820,7 +1820,7 @@ async function handlePetButton(interaction) {
         const result = evolvePet(guildId, userId);
         if (!result) return interaction.reply({ content: '❌ Gagal evolve!', ephemeral: true });
         const oldDef = PET_DATA.find(p => p.id === evo.from);
-        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🧬 PET EVOLUTION!')
+        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('✧ PET EVOLUTION ✧')
             .setDescription(`${oldDef ? oldDef.emoji : '🐾'} **${pet.name}** berevolusi!\n\n> 🔄 **${evo.name}**\n> ${result.newPetDef.emoji} Tier: **${result.newPetDef.tier}**\n\n> ⚔️ ATK: ${result.newStats.atk} | 🛡️ DEF: ${result.newStats.def}\n> ❤️ HP: ${result.newStats.hp} | 💨 SPD: ${result.newStats.spd}\n> 🎯 CRIT: ${result.newStats.crit}%\n\n🎉 *Selamat! Pet kamu sekarang jauh lebih kuat!*`);
         const backRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali ke Panel').setStyle(ButtonStyle.Success)

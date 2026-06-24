@@ -584,7 +584,7 @@ async function handleProfileSelectMenu(interaction) {
         incrementUserStat(guildId, userId, 'total_crafts');
 
         const embed = new EmbedBuilder()
-            .setTitle('✅ Craft Berhasil!')
+            .setTitle('✧ ITEM CRAFTED ✧')
             .setColor('#9B59B6')
             .setDescription(`${recipe.emoji} **${recipe.name}**\n\n> Hasil: ${resultMsg}`)
             .setFooter({ text: recipe.desc });

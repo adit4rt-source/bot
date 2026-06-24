@@ -1785,7 +1785,9 @@ async function routeInteraction(interaction) {
                     const entry = collectedMap[f.id];
                     const countInfo = entry && entry.catch_count > 1 ? ` (×${entry.catch_count})` : '';
                     const weightInfo = entry && entry.heaviest_weight ? ` ⚖️${entry.heaviest_weight}kg` : '';
-                    desc += `> ${f.emoji} **${f.name}** ✅${countInfo}${weightInfo} — 📍 ${locName}\n`;
+                    const isLegendaryPlus = ['Legendary', 'Mythic', 'Secret', 'God'].includes(f.tier);
+                    const displayName = isLegendaryPlus ? `✧ ${f.name} ✧` : f.name;
+                    desc += `> ${f.emoji} **${displayName}** ✅${countInfo}${weightInfo} — 📍 ${locName}\n`;
                 } else {
                     desc += `> ▪️ ??? 🔒 — 📍 ${locName}\n`;
                 }
