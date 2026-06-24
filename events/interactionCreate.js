@@ -1798,7 +1798,19 @@ async function routeInteraction(interaction) {
             navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_back_${targetUserId}_0`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Primary));
             if (page < totalPages - 1) navRow.addComponents(new ButtonBuilder().setCustomId(`fcol_${tier}_${targetUserId}_${page+1}`).setLabel('▶').setStyle(ButtonStyle.Secondary));
             navRow.addComponents(new ButtonBuilder().setCustomId(`fish_back_${targetUserId}`).setLabel('🎣 Panel').setStyle(ButtonStyle.Success));
-            return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Pokédex`).setColor('#3498DB').setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan | Koleksi permanen` })], components: [navRow] });
+            const tierColors = {
+                'Trash': '#7F8C8D',
+                'Common': '#BDC3C7',
+                'Uncommon': '#2ECC71',
+                'Rare': '#3498DB',
+                'Epic': '#9B59B6',
+                'Legendary': '#E67E22',
+                'Mythic': '#E74C3C',
+                'Secret': '#8E44AD',
+                'God': '#F1C40F'
+            };
+            const embedColor = tierColors[tier] || '#3498DB';
+            return interaction.update({ embeds: [new EmbedBuilder().setTitle(`📖 ${tierEmoji} ${tier} Pokédex`).setColor(embedColor).setDescription(desc).setFooter({ text: `Halaman ${page+1}/${totalPages} | ${tierCollected}/${tierFish.length} ditemukan | Koleksi permanen` })], components: [navRow] });
         }
 
         // --- MENU HUB BUTTONS ---
@@ -1949,9 +1961,32 @@ async function routeInteraction(interaction) {
                 if (streakResult.weeklyBonus) bonusMsg += `\n\n🎉🎉 **7-DAY STREAK BONUS!** +1000 Money + 📦 Mystery Box! 🎉🎉`;
                 if (streakResult.gotCardsText) bonusMsg += streakResult.gotCardsText;
             }
-            return interaction.reply(`✅ Dapat 🪙 **${tq.reward}**!${bonusMsg}`);
+            const rewardEmbed = new EmbedBuilder()
+                .setColor('#2ECC71')
+                .setTitle('✧ QUEST COMPLETED ✧')
+                .setDescription(`Kamu telah menyelesaikan misi harian!\n\n> 🎁 Hadiah: 🪙 **${tq.reward.toLocaleString('id-ID')} Money**` + (bonusMsg ? bonusMsg : ''));
+            return interaction.reply({ embeds: [rewardEmbed] });
         }
-        if (interaction.customId.startsWith('claim_weekly_')) { const qi = parseInt(interaction.customId.replace('claim_weekly_', '')); const week = getWeekId(); let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week); if (!row) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] }); let quests = JSON.parse(row.data), tq = quests[qi]; if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai atau sudah diklaim!', ephemeral: true}); tq.claimed = true; db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week); let ud = getOrCreateUser(guildId, interaction.user.id); ud.balance += tq.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id); incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done'); addIncome(guildId, interaction.user.id, 'quest', tq.reward); return interaction.reply(`\u2705 Weekly Quest selesai! Dapat \ud83e\ude99 **${tq.reward.toLocaleString('id-ID')}**!`); }
+        if (interaction.customId.startsWith('claim_weekly_')) {
+            const qi = parseInt(interaction.customId.replace('claim_weekly_', ''));
+            const week = getWeekId();
+            let row = db.prepare('SELECT * FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, interaction.user.id, week);
+            if (!row) return interaction.update({ content: '\u274c Expired. Gunakan `/quest` untuk panel baru.', embeds: [], components: [] });
+            let quests = JSON.parse(row.data), tq = quests[qi];
+            if (!tq || tq.progress < tq.target || tq.claimed) return interaction.reply({content: '\u274c Belum selesai atau sudah diklaim!', ephemeral: true});
+            tq.claimed = true;
+            db.prepare('UPDATE weekly_quests SET data = ? WHERE guildId = ? AND userId = ? AND week = ?').run(JSON.stringify(quests), guildId, interaction.user.id, week);
+            let ud = getOrCreateUser(guildId, interaction.user.id);
+            ud.balance += tq.reward;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, interaction.user.id);
+            incrementUserStat(guildId, interaction.user.id, 'total_weekly_quests_done');
+            addIncome(guildId, interaction.user.id, 'quest', tq.reward);
+            const rewardEmbed = new EmbedBuilder()
+                .setColor('#2ECC71')
+                .setTitle('✧ QUEST COMPLETED ✧')
+                .setDescription(`Kamu telah menyelesaikan misi mingguan!\n\n> 🎁 Hadiah: 🪙 **${tq.reward.toLocaleString('id-ID')} Money**`);
+            return interaction.reply({ embeds: [rewardEmbed] });
+        }
         if (interaction.customId === 'cancel_buy') return interaction.update({ content: '\u274c Dibatalkan.', components: [] });
         if (interaction.customId.startsWith('confirm_')) { const selected = interaction.customId.substring(8), userData = getOrCreateUser(guildId, interaction.user.id); let finalItemName = '', finalPrice = 0; if (selected.startsWith('item_')) { const parts = selected.substring(5).split('_'); const itemPrice = parseInt(parts.pop()); const itemName = parts.join('_'); const item = db.prepare('SELECT * FROM shop_items WHERE guildId = ? AND name = ? AND price = ? LIMIT 1').get(guildId, itemName, itemPrice); if (!item) return interaction.update({content: '❌ Habis!', components: []}); if (userData.balance < item.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); try { await interaction.user.send(`🛍️ **${item.name}**:\n\`\`\`\n${item.content}\n\`\`\``); } catch(e) { return interaction.update({content: '❌ DM tertutup!', components: []}); } userData.balance -= item.price; finalItemName = item.name; finalPrice = item.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id); } if (selected.startsWith('role_')) { const roleId = selected.substring(5), sr = db.prepare('SELECT * FROM shop_roles WHERE guildId = ? AND roleId = ?').get(guildId, roleId); if (!sr) return interaction.update({content: '❌ Tidak dijual.', components: []}); if (userData.balance < sr.price) return interaction.update({content: '❌ Saldo kurang!', components: []}); if (interaction.member.roles.cache.has(roleId)) return interaction.update({content: '❌ Sudah punya!', components: []}); userData.balance -= sr.price; const role = interaction.guild.roles.cache.get(roleId); finalItemName = role ? `Role ${role.name}` : 'Role'; finalPrice = sr.price; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); if (role) await interaction.member.roles.add(role).catch(()=>{}); } incrementUserStat(guildId, interaction.user.id, 'total_buys'); if (finalPrice > 0) { updateQuestProgress(guildId, interaction.user.id, 'spend_money', finalPrice); addSpending(guildId, interaction.user.id, 'shop', finalPrice); } await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', finalItemName, finalPrice); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor('#2B2D31').setDescription(`<@${interaction.user.id}> beli **${finalItemName}** (🪙 ${finalPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.update({content: `✅ Berhasil beli **${finalItemName}**!`, components: []}); }
     }

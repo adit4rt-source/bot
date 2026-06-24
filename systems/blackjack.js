@@ -155,11 +155,11 @@ function buildGameEmbed(game, showDealer = false, result = null) {
     }
 
     let color = '#3498DB';
-    let title = '🃏 Blackjack';
+    let title = '✧ BLACKJACK ✧';
     if (result) {
-        if (result.result === 'blackjack' || result.result === 'win') { color = '#2ECC71'; title = '🃏 Blackjack — Menang!'; }
-        else if (result.result === 'bust' || result.result === 'lose') { color = '#E74C3C'; title = '🃏 Blackjack — Kalah!'; }
-        else { color = '#F1C40F'; title = '🃏 Blackjack — Seri!'; }
+        if (result.result === 'blackjack' || result.result === 'win') { color = '#2ECC71'; title = '✧ VICTORY ✧'; }
+        else if (result.result === 'bust' || result.result === 'lose') { color = '#E74C3C'; title = '✧ DEFEAT ✧'; }
+        else { color = '#F1C40F'; title = '✧ PUSH ✧'; }
     }
 
     let desc = `━━━━━━━━━━━━━━━━━━━━━━\n`;

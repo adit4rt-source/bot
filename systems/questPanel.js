@@ -296,11 +296,11 @@ async function handleQuestButton(interaction) {
         const panel = buildDailyPanel(guildId, userId, interaction.user.username);
         await interaction.update(panel);
 
-        // Send bonus message if any
-        if (bonusMsg) {
-            return interaction.followUp({ content: `\u2705 Dapat \ud83e\ude99 **${tq.reward}**!${bonusMsg}`, ephemeral: true });
-        }
-        return interaction.followUp({ content: `\u2705 Dapat \ud83e\ude99 **${tq.reward}**!`, ephemeral: true });
+        const rewardEmbed = new EmbedBuilder()
+            .setColor('#2ECC71')
+            .setTitle('✧ QUEST COMPLETED ✧')
+            .setDescription(`Kamu telah menyelesaikan misi harian!\n\n> 🎁 Hadiah: 🪙 **${tq.reward.toLocaleString('id-ID')} Money**` + (bonusMsg ? bonusMsg : ''));
+        return interaction.followUp({ embeds: [rewardEmbed], ephemeral: true });
     }
 
     // === CLAIM WEEKLY QUEST ===
@@ -328,7 +328,11 @@ async function handleQuestButton(interaction) {
         // Update the panel to reflect new state
         const panel = buildWeeklyPanel(guildId, userId, interaction.user.username);
         await interaction.update(panel);
-        return interaction.followUp({ content: `\u2705 Weekly Quest selesai! Dapat \ud83e\ude99 **${tq.reward.toLocaleString('id-ID')}**!`, ephemeral: true });
+        const rewardEmbed = new EmbedBuilder()
+            .setColor('#2ECC71')
+            .setTitle('✧ QUEST COMPLETED ✧')
+            .setDescription(`Kamu telah menyelesaikan misi mingguan!\n\n> 🎁 Hadiah: 🪙 **${tq.reward.toLocaleString('id-ID')} Money**`);
+        return interaction.followUp({ embeds: [rewardEmbed], ephemeral: true });
     }
 }
 
