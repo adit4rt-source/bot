@@ -29,7 +29,7 @@ const GLOBAL_TABLES = new Set([
     'auto_harvest', 'combo_tracker', 'trades', 'market_listings',
     'command_summary', 'pet_evolution_history',
     'giant_fish_encounters', 'giant_fish_active', 'secret_locations_unlocked', 'fishing_combo',
-    'belajar_progress', 'belajar_done', 'belajar_weak'
+    'belajar_progress', 'belajar_done', 'belajar_weak', 'blacklist'
 ]);
 
 function isGlobalTable(sql) {
@@ -369,6 +369,14 @@ try {
         SELECT userId, petId, MIN(adoptedAt), COUNT(*)
         FROM pets GROUP BY userId, petId`);
 } catch(e) { /* safe to ignore on first run */ }
+
+// ================= BLACKLIST TABLE =================
+db.exec(`CREATE TABLE IF NOT EXISTS blacklist (
+    userId TEXT PRIMARY KEY,
+    reason TEXT,
+    addedAt INTEGER,
+    addedBy TEXT
+)`);
 
 // ================= HELPER FUNCTIONS =================
 
