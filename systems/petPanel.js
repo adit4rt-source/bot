@@ -890,41 +890,75 @@ function buildMainPanel(guildId, userId, username) {
     const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
     const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
     const isHunting = pet.hunting_until && pet.hunting_until > Date.now();
-    const huntInfo = isHunting ? `\n🏹 **HUNTING** — Kembali <t:${Math.floor(pet.hunting_until / 1000)}:R>` : '';
-    const mutationLine = pet.mutation_trait ? `\n🧪 **Mutation:** ${formatTrait(pet)}` : '';
+    const mutationLine = pet.mutation_trait ? `🧪 **Mutation:** ${formatTrait(pet)}` : '';
 
     // Evolution info
-    let evoInfo = '';
+    let evoLine = '';
     const evo = PET_EVOLUTIONS.find(e => e.from === pet.petId);
     if (evo) {
         const evoPetDef = PET_DATA.find(p => p.id === evo.to);
-        if (pet.level >= evo.level) evoInfo = `\n🧬 **SIAP EVOLVE!** → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
-        else evoInfo = `\n🧬 Evolution: Lv.${evo.level} → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
+        if (pet.level >= evo.level) evoLine = `🧬 **SIAP EVOLVE!** → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
+        else evoLine = `🧬 Evolution: Lv.${evo.level} → ${evoPetDef ? evoPetDef.emoji + ' ' + evoPetDef.name : evo.to}`;
     }
 
     // Effective stats including equipped/owned relic bonuses (from Refine).
     const eff = getEffectiveStats(pet);
     const hasRelic = eff.bonus.atk || eff.bonus.def || eff.bonus.spd || eff.bonus.crit ||
         (eff.bonus.percent && (eff.bonus.percent.atk || eff.bonus.percent.def || eff.bonus.percent.spd || eff.bonus.percent.crit));
-    // Show effective total (already includes percent calc from getEffectiveStats)
-    const statFmt = (effective, base) => effective !== base ? `**${effective}** (base ${base})` : `**${base}**`;
+    // Show effective (base) format
+    const statFmt = (effective, base) => effective !== base ? `**${effective}** (${base})` : `**${base}**`;
+
+    // ── Tier-based embed color ──
+    const tierColor = ui.TIER_COLORS[petDef.tier] || ui.COLORS.pet;
+    const classIcon = ui.CLASS_EMOJI[pet.class] || '⚔️';
+    const elemIcon = ELEMENT_EMOJI[pet.element] || '🔥';
+
+    // ── Build description sections ──
+    // Header identity
+    const headerSection = [
+        `${petDef.emoji} **${petDef.name}** — *${petDef.tier}*`,
+        `> ${classIcon} ${pet.class || 'warrior'} • ${elemIcon} ${pet.element || 'fire'} • Lv.**${pet.level}**`,
+    ].join('\n');
+
+    // Condition bars
+    const conditionSection = [
+        ui.sectionHeader('📊', 'CONDITION'),
+        `❤️ Senang:  \`${bar(happyPercent)}\` **${happyPercent}%**`,
+        `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**`,
+        `✨ EXP:     ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})`,
+    ].join('\n');
+
+    // Combat stats — aligned grid
+    const combatSection = [
+        ui.sectionHeader('⚔️', 'COMBAT STATS'),
+        `⚔️ ATK: ${statFmt(eff.atk, pet.atk)}  ┃  🛡️ DEF: ${statFmt(eff.def, pet.def)}`,
+        `💨 SPD: ${statFmt(eff.spd, pet.spd)}  ┃  ❤️ HP: ${statFmt(eff.hp, pet.hp)}`,
+        `🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (${pet.crit}%)` : `**${pet.crit}%**`}`,
+    ].join('\n');
+
+    // Bonus & status
+    const statusLines = [];
+    statusLines.push(ui.sectionHeader('🎁', 'BONUS & STATUS'));
+    statusLines.push(`🎁 +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}`);
+    if (hasRelic) statusLines.push(`📿 *Bonus relic aktif — naikkan dengan Refine!*`);
+    if (mutationLine) statusLines.push(mutationLine);
+    if (isHunting) statusLines.push(`🏹 **HUNTING** — Kembali <t:${Math.floor(pet.hunting_until / 1000)}:R>`);
+    if (evoLine) statusLines.push(evoLine);
+    const statusSection = statusLines.join('\n');
 
     const embed = new EmbedBuilder()
-        .setTitle(ui.title('🐾', 'PET', `${pet.name} (Lv.${pet.level})`))
-        .setColor(bonusActive ? ui.COLORS.success : ui.COLORS.danger)
+        .setTitle(`🐾 ${pet.name}`)
+        .setColor(tierColor)
         .setDescription(
-            `${petDef.emoji} **${petDef.name}** — *${petDef.tier}*\n\n` +
-            `❤️ Senang: \`${bar(happyPercent)}\` **${happyPercent}%**\n` +
-            `🍖 Kenyang: \`${bar(hungerPercent)}\` **${hungerPercent}%**\n` +
-            `✨ EXP: ${ui.progressLine(pet.exp, expNeeded)} (${pet.exp}/${expNeeded})\n\n` +
-            `⚔️ ATK: ${statFmt(eff.atk, pet.atk)} | 🛡️ DEF: ${statFmt(eff.def, pet.def)} | 💨 SPD: ${statFmt(eff.spd, pet.spd)}\n` +
-            `❤️ HP: ${eff.hp !== pet.hp ? `**${eff.hp}** (base ${pet.hp})` : `**${pet.hp}**`} | 🎯 CRIT: ${eff.crit !== pet.crit ? `**${eff.crit}%** (base ${pet.crit}%)` : `**${pet.crit}%**`}\n` +
-            (hasRelic ? `📿 *Bonus relic aktif — naikkan dengan 📿 Refine!*\n` : '') +
-            `🎁 Bonus: +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}` + mutationLine +
-            huntInfo + evoInfo
+            headerSection + '\n\n' +
+            conditionSection + '\n\n' +
+            combatSection + '\n\n' +
+            statusSection
         )
-        .setFooter({ text: ui.footer(`${ui.money(userData.balance)} • Class: ${pet.class || 'warrior'} • Element: ${pet.element || 'fire'}`) });
+        .setFooter({ text: `💡 ${ui.money(userData.balance)}` });
 
+    // ── Buttons: grouped by purpose ──
+    // Row 1: Pet Care (blue primary)
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_info_${userId}`).setLabel('📋 Info').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_feed_${userId}`).setLabel('🍖 Feed').setStyle(ButtonStyle.Primary),
@@ -932,15 +966,17 @@ function buildMainPanel(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`pet_hunt_${userId}`).setLabel('🏹 Hunt').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`pet_cook_${userId}`).setLabel('🍳 Cook').setStyle(ButtonStyle.Success)
     );
+    // Row 2: Management (grey secondary)
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_shop_${userId}`).setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`pet_collection_${userId}`).setLabel('📦 Collection').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_swap_${userId}`).setLabel('🔄 Swap').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`pet_rename_${userId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`pet_bag_${userId}`).setLabel('💼 Bag').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`pet_bag_${userId}`).setLabel('💼 Bag').setStyle(ButtonStyle.Secondary)
     );
+    // Row 3: Adventure (red danger for combat, green for progression)
     const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('🏰 Dungeon').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`pet_dungeon_${userId}`).setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`pet_boss_${userId}`).setLabel('👹 Boss').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`pet_expedition_${userId}`).setLabel('🌊 Expedition').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`pet_fusion_${userId}`).setLabel('🧬 Fusion').setStyle(ButtonStyle.Success),

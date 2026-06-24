@@ -39,6 +39,24 @@ const COLORS = {
     neutral:     '#95A5A6',
 };
 
+// ==================== TIER COLORS ====================
+// Rarity-based accent colors for pet and item panels.
+const TIER_COLORS = {
+    Common:    '#95A5A6',
+    Uncommon:  '#2ECC71',
+    Rare:      '#3498DB',
+    Epic:      '#9B59B6',
+    Legendary: '#F1C40F',
+    Mythic:    '#E74C3C',
+    Secret:    '#E91E63',
+    God:       '#FFD700',
+};
+
+// ==================== CLASS / ELEMENT EMOJI ====================
+const CLASS_EMOJI = {
+    warrior: '⚔️', tank: '🛡️', mage: '🔮', ranger: '🏹', healer: '💚',
+};
+
 // ==================== DIVIDERS ====================
 // One canonical divider length used everywhere (was inconsistent: 18-24 chars).
 const DIVIDER = '━━━━━━━━━━━━━━━━━━━━';        // heavy, for embed bodies
@@ -96,6 +114,12 @@ function progressLine(value, max, length = 10, style = 'block') {
     return `\`${progressBar(value, max, length, style)}\` **${pct}%**`;
 }
 
+// ==================== SECTION HEADER ====================
+// Styled section header: "━━━ ⚔️ COMBAT STATS ━━━"
+function sectionHeader(emoji, label) {
+    return `━━━ ${emoji} **${label}** ━━━`;
+}
+
 // ==================== MEDAL ====================
 // Rank medal for leaderboards (0-indexed): 🥇🥈🥉 then "#4".
 function medal(index) {
@@ -147,6 +171,8 @@ function shortNum(n) {
 
 module.exports = {
     COLORS,
+    TIER_COLORS,
+    CLASS_EMOJI,
     DIVIDER,
     DIVIDER_THIN,
     title,
@@ -155,6 +181,7 @@ module.exports = {
     menuList,
     progressBar,
     progressLine,
+    sectionHeader,
     medal,
     backButton,
     backRow,
