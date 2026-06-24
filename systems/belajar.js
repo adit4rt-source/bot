@@ -680,14 +680,14 @@ function buildLesson(topic, part, guildId, userId) {
 const LBL = ['🇦', '🇧', '🇨', '🇩'];
 function heartsBar(h) { return '❤️'.repeat(h) + '🤍'.repeat(HEARTS_MAX - h); }
 function progressBar(cur, total) {
-    const filled = Math.round((cur / total) * 10);
-    return '█'.repeat(filled) + '░'.repeat(Math.max(0, 10 - filled));
+    const filled = Math.round((cur / total) * 12);
+    return '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 }
 
 function renderExercise(session, userId, note = '') {
     const ex = session.exercises[session.current];
     const total = session.exercises.length;
-    const bar = `**Soal ${session.current + 1}/${total}** • \`${progressBar(session.current, total)}\``;
+    const bar = `**Soal ${session.current + 1}/${total}**  ${progressBar(session.current, total)}`;
     const head = `${heartsBar(session.hearts)}${session.extra ? '  •  ⭐ 2x' : ''}${session.review ? '  •  🔄 Review' : ''}${session.speed ? '  •  ⚡ Speed' : ''}`;
     const topic = session.topicId ? TOPIC_BY_ID[session.topicId] : null;
     const footerText = `${head}${topic ? `  •  Part ${session.part || '?'}` : ''}`;
@@ -804,7 +804,7 @@ function buildChapterPanel(guildId, userId, chapter = 1) {
     const doneTopics = chapterTopics.filter(t => topicDoneCount(guildId, userId, t.id) >= t.parts).length;
     const pct = totalParts ? Math.round((donePartsTotal / totalParts) * 100) : 0;
     const filled = Math.round((pct / 100) * 12);
-    const overallBar = '█'.repeat(filled) + '░'.repeat(Math.max(0, 12 - filled));
+    const overallBar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 
     const lines = chapterTopics.map(t => {
         const idx = TOPICS.indexOf(t);
@@ -880,7 +880,7 @@ function buildTopicPanel(guildId, userId, topic) {
     const donePartCount = topicDoneCount(guildId, userId, topic.id);
     const pct = topic.parts ? Math.round((donePartCount / topic.parts) * 100) : 0;
     const filled = Math.round((pct / 100) * 12);
-    const bar = '█'.repeat(filled) + '░'.repeat(Math.max(0, 12 - filled));
+    const bar = '▰'.repeat(filled) + '▱'.repeat(12 - filled);
 
     const lines = [];
     for (let p = 1; p <= topic.parts; p++) {
