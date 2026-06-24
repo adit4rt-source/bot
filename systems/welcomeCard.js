@@ -4,6 +4,7 @@
 // rounded corners, accent bar, letter-spaced headline and a subtitle line.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { getCachedImage } = require('./welcomeCardCache');
 
 // ---- Register bundled fonts once (so text renders even without system fonts) ----
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
@@ -227,7 +228,8 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     let drewBg = false;
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
-            const bg = await loadImage(bgURL);
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
             ctx.save();
             try { ctx.filter = 'blur(9px)'; } catch (_) { /* filter unsupported */ }
             drawCover(ctx, bg, W, H, 1.12); // overscan hides blurred edges
@@ -406,7 +408,8 @@ async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFF
     let drewBg = false;
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
-            const bg = await loadImage(bgURL);
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
             drawCover(ctx, bg, W, H, 1);
             drewBg = true;
         } catch (e) {

@@ -1728,4 +1728,104 @@ module.exports = function register() {
       throw new Error('expected page navigation to load Chapter 2 panel');
     }
   });
+
+  // ---- Welcome Card Cache ----
+  test('welcomeCardCache: caching and validation flow', async () => {
+    const { getCachedImage, failedUrls } = botRequire('systems/welcomeCardCache');
+    const originalFetch = globalThis.fetch;
+
+    // 1. Invalid input validation
+    try {
+      await getCachedImage('');
+      throw new Error('Expected validation error for empty URL');
+    } catch (e) {
+      if (e.message !== 'Invalid URL') throw e;
+    }
+
+    // 2. Successful download and local cache test
+    const testUrlSuccess = 'https://example.com/test-bg-image-success.png';
+    const fs = require('fs');
+    const hash = require('crypto').createHash('md5').update(testUrlSuccess).digest('hex');
+    const cachePath = require('path').join(__dirname, '..', '..', 'assets', 'cache', `${hash}.png`);
+    try { fs.unlinkSync(cachePath); } catch (_) {}
+
+    let successFetchCount = 0;
+    globalThis.fetch = async (url, init) => {
+      if (typeof url === 'string' && url.includes('test-bg-image-success.png')) {
+        successFetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => {
+            return new Uint8Array([1, 2, 3, 4]).buffer;
+          }
+        };
+      }
+      return originalFetch(url, init);
+    };
+
+    try {
+      const cachedPath = await getCachedImage(testUrlSuccess);
+      if (!cachedPath.includes('cache')) throw new Error(`Expected path to include cache, got: ${cachedPath}`);
+      
+      const fs = require('fs');
+      const content = fs.readFileSync(cachedPath);
+      if (content.length !== 4) throw new Error(`Expected length of 4, got: ${content.length}`);
+      if (successFetchCount !== 1) throw new Error(`Expected 1 fetch, got: ${successFetchCount}`);
+
+      // Request again, should hit the disk cache and NOT fetch again
+      const cachedPath2 = await getCachedImage(testUrlSuccess);
+      if (cachedPath2 !== cachedPath) throw new Error('Expected identical cache path');
+      if (successFetchCount !== 1) throw new Error(`Expected still 1 fetch (disk cache hit), got: ${successFetchCount}`);
+    } finally {
+      // Cleanup file if exists
+      try {
+        const fs = require('fs');
+        const hash = require('crypto').createHash('md5').update(testUrlSuccess).digest('hex');
+        const cachePath = require('path').join(__dirname, '..', '..', 'assets', 'cache', `${hash}.png`);
+        fs.unlinkSync(cachePath);
+      } catch (_) {}
+    }
+
+    // 3. Failure caching test
+    const testUrlFail = 'https://example.com/failed-image-404.png';
+    failedUrls.delete(testUrlFail);
+
+    let failFetchCount = 0;
+    globalThis.fetch = async (url, init) => {
+      if (typeof url === 'string' && url.includes('failed-image-404.png')) {
+        failFetchCount++;
+        return {
+          ok: false,
+          status: 404,
+          arrayBuffer: async () => new ArrayBuffer(0)
+        };
+      }
+      return originalFetch(url, init);
+    };
+
+    try {
+      try {
+        await getCachedImage(testUrlFail);
+        throw new Error('Expected 404 error');
+      } catch (e) {
+        if (!e.message.includes('status code 404')) throw e;
+      }
+
+      // Second attempt should be rejected instantly from memory cache without fetch
+      try {
+        await getCachedImage(testUrlFail);
+        throw new Error('Expected memory cache rejection');
+      } catch (e) {
+        if (!e.message.includes('temporary failure cache')) throw e;
+      }
+
+      if (failFetchCount !== 1) {
+        throw new Error(`Expected exactly 1 fetch attempt, got: ${failFetchCount}`);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+      failedUrls.delete(testUrlFail);
+    }
+  });
 };
