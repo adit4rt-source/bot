@@ -96,8 +96,11 @@ function placeBid(guildId, auctionId, bidderId, amount) {
     const u = getOrCreateUser(guildId, bidderId);
     if (u.balance < amount) return { ok: false, error: `❌ Saldo kurang! Butuh 🪙 ${amount.toLocaleString('id-ID')}.` };
 
+    // Atomic escrow: debit new bidder first; only then refund previous (prevents free money if debit fails)
+    if (!subtractUserBalance(guildId, bidderId, amount)) {
+        return { ok: false, error: `❌ Saldo kurang! Butuh 🪙 ${amount.toLocaleString('id-ID')}.` };
+    }
     if (a.bidderId) addUserBalance(guildId, a.bidderId, a.currentBid); // refund previous bidder
-    subtractUserBalance(guildId, bidderId, amount);                    // escrow new bid
     let endsAt = a.endsAt;
     if (endsAt - Date.now() < ANTISNIPE_MS) endsAt = Date.now() + ANTISNIPE_MS; // anti-snipe extend
     db.prepare('UPDATE auctions SET currentBid = ?, bidderId = ?, endsAt = ? WHERE id = ?').run(amount, bidderId, endsAt, auctionId);

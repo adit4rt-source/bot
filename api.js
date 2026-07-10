@@ -7,8 +7,13 @@ const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStat, getSet
 
 const app = express();
 const API_PORT = process.env.API_PORT || 25922;
-const API_KEY = process.env.API_KEY || 'change-this-secret-key';
-const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').filter(Boolean);
+// Default bind localhost so the dashboard API is not accidentally public.
+// Set API_HOST=0.0.0.0 in env if the dashboard runs on another machine.
+const API_HOST = process.env.API_HOST || '127.0.0.1';
+const DEFAULT_API_KEY = 'change-this-secret-key';
+const API_KEY = process.env.API_KEY || DEFAULT_API_KEY;
+const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const IS_DEFAULT_API_KEY = !process.env.API_KEY || API_KEY === DEFAULT_API_KEY;
 
 // Discord client reference (set by bot.js)
 let discordClient = null;
@@ -49,7 +54,11 @@ app.use(express.json());
 
 // ==================== AUTH MIDDLEWARE ====================
 function authMiddleware(req, res, next) {
+    // Prefer header. Query-string keys leak into access logs / browser history.
     const key = req.headers['x-api-key'] || req.query.apikey;
+    if (req.query.apikey && !req.headers['x-api-key']) {
+        console.warn('[api] apikey via query string is deprecated — use x-api-key header');
+    }
     if (!key || key !== API_KEY) {
         return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing API key' });
     }
@@ -57,9 +66,22 @@ function authMiddleware(req, res, next) {
 }
 
 // Admin check (Discord user ID must be in ADMIN_IDS)
+// Refuses ALL admin mutations when API_KEY is still the insecure default.
 function adminCheck(req, res, next) {
+    if (IS_DEFAULT_API_KEY) {
+        return res.status(403).json({
+            error: 'Forbidden',
+            message: 'Admin routes disabled until API_KEY is set to a strong secret in .env',
+        });
+    }
+    if (ADMIN_IDS.length === 0) {
+        return res.status(403).json({
+            error: 'Forbidden',
+            message: 'ADMIN_IDS not configured — admin routes disabled',
+        });
+    }
     const userId = req.headers['x-user-id'];
-    if (!userId || !ADMIN_IDS.includes(userId)) {
+    if (!userId || !ADMIN_IDS.includes(String(userId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'Admin access required' });
     }
     next();
@@ -1121,21 +1143,21 @@ try {
 } catch (e) { console.error('⚠️ QR routes:', e.message); }
 
 // ==================== START SERVER ====================
-const DEFAULT_API_KEY = 'change-this-secret-key';
 function startApiServer() {
-    app.listen(API_PORT, '0.0.0.0', () => {
-        console.log(`🌐 API Server running on port ${API_PORT}`);
+    app.listen(API_PORT, API_HOST, () => {
+        console.log(`🌐 API Server running on ${API_HOST}:${API_PORT}`);
         console.log(`🔑 API Key: ${API_KEY.substring(0, 4)}****`);
         console.log(`👑 Admin IDs: ${ADMIN_IDS.length > 0 ? ADMIN_IDS.join(', ') : 'NONE (set ADMIN_IDS in .env)'}`);
+        if (API_HOST === '127.0.0.1' || API_HOST === 'localhost') {
+            console.log('🔒 API bound to localhost only. Set API_HOST=0.0.0.0 to expose (use firewall!).');
+        }
 
         // Loud warning if the dashboard auth key was never set (or left at default).
-        // Without a real API_KEY, every dashboard request gets 401 and pages show
-        // "Failed to load ... data". This is a DIFFERENT key from AI_API_KEY.
-        if (!process.env.API_KEY || API_KEY === DEFAULT_API_KEY) {
+        if (IS_DEFAULT_API_KEY) {
             console.warn('');
             console.warn('⚠️ ============================================================');
             console.warn('⚠️  API_KEY belum diset (pakai default "change-this-secret-key")!');
-            console.warn('⚠️  Dashboard akan kena 401 Unauthorized → "Failed to load data".');
+            console.warn('⚠️  Admin write routes are DISABLED until you set a strong API_KEY.');
             console.warn('⚠️  Set API_KEY di .env bot, dan samakan dengan BOT_API_KEY di .env dashboard.');
             console.warn('⚠️  CATATAN: API_KEY (dashboard) ≠ AI_API_KEY (AI Assistant) — dua hal berbeda!');
             console.warn('⚠️  Generate kunci: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');

@@ -1,5 +1,6 @@
 // systems/backup.js - Database Auto-Backup System (every 6 hours + startup)
 // Backs up locally AND uploads to a Discord channel for off-site safety.
+// Uses better-sqlite3 online backup API (WAL-safe) instead of raw fs.copyFileSync.
 const fs = require('fs');
 const path = require('path');
 const { log } = require('./logger');
@@ -10,8 +11,8 @@ const DB_PATH = path.join(__dirname, '..', 'economy.sqlite');
 const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
 const MAX_BACKUP_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// Discord channel for off-site backup uploads
-const BACKUP_CHANNEL_ID = '1513958525234319501';
+// Discord channel for off-site backup uploads (override via BACKUP_CHANNEL_ID env)
+const BACKUP_CHANNEL_ID = process.env.BACKUP_CHANNEL_ID || '1513958525234319501';
 
 // Ensure backups directory exists
 if (!fs.existsSync(BACKUP_DIR)) {
@@ -32,9 +33,36 @@ function getBackupTimestamp() {
 }
 
 /**
+ * Write a consistent snapshot of economy.sqlite to destPath.
+ * Prefer better-sqlite3 backup API (handles WAL correctly). Fall back to
+ * wal_checkpoint + copy if backup() is unavailable.
+ */
+async function writeConsistentBackup(destPath) {
+    try {
+        const { backupDatabaseTo } = require('../database');
+        await backupDatabaseTo(destPath);
+        return true;
+    } catch (e) {
+        log('WARN', `Online backup API failed (${e.message}); falling back to copy after checkpoint`);
+        try {
+            const { db } = require('../database');
+            try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+            fs.copyFileSync(DB_PATH, destPath);
+            // Clear any stale sidecar next to the copy (backup should be self-contained)
+            for (const ext of ['-wal', '-shm', '-journal']) {
+                try { if (fs.existsSync(destPath + ext)) fs.unlinkSync(destPath + ext); } catch (_) {}
+            }
+            return true;
+        } catch (e2) {
+            throw e2;
+        }
+    }
+}
+
+/**
  * Create a LOCAL-only backup (no Discord upload). Used on startup/restart.
  */
-function createLocalBackup() {
+async function createLocalBackup() {
     try {
         if (!fs.existsSync(DB_PATH)) {
             log('WARN', 'Backup skipped: economy.sqlite not found');
@@ -44,7 +72,7 @@ function createLocalBackup() {
         const timestamp = getBackupTimestamp();
         const backupFile = path.join(BACKUP_DIR, `economy_${timestamp}.sqlite`);
 
-        fs.copyFileSync(DB_PATH, backupFile);
+        await writeConsistentBackup(backupFile);
 
         const stats = fs.statSync(backupFile);
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
@@ -61,7 +89,7 @@ function createLocalBackup() {
 /**
  * Create a backup of the SQLite database (local + Discord upload)
  */
-function createBackup() {
+async function createBackup() {
     try {
         if (!fs.existsSync(DB_PATH)) {
             log('WARN', 'Backup skipped: economy.sqlite not found');
@@ -71,8 +99,7 @@ function createBackup() {
         const timestamp = getBackupTimestamp();
         const backupFile = path.join(BACKUP_DIR, `economy_${timestamp}.sqlite`);
 
-        // Copy database file
-        fs.copyFileSync(DB_PATH, backupFile);
+        await writeConsistentBackup(backupFile);
 
         const stats = fs.statSync(backupFile);
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
@@ -187,13 +214,13 @@ function startBackupSchedule(client) {
     // Startup: local backup only (no Discord upload) — prevents spam on frequent restarts
     setTimeout(() => {
         log('INFO', '💾 Creating startup backup (local only)...');
-        createLocalBackup();
+        createLocalBackup().catch(err => log('ERROR', 'Startup backup failed', err));
     }, 10000);
 
     // Scheduled: full backup + Discord upload every 6 hours
     setInterval(() => {
         log('INFO', '💾 Running scheduled backup + Discord upload...');
-        createBackup();
+        createBackup().catch(err => log('ERROR', 'Scheduled backup failed', err));
     }, BACKUP_INTERVAL);
 
     log('INFO', `💾 Auto-backup scheduled: lokal setiap restart, Discord setiap 6 jam (${BACKUP_CHANNEL_ID})`);
@@ -230,4 +257,4 @@ function forceBackup() {
     return createBackup();
 }
 
-module.exports = { startBackupSchedule, createBackup, cleanOldBackups, listBackups, forceBackup };
+module.exports = { startBackupSchedule, createBackup, createLocalBackup, cleanOldBackups, listBackups, forceBackup };

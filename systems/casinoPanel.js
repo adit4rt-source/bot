@@ -1,6 +1,6 @@
 // systems/casinoPanel.js - Casino Panel UI System (Button-based gambling)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStatMax, addIncome } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStatMax, addIncome, subtractUserBalance, addUserBalance } = require('../database');
 const { getRandomInt } = require('../utils');
 const { spinSlot, getSlotResult } = require('./slots');
 const { checkAchievements } = require('./achievements');
@@ -327,12 +327,15 @@ async function handleCasinoButton(interaction) {
         const choice = parts[2];
         const bet = parseInt(parts[3]);
         const userData = getOrCreateUser(guildId, userId);
-        if (userData.balance < bet) {
+        if (userData.balance < bet || !Number.isFinite(bet) || bet <= 0) {
             return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
         }
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        // Atomic debit — never go negative even under double-click
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_coinflips');
         incrementUserStat(guildId, userId, 'total_bets', bet);
@@ -354,7 +357,7 @@ async function handleCasinoButton(interaction) {
             const resultName = coinResult === 'head' ? 'HEAD' : 'TAIL';
 
             if (won) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(bet * 2, guildId, userId);
+                addUserBalance(guildId, userId, bet * 2);
                 incrementUserStat(guildId, userId, 'coinflip_wins');
                 incrementUserStat(guildId, userId, 'total_gambling_wins', bet);
                 addIncome(guildId, userId, 'gambling', bet);
@@ -404,8 +407,10 @@ async function handleCasinoButton(interaction) {
         }
         fishCooldowns.set(slotCdKey, Date.now() + 5000);
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_slot_spins');
         incrementUserStat(guildId, userId, 'total_bets', bet);
@@ -443,7 +448,7 @@ async function handleCasinoButton(interaction) {
             }
 
             if (result.win) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(result.payout, guildId, userId);
+                addUserBalance(guildId, userId, result.payout);
                 incrementUserStat(guildId, userId, 'slot_wins');
                 incrementUserStat(guildId, userId, 'slot_total_winnings', result.payout);
                 const slotProfit = Math.max(0, result.payout - bet);
@@ -486,8 +491,10 @@ async function handleCasinoButton(interaction) {
         }
         fishCooldowns.set(rlCdKey, Date.now() + 5000);
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_roulette_spins');
         incrementUserStat(guildId, userId, 'total_bets', bet);
@@ -521,7 +528,7 @@ async function handleCasinoButton(interaction) {
             const payout = won ? bet * multiplier : 0;
 
             if (won) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(payout, guildId, userId);
+                addUserBalance(guildId, userId, payout);
                 incrementUserStat(guildId, userId, 'roulette_wins');
                 incrementUserStat(guildId, userId, 'roulette_total_winnings', payout);
                 const rlProfit = Math.max(0, payout - bet);
