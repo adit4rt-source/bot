@@ -12,7 +12,7 @@ class Statement {
   pluck(){ return this; } raw(){ return this; } bind(){ return this; }
 }
 class Database {
-  constructor(path){ this._db = new DatabaseSync(path || ':memory:'); }
+  constructor(path){ this._path = path || ':memory:'; this._db = new DatabaseSync(this._path); }
   prepare(sql){ return new Statement(this._db, sql); }
   exec(sql){ this._db.exec(sql); return this; }
   pragma(str){
@@ -26,6 +26,22 @@ class Database {
     return [];
   }
   transaction(fn){ const db=this._db; return (...args)=>{ db.exec('BEGIN'); try{ const r=fn(...args); db.exec('COMMIT'); return r; } catch(e){ try{db.exec('ROLLBACK');}catch(_){} throw e; } }; }
+  // better-sqlite3 online backup API (Promise form)
+  backup(dest){
+    const fs = require('fs');
+    return new Promise((resolve, reject) => {
+      try {
+        // node:sqlite has no backup API; for tests just copy the file if path-like
+        if (this._path && this._path !== ':memory:' && fs.existsSync(this._path)) {
+          fs.copyFileSync(this._path, dest);
+        } else {
+          // Memory DB: write empty placeholder so callers don't crash
+          fs.writeFileSync(dest, '');
+        }
+        resolve();
+      } catch (e) { reject(e); }
+    });
+  }
   close(){ try{ this._db.close(); }catch(_){} }
   function(){} aggregate(){}
 }

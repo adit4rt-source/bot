@@ -621,6 +621,7 @@ function getUsersForDailyReminder(today, cutoff) {
 }
 
 function updateUserBalance(guildId, userId, newBalance) {
+    newBalance = Math.max(0, Math.floor(Number(newBalance) || 0));
     if (checkGlobalMode()) {
         db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(newBalance, userId);
     } else {
@@ -628,20 +629,99 @@ function updateUserBalance(guildId, userId, newBalance) {
     }
 }
 
+/**
+ * Credit money atomically (SQL expression). Safe under concurrent rewards.
+ * Returns true if a user row was updated.
+ */
 function addUserBalance(guildId, userId, amount) {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount === 0) return true;
+    if (amount < 0) return subtractUserBalance(guildId, userId, -amount);
+    // Ensure user row exists before credit
+    getOrCreateUser(guildId, userId);
+    let info;
     if (checkGlobalMode()) {
-        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(amount, userId);
+        info = db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(amount, userId);
     } else {
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+        info = db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+    }
+    return info.changes > 0;
+}
+
+/**
+ * Debit money atomically — only succeeds if balance >= amount.
+ * NEVER allows negative balance. Returns true on success, false if insufficient.
+ */
+function subtractUserBalance(guildId, userId, amount) {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount <= 0) return false;
+    getOrCreateUser(guildId, userId);
+    let info;
+    if (checkGlobalMode()) {
+        info = db.prepare(
+            'UPDATE users SET balance = balance - ? WHERE userId = ? AND balance >= ?'
+        ).run(amount, userId, amount);
+    } else {
+        info = db.prepare(
+            'UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ? AND balance >= ?'
+        ).run(amount, guildId, userId, amount);
+    }
+    return info.changes > 0;
+}
+
+/**
+ * Transfer money from one user to another in a single SQLite transaction.
+ * debitAmount is taken from `fromUserId`; creditAmount is given to `toUserId`
+ * (difference = tax burned / fees). Returns { ok, error? }.
+ */
+function transferBalance(guildId, fromUserId, toUserId, debitAmount, creditAmount) {
+    debitAmount = Math.floor(Number(debitAmount) || 0);
+    creditAmount = Math.floor(Number(creditAmount) || 0);
+    if (debitAmount <= 0) return { ok: false, error: 'invalid_amount' };
+    if (creditAmount < 0 || creditAmount > debitAmount) return { ok: false, error: 'invalid_credit' };
+    if (fromUserId === toUserId) return { ok: false, error: 'self_transfer' };
+
+    getOrCreateUser(guildId, fromUserId);
+    getOrCreateUser(guildId, toUserId);
+
+    try {
+        const run = _rawDb.transaction(() => {
+            // Use the same atomic helpers (they go through the global-mode proxy when active)
+            if (!subtractUserBalance(guildId, fromUserId, debitAmount)) {
+                throw new Error('INSUFFICIENT');
+            }
+            if (creditAmount > 0) {
+                if (!addUserBalance(guildId, toUserId, creditAmount)) {
+                    throw new Error('CREDIT_FAILED');
+                }
+            }
+        });
+        run();
+        return { ok: true };
+    } catch (e) {
+        if (e && e.message === 'INSUFFICIENT') return { ok: false, error: 'insufficient' };
+        return { ok: false, error: e.message || 'transfer_failed' };
     }
 }
 
-function subtractUserBalance(guildId, userId, amount) {
-    if (checkGlobalMode()) {
-        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(amount, userId);
-    } else {
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+/**
+ * Consistent online backup (respects WAL). Prefer this over fs.copyFileSync.
+ * Returns a Promise that resolves when the backup file is fully written.
+ */
+function backupDatabaseTo(destPath) {
+    // better-sqlite3: db.backup(destination) → Promise
+    // node:sqlite mock may not implement backup — fall back to copy after checkpoint
+    if (typeof _rawDb.backup === 'function') {
+        return Promise.resolve(_rawDb.backup(destPath));
     }
+    return new Promise((resolve, reject) => {
+        try {
+            try { _rawDb.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+            const fs = require('fs');
+            fs.copyFileSync('economy.sqlite', destPath);
+            resolve();
+        } catch (e) { reject(e); }
+    });
 }
 
 function getActivePetsHungry(hungerThreshold) {
@@ -782,7 +862,7 @@ module.exports = {
     getSeedCount, addSeed, removeSeed, getAllSeeds,
     getFertCount, addFert, removeFert, getAllFerts,
     getUsersForDailyReminder,
-    updateUserBalance, addUserBalance, subtractUserBalance,
+    updateUserBalance, addUserBalance, subtractUserBalance, transferBalance, backupDatabaseTo,
     getActivePetsHungry,
     getFarmDecorations, hasFarmDecoration, addFarmDecoration,
     getFarmPlot, insertFarmPlot, deleteDeadFarmPlots,

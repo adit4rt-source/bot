@@ -141,7 +141,10 @@ function placeBet(guildId, userId, username, number) {
         return { success: false, error: `❌ Saldo kurang! Pasang angka butuh 🪙 **${BET_PRICE.toLocaleString('id-ID')}**, saldomu 🪙 **${user.balance.toLocaleString('id-ID')}**.` };
     }
 
-    subtractUserBalance(guildId, userId, BET_PRICE);
+    if (!subtractUserBalance(guildId, userId, BET_PRICE)) {
+        const bal = getOrCreateUser(guildId, userId).balance;
+        return { success: false, error: `❌ Saldo kurang! Pasang angka butuh 🪙 **${BET_PRICE.toLocaleString('id-ID')}**, saldomu 🪙 **${bal.toLocaleString('id-ID')}**.` };
+    }
     addSpending(guildId, userId, 'lottery', BET_PRICE);
     db.prepare('UPDATE lottery_rounds SET pot = pot + ?, totalBets = totalBets + 1 WHERE guildId = ? AND roundId = ?')
         .run(BET_PRICE, guildId, round.roundId);
