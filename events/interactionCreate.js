@@ -44,7 +44,7 @@ const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRol
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotChannelSelect, isAiBotButton, isAiBotChannelSelect } = require('../systems/aiBotPanel');
-const { handleTempvoiceCommand, handleTempvoiceButton, isTempvoicePanelButton } = require('../systems/tempvoicePanel');
+const { handleTempvoiceCommand, handleTempvoiceButton, handleTempvoiceUserSelect, handleTempvoiceModal, isTempvoicePanelButton, isTempvoiceUserSelect, isTempvoiceModal } = require('../systems/tempvoicePanel');
 const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const i18n = require('../systems/i18n');
@@ -1029,6 +1029,9 @@ async function routeInteraction(interaction) {
     // ================= USER SELECT MENU HANDLERS =================
     // UserSelectMenu is distinct from StringSelectMenu in discord.js v14.
     if (interaction.isUserSelectMenu && interaction.isUserSelectMenu()) {
+        if (isTempvoiceUserSelect(interaction.customId)) {
+            return handleTempvoiceUserSelect(interaction);
+        }
         // --- ECONOMY PANEL: gift recipient picker ---
         if (isEconomyPanelSelect(interaction.customId)) {
             return handleEconomySelect(interaction);
@@ -1994,6 +1997,9 @@ async function routeInteraction(interaction) {
 
     // ================= MODAL SUBMIT HANDLERS =================
     if (interaction.isModalSubmit()) {
+        if (isTempvoiceModal(interaction.customId)) {
+            return handleTempvoiceModal(interaction);
+        }
         // === FEATURE GATE for modal components ===
         const modFeatureKey = getFeatureKeyForInteraction(interaction.customId);
         if (modFeatureKey && !isFeatureEnabled(guildId, modFeatureKey)) {

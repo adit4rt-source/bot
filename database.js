@@ -261,6 +261,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS streak_history (guildId TEXT, userId TEXT, lost_count INTEGER, PRIMARY KEY(guildId, userId));
   CREATE TABLE IF NOT EXISTS daily_quests (guildId TEXT, userId TEXT, date TEXT, data TEXT, PRIMARY KEY(guildId, userId));
   CREATE TABLE IF NOT EXISTS temp_voices (channelId TEXT PRIMARY KEY, guildId TEXT, ownerId TEXT);
+  CREATE TABLE IF NOT EXISTS private_spaces (guildId TEXT, ownerId TEXT, categoryId TEXT UNIQUE, textChannelId TEXT UNIQUE, voiceChannelId TEXT UNIQUE, hidden INTEGER DEFAULT 0, PRIMARY KEY(guildId, ownerId));
   CREATE TABLE IF NOT EXISTS achievements (guildId TEXT, userId TEXT, achievementId TEXT, unlockedAt INTEGER, PRIMARY KEY(guildId, userId, achievementId));
   CREATE TABLE IF NOT EXISTS user_stats (guildId TEXT, userId TEXT, stat_key TEXT, stat_value INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, stat_key));
   CREATE TABLE IF NOT EXISTS fish_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, fishId TEXT, weight REAL, caughtAt INTEGER, locked INTEGER DEFAULT 0);

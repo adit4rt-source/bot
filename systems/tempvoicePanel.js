@@ -1,284 +1,284 @@
-// systems/tempvoicePanel.js - Tempvoice Panel UI System (Button-based navigation)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
-const { db, getSetting } = require('../database');
+// systems/tempvoicePanel.js - Private Space panel
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    UserSelectMenuBuilder,
+    ChannelType,
+    PermissionsBitField,
+    TextInputBuilder,
+    TextInputStyle,
+    ModalBuilder
+} = require('discord.js');
+const { db } = require('../database');
 const ui = require('./ui');
 
-// ============ BUILD: Main Tempvoice Panel ============
-function buildTempvoicePanel(guildId, userId, guild) {
-    const categoryId = getSetting(guildId, 'jtc_category', '');
-    const enabled = getSetting(guildId, 'tv_enabled', '1');
-    const defaultName = getSetting(guildId, 'tv_default_name', "{user.name}'s Channel");
-    const defaultLimit = getSetting(guildId, 'tv_default_limit', '0');
+const EVERYONE_PERMISSIONS = [
+    PermissionsBitField.Flags.ViewChannel,
+    PermissionsBitField.Flags.SendMessages,
+    PermissionsBitField.Flags.Connect,
+    PermissionsBitField.Flags.Speak
+];
+const MEMBER_PERMISSIONS = [
+    PermissionsBitField.Flags.ViewChannel,
+    PermissionsBitField.Flags.SendMessages,
+    PermissionsBitField.Flags.ReadMessageHistory,
+    PermissionsBitField.Flags.Connect,
+    PermissionsBitField.Flags.Speak
+];
+const OWNER_PERMISSIONS = [
+    ...MEMBER_PERMISSIONS,
+    PermissionsBitField.Flags.ManageChannels,
+    PermissionsBitField.Flags.ManageRoles,
+    PermissionsBitField.Flags.MoveMembers
+];
 
-    // Get active temp voices
-    const activeVoices = db.prepare('SELECT * FROM temp_voices WHERE guildId = ?').all(guildId);
-    const userVoice = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
+function getSpace(guildId, ownerId) {
+    return db.prepare('SELECT * FROM private_spaces WHERE guildId = ? AND ownerId = ?').get(guildId, ownerId);
+}
+
+function deleteSpaceRecord(guildId, ownerId) {
+    db.prepare('DELETE FROM private_spaces WHERE guildId = ? AND ownerId = ?').run(guildId, ownerId);
+}
+
+function buildMainPanel(guild, ownerId) {
+    const space = getSpace(guild.id, ownerId);
+    const category = space ? guild.channels.cache.get(space.categoryId) : null;
+    if (space && !category) {
+        deleteSpaceRecord(guild.id, ownerId);
+        return buildMainPanel(guild, ownerId);
+    }
+
+    const description = space
+        ? ui.statBlock([
+            `📁 Category: <#${space.categoryId}>`,
+            `💬 Chat: <#${space.textChannelId}>`,
+            `🔊 Voice: <#${space.voiceChannelId}>`,
+            `👻 Category: ${space.hidden ? 'Tersembunyi dari member' : 'Terlihat untuk member'}`
+        ]) + '\n\nGunakan tombol untuk mengelola member dan privasi Space.'
+        : 'Buat Space privat berisi kategori, channel chat, dan channel voice. Hanya owner dan member yang ditambahkan bisa akses.';
 
     const embed = new EmbedBuilder()
-        .setTitle(ui.title('🎙️', 'TEMPVOICE'))
+        .setTitle(ui.title('🔒', 'PRIVATE SPACE'))
         .setColor(ui.COLORS.trade)
-        .setDescription(
-            ui.statBlock([
-                `System: ${enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'}  •  Category: ${categoryId ? '✅' : '❌ Belum setup'}`,
-                `📊 Active Channels: **${activeVoices.length}**`,
-                `📋 Your Channel: ${userVoice ? `<#${userVoice.channelId}> ✅` : '*Tidak ada*'}`,
-                `⚙️ Default: \`${defaultName}\` • Limit: ${defaultLimit === '0' ? 'Unlimited' : defaultLimit}`,
-            ]) +
-            `\n` +
-            ui.menuList([
-                { emoji: '🎙️', label: 'Create', desc: 'Bikin voice channel pribadimu sendiri' },
-                { emoji: '📋', label: 'My Channel', desc: 'Atur channel kamu (nama, limit, kick, lock)' },
-                { emoji: '📊', label: 'Active List', desc: 'Lihat semua channel yang sedang aktif' },
-                { emoji: '⚙️', label: 'Settings', desc: 'Atur sistem temp voice (khusus Admin)' },
-            ])
-        )
-        .setFooter({ text: ui.footer(`${guild.name} • Channel otomatis dihapus saat kosong`) })
+        .setDescription(description)
+        .setFooter({ text: ui.footer(`${guild.name} • Space tidak dihapus saat voice kosong`) })
         .setTimestamp();
 
-    const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`tvpnl_create_${userId}`).setLabel('🎙️ Create').setStyle(ButtonStyle.Success).setDisabled(enabled !== '1' || !categoryId),
-        new ButtonBuilder().setCustomId(`tvpnl_mychannel_${userId}`).setLabel('📋 My Channel').setStyle(ButtonStyle.Primary).setDisabled(!userVoice),
-        new ButtonBuilder().setCustomId(`tvpnl_list_${userId}`).setLabel('📊 Active List').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`tvpnl_settings_${userId}`).setLabel('⚙️ Settings').setStyle(ButtonStyle.Secondary)
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`psp_create_${ownerId}`).setLabel('➕ Create Space').setStyle(ButtonStyle.Success).setDisabled(Boolean(space)),
+        new ButtonBuilder().setCustomId(`psp_manage_${ownerId}`).setLabel('⚙️ Manage Space').setStyle(ButtonStyle.Primary).setDisabled(!space),
+        new ButtonBuilder().setCustomId(`psp_refresh_${ownerId}`).setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1] };
+    return { embeds: [embed], components: [row], ephemeral: true };
 }
 
-// ============ HANDLER: /tempvoice command ============
+function buildManagePanel(guild, ownerId) {
+    const space = getSpace(guild.id, ownerId);
+    if (!space) return buildMainPanel(guild, ownerId);
+
+    const embed = new EmbedBuilder()
+        .setTitle('🔒 Private Space Control')
+        .setColor(ui.COLORS.trade)
+        .setDescription(
+            `📁 <#${space.categoryId}>\n` +
+            `💬 <#${space.textChannelId}>\n` +
+            `🔊 <#${space.voiceChannelId}>\n\n` +
+            '> Add User memberi akses kategori, chat, dan voice.\n' +
+            '> Kick User mencabut akses lalu disconnect dari voice.\n' +
+            `> Category sekarang: **${space.hidden ? 'Hidden' : 'Visible untuk member'}**.`
+        );
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`psp_add_${ownerId}`).setLabel('➕ Add User').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`psp_kick_${ownerId}`).setLabel('👢 Kick User').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`psp_hide_${ownerId}`).setLabel(space.hidden ? '👁️ Show Category' : '👻 Hide Category').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`psp_rename_${ownerId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary)
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`psp_delete_${ownerId}`).setLabel('🗑️ Delete Space').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`psp_back_${ownerId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row1, row2], ephemeral: true };
+}
+
+function getOwnerId(customId) {
+    return customId.split('_').at(-1);
+}
+
+function requireOwner(interaction) {
+    if (interaction.user.id === getOwnerId(interaction.customId)) return true;
+    interaction.reply({ content: '❌ Ini bukan Private Space kamu.', ephemeral: true });
+    return false;
+}
+
+async function createPrivateSpace(interaction) {
+    const { guild, user } = interaction;
+    if (getSpace(guild.id, user.id)) return interaction.reply({ content: '❌ Kamu sudah punya Private Space.', ephemeral: true });
+
+    const baseName = user.username.replace(/[\\/:*?"<>|]/g, '').slice(0, 60) || 'Member';
+    const overwrites = [
+        { id: guild.roles.everyone.id, deny: EVERYONE_PERMISSIONS },
+        { id: user.id, allow: OWNER_PERMISSIONS }
+    ];
+
+    try {
+        const category = await guild.channels.create({
+            name: `🔒 ${baseName}'s Space`,
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: overwrites,
+            reason: `Private Space untuk ${user.tag}`
+        });
+        const textChannel = await guild.channels.create({
+            name: '💬-chat',
+            type: ChannelType.GuildText,
+            parent: category.id,
+            reason: `Private Space untuk ${user.tag}`
+        });
+        const voiceChannel = await guild.channels.create({
+            name: '🔊 Voice',
+            type: ChannelType.GuildVoice,
+            parent: category.id,
+            reason: `Private Space untuk ${user.tag}`
+        });
+
+        await textChannel.lockPermissions();
+        await voiceChannel.lockPermissions();
+        db.prepare('INSERT INTO private_spaces (guildId, ownerId, categoryId, textChannelId, voiceChannelId, hidden) VALUES (?, ?, ?, ?, ?, 0)')
+            .run(guild.id, user.id, category.id, textChannel.id, voiceChannel.id);
+
+        await textChannel.send({
+            content: `<@${user.id}>`,
+            embeds: [new EmbedBuilder()
+                .setTitle('🔒 Private Space Ready')
+                .setColor(ui.COLORS.trade)
+                .setDescription('Gunakan `/tempvoice` lalu **Manage Space** untuk add user, kick user, hide category, atau rename Space.')]
+        }).catch(() => {});
+
+        return interaction.update(buildManagePanel(guild, user.id));
+    } catch (error) {
+        console.error('[private-space] create failed:', error);
+        return interaction.reply({ content: '❌ Gagal membuat Private Space. Pastikan bot punya Manage Channels dan Manage Roles.', ephemeral: true });
+    }
+}
+
 async function handleTempvoiceCommand(interaction) {
-    const guildId = interaction.guild.id;
-    const userId = interaction.user.id;
-    const panel = buildTempvoicePanel(guildId, userId, interaction.guild);
-    return interaction.reply(panel);
+    return interaction.reply(buildMainPanel(interaction.guild, interaction.user.id));
 }
 
-// ============ HANDLER: Button clicks ============
 async function handleTempvoiceButton(interaction) {
-    const guildId = interaction.guild.id;
-    const customId = interaction.customId;
-    const parts = customId.split('_');
-    const userId = parts[parts.length - 1];
+    if (!requireOwner(interaction)) return;
+    const action = interaction.customId.split('_')[1];
+    const { guild, user } = interaction;
 
-    if (interaction.user.id !== userId) {
-        return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
+    if (action === 'create') return createPrivateSpace(interaction);
+    if (action === 'refresh' || action === 'back') return interaction.update(buildMainPanel(guild, user.id));
+    if (action === 'manage') return interaction.update(buildManagePanel(guild, user.id));
+
+    const space = getSpace(guild.id, user.id);
+    if (!space) return interaction.update(buildMainPanel(guild, user.id));
+    const category = guild.channels.cache.get(space.categoryId);
+    if (!category) {
+        deleteSpaceRecord(guild.id, user.id);
+        return interaction.update(buildMainPanel(guild, user.id));
     }
 
-    const action = parts[1];
-
-    // === BACK ===
-    if (action === 'back') {
-        return interaction.update(buildTempvoicePanel(guildId, userId, interaction.guild));
+    if (action === 'add' || action === 'kick') {
+        const menu = new UserSelectMenuBuilder()
+            .setCustomId(`psp_select_${action}_${user.id}`)
+            .setPlaceholder(action === 'add' ? 'Pilih user untuk diberi akses' : 'Pilih user untuk dikeluarkan')
+            .setMinValues(1)
+            .setMaxValues(1);
+        const row = new ActionRowBuilder().addComponents(menu);
+        return interaction.reply({ content: action === 'add' ? 'Pilih member untuk ditambahkan.' : 'Pilih member untuk dikeluarkan.', components: [row], ephemeral: true });
     }
 
-    // === CREATE CHANNEL ===
-    if (action === 'create') {
-        const enabled = getSetting(guildId, 'tv_enabled', '1');
-        if (enabled !== '1') return interaction.reply({ content: '❌ Tempvoice belum diaktifkan!', ephemeral: true });
-
-        const categoryId = getSetting(guildId, 'jtc_category', '');
-        if (!categoryId) return interaction.reply({ content: '❌ Category belum di-setup! Admin harus setup via Dashboard atau /admin.', ephemeral: true });
-
-        // Check if user already has a channel
-        const existing = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
-        if (existing) return interaction.reply({ content: `❌ Kamu sudah punya channel: <#${existing.channelId}>`, ephemeral: true });
-
-        // Check if user is in a voice channel (optional - nice to have but not required)
-        const defaultName = getSetting(guildId, 'tv_default_name', "{user.name}'s Channel")
-            .replace(/{user\.name}/g, interaction.user.username)
-            .replace(/{user\.id}/g, userId);
-        const defaultLimit = parseInt(getSetting(guildId, 'tv_default_limit', '0')) || 0;
-
-        try {
-            const channel = await interaction.guild.channels.create({
-                name: defaultName,
-                type: ChannelType.GuildVoice,
-                parent: categoryId,
-                userLimit: defaultLimit,
-                permissionOverwrites: [
-                    { id: interaction.guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect] },
-                    { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect] }
-                ]
-            });
-
-            db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(channel.id, guildId, userId);
-
-            const embed = new EmbedBuilder()
-                .setTitle('🔒 Private Space Created!')
-                .setColor('#00D4AA')
-                .setDescription(
-                    `✅ Private Space berhasil dibuat!\n\n` +
-                    `> 📍 Channel: <#${channel.id}>\n` +
-                    `> 👑 Owner: <@${userId}>\n` +
-                    `> 👥 Limit: ${defaultLimit || 'Unlimited'}\n\n` +
-                    `**Kontrol channel kamu:**\n` +
-                    `Gunakan tombol di bawah atau klik "My Channel" dari panel.`
-                );
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`tvpnl_mychannel_${userId}`).setLabel('📋 My Channel').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`tvpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-            );
-
-            return interaction.update({ embeds: [embed], components: [row] });
-        } catch (e) {
-            return interaction.reply({ content: '❌ Gagal membuat channel! Pastikan bot punya permission di category.', ephemeral: true });
-        }
-    }
-
-    // === MY CHANNEL ===
-    if (action === 'mychannel') {
-        const voiceData = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
-        if (!voiceData) {
-            return interaction.reply({ content: '❌ Kamu tidak punya channel aktif!', ephemeral: true });
-        }
-
-        const channel = interaction.guild.channels.cache.get(voiceData.channelId);
-        if (!channel) {
-            db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(voiceData.channelId);
-            return interaction.reply({ content: '❌ Channel sudah tidak ada!', ephemeral: true });
-        }
-
-        const isLocked = channel.permissionOverwrites.cache.get(guildId)?.deny?.has(PermissionsBitField.Flags.Connect) || false;
-        const isHidden = channel.permissionOverwrites.cache.get(guildId)?.deny?.has(PermissionsBitField.Flags.ViewChannel) || false;
-
-        const embed = new EmbedBuilder()
-            .setTitle(`📋 My Channel — ${channel.name}`)
-            .setColor('#00D4AA')
-            .setDescription(
-                `> 📍 Channel: <#${channel.id}>\n` +
-                `> 👑 Owner: <@${userId}>\n` +
-                `> 👥 Members: **${channel.members.size}** ${channel.userLimit ? `/ ${channel.userLimit}` : ''}\n` +
-                `> 🔒 Locked: ${isLocked ? '✅ Ya' : '❌ Tidak'}\n` +
-                `> 👻 Hidden: ${isHidden ? '✅ Ya' : '❌ Tidak'}\n\n` +
-                `Gunakan tombol di bawah untuk mengontrol channel:`
-            );
-
-        const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tvpnl_lock_${userId}`).setLabel(isLocked ? '🔓 Unlock' : '🔒 Lock').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`tvpnl_hide_${userId}`).setLabel(isHidden ? '👁️ Show' : '👻 Hide').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`tvpnl_delete_${userId}`).setLabel('🗑️ Delete').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`tvpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-
-        return interaction.update({ embeds: [embed], components: [row1] });
-    }
-
-    // === LOCK/UNLOCK ===
-    if (action === 'lock') {
-        const voiceData = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
-        if (!voiceData) return interaction.reply({ content: '❌ Tidak punya channel!', ephemeral: true });
-        const channel = interaction.guild.channels.cache.get(voiceData.channelId);
-        if (!channel) return interaction.reply({ content: '❌ Channel hilang!', ephemeral: true });
-
-        const isLocked = channel.permissionOverwrites.cache.get(guildId)?.deny?.has(PermissionsBitField.Flags.Connect) || false;
-        if (isLocked) {
-            await channel.permissionOverwrites.edit(guildId, { Connect: null }).catch(() => {});
-            return interaction.reply({ content: '🔓 Channel di-unlock!', ephemeral: true });
-        } else {
-            await channel.permissionOverwrites.edit(guildId, { Connect: false }).catch(() => {});
-            return interaction.reply({ content: '🔒 Channel di-lock!', ephemeral: true });
-        }
-    }
-
-    // === HIDE/SHOW ===
     if (action === 'hide') {
-        const voiceData = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
-        if (!voiceData) return interaction.reply({ content: '❌ Tidak punya channel!', ephemeral: true });
-        const channel = interaction.guild.channels.cache.get(voiceData.channelId);
-        if (!channel) return interaction.reply({ content: '❌ Channel hilang!', ephemeral: true });
-
-        const isHidden = channel.permissionOverwrites.cache.get(guildId)?.deny?.has(PermissionsBitField.Flags.ViewChannel) || false;
-        if (isHidden) {
-            await channel.permissionOverwrites.edit(guildId, { ViewChannel: null }).catch(() => {});
-            return interaction.reply({ content: '👁️ Channel terlihat!', ephemeral: true });
-        } else {
-            await channel.permissionOverwrites.edit(guildId, { ViewChannel: false }).catch(() => {});
-            return interaction.reply({ content: '👻 Channel tersembunyi!', ephemeral: true });
+        const nextHidden = space.hidden ? 0 : 1;
+        const members = category.permissionOverwrites.cache.filter(overwrite => overwrite.type === 1 && overwrite.id !== user.id);
+        for (const overwrite of members.values()) {
+            await category.permissionOverwrites.edit(overwrite.id, { ViewChannel: nextHidden ? false : true }).catch(() => {});
         }
+        db.prepare('UPDATE private_spaces SET hidden = ? WHERE guildId = ? AND ownerId = ?').run(nextHidden, guild.id, user.id);
+        return interaction.update(buildManagePanel(guild, user.id));
     }
 
-    // === DELETE ===
+    if (action === 'rename') {
+        const modal = new ModalBuilder().setCustomId(`psp_modal_rename_${user.id}`).setTitle('Rename Private Space');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('psp_name').setLabel('Nama category').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(80).setValue(category.name.replace(/^🔒\s*/, ''))
+        ));
+        return interaction.showModal(modal);
+    }
+
     if (action === 'delete') {
-        const voiceData = db.prepare('SELECT * FROM temp_voices WHERE guildId = ? AND ownerId = ?').get(guildId, userId);
-        if (!voiceData) return interaction.reply({ content: '❌ Tidak punya channel!', ephemeral: true });
-        const channel = interaction.guild.channels.cache.get(voiceData.channelId);
-        if (channel) await channel.delete().catch(() => {});
-        db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(voiceData.channelId);
-        return interaction.reply({ content: '🗑️ Channel dihapus!', ephemeral: true });
-    }
-
-    // === ACTIVE LIST ===
-    if (action === 'list') {
-        const voices = db.prepare('SELECT * FROM temp_voices WHERE guildId = ?').all(guildId);
-        let desc = '';
-        if (voices.length === 0) {
-            desc = '*Tidak ada temp voice channel aktif.*';
-        } else {
-            voices.forEach((v, i) => {
-                const ch = interaction.guild.channels.cache.get(v.channelId);
-                if (ch) {
-                    desc += `> **${i + 1}.** <#${v.channelId}> — 👑 <@${v.ownerId}> (${ch.members.size} user)\n`;
-                }
-            });
-            if (!desc) desc = '*Semua channel sudah dihapus.*';
-        }
-
-        const embed = new EmbedBuilder()
-            .setTitle('📊 Active Temp Voices')
-            .setColor('#00D4AA')
-            .setDescription(desc)
-            .setFooter({ text: `Total: ${voices.length} channel aktif` });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tvpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    // === SETTINGS ===
-    if (action === 'settings') {
-        const isAdmin = interaction.member.permissions.has('Administrator');
-        const categoryId = getSetting(guildId, 'jtc_category', '');
-        const enabled = getSetting(guildId, 'tv_enabled', '1');
-        const defaultName = getSetting(guildId, 'tv_default_name', "{user.name}'s Channel");
-        const allowLock = getSetting(guildId, 'tv_allow_lock', '1');
-        const allowHide = getSetting(guildId, 'tv_allow_hide', '1');
-        const allowKick = getSetting(guildId, 'tv_allow_kick', '1');
-        const allowBlock = getSetting(guildId, 'tv_allow_block', '1');
-
-        const embed = new EmbedBuilder()
-            .setTitle('⚙️ Tempvoice Settings')
-            .setColor('#2B2D31')
-            .setDescription(
-                `**System:** ${enabled === '1' ? '🟢 Aktif' : '🔴 Nonaktif'}\n` +
-                `**Category:** ${categoryId ? `\`${categoryId}\` ✅` : '❌ Belum setup'}\n` +
-                `**Default Name:** \`${defaultName}\`\n\n` +
-                `**Permissions:**\n` +
-                `> 🔒 Lock/Unlock: ${allowLock === '1' ? '✅' : '❌'}\n` +
-                `> 👻 Hide/Show: ${allowHide === '1' ? '✅' : '❌'}\n` +
-                `> 👢 Kick: ${allowKick === '1' ? '✅' : '❌'}\n` +
-                `> 🚫 Block: ${allowBlock === '1' ? '✅' : '❌'}\n\n` +
-                (isAdmin
-                    ? '💡 Gunakan **Dashboard** untuk mengubah pengaturan tempvoice.'
-                    : '🔒 Hanya admin yang dapat mengubah pengaturan.')
-            );
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tvpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row] });
+        const textChannel = guild.channels.cache.get(space.textChannelId);
+        const voiceChannel = guild.channels.cache.get(space.voiceChannelId);
+        await Promise.all([textChannel?.delete().catch(() => {}), voiceChannel?.delete().catch(() => {})]);
+        await category.delete().catch(() => {});
+        deleteSpaceRecord(guild.id, user.id);
+        return interaction.update(buildMainPanel(guild, user.id));
     }
 }
 
-// ============ UTILITY: Detection helper ============
+async function handleTempvoiceUserSelect(interaction) {
+    if (!requireOwner(interaction)) return;
+    const [, , action] = interaction.customId.split('_');
+    const ownerId = interaction.user.id;
+    const memberId = interaction.values[0];
+    if (memberId === ownerId) return interaction.reply({ content: '❌ Kamu sudah owner Space ini.', ephemeral: true });
+
+    const space = getSpace(interaction.guild.id, ownerId);
+    const category = space && interaction.guild.channels.cache.get(space.categoryId);
+    const voiceChannel = space && interaction.guild.channels.cache.get(space.voiceChannelId);
+    if (!space || !category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', ephemeral: true });
+
+    if (action === 'add') {
+        await category.permissionOverwrites.edit(memberId, { ViewChannel: !space.hidden, SendMessages: true, ReadMessageHistory: true, Connect: true, Speak: true });
+        return interaction.update({ content: `✅ <@${memberId}> ditambahkan ke Private Space.`, components: [] });
+    }
+
+    if (action === 'kick') {
+        await category.permissionOverwrites.delete(memberId).catch(() => {});
+        const member = await interaction.guild.members.fetch(memberId).catch(() => null);
+        if (member?.voice.channelId === voiceChannel?.id) await member.voice.disconnect().catch(() => {});
+        return interaction.update({ content: `👢 <@${memberId}> dikeluarkan dari Private Space.`, components: [] });
+    }
+}
+
+async function handleTempvoiceModal(interaction) {
+    if (!requireOwner(interaction)) return;
+    if (!interaction.customId.startsWith('psp_modal_rename_')) return;
+    const space = getSpace(interaction.guild.id, interaction.user.id);
+    const category = space && interaction.guild.channels.cache.get(space.categoryId);
+    if (!category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', ephemeral: true });
+    const name = interaction.fields.getTextInputValue('psp_name').trim();
+    if (!name) return interaction.reply({ content: '❌ Nama wajib diisi.', ephemeral: true });
+    await category.setName(`🔒 ${name}`).catch(() => null);
+    return interaction.reply({ content: '✅ Nama category diubah.', ephemeral: true });
+}
+
 function isTempvoicePanelButton(customId) {
-    return customId.startsWith('tvpnl_');
+    return customId.startsWith('psp_') && !customId.startsWith('psp_select_') && !customId.startsWith('psp_modal_');
+}
+
+function isTempvoiceUserSelect(customId) {
+    return customId.startsWith('psp_select_');
+}
+
+function isTempvoiceModal(customId) {
+    return customId.startsWith('psp_modal_');
 }
 
 module.exports = {
-    buildTempvoicePanel,
     handleTempvoiceCommand,
     handleTempvoiceButton,
-    isTempvoicePanelButton
+    handleTempvoiceUserSelect,
+    handleTempvoiceModal,
+    isTempvoicePanelButton,
+    isTempvoiceUserSelect,
+    isTempvoiceModal
 };
