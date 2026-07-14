@@ -14,6 +14,8 @@ const {
 const { db } = require('../database');
 const ui = require('./ui');
 
+const SPACE_POSITION_AFTER_CATEGORY_ID = '1526405329917710387';
+
 const EVERYONE_PERMISSIONS = [
     PermissionsBitField.Flags.ViewChannel,
     PermissionsBitField.Flags.SendMessages,
@@ -132,6 +134,11 @@ async function createPrivateSpace(interaction) {
             permissionOverwrites: overwrites,
             reason: `Private Space untuk ${user.tag}`
         });
+        const positionAnchor = await guild.channels.fetch(SPACE_POSITION_AFTER_CATEGORY_ID).catch(() => null);
+        if (positionAnchor?.type === ChannelType.GuildCategory) {
+            await category.setPosition(positionAnchor.position + 1);
+        }
+
         const textChannel = await guild.channels.create({
             name: '💬-chat',
             type: ChannelType.GuildText,
