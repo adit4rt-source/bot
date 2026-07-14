@@ -9,7 +9,8 @@ const {
     PermissionsBitField,
     TextInputBuilder,
     TextInputStyle,
-    ModalBuilder
+    ModalBuilder,
+    MessageFlags
 } = require('discord.js');
 const { db } = require('../database');
 const ui = require('./ui');
@@ -74,7 +75,7 @@ function buildMainPanel(guild, ownerId) {
         new ButtonBuilder().setCustomId(`psp_refresh_${ownerId}`).setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row], ephemeral: true };
+    return { embeds: [embed], components: [row] };
 }
 
 function buildManagePanel(guild, ownerId) {
@@ -104,7 +105,7 @@ function buildManagePanel(guild, ownerId) {
         new ButtonBuilder().setCustomId(`psp_back_${ownerId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1, row2], ephemeral: true };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 function getOwnerId(customId) {
@@ -113,22 +114,28 @@ function getOwnerId(customId) {
 
 function requireOwner(interaction) {
     if (interaction.user.id === getOwnerId(interaction.customId)) return true;
-    interaction.reply({ content: '❌ Ini bukan Private Space kamu.', ephemeral: true });
+    interaction.reply({ content: '❌ Ini bukan Private Space kamu.', flags: MessageFlags.Ephemeral });
     return false;
 }
 
 async function createPrivateSpace(interaction) {
     const { guild, user } = interaction;
-    if (getSpace(guild.id, user.id)) return interaction.reply({ content: '❌ Kamu sudah punya Private Space.', ephemeral: true });
+    if (getSpace(guild.id, user.id)) {
+        return interaction.reply({ content: '❌ Kamu sudah punya Private Space.', flags: MessageFlags.Ephemeral });
+    }
 
+    await interaction.deferUpdate();
     const baseName = user.username.replace(/[\\/:*?"<>|]/g, '').slice(0, 60) || 'Member';
     const overwrites = [
         { id: guild.roles.everyone.id, deny: EVERYONE_PERMISSIONS },
         { id: user.id, allow: OWNER_PERMISSIONS }
     ];
+    let category;
+    let textChannel;
+    let voiceChannel;
 
     try {
-        const category = await guild.channels.create({
+        category = await guild.channels.create({
             name: `🔒 ${baseName}'s Space`,
             type: ChannelType.GuildCategory,
             permissionOverwrites: overwrites,
@@ -139,13 +146,13 @@ async function createPrivateSpace(interaction) {
             await category.setPosition(positionAnchor.position + 1);
         }
 
-        const textChannel = await guild.channels.create({
+        textChannel = await guild.channels.create({
             name: '💬-chat',
             type: ChannelType.GuildText,
             parent: category.id,
             reason: `Private Space untuk ${user.tag}`
         });
-        const voiceChannel = await guild.channels.create({
+        voiceChannel = await guild.channels.create({
             name: '🔊 Voice',
             type: ChannelType.GuildVoice,
             parent: category.id,
@@ -162,13 +169,14 @@ async function createPrivateSpace(interaction) {
             embeds: [new EmbedBuilder()
                 .setTitle('🔒 Private Space Ready')
                 .setColor(ui.COLORS.trade)
-                .setDescription('Gunakan `/tempvoice` lalu **Manage Space** untuk add user, kick user, hide category, atau rename Space.')]
+                .setDescription('Gunakan `/tempvoice open` lalu **Manage Space** untuk add user, kick user, hide category, atau rename Space.')]
         }).catch(() => {});
 
-        return interaction.update(buildManagePanel(guild, user.id));
+        return interaction.editReply(buildManagePanel(guild, user.id));
     } catch (error) {
         console.error('[private-space] create failed:', error);
-        return interaction.reply({ content: '❌ Gagal membuat Private Space. Pastikan bot punya Manage Channels dan Manage Roles.', ephemeral: true });
+        await Promise.all([textChannel?.delete().catch(() => {}), voiceChannel?.delete().catch(() => {}), category?.delete().catch(() => {})]);
+        return interaction.editReply({ content: '❌ Gagal membuat Private Space. Pastikan bot punya Manage Channels dan Manage Roles.', embeds: [], components: [] });
     }
 }
 
@@ -191,21 +199,21 @@ async function handleTempvoiceCommand(interaction) {
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === 'setup') {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: '❌ Hanya admin yang bisa setup panel.', ephemeral: true });
+            return interaction.reply({ content: '❌ Hanya admin yang bisa setup panel.', flags: MessageFlags.Ephemeral });
         }
         const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
         if (!targetChannel?.isTextBased()) {
-            return interaction.reply({ content: '❌ Pilih channel text untuk panel.', ephemeral: true });
+            return interaction.reply({ content: '❌ Pilih channel text untuk panel.', flags: MessageFlags.Ephemeral });
         }
         await targetChannel.send(buildSetupPanel(interaction.guild));
-        return interaction.reply({ content: `✅ Panel Private Space dikirim ke <#${targetChannel.id}>.`, ephemeral: true });
+        return interaction.reply({ content: `✅ Panel Private Space dikirim ke <#${targetChannel.id}>.`, flags: MessageFlags.Ephemeral });
     }
-    return interaction.reply(buildMainPanel(interaction.guild, interaction.user.id));
+    return interaction.reply({ ...buildMainPanel(interaction.guild, interaction.user.id), flags: MessageFlags.Ephemeral });
 }
 
 async function handleTempvoiceButton(interaction) {
     if (interaction.customId === 'psp_open') {
-        return interaction.reply(buildMainPanel(interaction.guild, interaction.user.id));
+        return interaction.reply({ ...buildMainPanel(interaction.guild, interaction.user.id), flags: MessageFlags.Ephemeral });
     }
     if (!requireOwner(interaction)) return;
     const action = interaction.customId.split('_')[1];
@@ -230,7 +238,7 @@ async function handleTempvoiceButton(interaction) {
             .setMinValues(1)
             .setMaxValues(1);
         const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.reply({ content: action === 'add' ? 'Pilih member untuk ditambahkan.' : 'Pilih member untuk dikeluarkan.', components: [row], ephemeral: true });
+        return interaction.reply({ content: action === 'add' ? 'Pilih member untuk ditambahkan.' : 'Pilih member untuk dikeluarkan.', components: [row], flags: MessageFlags.Ephemeral });
     }
 
     if (action === 'hide') {
@@ -266,12 +274,12 @@ async function handleTempvoiceUserSelect(interaction) {
     const [, , action] = interaction.customId.split('_');
     const ownerId = interaction.user.id;
     const memberId = interaction.values[0];
-    if (memberId === ownerId) return interaction.reply({ content: '❌ Kamu sudah owner Space ini.', ephemeral: true });
+    if (memberId === ownerId) return interaction.reply({ content: '❌ Kamu sudah owner Space ini.', flags: MessageFlags.Ephemeral });
 
     const space = getSpace(interaction.guild.id, ownerId);
     const category = space && interaction.guild.channels.cache.get(space.categoryId);
     const voiceChannel = space && interaction.guild.channels.cache.get(space.voiceChannelId);
-    if (!space || !category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', ephemeral: true });
+    if (!space || !category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', flags: MessageFlags.Ephemeral });
 
     if (action === 'add') {
         await category.permissionOverwrites.edit(memberId, { ViewChannel: !space.hidden, SendMessages: true, ReadMessageHistory: true, Connect: true, Speak: true });
@@ -291,11 +299,11 @@ async function handleTempvoiceModal(interaction) {
     if (!interaction.customId.startsWith('psp_modal_rename_')) return;
     const space = getSpace(interaction.guild.id, interaction.user.id);
     const category = space && interaction.guild.channels.cache.get(space.categoryId);
-    if (!category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', ephemeral: true });
+    if (!category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', flags: MessageFlags.Ephemeral });
     const name = interaction.fields.getTextInputValue('psp_name').trim();
-    if (!name) return interaction.reply({ content: '❌ Nama wajib diisi.', ephemeral: true });
+    if (!name) return interaction.reply({ content: '❌ Nama wajib diisi.', flags: MessageFlags.Ephemeral });
     await category.setName(`🔒 ${name}`).catch(() => null);
-    return interaction.reply({ content: '✅ Nama category diubah.', ephemeral: true });
+    return interaction.reply({ content: '✅ Nama category diubah.', flags: MessageFlags.Ephemeral });
 }
 
 function isTempvoicePanelButton(customId) {
