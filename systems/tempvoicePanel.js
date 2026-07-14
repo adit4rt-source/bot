@@ -96,17 +96,18 @@ async function handleTempvoiceButton(interaction) {
                 parent: categoryId,
                 userLimit: defaultLimit,
                 permissionOverwrites: [
-                    { id: userId, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect] }
+                    { id: interaction.guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect] },
+                    { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect] }
                 ]
             });
 
             db.prepare('INSERT INTO temp_voices (channelId, guildId, ownerId) VALUES (?, ?, ?)').run(channel.id, guildId, userId);
 
             const embed = new EmbedBuilder()
-                .setTitle('🎙️ Channel Created!')
+                .setTitle('🔒 Private Space Created!')
                 .setColor('#00D4AA')
                 .setDescription(
-                    `✅ Channel berhasil dibuat!\n\n` +
+                    `✅ Private Space berhasil dibuat!\n\n` +
                     `> 📍 Channel: <#${channel.id}>\n` +
                     `> 👑 Owner: <@${userId}>\n` +
                     `> 👥 Limit: ${defaultLimit || 'Unlimited'}\n\n` +

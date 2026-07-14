@@ -47,7 +47,8 @@ async function handleVoiceStateUpdate(oldState, newState) {
                     type: ChannelType.GuildVoice,
                     parent: categoryId || undefined,
                     permissionOverwrites: [
-                        { id: newState.member.id, allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.MoveMembers] }
+                        { id: newState.guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect] },
+                        { id: newState.member.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageRoles, PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.MoveMembers] }
                     ]
                 });
 
