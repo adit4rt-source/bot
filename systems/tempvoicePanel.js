@@ -165,11 +165,41 @@ async function createPrivateSpace(interaction) {
     }
 }
 
+function buildSetupPanel(guild) {
+    const embed = new EmbedBuilder()
+        .setTitle(ui.title('🔒', 'PRIVATE SPACE'))
+        .setColor(ui.COLORS.trade)
+        .setDescription(
+            'Buat ruang privat sendiri berisi kategori, channel chat, dan channel voice.\n\n' +
+            '> Owner bisa add user, kick user, hide category, rename, dan delete Space.'
+        )
+        .setFooter({ text: ui.footer(`${guild.name} • Klik tombol untuk mulai`) });
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('psp_open').setLabel('🔒 Create Private Space').setStyle(ButtonStyle.Success)
+    );
+    return { embeds: [embed], components: [row] };
+}
+
 async function handleTempvoiceCommand(interaction) {
+    const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'setup') {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: '❌ Hanya admin yang bisa setup panel.', ephemeral: true });
+        }
+        const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+        if (!targetChannel?.isTextBased()) {
+            return interaction.reply({ content: '❌ Pilih channel text untuk panel.', ephemeral: true });
+        }
+        await targetChannel.send(buildSetupPanel(interaction.guild));
+        return interaction.reply({ content: `✅ Panel Private Space dikirim ke <#${targetChannel.id}>.`, ephemeral: true });
+    }
     return interaction.reply(buildMainPanel(interaction.guild, interaction.user.id));
 }
 
 async function handleTempvoiceButton(interaction) {
+    if (interaction.customId === 'psp_open') {
+        return interaction.reply(buildMainPanel(interaction.guild, interaction.user.id));
+    }
     if (!requireOwner(interaction)) return;
     const action = interaction.customId.split('_')[1];
     const { guild, user } = interaction;

@@ -69,7 +69,20 @@ const commands = [
         .setName('welcomer')
         .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-    new SlashCommandBuilder().setName('tempvoice').setDescription('🔒 Private Space — Buat kategori, chat, dan voice privat'),
+    new SlashCommandBuilder()
+        .setName('tempvoice')
+        .setDescription('🔒 Private Space — Buat kategori, chat, dan voice privat')
+        .addSubcommand(subcommand => subcommand
+            .setName('open')
+            .setDescription('Buka panel Private Space kamu'))
+        .addSubcommand(subcommand => subcommand
+            .setName('setup')
+            .setDescription('[Admin] Kirim panel Create Private Space')
+            .addChannelOption(option => option
+                .setName('channel')
+                .setDescription('Channel tempat panel dikirim')
+                .setRequired(false)
+                .addChannelTypes(ChannelType.GuildText))),
     new SlashCommandBuilder()
         .setName('selfrole')
         .setDescription('🎭 Self-Roles Panel — Buat menu pilih role sendiri (dropdown)')
