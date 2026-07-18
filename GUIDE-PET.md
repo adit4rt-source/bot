@@ -58,16 +58,18 @@ Kamu bisa punya banyak pet, tapi **cuma 1 yang aktif** dalam satu waktu. Ganti v
 
 8 tier, makin tinggi makin kuat + bonus pasif makin besar:
 
-| Tier | Jumlah | Contoh nilai bonus |
+| Tier | Jumlah (approx) | Contoh nilai bonus |
 |---|---|---|
 | ⚪ Common | 25 | +1–5% |
 | 🟢 Uncommon | 25 | +5–8% |
-| 🔵 Rare | 20 | +8–12% |
-| 🟣 Epic | 15 | +12–18% |
-| 🟡 Legendary | 10 | +18–25% |
-| 🔴 Mythic | 8 | +25–30% |
-| 🟪 Secret | 5 | +35–45% |
-| 👑 GOD | 3 | +60–75% (Omega = 75%) |
+| 🔵 Rare | 23+ | +8–12% |
+| 🟣 Epic | 18+ | +12–18% |
+| 🟡 Legendary | 13+ | +18–25% |
+| 🔴 Mythic | 10+ | +25–30% |
+| 🟪 Secret | 7+ | +35–45% |
+| 👑 GOD | 4+ | +60–75% (Omega = 75%) |
+
+> Wave Ascendant menambah pet baru (Neon Lynx, Eclipse Wyrm, Void Empress, Aether Sovereign, dll.) + jalur evolusi baru.
 
 **Tipe bonus:** `money_chat`, `xp_chat`, `money_all`, `xp_all`, `fish_luck`, `farm_yield`, `farm_speed`, `quest_reward`, `event_luck`, `all_reward` (paling fleksibel), `money_xp`.
 
@@ -143,11 +145,11 @@ Pet unlock **1 skill acak per tier** otomatis saat naik level — maksimal **5 s
 
 | Tier | Unlock Lv | Pilihan skill (acak 1) |
 |---|---|---|
-| 1 | **10** | Power Strike (2x dmg) · Shield Wall (-50% dmg) · Quick Heal (+20% HP) |
-| 2 | **30** | Critical Surge (+30% crit) · Elemental Blast (2.5x, bonus elemen) · Life Drain (1.5x + heal 50%) |
-| 3 | **60** | Berserk (+50% ATK / -30% DEF) · Iron Fortress (-80% dmg) · **Resurrection (bangkit 30% HP, 1x/battle)** |
-| 4 | **100** | Ultimate Strike (**4x dmg**) · Divine Shield (kebal 1 turn) · Omega Heal (+50% HP) |
-| **5 Ascendant** | **150** | Elemental Catastrophe · Time Stop · Blood Pact · Aegis of Gods · Soul Link · Omega Burst · Void Rend · Genesis Light |
+| 1 | **10** | Power Strike · Shield Wall · Quick Heal · **Double Slash** · **Fortify** |
+| 2 | **30** | Critical Surge · Elemental Blast · Life Drain · **Poison Fang** · **Battle Focus** |
+| 3 | **60** | Berserk · Iron Fortress · Resurrection · **Whirlwind** · **Stone Skin** |
+| 4 | **100** | Ultimate Strike · Divine Shield · Omega Heal · **Meteor Strike** · **Guardian Aura** |
+| **5 Ascendant** | **150** | Elemental Catastrophe · Time Stop · Blood Pact · Aegis · Soul Link · Omega Burst · Void Rend · Genesis Light · **Astral Barrage** · **Death Defiance** · **Nova Flare** · **Chrono Mend** |
 
 Skill dipakai otomatis (~20% peluang/turn jika tidak sedang cooldown).
 

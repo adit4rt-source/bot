@@ -74,6 +74,10 @@ const PET_DATA = [
     { id: 'frost_bear', name: 'Frost Bear', emoji: '<:FrostBear:1512272960617058454>', tier: 'Rare', price: 45000, bonus: { type: 'money_all', value: 10 } },
     { id: 'vine_snake', name: 'Vine Snake', emoji: '<:VineSnake:1512272969982144808>', tier: 'Rare', price: 25000, bonus: { type: 'farm_yield', value: 10 } },
     { id: 'ember_cat', name: 'Ember Cat', emoji: '<:EmberCat:1512273262871318680>', tier: 'Rare', price: 35000, bonus: { type: 'money_chat', value: 10 } },
+    // RARE — Ascendant wave
+    { id: 'neon_lynx', name: 'Neon Lynx', emoji: '🐱', tier: 'Rare', price: 38000, bonus: { type: 'event_luck', value: 11 } },
+    { id: 'coral_serpent', name: 'Coral Serpent', emoji: '🐍', tier: 'Rare', price: 32000, bonus: { type: 'fish_luck', value: 11 } },
+    { id: 'storm_meerkat', name: 'Storm Meerkat', emoji: '🦡', tier: 'Rare', price: 28000, bonus: { type: 'xp_chat', value: 10 } },
     // EPIC (15 pets)
     { id: 'phoenix', name: 'Phoenix', emoji: '🔥', tier: 'Epic', price: 100000, bonus: { type: 'xp_all', value: 12 } },
     { id: 'ice_wolf', name: 'Ice Wolf', emoji: '❄️', tier: 'Epic', price: 120000, bonus: { type: 'money_all', value: 12 } },
@@ -90,6 +94,10 @@ const PET_DATA = [
     { id: 'golden_kirin', name: 'Golden Kirin', emoji: '🦄', tier: 'Epic', price: 170000, bonus: { type: 'all_reward', value: 13 } },
     { id: 'nightmare_horse', name: 'Nightmare Horse', emoji: '🐴', tier: 'Epic', price: 130000, bonus: { type: 'xp_all', value: 14 } },
     { id: 'ancient_tortoise', name: 'Ancient Tortoise', emoji: '🐢', tier: 'Epic', price: 100000, bonus: { type: 'farm_speed', value: 18 } },
+    // EPIC — Ascendant wave
+    { id: 'blight_moth', name: 'Blight Moth', emoji: '🦋', tier: 'Epic', price: 145000, bonus: { type: 'event_luck', value: 16 } },
+    { id: 'glacier_hydra', name: 'Glacier Hydra', emoji: '🐉', tier: 'Epic', price: 165000, bonus: { type: 'money_all', value: 15 } },
+    { id: 'solar_griffin', name: 'Solar Griffin', emoji: '🦅', tier: 'Epic', price: 155000, bonus: { type: 'xp_all', value: 15 } },
     // LEGENDARY (10 pets - NOT sold, only from eggs)
     { id: 'golden_dragon', name: 'Golden Dragon', emoji: '🐲', tier: 'Legendary', price: 0, bonus: { type: 'all_reward', value: 20 } },
     { id: 'celestial_butterfly', name: 'Celestial Butterfly', emoji: '🦋', tier: 'Legendary', price: 0, bonus: { type: 'money_xp', value: 15 } },
@@ -101,6 +109,10 @@ const PET_DATA = [
     { id: 'diamond_wolf', name: 'Diamond Wolf', emoji: '💎', tier: 'Legendary', price: 0, bonus: { type: 'money_all', value: 20 } },
     { id: 'eternal_serpent', name: 'Eternal Serpent', emoji: '🐍', tier: 'Legendary', price: 0, bonus: { type: 'all_reward', value: 18 } },
     { id: 'galaxy_horse', name: 'Galaxy Horse', emoji: '🌌', tier: 'Legendary', price: 0, bonus: { type: 'xp_all', value: 18 } },
+    // LEGENDARY — Ascendant wave (egg / fusion only)
+    { id: 'obsidian_tiger', name: 'Obsidian Tiger', emoji: '🐯', tier: 'Legendary', price: 0, bonus: { type: 'money_all', value: 22 } },
+    { id: 'aurora_kitsune', name: 'Aurora Kitsune', emoji: '🦊', tier: 'Legendary', price: 0, bonus: { type: 'event_luck', value: 22 } },
+    { id: 'tide_sovereign', name: 'Tide Sovereign', emoji: '🌊', tier: 'Legendary', price: 0, bonus: { type: 'fish_luck', value: 24 } },
     // MYTHIC (8 pets - EXTREMELY rare from eggs only)
     { id: 'world_tree_spirit', name: 'World Tree Spirit', emoji: '🌳', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
     { id: 'time_dragon', name: 'Time Dragon', emoji: '⌛', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 25 } },
@@ -110,16 +122,24 @@ const PET_DATA = [
     { id: 'nine_tails', name: 'Nine-Tailed Fox', emoji: '🦊', tier: 'Mythic', price: 0, bonus: { type: 'event_luck', value: 25 } },
     { id: 'cerberus', name: 'Cerberus', emoji: '🐕', tier: 'Mythic', price: 0, bonus: { type: 'money_all', value: 25 } },
     { id: 'leviathan_pet', name: 'Leviathan', emoji: '🐋', tier: 'Mythic', price: 0, bonus: { type: 'fish_luck', value: 30 } },
+    // MYTHIC — Ascendant wave
+    { id: 'eclipse_wyrm', name: 'Eclipse Wyrm', emoji: '🌑', tier: 'Mythic', price: 0, bonus: { type: 'all_reward', value: 28 } },
+    { id: 'starforge_golem', name: 'Starforge Golem', emoji: '🗿', tier: 'Mythic', price: 0, bonus: { type: 'money_all', value: 28 } },
     // SECRET (5 pets — ultra rare, only from Mythic Egg jackpot)
     { id: 'shadow_monarch', name: 'Shadow Monarch', emoji: '👤', tier: 'Secret', price: 0, bonus: { type: 'all_reward', value: 35 } },
     { id: 'astral_serpent', name: 'Astral Serpent', emoji: '🌌', tier: 'Secret', price: 0, bonus: { type: 'all_reward', value: 35 } },
     { id: 'chrono_phoenix', name: 'Chrono Phoenix', emoji: '🦅', tier: 'Secret', price: 0, bonus: { type: 'xp_all', value: 40 } },
     { id: 'abyss_kraken', name: 'Abyss Kraken', emoji: '🦑', tier: 'Secret', price: 0, bonus: { type: 'fish_luck', value: 45 } },
     { id: 'prism_unicorn', name: 'Prism Unicorn', emoji: '🦄', tier: 'Secret', price: 0, bonus: { type: 'money_all', value: 40 } },
+    // SECRET — Ascendant wave
+    { id: 'void_empress', name: 'Void Empress', emoji: '👸', tier: 'Secret', price: 0, bonus: { type: 'all_reward', value: 42 } },
+    { id: 'singularity_wolf', name: 'Singularity Wolf', emoji: '🐺', tier: 'Secret', price: 0, bonus: { type: 'xp_all', value: 42 } },
     // GOD (3 pets — the absolute rarest, near-impossible jackpot)
     { id: 'creator_dragon', name: 'Creator Dragon', emoji: '🐉', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 60 } },
     { id: 'cosmic_deity', name: 'Cosmic Deity', emoji: '✨', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 60 } },
-    { id: 'omega_god', name: 'Omega (The All)', emoji: '🌠', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 75 } }
+    { id: 'omega_god', name: 'Omega (The All)', emoji: '🌠', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 75 } },
+    // GOD — Ascendant wave
+    { id: 'aether_sovereign', name: 'Aether Sovereign', emoji: '👑', tier: 'God', price: 0, bonus: { type: 'all_reward', value: 70 } },
 ];
 
 const PET_FOODS = [
@@ -167,6 +187,13 @@ const PET_EVOLUTIONS = [
     { from: 'storm_dragon', to: 'golden_dragon', level: 150, name: 'Storm Dragon → Golden Dragon' },
     { from: 'ice_wolf', to: 'diamond_wolf', level: 150, name: 'Ice Wolf → Diamond Wolf' },
     { from: 'ocean_leviathan', to: 'cosmic_whale', level: 150, name: 'Ocean Leviathan → Cosmic Whale' },
+    // Ascendant evolution paths
+    { from: 'neon_lynx', to: 'blight_moth', level: 100, name: 'Neon Lynx → Blight Moth' },
+    { from: 'coral_serpent', to: 'glacier_hydra', level: 100, name: 'Coral Serpent → Glacier Hydra' },
+    { from: 'storm_meerkat', to: 'solar_griffin', level: 100, name: 'Storm Meerkat → Solar Griffin' },
+    { from: 'solar_griffin', to: 'aurora_kitsune', level: 150, name: 'Solar Griffin → Aurora Kitsune' },
+    { from: 'glacier_hydra', to: 'tide_sovereign', level: 150, name: 'Glacier Hydra → Tide Sovereign' },
+    { from: 'blight_moth', to: 'obsidian_tiger', level: 150, name: 'Blight Moth → Obsidian Tiger' },
 ];
 
 const PET_SKILL_MILESTONES = [
@@ -199,21 +226,29 @@ const PET_SKILLS = [
     { id: 'power_strike', name: 'Power Strike', emoji: '⚔️', tier: 1, level: 10, type: 'attack', multiplier: 2.0, cooldown: 3, desc: 'Serangan 2x damage' },
     { id: 'shield_wall', name: 'Shield Wall', emoji: '🛡️', tier: 1, level: 10, type: 'defense', reduction: 0.5, cooldown: 4, desc: 'Kurangi damage 50% selama 1 turn' },
     { id: 'quick_heal', name: 'Quick Heal', emoji: '💚', tier: 1, level: 10, type: 'heal', amount: 0.2, cooldown: 5, desc: 'Heal 20% max HP' },
+    { id: 'double_slash', name: 'Double Slash', emoji: '🗡️', tier: 1, level: 10, type: 'attack', multiplier: 1.8, cooldown: 2, desc: 'Serangan cepat 1.8x (CD pendek)' },
+    { id: 'fortify', name: 'Fortify', emoji: '🧱', tier: 1, level: 10, type: 'defense', reduction: 0.35, duration: 2, cooldown: 5, desc: 'Kurangi damage 35% selama 2 turn' },
 
     // Tier 2 (unlocked at pet level 30)
     { id: 'critical_surge', name: 'Critical Surge', emoji: '🎯', tier: 2, level: 30, type: 'buff', critBonus: 30, duration: 3, cooldown: 5, desc: '+30% crit rate selama 3 turn' },
     { id: 'elemental_blast', name: 'Elemental Blast', emoji: '🌊', tier: 2, level: 30, type: 'attack', multiplier: 2.5, cooldown: 4, desc: 'Serangan elemen 2.5x (bonus jika advantage)' },
     { id: 'life_drain', name: 'Life Drain', emoji: '🧛', tier: 2, level: 30, type: 'drain', multiplier: 1.5, healRatio: 0.5, cooldown: 4, desc: 'Serang 1.5x + heal 50% dari damage' },
+    { id: 'poison_fang', name: 'Poison Fang', emoji: '🦷', tier: 2, level: 30, type: 'attack', multiplier: 2.2, cooldown: 3, desc: 'Serangan beracun 2.2x' },
+    { id: 'battle_focus', name: 'Battle Focus', emoji: '👁️', tier: 2, level: 30, type: 'buff', atkBonus: 25, duration: 3, cooldown: 5, desc: '+25% ATK selama 3 turn' },
 
     // Tier 3 (unlocked at pet level 60)
     { id: 'berserk', name: 'Berserk', emoji: '😡', tier: 3, level: 60, type: 'buff', atkBonus: 50, defPenalty: 30, duration: 3, cooldown: 6, desc: '+50% ATK tapi -30% DEF (3 turn)' },
     { id: 'iron_fortress', name: 'Iron Fortress', emoji: '🏰', tier: 3, level: 60, type: 'defense', reduction: 0.8, duration: 2, cooldown: 7, desc: 'Hampir tak tertembus (80% reduction, 2 turn)' },
     { id: 'resurrection', name: 'Resurrection', emoji: '✨', tier: 3, level: 60, type: 'revive', hpRestore: 0.3, cooldown: 10, desc: 'Jika HP 0, bangkit dengan 30% HP (1x per battle)' },
+    { id: 'whirlwind', name: 'Whirlwind', emoji: '🌪️', tier: 3, level: 60, type: 'attack', multiplier: 2.8, cooldown: 5, desc: 'Serangan berputar 2.8x' },
+    { id: 'stone_skin', name: 'Stone Skin', emoji: '🪨', tier: 3, level: 60, type: 'absorb', amount: 0.25, cooldown: 6, desc: 'Shield menyerap 25% max HP' },
 
     // Tier 4 (unlocked at pet level 100)
     { id: 'ultimate_strike', name: 'Ultimate Strike', emoji: '💥', tier: 4, level: 100, type: 'attack', multiplier: 4.0, cooldown: 8, desc: 'Serangan ULTIMATE 4x damage!' },
     { id: 'divine_shield', name: 'Divine Shield', emoji: '✝️', tier: 4, level: 100, type: 'immune', duration: 1, cooldown: 10, desc: 'Kebal damage selama 1 turn' },
     { id: 'omega_heal', name: 'Omega Heal', emoji: '💖', tier: 4, level: 100, type: 'heal', amount: 0.5, cooldown: 8, desc: 'Heal 50% max HP' },
+    { id: 'meteor_strike', name: 'Meteor Strike', emoji: '☄️', tier: 4, level: 100, type: 'attack', multiplier: 3.5, ignoreDef: 0.15, cooldown: 7, desc: 'Meteor 3.5x + ignore 15% DEF' },
+    { id: 'guardian_aura', name: 'Guardian Aura', emoji: '🌟', tier: 4, level: 100, type: 'defense', reduction: 0.6, duration: 2, cooldown: 8, desc: 'Aura penjaga: −60% dmg (2 turn)' },
 
     // Tier 5 — ASCENDANT (unlocked at pet level 150)
     { id: 'elemental_catastrophe', name: 'Elemental Catastrophe', emoji: '☄️', tier: 5, level: 150, type: 'attack', multiplier: 3.5, ignoreDef: 0.3, requireAdvantage: true, cooldown: 6, desc: '3.5x + ignore 30% DEF jika super effective' },
@@ -224,6 +259,11 @@ const PET_SKILLS = [
     { id: 'omega_burst', name: 'Omega Burst', emoji: '💥', tier: 5, level: 150, type: 'attack', multiplier: 5.0, minHpPercent: 0.3, cooldown: 9, desc: '5x dmg HANYA jika HP < 30%' },
     { id: 'void_rend', name: 'Void Rend', emoji: '🕳️', tier: 5, level: 150, type: 'attack', multiplier: 2.2, cooldown: 5, desc: '2.2x dmg (anti-sustain)' },
     { id: 'genesis_light', name: 'Genesis Light', emoji: '✨', tier: 5, level: 150, type: 'genesis', heal: 0.35, atkBonus: 15, defBonus: 15, duration: 2, cooldown: 8, desc: 'Heal 35% + +15% ATK/DEF (2 turn)' },
+    // Tier 5 — wave 2
+    { id: 'astral_barrage', name: 'Astral Barrage', emoji: '🌌', tier: 5, level: 150, type: 'attack', multiplier: 3.0, ignoreDef: 0.2, cooldown: 6, desc: 'Hujan astral 3x + ignore 20% DEF' },
+    { id: 'death_defiance', name: 'Death Defiance', emoji: '💀', tier: 5, level: 150, type: 'revive', hpRestore: 0.4, cooldown: 12, desc: 'Bangkit dengan 40% HP (1x/battle)' },
+    { id: 'nova_flare', name: 'Nova Flare', emoji: '🔆', tier: 5, level: 150, type: 'attack', multiplier: 4.2, requireAdvantage: true, cooldown: 7, desc: '4.2x dmg jika super effective' },
+    { id: 'chrono_mend', name: 'Chrono Mend', emoji: '⏳', tier: 5, level: 150, type: 'genesis', heal: 0.45, atkBonus: 10, defBonus: 20, duration: 2, cooldown: 9, desc: 'Heal 45% + +10% ATK / +20% DEF' },
 ];
 
 module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS };

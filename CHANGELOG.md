@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.10.1 — 18 Juli 2026 — New Pets + Skill Pool Expand
+
+### Pet baru (14)
+- **Rare:** Neon Lynx, Coral Serpent, Storm Meerkat
+- **Epic:** Blight Moth, Glacier Hydra, Solar Griffin
+- **Legendary:** Obsidian Tiger, Aurora Kitsune, Tide Sovereign
+- **Mythic:** Eclipse Wyrm, Starforge Golem
+- **Secret:** Void Empress, Singularity Wolf
+- **God:** Aether Sovereign (+70% all_reward)
+- Jalur evolusi baru (Rare→Epic→Legendary)
+
+### Skill battle baru (14)
+- T1: Double Slash, Fortify
+- T2: Poison Fang, Battle Focus
+- T3: Whirlwind, Stone Skin
+- T4: Meteor Strike, Guardian Aura
+- T5: Astral Barrage, Death Defiance, Nova Flare, Chrono Mend
+
+---
+
 ## v3.10.0 — 18 Juli 2026 — Ascendant (Pet Endgame)
 
 ### Skill Tier 5 (Lv.150)
