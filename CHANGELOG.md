@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.10.3 — 18 Juli 2026 — Fishing Ascendant Wave
+
+### Konten
+- **Lokasi baru:** 🌌 Astral Trench (rod tier 8+, monster + God fish)
+- **~30 spesies ikan baru** (mid-zone fillers + Astral Trench + endgame extras)
+- **Umpan baru:** Prism Lure, Omega Bait, Trophy Chum (berat condong trophy)
+- **Giant fish** di Astral / Celestial / Primordial / God Realm
+
+### Mekanik
+- **Trophy Catch** — berat ≥90% max tier → +50% nilai (cast & sell)
+- **Double Catch** ability pet benar-benar double-insert inventory
+- **Collection milestones** 10/25/50/75/100% Pokédex → money + items
+- Treasure chance naik dari pet `drop_luck`; drop treasure baru (Trophy Chum, Prism, Omega Bait)
+- Rod part drop + pet drop_luck
+
+---
+
 ## v3.10.2 — 18 Juli 2026 — Expanded Pet Bonus System
 
 ### Engine

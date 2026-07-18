@@ -360,7 +360,7 @@ async function routeInteraction(interaction) {
             const comboMsg = formatComboDisplay(comboData.combo);
 
             // === TREASURE SYSTEM ===
-            const treasure = rollTreasure(comboData.combo);
+            const treasure = rollTreasure(comboData.combo, interaction.guild.id, interaction.user.id);
             if (treasure) applyTreasure(guildId, interaction.user.id, treasure);
             const treasureMsg = formatTreasureDisplay(treasure);
 
@@ -383,18 +383,36 @@ async function routeInteraction(interaction) {
                 await checkAchievements(interaction.guild, interaction.user.id, { type: 'secret_location_unlock' });
             }
 
+            let trophyMsg = result.isTrophy ? '\n> 🏆 **TROPHY CATCH!** (+50% nilai)' : '';
+            let doubleMsg = '';
+            if (result.doubleCatch) {
+                const d = result.doubleCatch;
+                doubleMsg = `\n> 🐟 **DOUBLE CATCH!** ${d.fish.name} (${d.weight}kg) 🪙${d.value.toLocaleString('id-ID')}`;
+                try { incrementUserStat(guildId, interaction.user.id, 'total_fish_caught'); } catch (_) {}
+            }
+            let colMsg = '';
+            try {
+                const { checkCollectionMilestones } = require('../systems/fishing');
+                const col = checkCollectionMilestones(guildId, interaction.user.id);
+                if (col.rewards?.length) {
+                    colMsg = '\n> 📖 **COLLECTION MILESTONE!** ' + col.rewards.map(r => `${r.pct}%`).join(', ');
+                }
+            } catch (_) {}
+
             const contestState = getContestState(guildId);
             let contestMsg = '';
             if (contestState && contestState.active && Date.now() < contestState.endsAt) { addContestEntry(guildId, interaction.user.id, result.fish.id, result.weight); contestMsg = '\n> 🏆 *Otomatis masuk kontes!*'; }
-            const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF' };
+            const tierColors = { 'Trash': '#808080', 'Common': '#FFFFFF', 'Uncommon': '#2ECC71', 'Rare': '#3498DB', 'Epic': '#9B59B6', 'Legendary': '#F1C40F', 'Mythic': '#FF6B6B', 'Secret': '#8B00FF', 'God': '#FFD700' };
             const embed = new EmbedBuilder()
-                .setColor(treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31'))
+                .setColor(result.isTrophy ? '#FFD700' : (treasure ? '#FFD700' : (tierColors[result.tier.tier] || '#2B2D31')))
                 .setTitle(`🎣 ${result.tier.tier === 'Trash' ? 'Tangkapan Sampah' : 'Ikan Tertangkap!'}`)
-                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
+                .setDescription(`${result.tier.emoji} **${result.fish.name}**\n\n> 📊 **Tier:** ${result.tier.tier}\n> ⚖️ **Berat:** ${result.weight.toLocaleString('id-ID')} kg\n> 💰 **Nilai Jual:** 🪙 ${boostedValue.toLocaleString('id-ID')}${comboTier.mult > 1 ? ` (${comboTier.mult}x)` : ''}${trophyMsg}\n\n> 🎋 Joran: **${rod.name}**\n> 🪱 Umpan: **${(BAIT_TYPES.find(b => b.id === eq.bait) || BAIT_TYPES[0]).name}** ${eq.bait !== 'none' ? `(${eq.bait_count > 0 ? eq.bait_count - 1 : 0} sisa)` : ''}` + doubleMsg + colMsg + contestMsg + comboMsg + treasureMsg + secretUnlockMsg)
                 .setFooter({ text: `Combo: ${comboData.combo}x | CD: ${finalCdSec}s | Max combo: ${comboData.maxCombo}x` });
             if (result.tier.tier === 'Secret') embed.setTitle('✧ SECRET CATCH ✧');
             else if (result.tier.tier === 'Mythic') embed.setTitle('✧ MYTHIC CATCH ✧');
             else if (result.tier.tier === 'Legendary') embed.setTitle('✧ LEGENDARY CATCH ✧');
+            else if (result.tier.tier === 'God') embed.setTitle('✧ GOD TIER CATCH ✧');
+            else if (result.isTrophy) embed.setTitle('🏆 TROPHY CATCH!');
             const afterCatchRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`fish_cast_${interaction.user.id}`).setLabel('🎣 Lagi').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId(`fish_inv_${interaction.user.id}`).setLabel('📦 Inventory').setStyle(ButtonStyle.Secondary),

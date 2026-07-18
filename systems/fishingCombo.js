@@ -28,13 +28,16 @@ const TREASURE_DROPS = [
     { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 7, category: 'uncommon' },
     { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 5, category: 'uncommon' },
     { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 5, category: 'uncommon' },
+    { id: 'trophy_chum', name: 'Trophy Chum x1', emoji: '🏆', chance: 4, category: 'uncommon' },
     // Rare drops (total ~12%)
     { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡⚡', chance: 5, category: 'rare' },
     { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 4, category: 'rare' },
     { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '🌿', chance: 3, category: 'rare' },
+    { id: 'prism_lure', name: 'Prism Lure', emoji: '💎', chance: 2, category: 'rare' },
     // Ultra rare drops (total ~3%)
     { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 2, category: 'legendary' },
     { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 0.5, category: 'mythic' },
+    { id: 'omega_bait', name: 'Omega Bait', emoji: '🔱', chance: 0.3, category: 'mythic' },
 ];
 
 const BASE_TREASURE_CHANCE = 0.05; // 5% base chance per cast
@@ -88,10 +91,17 @@ function getComboFishMultiplier(combo) {
 }
 
 // ==================== ROLL TREASURE ====================
-function rollTreasure(combo) {
+function rollTreasure(combo, guildId, userId) {
     // Higher combo = higher treasure chance (5% base + 1% per 5 combo)
     const bonusChance = Math.floor(combo / 5) * 0.01;
-    const totalChance = BASE_TREASURE_CHANCE + bonusChance;
+    let totalChance = BASE_TREASURE_CHANCE + bonusChance;
+    // Pet drop_luck: +0.05% chance per effective point (soft)
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        const dl = getTotalPetBonus(guildId, userId, 'drop_luck') || 0;
+        totalChance += dl * 0.0005;
+    } catch (_) {}
+    totalChance = Math.min(0.18, totalChance); // hard cap 18%
 
     if (Math.random() > totalChance) return null; // No treasure
 

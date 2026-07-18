@@ -14,7 +14,7 @@ try {
 }
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.10.2';
+const BOT_VERSION = '3.10.3';
 const BUILD_DATE = '2026-07-18';
 
 // Load logger first (so everything else can use it)

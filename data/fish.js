@@ -34,6 +34,10 @@ const BAIT_TYPES = [
     { id: 'celestial_bait', name: 'Celestial Bait', emoji: '🌙', price: 50000, rareBonus: 38 },
     { id: 'divine_essence', name: 'Divine Essence', emoji: '✝️', price: 100000, rareBonus: 45 },
     { id: 'god_lure', name: 'God Lure', emoji: '👁️‍🗨️', price: 250000, rareBonus: 55 },
+    // Ascendant baits
+    { id: 'prism_lure', name: 'Prism Lure', emoji: '💎', price: 150000, rareBonus: 50 },
+    { id: 'omega_bait', name: 'Omega Bait', emoji: '🔱', price: 400000, rareBonus: 60 },
+    { id: 'trophy_chum', name: 'Trophy Chum', emoji: '🏆', price: 75000, rareBonus: 28, trophyBonus: 15 },
 ];
 
 // ==================== FISH TIERS ====================
@@ -54,6 +58,12 @@ const FISH_TIERS = [
 // chance = % chance per cast to encounter monster instead of fish
 const SEA_MONSTERS = [
     // ===== CELESTIAL OCEAN (🌟) — 8 monsters =====
+    // ===== ASTRAL TRENCH (🌌) =====
+    { id: 'rift_wraith', name: 'Rift Wraith', emoji: '👻🌌', location: 'astral_trench', chance: 12, damage: 'bait', desc: 'Hantu jurang bintang mencuri umpan!' },
+    { id: 'star_piranha', name: 'Star Piranha', emoji: '⭐🐟', location: 'astral_trench', chance: 10, damage: 'bait', desc: 'Piranha bintang melahap umpan!' },
+    { id: 'gravity_ray', name: 'Gravity Ray', emoji: '🌀', location: 'astral_trench', chance: 6, damage: 'cooldown', desc: 'Pari gravitasi melambatkanmu! CD +15s' },
+    { id: 'void_snatcher', name: 'Void Snatcher', emoji: '🕳️', location: 'astral_trench', chance: 5, damage: 'money', desc: 'Pencuri void mengambil 4000 money!' },
+
     { id: 'storm_serpent', name: 'Storm Serpent', emoji: '🐍⚡', location: 'celestial_ocean', chance: 12, damage: 'bait', desc: 'Ular badai menyambar umpanmu!' },
     { id: 'light_kraken', name: 'Light Kraken', emoji: '🦑✨', location: 'celestial_ocean', chance: 8, damage: 'bait', desc: 'Kraken cahaya merebut umpanmu!' },
     { id: 'celestial_shark', name: 'Celestial Shark', emoji: '🦈🌟', location: 'celestial_ocean', chance: 5, damage: 'rod_break', desc: 'Hiu celestial menyerang joranmu! Rod Part -1' },
@@ -105,6 +115,8 @@ const FISHING_LOCATIONS = [
     { id: 'celestial_ocean', name: '🌟 Celestial Ocean', desc: 'Lautan bintang — ikan dewa tapi penuh monster laut!', requiredRodTier: 9, luckPenalty: 40, bonusRare: 30, tiers: ['Epic','Legendary','Mythic','Secret','God'], monsterChance: 25 },
     { id: 'primordial_depths', name: '💀 Primordial Depths', desc: 'Kedalaman purba — monster mematikan mengintai setiap cast!', requiredRodTier: 10, luckPenalty: 45, bonusRare: 35, tiers: ['Epic','Legendary','Mythic','Secret','God'], monsterChance: 33 },
     { id: 'god_realm', name: '👑 God Realm', desc: 'Dimensi para dewa — hanya yang paling kuat yang bertahan!', requiredRodTier: 11, luckPenalty: 50, bonusRare: 45, tiers: ['Legendary','Mythic','Secret','God'], monsterChance: 45 },
+    // Ascendant location
+    { id: 'astral_trench', name: '🌌 Astral Trench', desc: 'Jurang bintang di antara Void dan Celestial — trophy fish & drop bagus', requiredRodTier: 8, luckPenalty: 38, bonusRare: 28, tiers: ['Epic','Legendary','Mythic','Secret','God'], monsterChance: 20 },
 ];
 
 // ==================== FISH DATA (Location-Based) ====================
@@ -254,6 +266,41 @@ const FISH_DATA = [
     { id: 'origin_fish', name: 'Origin Fish', tier: 'God', emoji: '🌌', location: 'god_realm' },
     { id: 'seraph_eel', name: 'Seraph Eel', tier: 'Legendary', emoji: '😇', location: 'god_realm' },
     { id: 'cherub_koi', name: 'Cherub Koi', tier: 'Mythic', emoji: '👼', location: 'god_realm' },
+
+    // ===== ASCENDANT WAVE — more species per zone =====
+    // River / Lake / Coast fillers
+    { id: 'river_crab', name: 'Kepiting Sungai', tier: 'Common', emoji: '🦀', location: 'river' },
+    { id: 'glass_goby', name: 'Glass Goby', tier: 'Uncommon', emoji: '🫧', location: 'river' },
+    { id: 'sunset_perch', name: 'Sunset Perch', tier: 'Rare', emoji: '🌇', location: 'lake' },
+    { id: 'mirror_carp', name: 'Mirror Carp', tier: 'Uncommon', emoji: '🪞', location: 'lake' },
+    { id: 'coral_clown', name: 'Coral Clown', tier: 'Common', emoji: '🤡', location: 'coast' },
+    { id: 'tide_snapper', name: 'Tide Snapper', tier: 'Rare', emoji: '🌊', location: 'coast' },
+    { id: 'deep_lantern', name: 'Deep Lantern Fish', tier: 'Epic', emoji: '🏮', location: 'deep_sea' },
+    { id: 'crystal_smelt', name: 'Crystal Smelt', tier: 'Rare', emoji: '💎', location: 'ice_cave' },
+    { id: 'ember_trout', name: 'Ember Trout', tier: 'Epic', emoji: '🔥', location: 'volcano' },
+    { id: 'rift_minnow', name: 'Rift Minnow', tier: 'Epic', emoji: '🕳️', location: 'void_rift' },
+    { id: 'echo_ray', name: 'Echo Ray', tier: 'Legendary', emoji: '📡', location: 'void_rift' },
+    { id: 'abyss_pearl_fish', name: 'Abyss Pearl Fish', tier: 'Legendary', emoji: '🦪', location: 'abyss' },
+    { id: 'nightfall_carp', name: 'Nightfall Carp', tier: 'Mythic', emoji: '🌃', location: 'abyss' },
+    // Celestial / Primordial / God extras
+    { id: 'pulsar_bass', name: 'Pulsar Bass', tier: 'Legendary', emoji: '📶', location: 'celestial_ocean' },
+    { id: 'orbit_koi', name: 'Orbit Koi', tier: 'Mythic', emoji: '🪐', location: 'celestial_ocean' },
+    { id: 'quasar_marlin', name: 'Quasar Marlin', tier: 'Secret', emoji: '💠', location: 'celestial_ocean' },
+    { id: 'magma_fossil_fish', name: 'Magma Fossil Fish', tier: 'Legendary', emoji: '🌋', location: 'primordial_depths' },
+    { id: 'archaeo_shark', name: 'Archaeo Shark', tier: 'Secret', emoji: '🦷', location: 'primordial_depths' },
+    { id: 'halo_tuna', name: 'Halo Tuna', tier: 'Mythic', emoji: '😇', location: 'god_realm' },
+    { id: 'throne_whale', name: 'Throne Whale', tier: 'God', emoji: '🪑', location: 'god_realm' },
+    // ===== ASTRAL TRENCH (🌌) — NEW LOCATION =====
+    { id: 'star_shard_fish', name: 'Star Shard Fish', tier: 'Epic', emoji: '✨', location: 'astral_trench' },
+    { id: 'voidglass_eel', name: 'Voidglass Eel', tier: 'Epic', emoji: '🐍', location: 'astral_trench' },
+    { id: 'nebula_trout', name: 'Nebula Trout', tier: 'Legendary', emoji: '🌌', location: 'astral_trench' },
+    { id: 'orbit_shark', name: 'Orbit Shark', tier: 'Legendary', emoji: '🦈', location: 'astral_trench' },
+    { id: 'singularity_koi', name: 'Singularity Koi', tier: 'Mythic', emoji: '⚫', location: 'astral_trench' },
+    { id: 'astral_crown_fish', name: 'Astral Crown Fish', tier: 'Mythic', emoji: '👑', location: 'astral_trench' },
+    { id: 'horizon_leviathan', name: 'Horizon Leviathan', tier: 'Secret', emoji: '🌅', location: 'astral_trench' },
+    { id: 'cosmos_angler', name: 'Cosmos Angler', tier: 'Secret', emoji: '🔦', location: 'astral_trench' },
+    { id: 'aether_god_fish', name: 'Aether God Fish', tier: 'God', emoji: '🌟', location: 'astral_trench' },
+    { id: 'parallax_whale', name: 'Parallax Whale', tier: 'God', emoji: '🐋', location: 'astral_trench' },
 ];
 
 // ==================== ROD UPGRADE REQUIREMENTS ====================
