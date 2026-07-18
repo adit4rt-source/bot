@@ -101,6 +101,18 @@ function rollTreasure(combo, guildId, userId) {
         const dl = getTotalPetBonus(guildId, userId, 'drop_luck') || 0;
         totalChance += dl * 0.0005;
     } catch (_) {}
+    try {
+        const { getMasteryBonuses } = require('./fishingMastery');
+        totalChance += getMasteryBonuses(userId).treasureBonus || 0;
+    } catch (_) {}
+    try {
+        const { getEnchantEffects, getAquariumBonuses } = require('./fishingExtras');
+        const { getEquipment } = require('./fishing');
+        const eq = getEquipment(guildId, userId);
+        const fx = getEnchantEffects(userId, eq.rod);
+        totalChance += fx.treasure || 0;
+        totalChance += (getAquariumBonuses(userId).drop_luck || 0) * 0.001;
+    } catch (_) {}
     totalChance = Math.min(0.18, totalChance); // hard cap 18%
 
     if (Math.random() > totalChance) return null; // No treasure

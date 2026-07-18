@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.11.0 — 18 Juli 2026 — Full Fishing Hub (semua paket)
+
+Akses: `/fishing` → **🧭 Hub** (atau Perfect di panel).
+
+### A. Mastery + Contracts
+- Fishing Mastery Rank 0–50 (XP dari cast, rare+ lebih banyak XP)
+- Bonus: rare%, trophy tilt, treasure chance
+- Location mastery: 100 cast/zona → +1% rare lokal (max +10%)
+- Soft pity rare/epic setelah dry streak
+- Daily **3 contracts** (catch / rare / trophy / sell / monster / combo)
+
+### B. Rod Enchant + Bait Craft
+- 2 affix slot per joran (Trophy Hook, Monster Ward, Treasure Sense, God Whisper, Swift Line, Double String)
+- Craft bait: Golden Worm, Trophy Chum, Prism Lure, Mystic, Omega
+
+### C. Aquarium + Season
+- 6 slot aquarium display → passive fish_luck / sell / drop
+- Monthly fishing season (featured fish + zona +8% rare)
+
+### D. Co-op Giant + Bestiary + Forecast + Perfect Cast
+- Co-op giant fish di channel (shared HP, loot by hits)
+- Monster bestiary + seen tracking
+- Weather forecast panel
+- Perfect Cast timing (+rare 30s)
+
+---
+
 ## v3.10.3 — 18 Juli 2026 — Fishing Ascendant Wave
 
 ### Konten

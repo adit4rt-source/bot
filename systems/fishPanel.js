@@ -102,8 +102,17 @@ function buildFishingPanel(guildId, userId, username) {
     );
     const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`fish_upgrade_${userId}`).setLabel('Upgrade Rod').setEmoji('🔧').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('Equip Rod').setEmoji('🎋').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`fish_equip_${userId}`).setLabel('Equip Rod').setEmoji('🎋').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('Hub').setEmoji('🧭').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`fish_pcast_${userId}`).setLabel('Perfect').setEmoji('🎯').setStyle(ButtonStyle.Success)
     );
+    // Mastery line on panel
+    try {
+        const { getMastery, getMasteryBonuses } = require('./fishingMastery');
+        const m = getMastery(userId);
+        const b = getMasteryBonuses(userId);
+        embed.setFooter({ text: `🏅 Rank ${m.rank} ${b.title || ''} · Hub = contracts/aquarium/season/enchant · Perfect cast optional` });
+    } catch (_) {}
     return { embeds: [embed], components: [row1, row2, row3] };
 }
 
@@ -137,6 +146,166 @@ async function handleFishingButton(interaction) {
     if (action === 'back') {
         const panel = buildFishingPanel(guildId, userId, interaction.user.username);
         return interaction.update(panel);
+    }
+
+    // === FISHING HUB + EXTRAS (Mastery, Contracts, Aquarium, Season, Enchant, Craft, Bestiary, Co-op) ===
+    {
+        const extras = require('./fishingExtras');
+        const mastery = require('./fishingMastery');
+
+        if (action === 'hub') return interaction.update(extras.buildFishingHub(guildId, userId, interaction.user.username));
+        if (action === 'mastery') {
+            return interaction.update({
+                embeds: [mastery.buildMasteryEmbed(userId, interaction.user.username)],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
+                )],
+            });
+        }
+        if (action === 'contracts') return interaction.update(extras.buildContractsPanel(guildId, userId));
+        if (action.startsWith('claim') && /^claim\d+$/.test(action)) {
+            const idx = parseInt(action.replace('claim', ''), 10);
+            const res = extras.claimContract(guildId, userId, idx);
+            if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+            return interaction.update({
+                ...extras.buildContractsPanel(guildId, userId),
+                content: `✅ Klaim: ${res.contract.desc}`,
+            });
+        }
+        if (action === 'aqua') return interaction.update(extras.buildAquariumPanel(guildId, userId));
+        if (action === 'aquaadd' || action === 'aqua_add') {
+            // show select of inventory fish (max 25)
+            const inv = db.prepare('SELECT * FROM fish_inventory WHERE userId = ? ORDER BY weight DESC LIMIT 25').all(userId);
+            if (!inv.length) return interaction.reply({ content: '❌ Inventory kosong!', ephemeral: true });
+            const menu = new StringSelectMenuBuilder().setCustomId(`fish_aquasel_${userId}`).setPlaceholder('Pilih ikan untuk aquarium...').setMinValues(1).setMaxValues(1);
+            inv.forEach(item => {
+                const fd = FISH_DATA.find(f => f.id === item.fishId);
+                menu.addOptions({
+                    label: `#${item.id} ${fd ? fd.name : item.fishId}`.slice(0, 100),
+                    value: String(item.id),
+                    description: `${item.weight}kg · ${fd ? fd.tier : '?'}`.slice(0, 100),
+                });
+            });
+            return interaction.update({
+                embeds: [new EmbedBuilder().setTitle('🐠 Pilih ikan').setDescription('Ikan dipindah ke slot kosong pertama aquarium (lock display).').setColor('#3498DB')],
+                components: [
+                    new ActionRowBuilder().addComponents(menu),
+                    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_aqua_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)),
+                ],
+            });
+        }
+        if (action === 'aquarem' || action === 'aqua_rem') {
+            const rows = extras.getAquarium(userId);
+            if (!rows.length) return interaction.reply({ content: '❌ Aquarium kosong.', ephemeral: true });
+            const menu = new StringSelectMenuBuilder().setCustomId(`fish_aquarm_${userId}`).setPlaceholder('Ambil dari slot...').setMinValues(1).setMaxValues(1);
+            rows.forEach(r => {
+                const fd = FISH_DATA.find(f => f.id === r.fishId);
+                menu.addOptions({ label: `Slot ${r.slot + 1}: ${fd ? fd.name : r.fishId}`.slice(0, 100), value: String(r.slot) });
+            });
+            return interaction.update({
+                embeds: [new EmbedBuilder().setTitle('➖ Ambil ikan').setColor('#E74C3C').setDescription('Kembali ke inventory (locked).')],
+                components: [
+                    new ActionRowBuilder().addComponents(menu),
+                    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fish_aqua_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)),
+                ],
+            });
+        }
+        if (action === 'season') return interaction.update(extras.buildSeasonPanel(userId));
+        if (action === 'enchant') return interaction.update(extras.buildEnchantPanel(guildId, userId));
+        if (action === 'craft') return interaction.update(extras.buildCraftPanel(userId));
+        if (action === 'bestiary') return interaction.update(extras.buildBestiaryPanel(userId, 0));
+        if (action === 'bestp') {
+            const page = parseInt(parts[3] || '0', 10);
+            return interaction.update(extras.buildBestiaryPanel(userId, page - 1));
+        }
+        if (action === 'bestn') {
+            const page = parseInt(parts[3] || '0', 10);
+            return interaction.update(extras.buildBestiaryPanel(userId, page + 1));
+        }
+        if (action === 'forecast') return interaction.update(extras.buildForecastPanel(userId));
+        if (action === 'pcast') {
+            extras.startPerfectCast(userId);
+            return interaction.update({
+                embeds: [new EmbedBuilder().setTitle('🎯 Perfect Cast').setColor('#F1C40F').setDescription(
+                    `Timing window **2.5 detik**!\nTekan **HIT NOW** secepatnya untuk +rare pada cast berikutnya.\n\nLalu tekan **Cast** di panel.`
+                )],
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId(`fish_phit_${userId}`).setLabel('HIT NOW').setEmoji('🎯').setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('Panel').setStyle(ButtonStyle.Secondary),
+                    ),
+                ],
+            });
+        }
+        if (action === 'phit') {
+            const res = extras.resolvePerfectCast(userId);
+            if (!res.ok) return interaction.reply({ content: '❌ Terlambat / tidak ada window!', ephemeral: true });
+            // store bonus for next cast
+            try {
+                const { setUserStat } = require('../database');
+                setUserStat(guildId, userId, 'perfect_cast_bonus', res.bonus);
+                setUserStat(guildId, userId, 'perfect_cast_until', Date.now() + 30000);
+            } catch (_) {}
+            return interaction.update({
+                embeds: [new EmbedBuilder().setTitle('🎯 PERFECT!').setColor('#2ECC71').setDescription(`+**${res.bonus}%** rare pada cast dalam 30 detik. Gas **Cast**!`)],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fish_cast_${userId}`).setLabel('🎣 Cast').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId(`fish_back_${userId}`).setLabel('Panel').setStyle(ButtonStyle.Secondary),
+                )],
+            });
+        }
+        if (action === 'coop') {
+            const eq = getEquipment(guildId, userId);
+            const loc = FISHING_LOCATIONS.find(l => l.id === (eq.location || 'river'));
+            const active = extras.getActiveCoop(interaction.channelId);
+            if (active) {
+                const giant = require('./giantFish').GIANT_FISH.find(g => g.id === active.giantFishId);
+                const embed = extras.buildCoopEmbed(active, giant);
+                return interaction.update({
+                    embeds: [embed],
+                    components: [new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId(`fish_chit_${userId}`).setLabel('HIT').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary),
+                    )],
+                });
+            }
+            // start new
+            const started = extras.startCoopGiant(guildId, interaction.channelId, userId, loc?.id || 'deep_sea');
+            const coop = extras.getActiveCoop(interaction.channelId);
+            const embed = extras.buildCoopEmbed(coop, started.giant);
+            return interaction.update({
+                embeds: [embed],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fish_chit_${userId}`).setLabel('HIT').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary),
+                )],
+            });
+        }
+        if (action === 'chit') {
+            const active = extras.getActiveCoop(interaction.channelId);
+            if (!active) return interaction.reply({ content: '❌ Tidak ada co-op aktif di channel ini. Buka Hub → Co-op Giant.', ephemeral: true });
+            const hit = extras.hitCoopGiant(active.id, userId);
+            if (!hit.ok) return interaction.reply({ content: `❌ ${hit.msg}`, ephemeral: true });
+            if (hit.defeated) {
+                const rewards = extras.rewardCoop(guildId, active.id);
+                const lines = rewards.map(r => `> <@${r.userId}> hits **${r.hits}** → 🪙 **${r.money.toLocaleString('id-ID')}**`).join('\n');
+                return interaction.update({
+                    embeds: [new EmbedBuilder().setTitle('🐉 CO-OP CLEARED!').setColor('#2ECC71').setDescription(lines || 'Done.')],
+                    components: [new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary)
+                    )],
+                });
+            }
+            const giant = require('./giantFish').GIANT_FISH.find(g => g.id === hit.giantId);
+            const coop = extras.getActiveCoop(interaction.channelId);
+            return interaction.update({
+                embeds: [extras.buildCoopEmbed(coop, giant).setFooter({ text: `You hit for ${hit.dmg} dmg` })],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`fish_chit_${userId}`).setLabel('HIT').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`fish_hub_${userId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary),
+                )],
+            });
+        }
     }
 
     // === CONTEST STATUS + LEADERBOARD ===
@@ -272,6 +441,11 @@ async function handleFishingButton(interaction) {
         if (monsterEncounter) {
             const { monster, damageResult, blocked, loot } = monsterEncounter;
             incrementUserStat(guildId, userId, 'sea_monster_encounters');
+            try {
+                incrementUserStat(guildId, userId, `monster_seen_${monster.id}`);
+                incrementUserStat(guildId, userId, `monster_kill_${monster.id}`);
+                require('./fishingExtras').bumpContract(userId, { type: 'monster' });
+            } catch (_) {}
 
             // Extra cooldown if monster type is cooldown (only if not blocked)
             if (!blocked && damageResult.type === 'cooldown') {
@@ -473,6 +647,13 @@ async function handleFishingButton(interaction) {
         if (result.isTrophy) {
             try { incrementUserStat(guildId, userId, 'trophy_fish_caught'); } catch (_) {}
         }
+        try {
+            const { updateFishingCombo } = require('./fishingCombo');
+            const cd = updateFishingCombo(guildId, userId);
+            require('./fishingExtras').bumpContract(userId, {
+                type: 'catch', tier: result.tier.tier, isTrophy: !!result.isTrophy, combo: cd.combo,
+            });
+        } catch (_) {}
 
         await checkAchievements(interaction.guild, userId, { type: 'fishing', tier: result.tier.tier, weight: result.weight, fishId: result.fish.id });
 
@@ -728,8 +909,11 @@ async function handleFishingButton(interaction) {
         }
         try {
             const { getTotalPetBonus, applyBonusPercent } = require('./pets');
-            totalValue = applyBonusPercent(totalValue, getTotalPetBonus(guildId, userId, 'sell_bonus'));
+            let sellPct = getTotalPetBonus(guildId, userId, 'sell_bonus') || 0;
+            try { sellPct += require('./fishingExtras').getAquariumBonuses(userId).sell_bonus || 0; } catch (_) {}
+            totalValue = applyBonusPercent(totalValue, sellPct);
         } catch (_) {}
+        try { require('./fishingExtras').bumpContract(userId, { type: 'sell', sold: sellable.length }); } catch (_) {}
         const freshData = getOrCreateUser(guildId, userId);
         freshData.balance += totalValue;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, userId);
@@ -884,6 +1068,47 @@ async function handleFishingSelectMenu(interaction) {
 
     const userData = getOrCreateUser(guildId, userId);
 
+    // === ENCHANT / CRAFT / AQUARIUM SELECTS ===
+    if (customId.startsWith('fish_ench1_') || customId.startsWith('fish_ench2_')) {
+        const extras = require('./fishingExtras');
+        const slot = customId.startsWith('fish_ench2_') ? 2 : 1;
+        const affixId = interaction.values[0];
+        const eq = getEquipment(guildId, userId);
+        const res = extras.setRodAffix(guildId, userId, eq.rod, slot, affixId);
+        if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+        return interaction.update({
+            ...extras.buildEnchantPanel(guildId, userId),
+            content: `✅ Slot ${slot}: **${res.affix.name}** terpasang!`,
+        });
+    }
+    if (customId.startsWith('fish_craft_select_')) {
+        const extras = require('./fishingExtras');
+        const res = extras.craftBait(guildId, userId, interaction.values[0]);
+        if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+        return interaction.update({
+            ...extras.buildCraftPanel(userId),
+            content: `✅ Craft **${res.rec.name}** berhasil!`,
+        });
+    }
+    if (customId.startsWith('fish_aquasel_')) {
+        const extras = require('./fishingExtras');
+        const invId = parseInt(interaction.values[0], 10);
+        const used = extras.getAquarium(userId).map(r => r.slot);
+        let slot = 0;
+        while (used.includes(slot) && slot < extras.AQUA_SLOTS) slot++;
+        if (slot >= extras.AQUA_SLOTS) return interaction.reply({ content: '❌ Aquarium penuh!', ephemeral: true });
+        const res = extras.placeAquarium(userId, slot, invId, guildId);
+        if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+        return interaction.update(extras.buildAquariumPanel(guildId, userId));
+    }
+    if (customId.startsWith('fish_aquarm_')) {
+        const extras = require('./fishingExtras');
+        const slot = parseInt(interaction.values[0], 10);
+        const res = extras.removeAquarium(userId, slot, guildId);
+        if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+        return interaction.update(extras.buildAquariumPanel(guildId, userId));
+    }
+
     // === SET LOCATION ===
     if (customId.startsWith('fish_setloc_')) {
         const locId = interaction.values[0];
@@ -1008,7 +1233,9 @@ function isFishingPanelButton(customId) {
 }
 
 function isFishingPanelSelectMenu(customId) {
-    return customId.startsWith('fish_shop') || customId.startsWith('fish_setloc_') || customId.startsWith('fish_equiprod_');
+    return customId.startsWith('fish_shop') || customId.startsWith('fish_setloc_') || customId.startsWith('fish_equiprod_')
+        || customId.startsWith('fish_ench') || customId.startsWith('fish_craft_select_')
+        || customId.startsWith('fish_aquasel_') || customId.startsWith('fish_aquarm_');
 }
 
 function isFishingPanelModal(customId) {
