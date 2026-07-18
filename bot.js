@@ -244,41 +244,41 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#8e44ad')
-            .setTitle(`🌑 ASCENDANT UPDATE — v${BOT_VERSION}`)
+            .setColor('#FF6B35')
+            .setTitle(`🎉 MEGA UPDATE — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `Paket endgame **Ascendant**: Skill T5, Ability T4, Nightmare Dungeon & Skill Reroll!\n` +
+                `Update besar endgame: **Pet · Fishing · Farming**!\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
-
         new ChangelogEmbed()
-            .setColor('#E74C3C')
-            .setTitle('⚔️ Skill Tier 5 (Lv.150) + Ability Slot 4')
+            .setColor('#9B59B6')
+            .setTitle('🐾 PET — Ascendant')
             .setDescription(
-                `**8 skill battle baru (Ascendant):**\n` +
-                `> ☄️ Elemental Catastrophe · ⏸️ Time Stop · 🩸 Blood Pact\n` +
-                `> 🛡️ Aegis of Gods · 🔗 Soul Link · 💥 Omega Burst\n` +
-                `> 🕳️ Void Rend · ✨ Genesis Light\n\n` +
-                `**Ability Tier 4** (Slot 4 — butuh Lv.150 + Awakening ★2):\n` +
-                `> 🦴 Boss Scavenger · ⚔️ Arena Veteran · 🥚 Egg Whisperer\n` +
-                `> ✨ Relic Polish · 🌑 Nightmare Runner`
+                `> Skill **T5** (Lv.150) · Ability **T4/Slot4** (★2+)\n` +
+                `> 🌑 **Nightmare Dungeon** + Token Shop + 📖 Skill Tome\n` +
+                `> Pet baru + multi-bonus + 15+ tipe bonus pasif`
             )
             .setTimestamp(),
-
         new ChangelogEmbed()
-            .setColor('#1a1a2e')
-            .setTitle('🌑 Nightmare Dungeon + Skill Reroll')
+            .setColor('#1ABC9C')
+            .setTitle('🎣 FISHING — Full Hub')
             .setDescription(
-                `**Daily endgame loop** — akses dari \`/pet\` → Dungeon / More:\n` +
-                `> • 3 entry/hari (4 dengan Nightmare Runner)\n` +
-                `> • Stats musuh ×1.5 + modifier acak\n` +
-                `> • Reward: 🌑 **Nightmare Token** + loot\n` +
-                `> • Shop: 📖 Skill Tome, refine pack, mythic fragment, dll.\n\n` +
-                `**📖 Skill Tome** — reroll 1 battle skill per tier (build crafting!)`
+                `> \`/fishing\` → **🧭 Hub**\n` +
+                `> Astral Trench · Trophy Catch · Mastery · Contracts\n` +
+                `> Rod Enchant · Aquarium · Season · Co-op Giant · Perfect Cast`
             )
-            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
+            .setTimestamp(),
+        new ChangelogEmbed()
+            .setColor('#2ECC71')
+            .setTitle('🌾 FARMING — Full Hub')
+            .setDescription(
+                `> \`/farm\` → **🧭 More**\n` +
+                `> Mastery · Contracts · Soil Affix · Showcase\n` +
+                `> Season crop · Co-op Contest · Deco efek nyata`
+            )
+            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG` })
             .setTimestamp()
     ]);
 });
