@@ -217,8 +217,13 @@ function buildFarmHub(guildId, userId, username) {
         new ButtonBuilder().setCustomId(`farm_allcraft_${userId}`).setLabel('Crafting').setEmoji('🧪').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`farm_allstorage_${userId}`).setLabel('Storage').setEmoji('📦').setStyle(ButtonStyle.Secondary)
     );
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_fmore_${userId}`).setLabel('More').setEmoji('🧭').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`farm_fmaster_${userId}`).setLabel('Mastery').setEmoji('🏅').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`farm_fcontracts_${userId}`).setLabel('Contracts').setEmoji('📋').setStyle(ButtonStyle.Success),
+    );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row, row2] };
 }
 
 // ============ BUILD: Farm Tool (craftable gear) Panel ============
@@ -699,6 +704,65 @@ async function handleFarmButton(interaction) {
         return;
     }
 
+    // === FARM MORE HUB (mastery, contracts, soil, showcase, season, contest) ===
+    {
+        const extras = require('./farmExtras');
+        const mastery = require('./farmMastery');
+        if (action === 'fmore') return interaction.update(extras.buildFarmMoreHub(guildId, userId, interaction.user.username));
+        if (action === 'fmaster') {
+            return interaction.update({
+                embeds: [mastery.buildMasteryEmbed(userId, interaction.user.username)],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`farm_fmore_${userId}`).setLabel('🔙 More').setStyle(ButtonStyle.Secondary)
+                )],
+            });
+        }
+        if (action === 'fcontracts') return interaction.update(extras.buildContractsPanel(guildId, userId));
+        if (action.startsWith('fclaim') && /^fclaim\d+$/.test(action)) {
+            const idx = parseInt(action.replace('fclaim', ''), 10);
+            const res = extras.claimContract(guildId, userId, idx);
+            if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+            return interaction.update({ ...extras.buildContractsPanel(guildId, userId), content: `✅ Klaim OK` });
+        }
+        if (action === 'fsoil') return interaction.update(extras.buildSoilPanel(guildId, userId));
+        if (action === 'fshow') return interaction.update(extras.buildShowcasePanel(userId));
+        if (action === 'showadd') {
+            const storage = getStorage(guildId, userId).filter(s => s.quantity > 0).slice(0, 25);
+            if (!storage.length) return interaction.reply({ content: '❌ Storage kosong!', ephemeral: true });
+            const menu = new StringSelectMenuBuilder().setCustomId(`farm_showsel_${userId}`).setPlaceholder('Pilih crop dari storage...').setMinValues(1).setMaxValues(1);
+            storage.forEach(s => {
+                const c = FARM_CROPS.find(x => x.id === s.itemId) || PRESTIGE_CROPS.find(x => x.id === s.itemId);
+                menu.addOptions({ label: `${c ? c.name : s.itemId} x${s.quantity}`.slice(0, 100), value: s.itemId });
+            });
+            return interaction.update({
+                embeds: [new EmbedBuilder().setTitle('🖼️ Pajang crop').setDescription('1 item diambil dari storage.').setColor('#9B59B6')],
+                components: [
+                    new ActionRowBuilder().addComponents(menu),
+                    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_fshow_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)),
+                ],
+            });
+        }
+        if (action === 'showclr') {
+            db.prepare('DELETE FROM farm_showcase WHERE userId = ?').run(userId);
+            return interaction.update(extras.buildShowcasePanel(userId));
+        }
+        if (action === 'fseason') return interaction.update(extras.buildSeasonEventPanel(userId));
+        if (action === 'fcontest') {
+            let contest = extras.getActiveContest(interaction.channelId);
+            if (!contest) {
+                extras.startContest(guildId, interaction.channelId, userId);
+                contest = extras.getActiveContest(interaction.channelId);
+            }
+            return interaction.update({
+                embeds: [extras.buildContestEmbed(contest)],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`farm_harvest_${userId}`).setLabel('🌾 Harvest (contrib)').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId(`farm_fmore_${userId}`).setLabel('🔙 More').setStyle(ButtonStyle.Secondary),
+                )],
+            });
+        }
+    }
+
     // === PLANT QUANTITY MODAL RESULT ===
     if (action === 'plantqty' && parts[2] === 'modal') {
         // This is handled in handleFarmModal, not here
@@ -745,6 +809,7 @@ async function handleFarmButton(interaction) {
 
     // === WATER ===
     if (action === 'water') {
+        try { require('./farmExtras').bumpContract(userId, { type: 'water' }); } catch (_) {}
         const plots = getPlots(guildId, userId);
         if (plots.length === 0) return interaction.reply({ content: '❌ Tidak ada tanaman untuk disiram!', ephemeral: true });
         let watered = 0;
@@ -858,6 +923,16 @@ async function handleFarmButton(interaction) {
             const { getTotalPetBonus } = require('./pets');
             petFarmBonus = getTotalPetBonus(guildId, userId, 'farm_yield') || 0;
         } catch (_) {}
+        // Mastery + showcase + deco yield
+        try {
+            const { getMasteryBonuses } = require('./farmMastery');
+            petFarmBonus += getMasteryBonuses(userId).yieldBonus || 0;
+        } catch (_) {}
+        try {
+            const { getShowcaseBonuses, getDecorationBonuses } = require('./farmExtras');
+            petFarmBonus += getShowcaseBonuses(userId).yieldBonus || 0;
+            petFarmBonus += (getDecorationBonuses(guildId, userId).yield || 0) * 100;
+        } catch (_) {}
 
         let harvested = 0, totalItems = 0, harvestDesc = '', harvestedLegendary = false;
         let mutationCount = 0, mutationDesc = '';
@@ -865,7 +940,11 @@ async function handleFarmButton(interaction) {
         // Permanent seed upgrade level (boosts yield + mutation chance for all plots).
         const seedLevel = getUserStat(guildId, userId, 'farm_seed_level') || 0;
 
-        for (const plot of plots) {
+        // Plot index map for soil affix
+        const plotList = plots;
+
+        for (let pi = 0; pi < plots.length; pi++) {
+            const plot = plots[pi];
             let crop = FARM_CROPS.find(c => c.id === plot.cropId);
             if (!crop) crop = PRESTIGE_CROPS.find(c => c.id === plot.cropId);
             if (!crop) continue;
@@ -873,12 +952,31 @@ async function handleFarmButton(interaction) {
             const seasonEffect = (plot.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
             let petSpeedPct = 0;
             try { petSpeedPct = require('./pets').getTotalPetBonus(guildId, userId, 'farm_speed') || 0; } catch (_) {}
-            const petSpeedMult = Math.max(0.7, 1 - Math.min(0.25, petSpeedPct / 100)); // max −25% grow time
+            try {
+                const { getMasteryBonuses } = require('./farmMastery');
+                petSpeedPct += (getMasteryBonuses(userId).growSpeed || 0) * 100;
+            } catch (_) {}
+            try {
+                const { getDecorationBonuses, getSoilEffects } = require('./farmExtras');
+                petSpeedPct += (getDecorationBonuses(guildId, userId).grow || 0) * 100;
+                // soil by plot order index
+                const soil = getSoilEffects(userId, pi);
+                petSpeedPct += (soil.grow || 0) * 100;
+            } catch (_) {}
+            const petSpeedMult = Math.max(0.65, 1 - Math.min(0.30, petSpeedPct / 100));
             const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * petSpeedMult * 60000;
             
             if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
                 // Season death check (wrong season can kill crops at harvest)
-                if (seasonEffect.deathChance > 0 && Math.random() < seasonEffect.deathChance) {
+                let deathChance = seasonEffect.deathChance || 0;
+                try {
+                    const { getSoilEffects, getDecorationBonuses } = require('./farmExtras');
+                    const soil = getSoilEffects(userId, pi);
+                    const deco = getDecorationBonuses(guildId, userId);
+                    deathChance *= (1 - (soil.hardy || 0));
+                    deathChance *= (1 - (deco.pestResist || 0) * 0.5);
+                } catch (_) {}
+                if (deathChance > 0 && Math.random() < deathChance) {
                     harvestDesc += `> ❌ ~~${crop.emoji} ${crop.name}~~ — *mati karena musim salah!*\n`;
                     db.prepare('DELETE FROM farm_plots WHERE id = ?').run(plot.id);
                     try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
@@ -907,42 +1005,71 @@ async function handleFarmButton(interaction) {
 
                 // Calculate yield with all bonuses (including season yieldMult)
                 const rotationBonus = getRotationBonus(guildId, userId, plot.id, crop.id);
+                let soilFx = { yield: 0, mut: 0, sell: 0, hardy: 0 };
+                try { soilFx = require('./farmExtras').getSoilEffects(userId, pi); } catch (_) {}
+                let cropM = { yieldBonus: 0 };
+                try { cropM = require('./farmMastery').getCropMastery(userId, crop.id); } catch (_) {}
+                let seasonYield = 1;
+                try {
+                    const se = require('./farmExtras').getFarmSeasonEvent();
+                    if (se.cropId === crop.id) seasonYield = 1.20;
+                } catch (_) {}
+
                 let qty = calculateHarvestYield(crop, {
-                    weatherYieldMult: weatherYieldMult * seasonEffect.yieldMult,
-                    fertYieldBonus: fert.yieldBonus,
+                    weatherYieldMult: weatherYieldMult * seasonEffect.yieldMult * seasonYield,
+                    fertYieldBonus: fert.yieldBonus + (soilFx.yield || 0),
                     seedLevel,
                     rotationBonus,
-                    petFarmBonus,
+                    petFarmBonus: petFarmBonus + (cropM.yieldBonus || 0),
                     toolBonus: getFarmToolYieldBonus(guildId, userId)
                 });
 
                 // Apply pest yield reduction + theft (ulat/belalang/jamur reduce, burung steals)
                 let pestNote = '';
                 if (pestEffect.yieldMult < 1 || pestEffect.stolenItems > 0) {
-                    qty = Math.max(0, Math.round(qty * pestEffect.yieldMult) - (pestEffect.stolenItems || 0));
+                    let yMult = pestEffect.yieldMult;
+                    if (soilFx.hardy) yMult = Math.min(1, yMult + soilFx.hardy * 0.3);
+                    qty = Math.max(0, Math.round(qty * yMult) - (pestEffect.stolenItems || 0));
                     pestNote = ' 🐛';
                 }
 
-                // Roll mutation! (season mutation bonus added)
-                const mutation = rollMutation(guildId, userId, seedLevel);
+                // Roll mutation! (mastery + soil + showcase + deco + season)
+                let mutation = rollMutation(guildId, userId, seedLevel);
+                try {
+                    const { getMasteryBonuses } = require('./farmMastery');
+                    const { getShowcaseBonuses, getDecorationBonuses, getFarmSeasonEvent } = require('./farmExtras');
+                    let extraMut = (getMasteryBonuses(userId).mutBonus || 0)
+                        + (getShowcaseBonuses(userId).mutBonus || 0)
+                        + (getDecorationBonuses(guildId, userId).mut || 0)
+                        + (soilFx.mut || 0);
+                    const se = getFarmSeasonEvent();
+                    if (se.cropId === crop.id) extraMut += 0.03;
+                    if (!mutation && extraMut > 0 && Math.random() < extraMut) {
+                        mutation = { id: 'golden', prefix: 'Golden', emoji: '✨', multiplier: 5 };
+                    }
+                } catch (_) {}
                 
                 addStorage(guildId, userId, crop.id, qty);
                 if (crop.tier === 'Legendary') harvestedLegendary = true;
 
                 if (mutation) {
-                    const mutationMoney = getDynamicPrice(crop, 'sell') * qty * (mutation.multiplier - 1);
+                    let mutationMoney = getDynamicPrice(crop, 'sell') * qty * (mutation.multiplier - 1);
+                    if (soilFx.sell) mutationMoney = Math.floor(mutationMoney * (1 + soilFx.sell));
                     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(mutationMoney, guildId, userId);
                     addIncome(guildId, userId, 'farm_mutation', mutationMoney);
                     logMutation(guildId, userId, crop.id, mutation.id);
                     mutationCount++;
                     mutationDesc += `> ${mutation.emoji} **${mutation.prefix} ${crop.name}!** (+🪙 ${mutationMoney.toLocaleString('id-ID')})\n`;
                     harvestDesc += `> ${crop.emoji} ${crop.name} x${qty} ${mutation.emoji} **MUTASI!**\n`;
+                    try { require('./farmExtras').bumpContract(userId, { type: 'mutate' }); } catch (_) {}
                 } else {
                     harvestDesc += `> ${crop.emoji} ${crop.name} x${qty}${rotationBonus > 0 ? ' 🔄' : ''}${pestNote}\n`;
                 }
 
                 // Update rotation tracking
                 updateRotation(guildId, userId, plot.id, crop.id);
+                try { require('./farmMastery').recordHarvest(userId, crop.id, qty, !!mutation); } catch (_) {}
+                try { require('./farmExtras').trackSeasonHarvest(userId, crop.id, qty); } catch (_) {}
 
                 harvested++; totalItems += qty;
                 try { require('./farmWeather').resolvePlotPests(guildId, userId, plot.id); } catch (e) {}
@@ -964,6 +1091,21 @@ async function handleFarmButton(interaction) {
             return interaction.update({ embeds: [embed], components: [backRow] });
         }
         if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman siap dipanen!', ephemeral: true });
+        try { require('./farmExtras').bumpContract(userId, { type: 'harvest', amount: harvested }); } catch (_) {}
+        // Co-op contest contrib
+        try {
+            const extras = require('./farmExtras');
+            const contest = extras.getActiveContest(interaction.channelId);
+            if (contest) {
+                const r = extras.contribContest(contest.id, userId, harvested);
+                if (r.done) {
+                    const rewards = extras.rewardContest(guildId, contest.id);
+                    harvestDesc += `\n🏆 **CO-OP CONTEST SELESAI!**\n` + rewards.map(x => `> <@${x.userId}> +🪙${x.money.toLocaleString('id-ID')}`).join('\n');
+                } else if (r.ok) {
+                    harvestDesc += `\n🏆 Contest: **${r.progress}/${r.goal}**`;
+                }
+            }
+        } catch (_) {}
         
         incrementUserStat(guildId, userId, 'total_harvests', harvested);
         updateQuestProgress(guildId, userId, 'farm_harvest', harvested);
@@ -1281,6 +1423,43 @@ async function handleFarmSelectMenu(interaction) {
     }
 
     const userData = getOrCreateUser(guildId, userId);
+
+    // === SOIL AFFIX / SHOWCASE ===
+    if (customId.startsWith('farm_soilplot_')) {
+        const plotIndex = parseInt(interaction.values[0], 10);
+        setUserStat(guildId, userId, 'farm_soil_pending_plot', plotIndex);
+        const extras = require('./farmExtras');
+        const menu = new StringSelectMenuBuilder().setCustomId(`farm_soilaff_${userId}`).setPlaceholder('Pilih affix...').setMinValues(1).setMaxValues(1);
+        extras.SOIL_AFFIXES.forEach(a => menu.addOptions({ label: a.name, value: a.id, description: a.desc.slice(0, 100), emoji: a.emoji }));
+        return interaction.update({
+            embeds: [new EmbedBuilder().setTitle(`🌍 Soil Plot ${plotIndex + 1}`).setDescription('Pilih affix:').setColor('#8B4513')],
+            components: [
+                new ActionRowBuilder().addComponents(menu),
+                new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_fsoil_${userId}`).setLabel('🔙').setStyle(ButtonStyle.Secondary)),
+            ],
+        });
+    }
+    if (customId.startsWith('farm_soilaff_')) {
+        const extras = require('./farmExtras');
+        const plotIndex = getUserStat(guildId, userId, 'farm_soil_pending_plot') || 0;
+        const res = extras.setSoilAffix(guildId, userId, plotIndex, interaction.values[0]);
+        if (!res.ok) return interaction.reply({ content: `❌ ${res.msg}`, ephemeral: true });
+        return interaction.update({ ...extras.buildSoilPanel(guildId, userId), content: `✅ ${res.affix.name} di plot ${plotIndex + 1}` });
+    }
+    if (customId.startsWith('farm_showsel_')) {
+        const extras = require('./farmExtras');
+        const cropId = interaction.values[0];
+        if (!removeStorage(guildId, userId, cropId, 1)) return interaction.reply({ content: '❌ Storage kurang!', ephemeral: true });
+        const used = extras.getShowcase(userId).map(r => r.slot);
+        let slot = 0;
+        while (used.includes(slot) && slot < extras.SHOWCASE_SLOTS) slot++;
+        if (slot >= extras.SHOWCASE_SLOTS) {
+            addStorage(guildId, userId, cropId, 1);
+            return interaction.reply({ content: '❌ Showcase penuh!', ephemeral: true });
+        }
+        extras.placeShowcase(userId, slot, cropId, null, 1);
+        return interaction.update(extras.buildShowcasePanel(userId));
+    }
 
     // === PLANT SEED SELECT ===
     if (customId.startsWith('farm_plantseed_')) {
@@ -1644,6 +1823,7 @@ async function handleFarmModal(interaction) {
             removeSeed(guildId, userId, cropId, 1);
             insertFarmPlot(guildId, userId, cropId, Date.now(), Date.now());
         }
+        try { require('./farmExtras').bumpContract(userId, { type: 'plant', amount: toPlant }); } catch (_) {}
 
         const sisa = getSeedCount(guildId, userId, cropId);
         const timeDisplay = crop.time >= 60 ? `${Math.floor(crop.time / 60)} jam ${crop.time % 60 > 0 ? crop.time % 60 + ' menit' : ''}` : `${crop.time} menit`;
@@ -1747,6 +1927,7 @@ async function handleFarmModal(interaction) {
         addIncome(guildId, userId, 'farming', totalMoney);
         updateQuestProgress(guildId, userId, 'craft', toCraft);
         addComboFeature(guildId, userId, 'farming');
+        try { require('./farmExtras').bumpContract(userId, { type: 'craft', amount: toCraft }); } catch (_) {}
         try { await checkAchievements(interaction.guild, userId, { type: 'farm_craft' }); } catch (_) {}
 
         const freshData = getOrCreateUser(guildId, userId);
@@ -1840,7 +2021,9 @@ function isFarmPanelSelectMenu(customId) {
            customId.startsWith('farm_craftselect') || customId.startsWith('farm_hubcraft') ||
            customId.startsWith('farm_buydeco_') ||
            customId.startsWith('farm_ghplantseed_') || customId.startsWith('farm_ghpupukfert_') || customId.startsWith('farm_marketsell_') ||
-           customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_');
+           customId.startsWith('farm_coop_evolveselect_') || customId.startsWith('farm_barn_evolveselect_') ||
+           customId.startsWith('farm_soilplot_') || customId.startsWith('farm_soilaff_') ||
+           customId.startsWith('farm_showsel_');
 }
 
 function isFarmPanelModal(customId) {

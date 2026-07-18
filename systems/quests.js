@@ -442,6 +442,10 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         } else {
             petXpPct = getTotalPetBonus(guildId, member.id, 'xp_chat');
             petMoneyPct = getTotalPetBonus(guildId, member.id, 'money_chat');
+            try {
+                const { getShowcaseBonuses } = require('./farmExtras');
+                petMoneyPct += getShowcaseBonuses(member.id).moneyChat || 0;
+            } catch (_) {}
         }
     } catch (_) {}
 

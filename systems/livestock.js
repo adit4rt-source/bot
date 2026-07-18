@@ -247,6 +247,14 @@ function collectProducts(userId, animalType) {
         if (animal.rarity === 'golden') yieldCount *= 2;
         else if (animal.rarity === 'diamond') yieldCount *= 3;
 
+        // Pet livestock_yield + farm mastery
+        try {
+            const { getTotalPetBonus } = require('./pets');
+            let pct = getTotalPetBonus(null, userId, 'livestock_yield') || 0;
+            try { pct += require('./farmMastery').getMasteryBonuses(userId).livestockYield || 0; } catch (_) {}
+            if (pct > 0) yieldCount = Math.max(1, Math.floor(yieldCount * (1 + pct / 100)));
+        } catch (_) {}
+
         // Disease cuts production (but a sick animal that produces still yields >= 1)
         if (diseaseReduction > 0) {
             yieldCount = Math.max(1, Math.floor(yieldCount * (1 - diseaseReduction)));
@@ -299,6 +307,7 @@ function collectProducts(userId, animalType) {
         const { incrementUserStat } = require('../database');
         const statKey = animalType === 'chicken' ? 'total_eggs_collected' : animalType === 'cow' ? 'total_milk_collected' : 'total_wool_collected';
         incrementUserStat(null, userId, statKey, totalCollected);
+        try { require('./farmExtras').bumpContract(userId, { type: 'collect' }); } catch (_) {}
     }
 
     return { success: true, totalCollected, totalExp, products };
@@ -375,6 +384,7 @@ function feedAnimals(userId, animalType) {
         db.prepare('UPDATE livestock SET lastFed = ? WHERE id = ?').run(nowTimestamp, animal.id);
     }
 
+    try { require('./farmExtras').bumpContract(userId, { type: 'feed' }); } catch (_) {}
     return { success: true, fed: animals.length, feedUsed: feedNeeded };
 }
 

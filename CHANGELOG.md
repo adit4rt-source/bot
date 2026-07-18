@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.12.0 — 18 Juli 2026 — Full Farm Hub (semua paket)
+
+Akses: `/farm` → **🧭 More** (atau Mastery / Contracts di main hub).
+
+### A. Mastery + Contracts
+- Farm Mastery Rank 0–50 (XP panen/mutasi)
+- Bonus: yield, mutation, grow speed, livestock yield
+- Crop mastery: 50 panen/crop → +1% yield crop itu (max +15%)
+- Daily 3 farm contracts (harvest/plant/craft/water/feed/collect/mutate/sell)
+
+### B. Soil Affix
+- Per-plot affix: Fertile / Swift / Mutable / Hardy / Golden Soil
+
+### C. Showcase + Season Event
+- Garden Showcase 4 slot (passive yield/mut/chat)
+- Monthly featured crop (+20% yield, +3% mut)
+
+### D. Co-op Harvest Contest
+- Channel contest 50 harvests / 30 menit, loot by contribution
+
+### E. QoL / bonus wire
+- Decoration now grant real bonuses (scarecrow, bee hive, statue…)
+- Pet `livestock_yield` + mastery on collect
+- Showcase money_chat on chat XP
+
+---
+
 ## v3.11.0 — 18 Juli 2026 — Full Fishing Hub (semua paket)
 
 Akses: `/fishing` → **🧭 Hub** (atau Perfect di panel).
