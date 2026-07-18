@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem, setUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ensurePetBattleSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic, GEM_STATS } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ensurePetBattleSkills, formatPetBonuses, getPetBonusEntries, PET_BONUS_LABELS, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic, GEM_STATS } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS, COOKING_RECIPES } = require('../data/items');
@@ -894,8 +894,8 @@ function buildMainPanel(guildId, userId, username) {
 
     const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
     const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-    const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
     const isHunting = pet.hunting_until && pet.hunting_until > Date.now();
+    const bonusLines = formatPetBonuses(petDef, pet.level);
     const mutationLine = pet.mutation_trait ? `🧪 **Mutation:** ${formatTrait(pet)}` : '';
 
     // Evolution info
@@ -945,7 +945,8 @@ function buildMainPanel(guildId, userId, username) {
     // Bonus & status
     const statusLines = [];
     statusLines.push(ui.sectionHeader('🎁', 'BONUS & STATUS'));
-    statusLines.push(`🎁 +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')} ${bonusActive ? '✅ aktif' : '❌ nonaktif — beri makan & ajak main!'}`);
+    statusLines.push(`🎁 **Bonus pasif** ${bonusActive ? '✅ aktif' : '❌ nonaktif — feed & play!'}`);
+    for (const line of bonusLines.split('\n')) statusLines.push(line);
     if (hasRelic) statusLines.push(`📿 *Bonus relic aktif — naikkan dengan Refine!*`);
     if (mutationLine) statusLines.push(mutationLine);
     if (isHunting) statusLines.push(`🏹 **HUNTING** — Kembali <t:${Math.floor(pet.hunting_until / 1000)}:R>`);
@@ -1129,8 +1130,8 @@ async function handlePetButton(interaction) {
         const statusEmoji = pet.status === 'sick' ? '🤒 Sakit!' : pet.happiness >= 70 ? '😊 Bahagia!' : pet.happiness >= 30 ? '😐 Biasa' : '😢 Sedih';
         const bonusActive = pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
         const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-        const bonusValue = bonusActive ? Math.floor(petDef.bonus.value * lvlMult) : 0;
         const isHunting = pet.hunting_until && pet.hunting_until > Date.now();
+        const bonusBlock = formatPetBonuses(petDef, pet.level);
 
         let skillDesc = '';
         for (const ms of PET_SKILL_MILESTONES) {
@@ -1174,7 +1175,7 @@ async function handlePetButton(interaction) {
                 `> ✨ EXP: \`${expBar}\` **${pet.exp}/${expNeeded}**\n` +
                 `> 💪 Status: ${statusEmoji}\n\n` +
                 `🎁 **Passive Bonus** ${bonusActive ? '(AKTIF ✅)' : '(MATI ❌)'}:\n` +
-                `> +**${bonusValue}%** ${petDef.bonus.type.replace(/_/g, ' ')}` +
+                `${bonusBlock}` +
                 `${!bonusActive ? '\n> ⚠️ *Happiness/Hunger terlalu rendah atau pet sakit!*' : ''}\n\n` +
                 `⚔️ **Battle Stats:**\n` +
                 `> Class: **${pet.class || 'warrior'}** | Element: **${pet.element || 'fire'}**\n` +
@@ -1340,7 +1341,12 @@ async function handlePetButton(interaction) {
             let embed;
             incrementUserStat(guildId, userId, 'hunt_missions');
             if (success) {
-                const reward = applyLevelScaling(getRandomInt(100, 400), pet.level);
+                let reward = applyLevelScaling(getRandomInt(100, 400), pet.level);
+                try {
+                    const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+                    // Hunt uses pre-hunt pet; re-check after hunt ends buff is back
+                    reward = applyBonusPercent(reward, getTotalPetBonus(guildId, userId, 'hunt_reward'));
+                } catch (_) {}
                 userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
                 addIncome(guildId, userId, 'battle', reward);
@@ -1953,11 +1959,17 @@ async function handlePetSelectMenu(interaction) {
         const eggId = interaction.values[0];
         const egg = PET_EGGS.find(e => e.id === eggId);
         if (!egg) return interaction.reply({ content: '❌ Egg tidak ditemukan!', ephemeral: true });
-        if (userData.balance < egg.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${egg.price.toLocaleString('id-ID')}**`, ephemeral: true });
+        let eggPrice = egg.price;
+        try {
+            const { getTotalPetBonus } = require('./pets');
+            const disc = getTotalPetBonus(guildId, userId, 'shop_discount') || 0;
+            if (disc > 0) eggPrice = Math.max(1, Math.floor(eggPrice * (1 - disc / 100)));
+        } catch (_) {}
+        if (userData.balance < eggPrice) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${eggPrice.toLocaleString('id-ID')}**`, ephemeral: true });
         const allPets = getAllPets(guildId, userId);
         if (allPets.length >= 10) return interaction.reply({ content: '❌ Slot pet penuh (max 10)!', ephemeral: true });
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(egg.price, guildId, userId);
-        updateQuestProgress(guildId, userId, 'spend_money', egg.price);
+        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(eggPrice, guildId, userId);
+        updateQuestProgress(guildId, userId, 'spend_money', eggPrice);
         // Egg Whisperer: slight tilt toward higher tiers (~2% of roll)
         let roll = Math.random() * 100;
         try {
@@ -2078,6 +2090,10 @@ async function handlePetSelectMenu(interaction) {
             reward = getRandomInt(dungeon.reward[0], dungeon.reward[1]);
             const comboMult = getComboMultiplier(guildId, userId);
             reward = applyLevelScaling(Math.floor(reward * comboMult), pet.level);
+            try {
+                const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+                reward = applyBonusPercent(reward, getTotalPetBonus(guildId, userId, 'battle_reward'));
+            } catch (_) {}
             expGain = dungeon.exp;
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
             addPetExp(guildId, userId, expGain);
@@ -2086,7 +2102,12 @@ async function handlePetSelectMenu(interaction) {
             updateQuestProgress(guildId, userId, 'dungeon', 1);
             await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
             lootText = rollLoot(guildId, userId, dungeon.loot);
-            relicText = rollRelicDrop(guildId, userId, dungeon.relicChance, dungeon.relicRareBonus);
+            let relicChance = dungeon.relicChance || 0;
+            try {
+                const { getTotalPetBonus } = require('./pets');
+                relicChance += (getTotalPetBonus(guildId, userId, 'dungeon_luck') || 0) / 100;
+            } catch (_) {}
+            relicText = rollRelicDrop(guildId, userId, relicChance, dungeon.relicRareBonus);
         } else {
             const freshData = getOrCreateUser(guildId, userId);
             const penalty = computePenalty(dungeon, freshData.balance);
@@ -2195,6 +2216,10 @@ async function handlePetSelectMenu(interaction) {
         let reward = 0, expGain = 0, lootText = '', relicText = '';
         if (result.alive) {
             reward = applyLevelScaling(getRandomInt(boss.reward[0], boss.reward[1]), pet.level);
+            try {
+                const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+                reward = applyBonusPercent(reward, getTotalPetBonus(guildId, userId, 'battle_reward'));
+            } catch (_) {}
             expGain = boss.exp;
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(reward, guildId, userId);
             addPetExp(guildId, userId, expGain);
@@ -2202,7 +2227,12 @@ async function handlePetSelectMenu(interaction) {
             addIncome(guildId, userId, 'battle', reward);
             updateQuestProgress(guildId, userId, 'boss', 1);
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
-            relicText = rollRelicDrop(guildId, userId, boss.relicChance, boss.relicRareBonus);
+            let relicChance = boss.relicChance || 0;
+            try {
+                const { getTotalPetBonus } = require('./pets');
+                relicChance += (getTotalPetBonus(guildId, userId, 'dungeon_luck') || 0) / 100;
+            } catch (_) {}
+            relicText = rollRelicDrop(guildId, userId, relicChance, boss.relicRareBonus);
             let lootMult = 1;
             try {
                 const { hasAbility } = require('./petAbilities');

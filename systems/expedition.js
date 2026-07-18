@@ -471,6 +471,10 @@ function claimExpeditionRewards(guildId, userId) {
     let money = getRandomInt(zone.rewards.moneyRange[0], zone.rewards.moneyRange[1]);
     money = Math.floor(money * (1 + levelBonus / 100)); // Apply pet level bonus
     if (synergy) money = Math.floor(money * (1 + SYNERGY_BONUS.money)); // Element synergy bonus
+    try {
+        const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+        money = applyBonusPercent(money, getTotalPetBonus(guildId, userId, 'expedition_reward'));
+    } catch (_) {}
 
     // Calculate EXP reward
     let exp = getRandomInt(zone.rewards.expRange[0], zone.rewards.expRange[1]);
@@ -479,8 +483,10 @@ function claimExpeditionRewards(guildId, userId) {
     // Calculate item drops
     const drops = [];
     const synergyDrop = synergy ? SYNERGY_BONUS.drop : 0;
+    let dropLuck = 0;
+    try { dropLuck = require('./pets').getTotalPetBonus(guildId, userId, 'drop_luck') || 0; } catch (_) {}
     for (const drop of zone.rewards.drops) {
-        const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop);
+        const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop + dropLuck * 0.3);
         if (Math.random() * 100 < adjustedChance) {
             const qty = getRandomInt(drop.min || 1, drop.max || 1);
             drops.push({ ...drop, qty });

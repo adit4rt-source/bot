@@ -71,7 +71,29 @@ Kamu bisa punya banyak pet, tapi **cuma 1 yang aktif** dalam satu waktu. Ganti v
 
 > Wave Ascendant menambah pet baru (Neon Lynx, Eclipse Wyrm, Void Empress, Aether Sovereign, dll.) + jalur evolusi baru.
 
-**Tipe bonus:** `money_chat`, `xp_chat`, `money_all`, `xp_all`, `fish_luck`, `farm_yield`, `farm_speed`, `quest_reward`, `event_luck`, `all_reward` (paling fleksibel), `money_xp`.
+**Tipe bonus (banyak pet endgame punya 2–5 efek sekaligus via `bonuses[]`):**
+
+| Tipe | Efek (saat pet aktif & sehat) |
+|---|---|
+| `money_chat` / `xp_chat` | Money / XP dari chat |
+| `money_all` / `xp_all` / `money_xp` | Money / XP luas |
+| `all_reward` | Fleksibel — berkontribusi ke banyak kategori |
+| `fish_luck` | Rare+ chance mancing |
+| `farm_yield` / `farm_speed` | Hasil panen / grow lebih cepat |
+| `quest_reward` | Hadiah klaim quest |
+| `event_luck` | Mini-event payout |
+| `battle_reward` | Money dungeon/boss |
+| `hunt_reward` / `expedition_reward` | Hunt & expedition money |
+| `gamble_luck` | Coinflip win chance (soft) |
+| `daily_bonus` | `/daily` money |
+| `sell_bonus` | Jual ikan |
+| `voice_xp` | XP voice |
+| `pet_exp` | EXP pet naik lebih cepat |
+| `drop_luck` / `dungeon_luck` | Drop & relic chance |
+| `shop_discount` | Diskon egg/shop (cap 25%) |
+| `livestock_yield` / `card_luck` / `boss_damage` | Ternak / kartu / niche |
+
+> Panel menampilkan **potensi penuh** (× level mult). Nilai efektif in-game ~55% dari panel + cap.
 
 ---
 

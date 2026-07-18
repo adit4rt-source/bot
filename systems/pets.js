@@ -511,6 +511,12 @@ function addPetExp(guildId, userId, amount) {
         }
     } catch (_) {}
 
+    // Passive pet_exp bonus (from other active pet bonuses — use raw def of THIS pet)
+    try {
+        const pct = getTotalPetBonus(guildId, userId, 'pet_exp');
+        if (pct > 0) amount = Math.floor(amount * (1 + pct / 100));
+    } catch (_) {}
+
     let newExp = pet.exp + amount;
     let newLevel = pet.level;
     let leveledUp = false;
@@ -636,26 +642,131 @@ function getPetSkills(pet) {
     return skillIds.map(id => PET_SKILLS.find(s => s.id === id)).filter(Boolean);
 }
 
+// Labels for UI / Pet Dex
+const PET_BONUS_LABELS = {
+    money_chat: 'Money Chat',
+    xp_chat: 'XP Chat',
+    money_all: 'Money (All)',
+    xp_all: 'XP (All)',
+    money_xp: 'Money + XP',
+    all_reward: 'All Reward',
+    fish_luck: 'Fish Luck',
+    farm_yield: 'Farm Yield',
+    farm_speed: 'Farm Speed',
+    quest_reward: 'Quest Reward',
+    event_luck: 'Event Luck',
+    battle_reward: 'Battle Reward',
+    hunt_reward: 'Hunt Reward',
+    expedition_reward: 'Expedition Reward',
+    gamble_luck: 'Gamble Luck',
+    daily_bonus: 'Daily Bonus',
+    sell_bonus: 'Sell Bonus',
+    voice_xp: 'Voice XP',
+    pet_exp: 'Pet EXP',
+    drop_luck: 'Drop Luck',
+    dungeon_luck: 'Dungeon/Relic Luck',
+    shop_discount: 'Shop Discount',
+    livestock_yield: 'Livestock Yield',
+    card_luck: 'Card Luck',
+    boss_damage: 'Boss Damage',
+};
+
+// When code asks for bonusType, which entry types contribute (and at what ratio).
+const BONUS_CONTRIB = {
+    money_chat:       { money_chat: 1, money_all: 1, all_reward: 0.75, money_xp: 0.85 },
+    xp_chat:          { xp_chat: 1, xp_all: 1, all_reward: 0.75, money_xp: 0.85 },
+    money_all:        { money_all: 1, all_reward: 1, money_xp: 1, money_chat: 0.35 },
+    xp_all:           { xp_all: 1, all_reward: 1, money_xp: 1, xp_chat: 0.35, voice_xp: 0.5 },
+    money_xp:         { money_xp: 1, all_reward: 0.9 },
+    all_reward:       { all_reward: 1 },
+    fish_luck:        { fish_luck: 1, all_reward: 0.45, drop_luck: 0.4 },
+    farm_yield:       { farm_yield: 1, all_reward: 0.45, livestock_yield: 0.4 },
+    farm_speed:       { farm_speed: 1 },
+    quest_reward:     { quest_reward: 1, all_reward: 0.55 },
+    event_luck:       { event_luck: 1, all_reward: 0.35, drop_luck: 0.4, gamble_luck: 0.25 },
+    battle_reward:    { battle_reward: 1, all_reward: 0.65, money_all: 0.4 },
+    hunt_reward:      { hunt_reward: 1, battle_reward: 0.5, all_reward: 0.45 },
+    expedition_reward:{ expedition_reward: 1, all_reward: 0.5, money_all: 0.3 },
+    gamble_luck:      { gamble_luck: 1, event_luck: 0.4 },
+    daily_bonus:      { daily_bonus: 1, all_reward: 0.5, money_all: 0.35 },
+    sell_bonus:       { sell_bonus: 1, money_all: 0.35, all_reward: 0.3 },
+    voice_xp:         { voice_xp: 1, xp_all: 0.85, all_reward: 0.55 },
+    pet_exp:          { pet_exp: 1, all_reward: 0.25 },
+    drop_luck:        { drop_luck: 1, event_luck: 0.4, all_reward: 0.3, dungeon_luck: 0.5 },
+    dungeon_luck:     { dungeon_luck: 1, drop_luck: 0.6, all_reward: 0.25 },
+    shop_discount:    { shop_discount: 1 },
+    livestock_yield:  { livestock_yield: 1, farm_yield: 0.5, all_reward: 0.3 },
+    card_luck:        { card_luck: 1, event_luck: 0.35, drop_luck: 0.3 },
+    boss_damage:      { boss_damage: 1, battle_reward: 0.3 },
+};
+
+/** Collect bonus entries from pet def (supports `bonus` + `bonuses[]`). */
+function getPetBonusEntries(petDef) {
+    if (!petDef) return [];
+    // Prefer multi-bonus list when present (avoid double-counting with legacy `bonus`)
+    if (Array.isArray(petDef.bonuses) && petDef.bonuses.length > 0) {
+        return petDef.bonuses
+            .filter(b => b && b.type && typeof b.value === 'number')
+            .map(b => ({ type: b.type, value: b.value }));
+    }
+    if (petDef.bonus && petDef.bonus.type && typeof petDef.bonus.value === 'number') {
+        return [{ type: petDef.bonus.type, value: petDef.bonus.value }];
+    }
+    return [];
+}
+
+function isPetBonusActive(pet) {
+    if (!pet) return false;
+    if (pet.hunting_until && pet.hunting_until > Date.now()) return false;
+    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return false;
+    return true;
+}
+
+/**
+ * Effective % bonus for a category (already level-scaled + dampened).
+ * Dampening 0.55 keeps display numbers exciting while keeping economy sane.
+ * Caps per-request at 80% (shop_discount hard-cap 25%).
+ */
 function getPetBonus(guildId, userId, bonusType) {
     const pet = getPetData(guildId, userId);
-    if (!pet) return 0;
-    if (pet.hunting_until && pet.hunting_until > Date.now()) return 0;
+    if (!isPetBonusActive(pet)) return 0;
     const petDef = PET_DATA.find(p => p.id === pet.petId);
     if (!petDef) return 0;
-    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return 0;
-    if (petDef.bonus.type !== bonusType && petDef.bonus.type !== 'all_reward' && petDef.bonus.type !== 'money_xp') return 0;
+
+    const contrib = BONUS_CONTRIB[bonusType] || { [bonusType]: 1 };
     const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-    let baseValue = petDef.bonus.value;
-    if (petDef.bonus.type === 'all_reward' || petDef.bonus.type === 'money_xp') {
-        if (bonusType === petDef.bonus.type || bonusType === 'money_all' || bonusType === 'xp_all') baseValue = petDef.bonus.value;
-        else baseValue = Math.floor(petDef.bonus.value * 0.7);
+    const DAMPEN = 0.55;
+    let total = 0;
+
+    for (const entry of getPetBonusEntries(petDef)) {
+        const ratio = contrib[entry.type];
+        if (!ratio) continue;
+        total += entry.value * ratio * lvlMult * DAMPEN;
     }
-    return Math.floor(baseValue * lvlMult * 0.4);
+
+    // Awakening permanent all_reward (if any tier grants it) — small stack
+    try {
+        const { getAwakeningData, AWAKENING_TIERS } = require('./awakening');
+        const awak = getAwakeningData(pet.id);
+        if (awak && awak.awakeningLevel > 0) {
+            const tier = AWAKENING_TIERS.find(t => t.level === awak.awakeningLevel);
+            if (tier && tier.reward && tier.reward.permanentBonus) {
+                const pb = tier.reward.permanentBonus;
+                const ratio = contrib[pb.type] || (pb.type === 'all_reward' ? (contrib.all_reward || 0.5) : 0);
+                if (ratio) total += pb.value * ratio * DAMPEN; // no level mult — already permanent
+            }
+        }
+    } catch (_) {}
+
+    if (bonusType === 'shop_discount') total = Math.min(25, total);
+    else total = Math.min(80, total);
+
+    return Math.floor(total);
 }
 
 function getPetSkillBonus(guildId, userId, bonusType) {
     const pet = getPetData(guildId, userId);
-    if (!pet || pet.hunting_until > Date.now()) return 0;
+    if (!pet || (pet.hunting_until && pet.hunting_until > Date.now())) return 0;
     let total = 0;
     for (const ms of PET_SKILL_MILESTONES) {
         if (pet.level >= ms.level && (ms.skill.type === bonusType || ms.skill.type === 'all_reward')) {
@@ -663,6 +774,29 @@ function getPetSkillBonus(guildId, userId, bonusType) {
         }
     }
     return total;
+}
+
+/** Total effective bonus for type = pet passive + skill milestones. */
+function getTotalPetBonus(guildId, userId, bonusType) {
+    return getPetBonus(guildId, userId, bonusType) + getPetSkillBonus(guildId, userId, bonusType);
+}
+
+/** Apply percent bonus to a money/xp amount. */
+function applyBonusPercent(amount, percent) {
+    if (!amount || !percent) return Math.floor(amount || 0);
+    return Math.floor(amount * (1 + percent / 100));
+}
+
+/** Display list of raw bonuses for a pet def (UI — full potential with level mult, no dampen). */
+function formatPetBonuses(petDef, level = 1) {
+    const entries = getPetBonusEntries(petDef);
+    if (!entries.length) return '> *Tidak ada bonus*';
+    const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(level || 1, 30)] || 1.0;
+    return entries.map(b => {
+        const label = PET_BONUS_LABELS[b.type] || b.type.replace(/_/g, ' ');
+        const shown = Math.floor(b.value * lvlMult);
+        return `> 🎁 +**${shown}%** ${label}`;
+    }).join('\n');
 }
 
 function checkPetEvolution(guildId, userId) {
@@ -687,6 +821,7 @@ function evolvePet(guildId, userId) {
 
 module.exports = {
     generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus,
+    getTotalPetBonus, applyBonusPercent, getPetBonusEntries, formatPetBonuses, isPetBonusActive, PET_BONUS_LABELS,
     getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, ensurePetBattleSkills, rerollPetSkill,
     SKILL_TIER_TO_LEVEL, MAX_BATTLE_SKILLS,
     elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective,

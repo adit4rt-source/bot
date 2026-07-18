@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.10.2 — 18 Juli 2026 — Expanded Pet Bonus System
+
+### Engine
+- Multi-bonus support (`bonuses[]`) — pet bisa 2–5 efek sekaligus
+- 15+ tipe bonus baru: battle/hunt/expedition reward, gamble, daily, sell, voice_xp, pet_exp, drop/dungeon luck, shop discount, livestock, card, boss_damage
+- Efektivitas dinaikkan (dampen 0.4 → 0.55), di-wire ke chat/voice, fishing, farm, quest, daily, dungeon/boss, hunt, expedition, sell fish, mini-event, coinflip, egg shop
+- UI panel menampilkan semua baris bonus
+
+### Data
+- 49 pet Epic–God mendapat multi-bonus endgame (Omega, Aether Sovereign, Void Empress, dll.)
+
+---
+
 ## v3.10.1 — 18 Juli 2026 — New Pets + Skill Pool Expand
 
 ### Pet baru (14)

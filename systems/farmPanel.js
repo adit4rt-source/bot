@@ -853,15 +853,11 @@ async function handleFarmButton(interaction) {
         // Get bonuses
         const weatherYieldMult = getWeatherYieldMultiplier();
         const weatherDeathChance = getWeatherDeathChance();
-        const pet = getPetData(guildId, userId);
         let petFarmBonus = 0;
-        if (pet) {
-            const petDef = PET_DATA.find(p => p.id === pet.petId);
-            if (petDef && (petDef.bonus.type === 'farm_yield' || petDef.bonus.type === 'all_reward')) {
-                const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-                petFarmBonus = petDef.bonus.value * lvlMult;
-            }
-        }
+        try {
+            const { getTotalPetBonus } = require('./pets');
+            petFarmBonus = getTotalPetBonus(guildId, userId, 'farm_yield') || 0;
+        } catch (_) {}
 
         let harvested = 0, totalItems = 0, harvestDesc = '', harvestedLegendary = false;
         let mutationCount = 0, mutationDesc = '';
@@ -875,7 +871,10 @@ async function handleFarmButton(interaction) {
             if (!crop) continue;
             const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
             const seasonEffect = (plot.greenhouse === 1) ? SEASON_CROP_EFFECTS['in'] : getCropSeasonEffect(crop);
-            const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * 60000;
+            let petSpeedPct = 0;
+            try { petSpeedPct = require('./pets').getTotalPetBonus(guildId, userId, 'farm_speed') || 0; } catch (_) {}
+            const petSpeedMult = Math.max(0.7, 1 - Math.min(0.25, petSpeedPct / 100)); // max −25% grow time
+            const growTime = crop.time * (1 - fert.speedBonus) * seasonEffect.growMult * petSpeedMult * 60000;
             
             if (Date.now() - plot.plantedAt >= growTime && plot.status !== 'dead') {
                 // Season death check (wrong season can kill crops at harvest)

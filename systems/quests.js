@@ -429,10 +429,30 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         moneyMult = 1.5;
     }
 
-    const baseMoneyGained = Math.floor(gainedXp / 2);
-    const moneyGained = Math.floor(baseMoneyGained * moneyMult);
+    // Pet passive bonuses (chat / voice / reaction)
+    let petXpPct = 0, petMoneyPct = 0;
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        if (type === 'voice') {
+            petXpPct = getTotalPetBonus(guildId, member.id, 'voice_xp') || getTotalPetBonus(guildId, member.id, 'xp_all');
+            petMoneyPct = getTotalPetBonus(guildId, member.id, 'money_all');
+        } else if (type === 'reaction') {
+            petXpPct = getTotalPetBonus(guildId, member.id, 'xp_all');
+            petMoneyPct = getTotalPetBonus(guildId, member.id, 'money_all');
+        } else {
+            petXpPct = getTotalPetBonus(guildId, member.id, 'xp_chat');
+            petMoneyPct = getTotalPetBonus(guildId, member.id, 'money_chat');
+        }
+    } catch (_) {}
 
-    user.xp += gainedXp; 
+    let finalXp = gainedXp;
+    if (petXpPct > 0) finalXp = Math.floor(finalXp * (1 + petXpPct / 100));
+
+    const baseMoneyGained = Math.floor(finalXp / 2);
+    let moneyGained = Math.floor(baseMoneyGained * moneyMult);
+    if (petMoneyPct > 0) moneyGained = Math.floor(moneyGained * (1 + petMoneyPct / 100));
+
+    user.xp += finalXp;
     user.balance += moneyGained;
 
     // Check max level

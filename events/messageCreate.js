@@ -121,7 +121,13 @@ module.exports = async function handleMessageCreate(message) {
             else if (game.match === 'includes') { if (content && content.toLowerCase().includes(String(game.answer).toLowerCase())) won = true; }
             if (won) {
                 clearTimeout(game.timer); state.activeMiniEvents.delete(guildId);
-                const reward = getRandomInt(game.rewardMin, game.rewardMax);
+                let reward = getRandomInt(game.rewardMin, game.rewardMax);
+                try {
+                    const { getTotalPetBonus, applyBonusPercent } = require('../systems/pets');
+                    // event_luck also lightly boosts payout
+                    const luck = getTotalPetBonus(guildId, message.author.id, 'event_luck') || 0;
+                    reward = applyBonusPercent(reward, Math.floor(luck * 0.5));
+                } catch (_) {}
                 const userData = getOrCreateUser(guildId, message.author.id); userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, message.author.id);
                 incrementUserStat(guildId, message.author.id, 'event_wins');

@@ -358,6 +358,12 @@ function catchFish(guildId, userId) {
         }
     } catch (e) {}
 
+    // Pet fish_luck passive
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        rareBonus += getTotalPetBonus(guildId, userId, 'fish_luck') || 0;
+    } catch (e) {}
+
     // Rod penalty
     const rodDeficit = location.requiredRodTier - rod.tier;
     let luckPenaltyApplied = 0;

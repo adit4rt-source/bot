@@ -359,8 +359,16 @@ async function handleCasinoButton(interaction) {
 
         // Result after delay
         setTimeout(async () => {
-            const coinResult = Math.random() < 0.5 ? 'head' : 'tail';
-            const won = choice === coinResult;
+            let winChance = 0.5;
+            try {
+                const { getTotalPetBonus } = require('./pets');
+                // gamble_luck: +1% win chance per 5 effective points, soft cap +8%
+                const gl = getTotalPetBonus(guildId, userId, 'gamble_luck') || 0;
+                winChance = Math.min(0.58, 0.5 + (gl / 500));
+            } catch (_) {}
+            const won = Math.random() < winChance;
+            // Align coin face with outcome for consistent UI
+            const coinResult = won ? choice : (choice === 'head' ? 'tail' : 'head');
             const resultEmoji = coinResult === 'head' ? '\ud83e\ude99' : '\ud83e\udda5';
             const resultName = coinResult === 'head' ? 'HEAD' : 'TAIL';
 

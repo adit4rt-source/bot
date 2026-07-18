@@ -171,8 +171,12 @@ async function claimDaily(guildId, userId, opts = {}) {
         randomPetExp = 15;
     }
 
-    const totalMoney = reward.money + randomMoney;
+    let totalMoney = reward.money + randomMoney;
     const totalPetExp = reward.petExp + randomPetExp;
+    try {
+        const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+        totalMoney = applyBonusPercent(totalMoney, getTotalPetBonus(guildId, userId, 'daily_bonus'));
+    } catch (_) {}
 
     // ----- Persist -----
     db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(totalMoney, today, guildId, userId);

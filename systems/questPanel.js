@@ -266,11 +266,17 @@ async function handleQuestButton(interaction) {
         tq.claimed = true;
         db.prepare('UPDATE daily_quests SET data = ? WHERE guildId = ? AND userId = ?').run(JSON.stringify(quests), guildId, userId);
 
+        let questPay = tq.reward;
+        try {
+            const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+            questPay = applyBonusPercent(questPay, getTotalPetBonus(guildId, userId, 'quest_reward'));
+        } catch (_) {}
+
         let ud = getOrCreateUser(guildId, userId);
-        ud.balance += tq.reward;
+        ud.balance += questPay;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(ud.balance, guildId, userId);
         incrementUserStat(guildId, userId, 'total_quests_done');
-        addIncome(guildId, userId, 'quest', tq.reward);
+        addIncome(guildId, userId, 'quest', questPay);
         await checkAchievements(interaction.guild, userId, { type: 'quest' });
 
         if (quests.every(q => q.claimed)) {
@@ -299,7 +305,7 @@ async function handleQuestButton(interaction) {
         const rewardEmbed = new EmbedBuilder()
             .setColor('#2ECC71')
             .setTitle('✧ QUEST COMPLETED ✧')
-            .setDescription(`Kamu telah menyelesaikan misi harian!\n\n> 🎁 Hadiah: 🪙 **${tq.reward.toLocaleString('id-ID')} Money**` + (bonusMsg ? bonusMsg : ''));
+            .setDescription(`Kamu telah menyelesaikan misi harian!\n\n> 🎁 Hadiah: 🪙 **${questPay.toLocaleString('id-ID')} Money**` + (questPay !== tq.reward ? ` _(base ${tq.reward.toLocaleString('id-ID')})_` : '') + (bonusMsg ? bonusMsg : ''));
         return interaction.followUp({ embeds: [rewardEmbed], ephemeral: true });
     }
 

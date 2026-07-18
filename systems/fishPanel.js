@@ -697,6 +697,10 @@ async function handleFishingButton(interaction) {
             const tier = fishDef ? fishDef.tier : 'Trash';
             countByTier[tier] = (countByTier[tier] || 0) + 1;
         }
+        try {
+            const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+            totalValue = applyBonusPercent(totalValue, getTotalPetBonus(guildId, userId, 'sell_bonus'));
+        } catch (_) {}
         const freshData = getOrCreateUser(guildId, userId);
         freshData.balance += totalValue;
         db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(freshData.balance, guildId, userId);
