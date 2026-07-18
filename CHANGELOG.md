@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.10.0 — 18 Juli 2026 — Ascendant (Pet Endgame)
+
+### Skill Tier 5 (Lv.150)
+- 8 skill battle baru: Elemental Catastrophe, Time Stop, Blood Pact, Aegis of Gods, Soul Link, Omega Burst, Void Rend, Genesis Light
+- Max battle skills: 5 (1 per tier)
+- Backfill otomatis untuk pet yang sudah Lv.150+
+
+### Ability Tier 4 + Slot 4
+- Slot 4 unlock: **Lv.150 + Awakening ★2+**
+- Boss Scavenger, Arena Veteran, Egg Whisperer, Relic Polish, Nightmare Runner
+
+### Nightmare Dungeon
+- Daily entry (3 base, +1 Nightmare Runner), min pet Lv.100
+- Scaled dungeon + random modifiers
+- Nightmare Token currency + shop (Skill Tome, materials, money cache)
+
+### Skill Reroll
+- Item **Skill Tome** (bukan shop biasa — hanya Nightmare Shop)
+- Reroll 1 skill battle per tier lewat panel `/pet`
+
+### Docs
+- `GUIDE-PET.md` disinkronkan (T5, T4, Nightmare, Awakening ★6)
+
+---
+
 ## v3.5.0 — 17 Juni 2026
 
 ### Fitur Baru

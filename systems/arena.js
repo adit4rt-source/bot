@@ -202,6 +202,13 @@ function doArenaFight(guildId, userId) {
         const moneyMult = Math.min(2.0, mult);
         reward = Math.floor(baseMoney * moneyMult);
         pointsEarned = Math.floor(basePoints * mult);
+        // Arena Veteran ability: +5% AP
+        try {
+            const { hasAbility } = require('./petAbilities');
+            if (hasAbility(guildId, userId, 'arena_veteran')) {
+                pointsEarned = Math.floor(pointsEarned * 1.05);
+            }
+        } catch (_) {}
 
         // Daily AP cap
         const apToday = getUserStat(guildId, userId, `arena_ap_${today}`) || 0;
@@ -414,7 +421,12 @@ async function handleArenaButton(interaction) {
         if (res.error === 'no_pet') return interaction.followUp({ content: '❌ Kamu belum punya pet aktif! Tetaskan/aktifkan pet dulu di `/pet`.', ephemeral: true });
         if (res.error === 'no_opponent') return interaction.followUp({ content: '❌ Belum ada lawan tersedia (belum ada pemain lain dengan pet aktif). Coba lagi nanti.', ephemeral: true });
         if (res.error === 'daily_limit') return interaction.followUp({ content: `❌ Kamu sudah mencapai limit **${MAX_FIGHTS_PER_DAY} fight/hari**! Istirahat dulu, lanjut besok.`, ephemeral: true });
-        cooldowns.setCooldown('arena', guildId, userId, FIGHT_COOLDOWN_MS);
+        let arenaCd = FIGHT_COOLDOWN_MS;
+        try {
+            const { hasAbility } = require('./petAbilities');
+            if (hasAbility(guildId, userId, 'arena_veteran')) arenaCd = Math.floor(FIGHT_COOLDOWN_MS * 0.9);
+        } catch (_) {}
+        cooldowns.setCooldown('arena', guildId, userId, arenaCd);
 
         // Quest progress + achievement check for arena fights
         try { const { updateQuestProgress } = require('./quests'); updateQuestProgress(guildId, userId, 'arena', 1); } catch (_) {}

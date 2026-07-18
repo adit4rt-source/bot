@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getItemCount, addItem, removeItem, setUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
-const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic, GEM_STATS } = require('./pets');
+const { generatePetStats, simulateBattle, getPetData, getAllPets, addPetExp, checkPetEvolution, evolvePet, getExpNeeded, getPetSkills, ensurePetBattleSkills, ELEMENT_EMOJI, getEffectiveStats, getUserRelics, getEquippedRelics, relicEffective, equipRelic, unequipAll, meltRelic, getRelicBonus, isPercentRelic, GEM_STATS } = require('./pets');
 const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS } = require('../data/pets');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS, COOKING_RECIPES } = require('../data/items');
@@ -47,12 +47,14 @@ function computePenalty(entry, balance) {
 }
 
 // Roll loot table → apply addItem & return display string.
-function rollLoot(guildId, userId, lootTable) {
+// qtyMult: e.g. 1.1 for Boss Scavenger (+10% quantity, ceil).
+function rollLoot(guildId, userId, lootTable, qtyMult = 1) {
     if (!Array.isArray(lootTable) || lootTable.length === 0) return '';
     const lines = [];
     for (const entry of lootTable) {
         if (Math.random() < (entry.chance ?? 1)) {
-            const qty = getRandomInt(entry.min || 1, entry.max || 1);
+            let qty = getRandomInt(entry.min || 1, entry.max || 1);
+            if (qtyMult > 1 && qty > 0) qty = Math.max(qty, Math.ceil(qty * qtyMult));
             if (qty <= 0) continue;
             addItem(guildId, userId, entry.item, qty);
             const def = ITEMS.find(i => i.id === entry.item);
@@ -66,6 +68,10 @@ function rollLoot(guildId, userId, lootTable) {
 
 // Roll relic drop (equipment) → insert ke DB & return display string.
 function rollRelicDrop(guildId, userId, chance, rareBonus) {
+    try {
+        const { hasAbility } = require('./petAbilities');
+        if (hasAbility(guildId, userId, 'relic_finder')) chance = (chance || 0) + 0.15;
+    } catch (_) {}
     if (!chance || Math.random() >= chance) return '';
     const slot = ['weapon', 'armor', 'accessory'][Math.floor(Math.random() * 3)];
     const r = Math.random();
@@ -1132,8 +1138,10 @@ async function handlePetButton(interaction) {
             else skillDesc += `> 🔒 Lv.${ms.level}: ${ms.skill.name}\n`;
         }
 
-        // Active Battle Skills
-        const activeSkills = getPetSkills(pet);
+        // Active Battle Skills (backfill T5 for existing high-level pets)
+        ensurePetBattleSkills(pet.id, pet.level);
+        const petFresh = getPetData(guildId, userId) || pet;
+        const activeSkills = getPetSkills(petFresh);
         let battleSkillDesc = '';
         if (activeSkills.length > 0) {
             activeSkills.forEach(s => {
@@ -1142,12 +1150,17 @@ async function handlePetButton(interaction) {
         } else {
             battleSkillDesc = '> *Belum ada skill aktif (unlock di Lv.10)*\n';
         }
-        // Show locked tiers
-        const skillTiers = [{ tier: 1, level: 10 }, { tier: 2, level: 30 }, { tier: 3, level: 60 }, { tier: 4, level: 100 }];
+        // Show locked tiers (incl. Ascendant T5)
+        const skillTiers = [
+            { tier: 1, level: 10 }, { tier: 2, level: 30 }, { tier: 3, level: 60 },
+            { tier: 4, level: 100 }, { tier: 5, level: 150 },
+        ];
         for (const st of skillTiers) {
             const hasThisTier = activeSkills.some(s => s.tier === st.tier);
             if (!hasThisTier && pet.level < st.level) {
-                battleSkillDesc += `> 🔒 Tier ${st.tier} — Unlock di **Lv.${st.level}**\n`;
+                battleSkillDesc += `> 🔒 Tier ${st.tier}${st.tier === 5 ? ' Ascendant' : ''} — Unlock di **Lv.${st.level}**\n`;
+            } else if (!hasThisTier && pet.level >= st.level) {
+                battleSkillDesc += `> ⚠️ Tier ${st.tier} missing — buka Info lagi / dapat EXP untuk assign\n`;
             }
         }
 
@@ -1178,7 +1191,7 @@ async function handlePetButton(interaction) {
         const abilitySlots = getAbilitySlots(guildId, userId);
         const abilitiesEligible = isPetEligibleForAbilities(pet);
         let abilityDesc = '';
-        const activeAbilityIds = [abilitySlots.slot1, abilitySlots.slot2, abilitySlots.slot3].filter(Boolean);
+        const activeAbilityIds = [abilitySlots.slot1, abilitySlots.slot2, abilitySlots.slot3, abilitySlots.slot4].filter(Boolean);
         if (activeAbilityIds.length > 0) {
             activeAbilityIds.forEach(aId => {
                 const ab = getAbilityById(aId);
@@ -1635,11 +1648,13 @@ async function handlePetButton(interaction) {
         desc += `**⬆️ Fitur Upgrade & Abilities:**\n`;
         desc += `> 📿 **Refine** — Upgrade relic equipment\n`;
         desc += `> 🧬 **Evolve** — Evolusi pet ke bentuk baru\n`;
-        desc += `> 🧪 **Abilities** — Passive world abilities (Lv.30+)\n`;
+        desc += `> 🧪 **Abilities** — Passive world abilities (Lv.30+ / Slot4 ★2)\n`;
         desc += `> ⚡ **Awakening** — Reset & power up (Lv.200)\n`;
+        desc += `> 🌑 **Nightmare** — Daily endgame dungeon + Skill Tome\n`;
+        desc += `> 📖 **Skill Reroll** — Reroll battle skill (butuh Skill Tome)\n`;
 
         // Show ability summary
-        const activeAbilities = [slots.slot1, slots.slot2, slots.slot3].filter(Boolean);
+        const activeAbilities = [slots.slot1, slots.slot2, slots.slot3, slots.slot4].filter(Boolean);
         if (activeAbilities.length > 0) {
             desc += `\n**🧪 Active Abilities:** ${abilitiesActive ? '✅' : '❌'}\n`;
             activeAbilities.forEach(aId => {
@@ -1676,9 +1691,29 @@ async function handlePetButton(interaction) {
             new ButtonBuilder().setCustomId(`pet_droprates_${userId}`).setLabel('📊 Rates').setStyle(ButtonStyle.Secondary)
         );
         const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`pet_nightmare_${userId}`).setLabel('🌑 Nightmare').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`pet_skillreroll_${userId}`).setLabel('📖 Skill Reroll').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row1, row2] });
+    }
+
+    // === NIGHTMARE / SKILL REROLL (Ascendant endgame) ===
+    if (action === 'nightmare') {
+        const { buildNightmarePanel } = require('./nightmare');
+        return interaction.update(buildNightmarePanel(guildId, userId, interaction.user.username));
+    }
+    if (action === 'nmrun') {
+        const { buildNightmareSelect } = require('./nightmare');
+        return interaction.update(buildNightmareSelect(guildId, userId));
+    }
+    if (action === 'nmshop') {
+        const { buildNightmareShop } = require('./nightmare');
+        return interaction.update(buildNightmareShop(guildId, userId));
+    }
+    if (action === 'skillreroll') {
+        const { buildSkillRerollPanel } = require('./nightmare');
+        return interaction.update(buildSkillRerollPanel(guildId, userId));
     }
 
     // === ABILITIES (redirect to abilities panel) ===
@@ -1713,6 +1748,7 @@ async function handlePetButton(interaction) {
         const row1 = new ActionRowBuilder().addComponents(dungeonMenu);
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`dngcoop_panel_${userId}`).setLabel('🤝 Co-op Roguelike').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`pet_nightmare_${userId}`).setLabel('🌑 Nightmare').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row1, row2] });
@@ -1849,6 +1885,21 @@ async function handlePetSelectMenu(interaction) {
 
     const userData = getOrCreateUser(guildId, userId);
 
+    // === NIGHTMARE / SKILL REROLL SELECT ===
+    if (customId.startsWith('pet_nm_select_')) {
+        const { runNightmare } = require('./nightmare');
+        return runNightmare(interaction, guildId, userId, interaction.values[0]);
+    }
+    if (customId.startsWith('pet_nmshop_select_')) {
+        const { buyNightmareShop } = require('./nightmare');
+        return buyNightmareShop(interaction, guildId, userId, interaction.values[0]);
+    }
+    if (customId.startsWith('pet_skillreroll_select_')) {
+        const { doSkillReroll } = require('./nightmare');
+        const tier = parseInt(interaction.values[0], 10);
+        return doSkillReroll(interaction, guildId, userId, tier);
+    }
+
     // === FEED SELECT ===
     if (customId.startsWith('pet_feed_select_')) {
         const foodId = interaction.values[0];
@@ -1907,7 +1958,13 @@ async function handlePetSelectMenu(interaction) {
         if (allPets.length >= 10) return interaction.reply({ content: '❌ Slot pet penuh (max 10)!', ephemeral: true });
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(egg.price, guildId, userId);
         updateQuestProgress(guildId, userId, 'spend_money', egg.price);
-        let roll = Math.random() * 100, cumulative = 0, selectedTier = 'Common';
+        // Egg Whisperer: slight tilt toward higher tiers (~2% of roll)
+        let roll = Math.random() * 100;
+        try {
+            const { hasAbility } = require('./petAbilities');
+            if (hasAbility(guildId, userId, 'egg_whisperer')) roll = Math.max(0, roll - 2);
+        } catch (_) {}
+        let cumulative = 0, selectedTier = 'Common';
         for (const [tier, rate] of Object.entries(egg.rates)) { cumulative += rate; if (roll <= cumulative) { selectedTier = tier; break; } }
         let tierPets = PET_DATA.filter(p => p.tier === selectedTier);
         // Safety: if a tier somehow has no pets (or rates don't reach 100), fall back
@@ -2146,7 +2203,12 @@ async function handlePetSelectMenu(interaction) {
             updateQuestProgress(guildId, userId, 'boss', 1);
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
             relicText = rollRelicDrop(guildId, userId, boss.relicChance, boss.relicRareBonus);
-            lootText = rollLoot(guildId, userId, boss.loot);
+            let lootMult = 1;
+            try {
+                const { hasAbility } = require('./petAbilities');
+                if (hasAbility(guildId, userId, 'boss_scavenger')) lootMult = 1.1;
+            } catch (_) {}
+            lootText = rollLoot(guildId, userId, boss.loot, lootMult);
         } else {
             const freshData = getOrCreateUser(guildId, userId);
             const penalty = computePenalty(boss, freshData.balance);
@@ -2420,7 +2482,11 @@ async function handleRefineAction(interaction, guildId, userId, slot, relic) {
     if (relic.refine_level >= 20) return interaction.reply({ content: '✅ Relic ini sudah **+20** (MAX)!', ephemeral: true });
     removeItem(guildId, userId, 'refine_stone');
     const lvl = relic.refine_level;
-    const rate = lvl < 10 ? 100 : lvl < 15 ? 70 : lvl < 18 ? 50 : 30;
+    let rate = lvl < 10 ? 100 : lvl < 15 ? 70 : lvl < 18 ? 50 : 30;
+    try {
+        const { hasAbility } = require('./petAbilities');
+        if (hasAbility(guildId, userId, 'relic_polish')) rate = Math.min(100, rate + 8);
+    } catch (_) {}
     const success = Math.random() * 100 < rate;
     const slotEmoji = slot === 'weapon' ? '⚔️' : slot === 'armor' ? '🛡️' : '💍';
 

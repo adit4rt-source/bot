@@ -22,6 +22,7 @@
 13. [Relic & Refine](#13-relic--refine)
 14. [Abilities (Pasif di Dunia)](#14-abilities-pasif-di-dunia)
 15. [Awakening](#15-awakening)
+15b. [Nightmare Dungeon](#15b-nightmare-dungeon-endgame-daily)
 16. [Roadmap Player Baru](#-roadmap-player-baru)
 
 ---
@@ -138,7 +139,7 @@ EXP didapat dari Hunt, Dungeon, Boss, Expedition. EXP per level:
 
 ## 8. Skill Battle
 
-Pet unlock **1 skill acak per tier** otomatis saat naik level — maksimal 4 skill:
+Pet unlock **1 skill acak per tier** otomatis saat naik level — maksimal **5 skill**:
 
 | Tier | Unlock Lv | Pilihan skill (acak 1) |
 |---|---|---|
@@ -146,8 +147,11 @@ Pet unlock **1 skill acak per tier** otomatis saat naik level — maksimal 4 ski
 | 2 | **30** | Critical Surge (+30% crit) · Elemental Blast (2.5x, bonus elemen) · Life Drain (1.5x + heal 50%) |
 | 3 | **60** | Berserk (+50% ATK / -30% DEF) · Iron Fortress (-80% dmg) · **Resurrection (bangkit 30% HP, 1x/battle)** |
 | 4 | **100** | Ultimate Strike (**4x dmg**) · Divine Shield (kebal 1 turn) · Omega Heal (+50% HP) |
+| **5 Ascendant** | **150** | Elemental Catastrophe · Time Stop · Blood Pact · Aegis of Gods · Soul Link · Omega Burst · Void Rend · Genesis Light |
 
 Skill dipakai otomatis (~20% peluang/turn jika tidak sedang cooldown).
+
+**Skill Reroll:** Beli **📖 Skill Tome** di Nightmare Shop → `/pet` → ⬆️ More → **Skill Reroll** → pilih tier. 1 tome = 1 reroll (skill diganti acak di tier yang sama).
 
 **Skill Milestone (bonus PASIF tambahan):** Lv.20 +2% Money · Lv.50 +2% XP · Lv.100 +3% Fish Luck · Lv.200 +5% Farm.
 
@@ -240,27 +244,61 @@ Relic (Weapon / Armor / Accessory) drop dari Dungeon/Boss, kasih +ATK/DEF/SPD/CR
 
 ## 14. Abilities (Pasif di Dunia)
 
-Pet Lv.30+ buka **3 slot ability** (swap cooldown 24 jam). Aktif otomatis selama pet sehat:
+Pet Lv.30+ buka slot ability (swap cooldown 24 jam). Aktif otomatis selama pet sehat:
 
-- **Tier 1 (Lv.30):** Auto-Fish · Auto-Water · Passive Income (100 + lvl×25 /30mnt) · Passive XP · Slow Hunger
-- **Tier 2 (Lv.50):** +15% jual market · /daily +30% · Streak Guardian · Quest Ace · -15% harga shop
-- **Tier 3 (Lv.100):** Double Catch · Green Thumb · Relic Hunter (+15% relic) · Crit Master (+10% crit) · Swift Explorer (-25% expedition)
+- **Tier 1 / Slot 1 (Lv.30):** Auto-Fish · Auto-Water · Passive Income (100 + lvl×25 /30mnt) · Passive XP · Slow Hunger
+- **Tier 2 / Slot 2 (Lv.50):** +15% jual market · /daily +30% · Streak Guardian · Quest Ace · -15% harga shop
+- **Tier 3 / Slot 3 (Lv.100):** Double Catch · Green Thumb · Relic Hunter (+15% relic) · Crit Master (+10% crit) · Swift Explorer (-25% expedition)
+- **Tier 4 Ascendant / Slot 4 (Lv.150 + Awakening ★2+):**
+  - **Boss Scavenger** — +10% qty loot boss
+  - **Arena Veteran** — +5% AP arena, −10% CD fight
+  - **Egg Whisperer** — +2% tilt ke tier lebih tinggi saat hatch egg
+  - **Relic Polish** — +8% success rate refine
+  - **Nightmare Runner** — +1 entry Nightmare Dungeon / hari
 
 ---
 
 ## 15. Awakening
 
-Pet Lv.200 bisa **Awaken**: level reset ke 1 TAPI stats base naik permanen. 5 tingkat:
+Pet Lv.200 bisa **Awaken**: level reset ke 1 TAPI stats base naik permanen. **6 tingkat:**
 
 | ★ | Nama | Boost stats | Biaya |
 |---|---|---|---|
 | ★ | Awakened | +15% | 50.000 |
-| ★★ | Transcendent | +30% | 200.000 + 10 Refine Stone |
+| ★★ | Transcendent | +30% | 200.000 + 10 Refine Stone (**buka Ability Slot 4**) |
 | ★★★ | Ascended | +50% | 500.000 + material (+8% all reward permanen) |
 | ★★★★ | Divine | +75% | 1.500.000 + Mythic Fragment (+12%) |
 | ★★★★★ | Immortal Champion | **+100%** | 5.000.000 + Awakening Crystal (+15%, aura rainbow) |
+| ★★★★★★ | Cosmic Deity | **+150%** | 10.000.000 + Omega Core ×1 + Awakening Crystal ×3 (+25% all reward, COSMIC aura) |
 
 Skill & ability tetap terbuka. Tiap ★ bikin EXP leveling lebih cepat.
+
+---
+
+## 15b. Nightmare Dungeon (Endgame Daily)
+
+Akses: `/pet` → ⚔️ Dungeon → **🌑 Nightmare**, atau ⬆️ More → Nightmare.
+
+| Aturan | Detail |
+|---|---|
+| Min level | Pet **Lv.100+** |
+| Entry | **3/hari** (4 jika ability Nightmare Runner) — reset 00:00 WIB |
+| Difficulty | Stats musuh **×1.5**, reward **×1.35**, + modifier acak |
+| Modifier | Blood Curse (no heal) · Element Seal · Frenzy · Shattered Guard · Endurance · Standard |
+| Reward | Money + Pet EXP + **🌑 Nightmare Token** + loot/relic boosted |
+| Gagal | Penalty money (cap) + 1 token consolation + happiness −25 |
+
+### Nightmare Shop (tukar Token)
+
+| Item | Cost |
+|---|---|
+| 📖 Skill Tome | 8 |
+| 🪨 Refine Pack (×5) | 3 |
+| 🛡️ Protection Pack (×2) | 5 |
+| 📦 Mystery Pack (×3) | 2 |
+| 🌟 Mythic Fragment | 15 |
+| 🪙 Money Cache 50k | 10 |
+| ⚡ XP Booster 3x | 6 |
 
 ---
 
@@ -272,6 +310,8 @@ Skill & ability tetap terbuka. Tiap ★ bikin EXP leveling lebih cepat.
 4. **Expedition** AFK → EXP + booster; bawa pet **se-elemen** zona (synergy).
 5. Kumpulkan duit → **Egg** buat tier tinggi, atau **Fusion** naik tier.
 6. Push ke **Lv.200** → **Awakening** buat endgame.
+7. **Lv.150** → Skill Tier 5 Ascendant; ★2 → Ability Slot 4.
+8. **Nightmare** harian → Token → Skill Tome / material endgame.
 
 ---
 

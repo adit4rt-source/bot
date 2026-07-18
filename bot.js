@@ -14,8 +14,8 @@ try {
 }
 
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.9.0';
-const BUILD_DATE = '2026-06-23';
+const BOT_VERSION = '3.10.0';
+const BUILD_DATE = '2026-07-18';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -244,55 +244,39 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#FF6B35')
-            .setTitle(`🎉 MAJOR UPDATE — v${BOT_VERSION}`)
+            .setColor('#8e44ad')
+            .setTitle(`🌑 ASCENDANT UPDATE — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `Update besar! Pet Stats Scaling, Boss Baru, dan Awakening Tier 6! ⚡\n` +
+                `Paket endgame **Ascendant**: Skill T5, Ability T4, Nightmare Dungeon & Skill Reroll!\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
             .setColor('#E74C3C')
-            .setTitle('⚔️ Pet Level Stats Scaling (BARU!)')
+            .setTitle('⚔️ Skill Tier 5 (Lv.150) + Ability Slot 4')
             .setDescription(
-                `Pet kamu sekarang **makin kuat** setiap naik level!\n\n` +
-                `**Bonus Per Level:**\n` +
-                `> ❤️ **HP** +5 per level\n` +
-                `> ⚔️ **ATK** +2 per level\n` +
-                `> 🛡️ **DEF** +1 per level\n` +
-                `> 💨 **SPD** +0.2 per level (1 setiap 5 level)\n` +
-                `> 🎯 **CRIT** +0.1% per level (1% setiap 10 level)\n\n` +
-                `*Stats scaling terlihat di panel pet — semakin tinggi level, semakin tangguh!*`
+                `**8 skill battle baru (Ascendant):**\n` +
+                `> ☄️ Elemental Catastrophe · ⏸️ Time Stop · 🩸 Blood Pact\n` +
+                `> 🛡️ Aegis of Gods · 🔗 Soul Link · 💥 Omega Burst\n` +
+                `> 🕳️ Void Rend · ✨ Genesis Light\n\n` +
+                `**Ability Tier 4** (Slot 4 — butuh Lv.150 + Awakening ★2):\n` +
+                `> 🦴 Boss Scavenger · ⚔️ Arena Veteran · 🥚 Egg Whisperer\n` +
+                `> ✨ Relic Polish · 🌑 Nightmare Runner`
             )
             .setTimestamp(),
 
         new ChangelogEmbed()
-            .setColor('#FFD700')
-            .setTitle('🔱 Boss Baru: Omega Genesis + Cosmic Deity Awakening')
+            .setColor('#1a1a2e')
+            .setTitle('🌑 Nightmare Dungeon + Skill Reroll')
             .setDescription(
-                `**🔱 Omega Genesis** — Boss End-Game tertinggi!\n` +
-                `> 📈 Min Level: **200** | HP: **120.000** | ATK: **380**\n` +
-                `> 🎁 Reward: 🪙 150K–300K + 600 Pet EXP\n` +
-                `> 🔱 Drop: **Omega Core** (10%) — material ultra-langka!\n\n` +
-                `**★★★★★★ Cosmic Deity** — Awakening Tier 6!\n` +
-                `> ⚡ Stat Boost: **+150%** all base stats\n` +
-                `> 🎁 Bonus: **+25% All Reward** + COSMIC aura\n` +
-                `> 📦 Requirements: 🪙 10.000.000 + 🔱 Omega Core ×1 + 💫 Awakening Crystal ×3`
-            )
-            .setTimestamp(),
-
-        new ChangelogEmbed()
-            .setColor('#3498DB')
-            .setTitle('📚 English Learning & Perbaikan Lainnya')
-            .setDescription(
-                `**📚 Belajar Bahasa Inggris:**\n` +
-                `> 📖 **BAB 2** dibuka — topik dan soal baru!\n` +
-                `> 🛡️ **Streak Shield** — lindungi streak belajar jika skip 1 hari\n` +
-                `> 🏆 **7 Achievement** baru untuk Education\n\n` +
-                `**🐟 Fishing:** Chance ikan **Secret** dinaikkan\n\n` +
-                `**🛠️ Perbaikan:** 35+ bug fix, HP display, World Boss stats scaling, TTS error handling`
+                `**Daily endgame loop** — akses dari \`/pet\` → Dungeon / More:\n` +
+                `> • 3 entry/hari (4 dengan Nightmare Runner)\n` +
+                `> • Stats musuh ×1.5 + modifier acak\n` +
+                `> • Reward: 🌑 **Nightmare Token** + loot\n` +
+                `> • Shop: 📖 Skill Tome, refine pack, mythic fragment, dll.\n\n` +
+                `**📖 Skill Tome** — reroll 1 battle skill per tier (build crafting!)`
             )
             .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
             .setTimestamp()

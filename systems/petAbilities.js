@@ -64,10 +64,28 @@ const PET_ABILITIES = {
           desc: 'Expedition time -25%',
           detail: 'Semua expedition duration dikurangi 25%. 8 jam → 6 jam, 2 jam → 1.5 jam.' },
     ],
+    // TIER 4 — ASCENDANT (Lv.150 + Awakening ★2+ for slot 4)
+    tier4: [
+        { id: 'boss_scavenger', name: 'Boss Scavenger', emoji: '🦴', tier: 4, level: 150,
+          desc: '+10% quantity loot dari boss',
+          detail: 'Semua drop item dari solo/party boss mendapat +10% quantity (min +1 jika qty≥1).' },
+        { id: 'arena_veteran', name: 'Arena Veteran', emoji: '⚔️', tier: 4, level: 150,
+          desc: '+5% AP arena & −10% cooldown fight',
+          detail: 'Arena Points +5% per fight, cooldown antar fight dikurangi 10%.' },
+        { id: 'egg_whisperer', name: 'Egg Whisperer', emoji: '🥚', tier: 4, level: 150,
+          desc: '+2% peluang tier lebih tinggi saat buka egg',
+          detail: 'Saat hatch egg, roll di-boost ~2% ke arah tier yang lebih tinggi (soft).' },
+        { id: 'relic_polish', name: 'Relic Polish', emoji: '✨', tier: 4, level: 150,
+          desc: '+8% success rate refine (terutama +10 ke atas)',
+          detail: 'Semua refine mendapat +8% flat success rate (cap 100%).' },
+        { id: 'nightmare_runner', name: 'Nightmare Runner', emoji: '🌑', tier: 4, level: 150,
+          desc: '+1 entry Nightmare Dungeon per hari',
+          detail: 'Daily Nightmare entry base 3 → 4. Stack tidak dengan item lain.' },
+    ],
 };
 
 // Flatten for easy lookup
-const ALL_ABILITIES = [...PET_ABILITIES.tier1, ...PET_ABILITIES.tier2, ...PET_ABILITIES.tier3];
+const ALL_ABILITIES = [...PET_ABILITIES.tier1, ...PET_ABILITIES.tier2, ...PET_ABILITIES.tier3, ...PET_ABILITIES.tier4];
 
 // ==================== DATABASE ====================
 db.exec(`CREATE TABLE IF NOT EXISTS pet_abilities (
@@ -76,11 +94,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS pet_abilities (
     slot1 TEXT DEFAULT NULL,
     slot2 TEXT DEFAULT NULL,
     slot3 TEXT DEFAULT NULL,
+    slot4 TEXT DEFAULT NULL,
     lastSwap1 INTEGER DEFAULT 0,
     lastSwap2 INTEGER DEFAULT 0,
     lastSwap3 INTEGER DEFAULT 0,
+    lastSwap4 INTEGER DEFAULT 0,
     PRIMARY KEY(guildId, userId)
 )`);
+
+// Migrate older DBs missing slot4 columns
+try { db.exec('ALTER TABLE pet_abilities ADD COLUMN slot4 TEXT DEFAULT NULL'); } catch (_) {}
+try { db.exec('ALTER TABLE pet_abilities ADD COLUMN lastSwap4 INTEGER DEFAULT 0'); } catch (_) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS pet_ability_log (
     guildId TEXT,
@@ -98,8 +122,10 @@ function getAbilitySlots(guildId, userId) {
     let row = db.prepare('SELECT * FROM pet_abilities WHERE guildId = ? AND userId = ?').get(guildId, userId);
     if (!row) {
         db.prepare('INSERT INTO pet_abilities (guildId, userId) VALUES (?, ?)').run(guildId, userId);
-        row = { guildId, userId, slot1: null, slot2: null, slot3: null, lastSwap1: 0, lastSwap2: 0, lastSwap3: 0 };
+        row = { guildId, userId, slot1: null, slot2: null, slot3: null, slot4: null, lastSwap1: 0, lastSwap2: 0, lastSwap3: 0, lastSwap4: 0 };
     }
+    if (row.slot4 === undefined) row.slot4 = null;
+    if (row.lastSwap4 === undefined) row.lastSwap4 = 0;
     return row;
 }
 
@@ -123,18 +149,37 @@ function isPetEligibleForAbilities(pet) {
     return pet && pet.happiness >= 30 && pet.hunger >= 10 && pet.status !== 'sick';
 }
 
-function getUnlockedSlots(petLevel) {
+function getAwakeningLevelForPet(pet) {
+    if (!pet || !pet.id) return 0;
+    try {
+        const { getAwakeningData } = require('./awakening');
+        return getAwakeningData(pet.id).awakeningLevel || 0;
+    } catch (_) { return 0; }
+}
+
+/** Slot 4 requires Lv.150+ AND Awakening ≥ ★2 (Transcendent). */
+function canUseSlot4(pet) {
+    return pet && pet.level >= 150 && getAwakeningLevelForPet(pet) >= 2;
+}
+
+function getUnlockedSlots(petLevel, pet) {
     let slots = 0;
     if (petLevel >= 30) slots = 1;
     if (petLevel >= 50) slots = 2;
     if (petLevel >= 100) slots = 3;
+    if (pet && canUseSlot4(pet)) slots = 4;
+    else if (petLevel >= 150) slots = Math.max(slots, 3); // T4 abilities exist but need ★2 for slot
     return slots;
 }
 
-function getAvailableAbilities(petLevel, slotNum) {
+function getAvailableAbilities(petLevel, slotNum, pet) {
     if (slotNum === 1) return PET_ABILITIES.tier1.filter(a => petLevel >= a.level);
     if (slotNum === 2) return PET_ABILITIES.tier2.filter(a => petLevel >= a.level);
     if (slotNum === 3) return PET_ABILITIES.tier3.filter(a => petLevel >= a.level);
+    if (slotNum === 4) {
+        if (pet && !canUseSlot4(pet)) return [];
+        return PET_ABILITIES.tier4.filter(a => petLevel >= a.level);
+    }
     return [];
 }
 
@@ -143,7 +188,7 @@ function hasAbility(guildId, userId, abilityId) {
     const pet = getPetData(guildId, userId);
     if (!pet || !isPetEligibleForAbilities(pet)) return false;
     const slots = getAbilitySlots(guildId, userId);
-    return slots.slot1 === abilityId || slots.slot2 === abilityId || slots.slot3 === abilityId;
+    return slots.slot1 === abilityId || slots.slot2 === abilityId || slots.slot3 === abilityId || slots.slot4 === abilityId;
 }
 
 // ==================== GET ACTIVE ABILITIES ====================
@@ -155,6 +200,7 @@ function getActiveAbilities(guildId, userId) {
     if (slots.slot1) { const a = getAbilityById(slots.slot1); if (a && pet.level >= a.level) active.push(a); }
     if (slots.slot2) { const a = getAbilityById(slots.slot2); if (a && pet.level >= a.level) active.push(a); }
     if (slots.slot3) { const a = getAbilityById(slots.slot3); if (a && pet.level >= a.level) active.push(a); }
+    if (slots.slot4 && canUseSlot4(pet)) { const a = getAbilityById(slots.slot4); if (a && pet.level >= a.level) active.push(a); }
     return active;
 }
 
@@ -168,7 +214,7 @@ function runAbilityTick(client, guildId, userId) {
     const TICK_INTERVAL = 30 * 60 * 1000; // 30 menit
 
     // Process each active ability
-    const activeSlots = [slots.slot1, slots.slot2, slots.slot3].filter(Boolean);
+    const activeSlots = [slots.slot1, slots.slot2, slots.slot3, slots.slot4].filter(Boolean);
 
     for (const abilityId of activeSlots) {
         const ability = getAbilityById(abilityId);
@@ -264,17 +310,18 @@ function buildAbilitiesPanel(guildId, userId, username) {
 
     const petDef = PET_DATA.find(p => p.id === pet.petId);
     const slots = getAbilitySlots(guildId, userId);
-    const unlockedSlots = getUnlockedSlots(pet.level);
+    const unlockedSlots = getUnlockedSlots(pet.level, pet);
     const eligible = isPetEligibleForAbilities(pet);
     const now = Date.now();
+    const awakLvl = getAwakeningLevelForPet(pet);
 
-    let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level})\n`;
+    let desc = `${petDef ? petDef.emoji : '🐾'} **${pet.name}** (Lv.${pet.level}${awakLvl > 0 ? ` ★${awakLvl}` : ''})\n`;
     desc += `> Status: ${eligible ? '✅ Abilities AKTIF' : '❌ Abilities MATI (happiness/hunger rendah)'}\n\n`;
     desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
 
     // Slot 1
     const s1 = slots.slot1 ? getAbilityById(slots.slot1) : null;
-    const s1Swap = (now - slots.lastSwap1) < SWAP_COOLDOWN;
+    const s1Swap = (now - (slots.lastSwap1 || 0)) < SWAP_COOLDOWN;
     if (pet.level >= 30) {
         desc += `**Slot 1** (Tier 1 — Lv.30) ${s1 ? '✅' : '⚪'}\n`;
         if (s1) {
@@ -291,7 +338,7 @@ function buildAbilitiesPanel(guildId, userId, username) {
 
     // Slot 2
     const s2 = slots.slot2 ? getAbilityById(slots.slot2) : null;
-    const s2Swap = (now - slots.lastSwap2) < SWAP_COOLDOWN;
+    const s2Swap = (now - (slots.lastSwap2 || 0)) < SWAP_COOLDOWN;
     if (pet.level >= 50) {
         desc += `**Slot 2** (Tier 2 — Lv.50) ${s2 ? '✅' : '⚪'}\n`;
         if (s2) {
@@ -308,7 +355,7 @@ function buildAbilitiesPanel(guildId, userId, username) {
 
     // Slot 3
     const s3 = slots.slot3 ? getAbilityById(slots.slot3) : null;
-    const s3Swap = (now - slots.lastSwap3) < SWAP_COOLDOWN;
+    const s3Swap = (now - (slots.lastSwap3 || 0)) < SWAP_COOLDOWN;
     if (pet.level >= 100) {
         desc += `**Slot 3** (Tier 3 — Lv.100) ${s3 ? '✅' : '⚪'}\n`;
         if (s3) {
@@ -321,25 +368,49 @@ function buildAbilitiesPanel(guildId, userId, username) {
     } else {
         desc += `**Slot 3** 🔒 Unlock di **Lv.100** (sekarang: Lv.${pet.level})\n`;
     }
+    desc += `\n`;
+
+    // Slot 4 (Ascendant)
+    const s4 = slots.slot4 ? getAbilityById(slots.slot4) : null;
+    const s4Swap = (now - (slots.lastSwap4 || 0)) < SWAP_COOLDOWN;
+    const slot4Ok = canUseSlot4(pet);
+    if (slot4Ok) {
+        desc += `**Slot 4** (Tier 4 Ascendant — Lv.150 + ★2) ${s4 ? '✅' : '⚪'}\n`;
+        if (s4) {
+            const log4 = getAbilityLog(guildId, userId, s4.id);
+            desc += `> ${s4.emoji} **${s4.name}** — ${s4.desc}\n`;
+            desc += `> 📊 Total earned: **${log4.totalEarned.toLocaleString('id-ID')}**\n`;
+        } else {
+            desc += `> *Belum dipasang* — Klik tombol untuk pilih\n`;
+        }
+    } else if (pet.level >= 150) {
+        desc += `**Slot 4** 🔒 Butuh **Awakening ★2+** (sekarang: ★${awakLvl})\n`;
+    } else {
+        desc += `**Slot 4** 🔒 Unlock di **Lv.150 + Awakening ★2** (sekarang: Lv.${pet.level})\n`;
+    }
 
     desc += `\n\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
     desc += `> ⏱️ Swap cooldown: 24 jam per slot\n`;
+    desc += `> 🌑 Tier 4 = endgame Ascendant abilities\n`;
     desc += `> 💡 Abilities aktif selama pet happy ≥30% & hunger ≥10%`;
 
     const embed = new EmbedBuilder()
         .setTitle(`🧪 PET ABILITIES — ${pet.name}`)
         .setColor(eligible ? '#9B59B6' : '#E74C3C')
         .setDescription(desc)
-        .setFooter({ text: `Tick setiap 30 menit | Pet Level: ${pet.level}` });
+        .setFooter({ text: `Tick setiap 30 menit | Pet Level: ${pet.level} | Slots: ${unlockedSlots}/4` });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`ability_set_1_${userId}`).setLabel(`${s1 ? '🔄' : '➕'} Slot 1`).setStyle(ButtonStyle.Primary).setDisabled(pet.level < 30 || s1Swap),
         new ButtonBuilder().setCustomId(`ability_set_2_${userId}`).setLabel(`${s2 ? '🔄' : '➕'} Slot 2`).setStyle(ButtonStyle.Primary).setDisabled(pet.level < 50 || s2Swap),
         new ButtonBuilder().setCustomId(`ability_set_3_${userId}`).setLabel(`${s3 ? '🔄' : '➕'} Slot 3`).setStyle(ButtonStyle.Primary).setDisabled(pet.level < 100 || s3Swap),
+        new ButtonBuilder().setCustomId(`ability_set_4_${userId}`).setLabel(`${s4 ? '🔄' : '➕'} Slot 4`).setStyle(ButtonStyle.Danger).setDisabled(!slot4Ok || s4Swap),
+    );
+    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`pet_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 // ==================== HANDLER: Ability Buttons ====================
@@ -366,7 +437,10 @@ async function handleAbilityButton(interaction) {
         const pet = getPetData(guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Pet tidak ditemukan!', ephemeral: true });
 
-        const available = getAvailableAbilities(pet.level, slotNum);
+        if (slotNum === 4 && !canUseSlot4(pet)) {
+            return interaction.reply({ content: '❌ Slot 4 butuh **Lv.150+** dan **Awakening ★2+** (Transcendent)!', ephemeral: true });
+        }
+        const available = getAvailableAbilities(pet.level, slotNum, pet);
         if (available.length === 0) {
             return interaction.reply({ content: '❌ Tidak ada ability yang tersedia untuk slot ini!', ephemeral: true });
         }
@@ -472,5 +546,7 @@ module.exports = {
     runAbilityTick,
     isPetEligibleForAbilities,
     getAbilitySlots,
-    getAbilityById
+    getAbilityById,
+    canUseSlot4,
+    getUnlockedSlots,
 };

@@ -214,6 +214,16 @@ const PET_SKILLS = [
     { id: 'ultimate_strike', name: 'Ultimate Strike', emoji: '💥', tier: 4, level: 100, type: 'attack', multiplier: 4.0, cooldown: 8, desc: 'Serangan ULTIMATE 4x damage!' },
     { id: 'divine_shield', name: 'Divine Shield', emoji: '✝️', tier: 4, level: 100, type: 'immune', duration: 1, cooldown: 10, desc: 'Kebal damage selama 1 turn' },
     { id: 'omega_heal', name: 'Omega Heal', emoji: '💖', tier: 4, level: 100, type: 'heal', amount: 0.5, cooldown: 8, desc: 'Heal 50% max HP' },
+
+    // Tier 5 — ASCENDANT (unlocked at pet level 150)
+    { id: 'elemental_catastrophe', name: 'Elemental Catastrophe', emoji: '☄️', tier: 5, level: 150, type: 'attack', multiplier: 3.5, ignoreDef: 0.3, requireAdvantage: true, cooldown: 6, desc: '3.5x + ignore 30% DEF jika super effective' },
+    { id: 'time_stop', name: 'Time Stop', emoji: '⏸️', tier: 5, level: 150, type: 'control', skipTurns: 1, cooldown: 8, desc: 'Lawan skip 1 turn' },
+    { id: 'blood_pact', name: 'Blood Pact', emoji: '🩸', tier: 5, level: 150, type: 'blood_pact', selfHpCost: 0.2, atkBonus: 80, duration: 2, cooldown: 7, desc: '−20% max HP, +80% ATK (2 turn)' },
+    { id: 'aegis_of_gods', name: 'Aegis of Gods', emoji: '🛡️', tier: 5, level: 150, type: 'absorb', amount: 0.4, cooldown: 8, desc: 'Shield menyerap 40% max HP' },
+    { id: 'soul_link', name: 'Soul Link', emoji: '🔗', tier: 5, level: 150, type: 'drain', multiplier: 2.0, healRatio: 0.75, cooldown: 5, desc: '2x dmg + heal 75% dari damage' },
+    { id: 'omega_burst', name: 'Omega Burst', emoji: '💥', tier: 5, level: 150, type: 'attack', multiplier: 5.0, minHpPercent: 0.3, cooldown: 9, desc: '5x dmg HANYA jika HP < 30%' },
+    { id: 'void_rend', name: 'Void Rend', emoji: '🕳️', tier: 5, level: 150, type: 'attack', multiplier: 2.2, cooldown: 5, desc: '2.2x dmg (anti-sustain)' },
+    { id: 'genesis_light', name: 'Genesis Light', emoji: '✨', tier: 5, level: 150, type: 'genesis', heal: 0.35, atkBonus: 15, defBonus: 15, duration: 2, cooldown: 8, desc: 'Heal 35% + +15% ATK/DEF (2 turn)' },
 ];
 
 module.exports = { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS, ELEMENT_ADVANTAGE, PET_SKILL_MILESTONES, PET_LEVEL_MULTIPLIERS, RELIC_NAMES, RELIC_MYTHIC_NAMES, RELIC_GOD_NAMES, PET_SKILLS };
