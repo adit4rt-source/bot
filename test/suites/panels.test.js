@@ -95,7 +95,7 @@ module.exports = function register() {
   const invite = botRequire('systems/invitePanel.js');
   panel('invitePanel.buildInvitePanel', () => invite.buildInvitePanel(G, U, NAME, { name: 'TestGuild' }));
   const tv = botRequire('systems/tempvoicePanel.js');
-  panel('tempvoicePanel.buildTempvoicePanel', () => tv.buildTempvoicePanel(G, U, { name: 'TestGuild' }));
+  panel('tempvoicePanel.buildTempvoicePanel', () => tv.buildTempvoicePanel({ id: G, name: 'TestGuild' }, U));
   const wel = botRequire('systems/welcomerPanel.js');
   panel('welcomerPanel.buildWelcomerPanel', () => wel.buildWelcomerPanel(G, U, { name: 'TestGuild' }));
 

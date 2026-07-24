@@ -319,6 +319,8 @@ function isTempvoiceModal(customId) {
 }
 
 module.exports = {
+    buildTempvoicePanel: buildMainPanel,
+    buildManagePanel,
     handleTempvoiceCommand,
     handleTempvoiceButton,
     handleTempvoiceUserSelect,

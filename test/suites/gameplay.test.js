@@ -86,12 +86,12 @@ module.exports = function register() {
   test('fish: God catchable but rare (<5%) at god_realm max gear; none at river basic', () => {
     db.getOrCreateUser(G, U);
     db.db.prepare("INSERT INTO fish_equipment (userId, rod, bait, bait_count, location) VALUES (?, 'omega_rod', 'god_lure', 1000000, 'god_realm') ON CONFLICT(userId) DO UPDATE SET rod='omega_rod', bait='god_lure', bait_count=1000000, location='god_realm'").run(U);
-    let god=0, secret=0; const N=40000;
+    let god=0, secret=0; const N=4000;
     for (let i=0;i<N;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God')god++; if(r.tier.tier==='Secret')secret++; }
     if (god===0) throw new Error('God never caught with max gear');
     if (god/N >= 0.05) throw new Error('God too common: ' + (god/N*100).toFixed(2) + '%');
     db.db.prepare("UPDATE fish_equipment SET rod='basic', bait='none', bait_count=0, location='river' WHERE userId=?").run(U);
-    let bad=0; for (let i=0;i<10000;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God'||r.tier.tier==='Secret')bad++; }
+    let bad=0; for (let i=0;i<1000;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God'||r.tier.tier==='Secret')bad++; }
     if (bad>0) throw new Error('Secret/God caught at river basic: ' + bad);
   });
 

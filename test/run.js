@@ -28,11 +28,6 @@ process.chdir(tmp);
   d.close();
 })();
 
-
-// Silence the bot's startup console noise; keep test output clean.
-const realLog = console.log, realErr = console.error;
-console.log = () => {}; console.error = () => {};
-
 const harness = require(path.join(__dirname, 'harness'));
 
 const suiteFiles = [
@@ -50,13 +45,15 @@ const suiteFiles = [
     const register = require(path.join(__dirname, f));
     register();
   }
-  console.log = realLog; console.error = realErr;
   const summary = await harness.finish('BOT TEST SUITE');
+  try {
+    const { shutdownPool } = require(path.join(__dirname, '../systems/imagePool.js'));
+    await shutdownPool();
+  } catch (e) {}
   // Cleanup temp dir
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
   process.exit(summary.fail ? 1 : 0);
 })().catch(e => {
-  console.log = realLog; console.error = realErr;
   console.error('Test runner crashed:', e);
   process.exit(1);
 });
