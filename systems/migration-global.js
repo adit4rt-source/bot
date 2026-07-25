@@ -467,6 +467,18 @@ function runGlobalMigration(db) {
     } else {
         console.log('✅ Belajar global progression migration already completed');
     }
+    const compensationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'streak_downtime_compensation_2026_07'").get();
+    if (!compensationDone) {
+        console.log('⚡ Running streak downtime compensation migration (adding +2 to all active streaks)...');
+        try {
+            db.exec(`UPDATE streaks SET count = count + 2 WHERE count > 0;`);
+            db.exec(`UPDATE belajar_progress SET streak = streak + 2 WHERE streak > 0;`);
+            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('streak_downtime_compensation_2026_07', 1);
+            console.log('✅ Streak compensation migration completed successfully!');
+        } catch (e) {
+            console.error('❌ Streak compensation migration failed:', e.message);
+        }
+    }
 }
 
 module.exports = { runGlobalMigration };
