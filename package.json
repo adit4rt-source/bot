@@ -3,7 +3,7 @@
   "version": "3.4.0",
   "main": "bot.js",
   "scripts": {
-    "preinstall": "node -e \"const fs = require('fs'); try { fs.unlinkSync('tsconfig.json'); console.log('Removed corrupt tsconfig.json'); } catch(e) {}\" && (npx allow-scripts auto || npm approve-scripts --allow-scripts-pending || true)",
+    "preinstall": "node -e \"const fs = require('fs'); try { fs.unlinkSync('tsconfig.json'); console.log('Removed corrupt tsconfig.json'); } catch(e) {}\" && (npx -y allow-scripts auto || npm approve-scripts --allow-scripts-pending || true)",
     "start": "node bot.js",
     "test": "node --experimental-sqlite test/run.js"
   },
