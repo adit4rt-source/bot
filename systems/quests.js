@@ -295,7 +295,7 @@ async function checkAndUpdateStreak(message) {
     
     if (!streakActivatedToday && streakData.last_date !== today) {
         const diffDays = Math.floor((new Date(today) - new Date(streakData.last_date)) / 86400000);
-        if (diffDays === 1) streakData.count += 1;
+        if (diffDays >= 1 && diffDays <= 3) streakData.count += 1;
         else { if (streakData.count > 1) db.prepare('INSERT OR REPLACE INTO streak_history (guildId, userId, lost_count) VALUES (?, ?, ?)').run(guildId, userId, streakData.count); streakData.count = 1; }
         db.prepare('UPDATE streaks SET count = ?, last_date = ? WHERE guildId = ? AND userId = ?').run(streakData.count, today, guildId, userId);
         streakActivatedToday = true;

@@ -83,9 +83,11 @@ function updateStreak(guildId, userId) {
     const r = db.prepare('SELECT streak, lastDay FROM belajar_progress WHERE guildId = ? AND userId = ?').get(guildId, userId) || { streak: 0, lastDay: '' };
     if (r.lastDay === today) return { streak: r.streak || 0, shieldUsed: false };
     const yesterday = jakartaDate(-1);
+    const twoDaysAgo = jakartaDate(-2);
+    const threeDaysAgo = jakartaDate(-3);
     let newStreak;
     let shieldUsed = false;
-    if (r.lastDay === yesterday || r.lastDay === '') {
+    if (r.lastDay === yesterday || r.lastDay === twoDaysAgo || r.lastDay === threeDaysAgo || r.lastDay === '') {
         newStreak = (r.streak || 0) + 1;
     } else {
         const shieldCount = getItemCount(guildId, userId, 'streak_shield') || 0;
