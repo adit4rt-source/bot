@@ -136,7 +136,7 @@ async function buildInteractionEmbed(interactionType, userId, targetId, guildNam
         const action = NEKOS_BEST_MAPPING[interactionType];
         if (action) {
             try {
-                const response = await fetch(`https://nekos.best/api/v2/${action}`);
+                const response = await fetch(`https://nekos.best/api/v2/${action}`, { headers: { 'User-Agent': 'idcommunity-bot/1.0' } });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.results && data.results.length > 0) {
