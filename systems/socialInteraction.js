@@ -108,7 +108,46 @@ async function buildInteractionEmbed(interactionType, userId, targetId, guildNam
         ? `${type.emoji} **<@${userId}>** ${type.selfVerb}!`
         : `${type.emoji} **<@${userId}>** ${type.verb} **<@${targetId}>**!`;
 
-    const gifUrl = await fetchTenorGif(type.search);
+    let gifUrl = await fetchTenorGif(type.search);
+
+    if (!gifUrl) {
+        const NEKOS_BEST_MAPPING = {
+            'hug': 'hug', 'peluk': 'hug',
+            'pat': 'pat', 'elus': 'pat', 'headpat': 'pat',
+            'slap': 'slap', 'tampar': 'slap', 'gampar': 'slap', 'gaplok': 'slap', 'tabok': 'slap',
+            'kiss': 'kiss', 'cium': 'kiss',
+            'tickle': 'tickle', 'gelitik': 'tickle',
+            'feed': 'feed', 'suapi': 'feed',
+            'poke': 'poke', 'colek': 'poke',
+            'bite': 'bite', 'gigit': 'bite',
+            'punch': 'punch', 'pukul': 'punch', 'jitak': 'punch',
+            'kick': 'kick', 'tendang': 'kick',
+            'cry': 'cry', 'nangis': 'cry',
+            'laugh': 'laugh',
+            'smile': 'smile',
+            'smug': 'smug',
+            'dance': 'dance',
+            'stare': 'stare',
+            'pout': 'pout', 'ngambek': 'pout',
+            'shrug': 'shrug',
+            'wave': 'wave',
+            'wink': 'wink'
+        };
+        const action = NEKOS_BEST_MAPPING[interactionType];
+        if (action) {
+            try {
+                const response = await fetch(`https://nekos.best/api/v2/${action}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.results && data.results.length > 0) {
+                        gifUrl = data.results[0].url;
+                    }
+                }
+            } catch (e) {
+                console.error('[social] nekos.best fallback error:', e.message);
+            }
+        }
+    }
 
     const embed = new EmbedBuilder()
         .setColor(type.color)
