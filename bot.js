@@ -94,6 +94,14 @@ const { log, wrapHandler } = require('./systems/logger');
     const DB_PATH = path.join(ROOT, 'economy.sqlite');
     const Database = require('better-sqlite3');
 
+    try {
+        const testDb = new Database(':memory:');
+        testDb.close();
+    } catch (e) {
+        log('ERROR', `[AUTO-RECOVERY] Gagal memuat driver database (better-sqlite3): ${e.message}`);
+        return;
+    }
+
     function isHealthy(file) {
         let d;
         try {
