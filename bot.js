@@ -170,7 +170,7 @@ const CLIENT_ID = process.env.CLIENT_ID || '1058955900389445672';
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildMembers],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember]
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember, Partials.User]
 });
 
 // ================= GLOBAL ERROR HANDLERS =================

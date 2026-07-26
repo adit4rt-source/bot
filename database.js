@@ -838,6 +838,28 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
     if (created > 0) console.log(`⚡ Performance indexes ready (${created}/${indexes.length})`);
 })();
 
+
+// ================= AUDIT FIX: EARLY TABLE CREATIONS =================
+db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT,
+    cardApiId TEXT,
+    name TEXT,
+    setName TEXT,
+    rarity TEXT,
+    imageUrl TEXT,
+    types TEXT,
+    hp TEXT,
+    artist TEXT,
+    obtainedAt INTEGER,
+    locked INTEGER DEFAULT 0
+)`);
+try { db.exec(`ALTER TABLE pokemon_cards ADD COLUMN marketPrice REAL DEFAULT 0`); } catch(_) {}
+
+db.exec(`CREATE TABLE IF NOT EXISTS rod_enchants (
+    userId TEXT, rodId TEXT, affix1 TEXT, affix2 TEXT, PRIMARY KEY(userId, rodId)
+)`);
+
 // ================= PET DISCOVERY (Pokédex) =================
 function registerPetDiscovery(userId, petId) {
     try {

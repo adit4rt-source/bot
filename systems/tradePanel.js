@@ -372,9 +372,12 @@ async function handleTradeButton(interaction) {
             const sCard = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(updated.senderCardId, updated.senderId);
             const rCard = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(updated.receiverCardId, updated.receiverId);
             if (!sCard || !rCard) { db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('failed', sessionId); return interaction.update({ content: '❌ Kartu sudah tidak ada! Trade gagal.', embeds: [], components: [] }); }
-            db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.receiverId, updated.senderCardId);
-            db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.senderId, updated.receiverCardId);
-            db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('completed', sessionId);
+            const cardTx = db.transaction(() => {
+                db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.receiverId, updated.senderCardId);
+                db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.senderId, updated.receiverCardId);
+                db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('completed', sessionId);
+            });
+            cardTx();
             const RARITIES = require('./cardGame').RARITIES;
             const sr = RARITIES[sCard.rarity] || { emoji: '⚪' };
             const rr = RARITIES[rCard.rarity] || { emoji: '⚪' };
@@ -707,20 +710,42 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
     }
 
     // Execute trade: sender's offer -> receiver
-    if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, userId); }
-    if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(userId, parseInt(senderGive.id)); }
+    try {
+        const runTx = db.transaction(() => {
+            if (senderGive.type === 'money') {
+                const senderData = getOrCreateUser(guildId, trade.senderId);
+                if (senderData.balance < parseInt(senderGive.id)) throw new Error('SENDER_INSUFFICIENT');
+            }
+            if (senderWant.type === 'money') {
+                if (getOrCreateUser(guildId, userId).balance < parseInt(senderWant.id)) throw new Error('RECEIVER_INSUFFICIENT');
+            }
 
-    // receiver's offer -> sender
-    if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, userId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId); }
-    if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(trade.senderId, parseInt(senderWant.id)); }
+            if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+            if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+            if (senderGive.type === 'money') {
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId);
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, userId);
+            }
+            if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+            if (senderGive.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(userId, parseInt(senderGive.id)); }
 
-    db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
+            if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+            if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+            if (senderWant.type === 'money') {
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, userId);
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId);
+            }
+            if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+            if (senderWant.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(trade.senderId, parseInt(senderWant.id)); }
+
+            db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
+        });
+        runTx();
+    } catch (e) {
+        if (e.message === 'SENDER_INSUFFICIENT') return interaction.reply({ content: '❌ Sender tidak punya cukup money!', ephemeral: true });
+        if (e.message === 'RECEIVER_INSUFFICIENT') return interaction.reply({ content: '❌ Saldo kamu kurang untuk trade ini!', ephemeral: true });
+        throw e;
+    }
 
     updateQuestProgress(guildId, userId, 'trade', 1);
     updateQuestProgress(guildId, trade.senderId, 'trade', 1);

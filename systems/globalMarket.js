@@ -376,30 +376,41 @@ function createGlobalListing(guildId, userId, username, itemType, itemId, price,
 
 // ==================== EXECUTE PURCHASE ====================
 function executeGlobalPurchase(guildId, userId, listingId) {
-    const listing = db.prepare('SELECT * FROM global_market WHERE id = ? AND status = ?').get(listingId, 'active');
-    if (!listing) return { ok: false, error: '❌ Listing tidak ditemukan atau sudah tidak aktif!' };
-    if (listing.sellerId === userId) return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
+    try {
+        let listing, tax, sellerReceives;
+        const runTx = db.transaction(() => {
+            listing = db.prepare('SELECT * FROM global_market WHERE id = ? AND status = ?').get(listingId, 'active');
+            if (!listing) throw new Error('NOT_ACTIVE');
+            if (listing.sellerId === userId) throw new Error('SELF_BUY');
 
-    const buyerData = getOrCreateUser(guildId, userId);
-    if (buyerData.balance < listing.price) {
-        return { ok: false, error: `❌ Saldo kurang! Butuh 🪙 ${listing.price.toLocaleString('id-ID')}` };
+            // Safe balance check & atomic deduction
+            const { subtractUserBalance, addUserBalance } = require('../database');
+            if (!subtractUserBalance(guildId, userId, listing.price)) {
+                throw new Error('INSUFFICIENT_BALANCE');
+            }
+
+            // Pay seller (minus tax)
+            tax = Math.floor(listing.price * GLOBAL_TAX_RATE);
+            sellerReceives = listing.price - tax;
+            addUserBalance(listing.guildId, listing.sellerId, sellerReceives);
+
+            // Transfer item to buyer
+            returnGlobalItem(listing, userId, guildId);
+
+            // Mark as sold
+            db.prepare('UPDATE global_market SET status = ?, buyerId = ?, boughtAt = ? WHERE id = ?').run('sold', userId, Date.now(), listingId);
+        });
+        runTx();
+        return { ok: true, listing, tax, sellerReceives };
+    } catch (e) {
+        if (e.message === 'NOT_ACTIVE') return { ok: false, error: '❌ Listing tidak ditemukan atau sudah tidak aktif!' };
+        if (e.message === 'SELF_BUY') return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
+        if (e.message === 'INSUFFICIENT_BALANCE') {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return { ok: false, error: "❌ Saldo kurang! Kamu punya 🪙 " + bal.toLocaleString('id-ID') + ", butuh 🪙 " + listing.price.toLocaleString('id-ID') };
+        }
+        return { ok: false, error: "❌ Gagal memproses pembelian global: " + e.message };
     }
-
-    // Deduct buyer
-    db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, userId);
-
-    // Pay seller (minus tax)
-    const tax = Math.floor(listing.price * GLOBAL_TAX_RATE);
-    const sellerReceives = listing.price - tax;
-    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(sellerReceives, listing.guildId, listing.sellerId);
-
-    // Transfer item to buyer
-    returnGlobalItem(listing, userId, guildId);
-
-    // Mark as sold
-    db.prepare('UPDATE global_market SET status = ?, buyerId = ?, boughtAt = ? WHERE id = ?').run('sold', userId, Date.now(), listingId);
-
-    return { ok: true, listing, tax, sellerReceives };
 }
 
 // ==================== HANDLER: Button Clicks ====================
