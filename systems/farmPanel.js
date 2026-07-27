@@ -655,11 +655,25 @@ async function handleFarmButton(interaction) {
             }
         }
         
+        const deadPlots = ghPlots.filter(p => p.status === 'dead');
+        let deadMsg = '';
+        if (deadPlots.length > 0) {
+            deleteDeadFarmPlots(guildId, userId);
+            deadMsg = `\n🗑️ **${deadPlots.length} tanaman mati** di greenhouse dihapus.`;
+        }
+
+        if (harvested === 0 && deadPlots.length > 0) {
+            const embed = new EmbedBuilder().setColor('#E74C3C').setTitle('🗑️ Tanaman Mati Dihapus')
+                .setDescription(`**${deadPlots.length} tanaman mati** di greenhouse telah dihapus.\nTidak ada yang siap dipanen.`);
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
+            return interaction.update({ embeds: [embed], components: [row] });
+        }
+
         if (harvested === 0) return interaction.reply({ content: '❌ Belum ada tanaman greenhouse siap dipanen!', ephemeral: true });
         
         incrementUserStat(guildId, userId, 'total_harvests', harvested);
         const embed = new EmbedBuilder().setColor('#27AE60').setTitle('🏠 Greenhouse Harvest!')
-            .setDescription(`**${harvested} tanaman** dipanen (${totalItems} item):\n\n${harvestDesc}\n> Hasil masuk ke Storage.`);
+            .setDescription(`**${harvested} tanaman** dipanen (${totalItems} item):\n\n${harvestDesc}${deadMsg}\n> Hasil masuk ke Storage.`);
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`farm_greenhouse_${userId}`).setLabel('🏠 Ke Greenhouse').setStyle(ButtonStyle.Success));
         return interaction.update({ embeds: [embed], components: [row] });
     }
