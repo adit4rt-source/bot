@@ -209,9 +209,11 @@ function rollSeaMonster(guildId, userId, location, rod) {
 
     // Rod enchant monster ward
     try {
-        const { getEnchantEffects } = require('./fishingExtras');
-        const fx = getEnchantEffects(userId, rod.id);
-        if (fx.monster) effectiveChance = Math.max(0, effectiveChance * (1 - fx.monster));
+        if (rod && rod.id) {
+            const { getEnchantEffects } = require('./fishingExtras');
+            const fx = getEnchantEffects(userId, rod.id);
+            if (fx.monster) effectiveChance = Math.max(0, effectiveChance * (1 - fx.monster));
+        }
     } catch (_) {}
 
     // Apply fishing weather multiplier to monster chance
@@ -385,9 +387,11 @@ function catchFish(guildId, userId) {
     // Rod enchants
     let enchantFx = {};
     try {
-        const { getEnchantEffects } = require('./fishingExtras');
-        enchantFx = getEnchantEffects(userId, rod.id) || {};
-        rareBonus += enchantFx.rareBonus || 0;
+        if (rod && rod.id) {
+            const { getEnchantEffects } = require('./fishingExtras');
+            enchantFx = getEnchantEffects(userId, rod.id) || {};
+            rareBonus += enchantFx.rareBonus || 0;
+        }
     } catch (_) {}
     // Season zone bonus
     try {
@@ -632,9 +636,11 @@ function getFishingCooldown(userId, rod) {
         const todayWeather = getTodayWeather();
         let cooldown = rod.cooldown;
         try {
-            const { getEnchantEffects } = require('./fishingExtras');
-            const fx = getEnchantEffects(userId, rod.id);
-            if (fx.cdReduce) cooldown = Math.max(1, cooldown - fx.cdReduce);
+            if (rod && rod.id) {
+                const { getEnchantEffects } = require('./fishingExtras');
+                const fx = getEnchantEffects(userId, rod.id);
+                if (fx.cdReduce) cooldown = Math.max(1, cooldown - fx.cdReduce);
+            }
         } catch (_) {}
         if (todayWeather && (todayWeather.id === 'rainy' || todayWeather.id === 'stormy')) {
             cooldown = Math.max(1, Math.round(cooldown * 0.85)); // 15% reduction

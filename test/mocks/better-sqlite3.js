@@ -4,7 +4,10 @@
 const { DatabaseSync } = require('node:sqlite');
 class Statement {
   constructor(db, sql) { this._stmt = db.prepare(sql); }
-  _norm(args){ if (args.length === 1 && Array.isArray(args[0])) return args[0]; return args; }
+  _norm(args){
+    const a = (args.length === 1 && Array.isArray(args[0])) ? args[0] : args;
+    return a.map(v => v === undefined ? null : v);
+  }
   get(...a){ return this._stmt.get(...this._norm(a)); }
   all(...a){ return this._stmt.all(...this._norm(a)); }
   run(...a){ const r=this._stmt.run(...this._norm(a)); return { changes:Number(r.changes), lastInsertRowid:r.lastInsertRowid }; }

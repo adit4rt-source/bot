@@ -314,6 +314,7 @@ const AFFIXES = [
 ];
 
 function getRodEnchants(userId, rodId) {
+    if (!userId || !rodId) return { affix1: null, affix2: null };
     let row = db.prepare('SELECT * FROM rod_enchants WHERE userId = ? AND rodId = ?').get(userId, rodId);
     if (!row) return { affix1: null, affix2: null };
     return row;

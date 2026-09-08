@@ -1,6 +1,6 @@
 {
   "name": "discord-economy-bot",
-  "version": "3.4.0",
+  "version": "3.12.0",
   "main": "bot.js",
   "scripts": {
     "preinstall": "node -e \"const fs = require('fs'); try { fs.unlinkSync('tsconfig.json'); console.log('Removed corrupt tsconfig.json'); } catch(e) {}\" && (npx -y allow-scripts auto || npm approve-scripts --allow-scripts-pending || true)",

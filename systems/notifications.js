@@ -1,4 +1,4 @@
-// systems/notifications.js - Notification System (DM DISABLED)
+// systems/notifications.js - Notification System (DM-based, Opt-In)
 const { db } = require('../database');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
@@ -6,89 +6,164 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 db.exec(`CREATE TABLE IF NOT EXISTS notification_settings (
     guildId TEXT,
     userId TEXT,
-    notif_daily INTEGER DEFAULT 0,
-    notif_quest INTEGER DEFAULT 0,
-    notif_trade INTEGER DEFAULT 0,
-    notif_pet INTEGER DEFAULT 0,
-    notif_farm INTEGER DEFAULT 0,
+    notif_daily INTEGER DEFAULT 1,
+    notif_quest INTEGER DEFAULT 1,
+    notif_trade INTEGER DEFAULT 1,
+    notif_pet INTEGER DEFAULT 1,
+    notif_farm INTEGER DEFAULT 1,
     PRIMARY KEY(guildId, userId)
 )`);
 // Migration: add new columns if missing
-try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_expedition INTEGER DEFAULT 0`); } catch(e) {}
-try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_worldboss INTEGER DEFAULT 0`); } catch(e) {}
-try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_streak INTEGER DEFAULT 0`); } catch(e) {}
-// DM consent - DISABLED BY DEFAULT
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_expedition INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_worldboss INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN notif_streak INTEGER DEFAULT 1`); } catch(e) {}
+// DM consent (opt-in): dm_consent 0 = not allowed (default), 1 = allowed.
+// dm_asked 0 = first-use prompt not shown yet, 1 = already prompted once.
 try { db.exec(`ALTER TABLE notification_settings ADD COLUMN dm_consent INTEGER DEFAULT 0`); } catch(e) {}
-try { db.exec(`ALTER TABLE notification_settings ADD COLUMN dm_asked INTEGER DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE notification_settings ADD COLUMN dm_asked INTEGER DEFAULT 0`); } catch(e) {}
 
-// ============ DM SYSTEM DISABLED ============
+// ============ DM CONSENT (opt-in) ============
 function getDmConsent(guildId, userId) {
-    return 0; // Always disabled
+    const row = getNotifSettings(guildId, userId);
+    return row.dm_consent ? 1 : 0;
 }
 function setDmConsent(guildId, userId, allowed) {
-    return 0; // Always disabled
+    getNotifSettings(guildId, userId); // ensure row exists
+    db.prepare('UPDATE notification_settings SET dm_consent = ?, dm_asked = 1 WHERE guildId = ? AND userId = ?').run(allowed ? 1 : 0, guildId, userId);
+    return allowed ? 1 : 0;
 }
-function canDM(guildId, userId, type = null) {
-    return false; // DM system completely disabled
+// True only if the player has explicitly opted in to DMs.
+function canDM(guildId, userId) {
+    return getDmConsent(guildId, userId) === 1;
 }
 function wasDmAsked(guildId, userId) {
-    return true; // Prevent asking
+    const row = getNotifSettings(guildId, userId);
+    return !!row.dm_asked;
 }
 function markDmAsked(guildId, userId) {
-    // Do nothing
+    getNotifSettings(guildId, userId);
+    db.prepare('UPDATE notification_settings SET dm_asked = 1 WHERE guildId = ? AND userId = ?').run(guildId, userId);
 }
 
 // ============ GET NOTIFICATION SETTINGS ============
 function getNotifSettings(guildId, userId) {
     let row = db.prepare('SELECT * FROM notification_settings WHERE guildId = ? AND userId = ?').get(guildId, userId);
     if (!row) {
-        db.prepare('INSERT INTO notification_settings (guildId, userId, dm_consent, dm_asked) VALUES (?, ?, 0, 1)').run(guildId, userId);
-        row = { guildId, userId, notif_daily: 0, notif_quest: 0, notif_trade: 0, notif_pet: 0, notif_farm: 0, dm_consent: 0, dm_asked: 1 };
+        db.prepare('INSERT INTO notification_settings (guildId, userId, dm_consent, dm_asked) VALUES (?, ?, 0, 0)').run(guildId, userId);
+        row = { guildId, userId, notif_daily: 1, notif_quest: 1, notif_trade: 1, notif_pet: 1, notif_farm: 1, dm_consent: 0, dm_asked: 0 };
     }
     return row;
 }
 
 // ============ TOGGLE NOTIFICATION ============
 function toggleNotif(guildId, userId, type) {
-    // Do nothing - DM disabled
-    return 0;
+    const settings = getNotifSettings(guildId, userId);
+    const key = `notif_${type}`;
+    const newValue = settings[key] ? 0 : 1;
+    db.prepare(`UPDATE notification_settings SET ${key} = ? WHERE guildId = ? AND userId = ?`).run(newValue, guildId, userId);
+    return newValue;
 }
 
-// ============ SEND NOTIFICATION (DISABLED) ============
+// ============ SEND NOTIFICATION ============
 async function sendNotification(client, guildId, userId, type, message) {
-    // DM System completely disabled
-    return false;
+    try {
+        // Opt-in gate: never DM a user who hasn't explicitly consented.
+        if (!canDM(guildId, userId)) return false;
+
+        const settings = getNotifSettings(guildId, userId);
+        const key = `notif_${type}`;
+        if (!settings[key]) return false; // Notification disabled
+
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user) return false;
+
+        await user.send(message).catch(() => null);
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
-// Direct DM (DISABLED)
+// Direct DM that still respects consent — for one-off DMs (giveaway/lottery
+// winners) that don't fit a notification category.
 async function dmUser(client, guildId, userId, message) {
-    // DM System completely disabled
-    return false;
+    try {
+        if (!canDM(guildId, userId)) return false;
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user) return false;
+        await user.send(message).catch(() => null);
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
-// ============ NOTIFICATION TYPES (ALL DISABLED) ============
+// ============ NOTIFICATION TYPES ============
+
+// Trade notification - when someone sends you a trade
 async function notifyTradeReceived(client, guildId, receiverId, senderId, tradeId) {
-    return false;
+    const sender = await client.users.fetch(senderId).catch(() => null);
+    const senderName = sender ? sender.username : 'Someone';
+    return sendNotification(client, guildId, receiverId, 'trade',
+        `🔄 **Trade Received!**\n\n` +
+        `**${senderName}** mengirim trade offer ke kamu!\n` +
+        `> 🆔 Trade ID: **#${tradeId}**\n\n` +
+        `Gunakan \`/trade\` → Accept/Reject di server untuk merespon.`
+    );
 }
 
+// Trade accepted notification - notify sender that their trade was accepted
 async function notifyTradeAccepted(client, guildId, senderId, receiverId, tradeId) {
-    return false;
+    const receiver = await client.users.fetch(receiverId).catch(() => null);
+    const receiverName = receiver ? receiver.username : 'Someone';
+    return sendNotification(client, guildId, senderId, 'trade',
+        `✅ **Trade Accepted!**\n\n` +
+        `**${receiverName}** menerima trade offer kamu!\n` +
+        `> 🆔 Trade ID: **#${tradeId}**\n\n` +
+        `Item sudah ditransfer. Cek inventory kamu!`
+    );
 }
 
+// Pet hungry notification
 async function notifyPetHungry(client, guildId, userId, petName, hunger) {
-    return false;
+    return sendNotification(client, guildId, userId, 'pet',
+        `🐾 **Pet Kelaparan!**\n\n` +
+        `Pet kamu **${petName}** sedang kelaparan!\n` +
+        `> 🍖 Hunger: **${hunger}%** (Kritis!)\n\n` +
+        `Segera beri makan dengan \`/pet\` → Feed sebelum happiness turun!`
+    );
 }
 
+// Farm harvest ready notification
 async function notifyFarmReady(client, guildId, userId, cropName) {
-    return false;
+    return sendNotification(client, guildId, userId, 'farm',
+        `🌾 **Siap Panen!**\n\n` +
+        `Tanaman kamu sudah siap dipanen!\n` +
+        `> 🌱 **${cropName}** sudah matang\n\n` +
+        `Gunakan \`/farm\` → Harvest untuk memanen.`
+    );
 }
 
+// Daily reminder notification
 async function notifyDailyReady(client, guildId, userId) {
-    return false;
+    return sendNotification(client, guildId, userId, 'daily',
+        `🎁 **Daily Reward Ready!**\n\n` +
+        `Kamu belum klaim daily reward hari ini!\n` +
+        `> Gunakan \`/daily\` untuk klaim hadiah harian.\n\n` +
+        `Jangan lupa jaga streak! 🔥`
+    );
 }
 
+// Market sold notification
 async function notifyMarketSold(client, guildId, sellerId, itemName, price, buyerName) {
-    return false;
+    return sendNotification(client, guildId, sellerId, 'trade',
+        `🏪 **Item Terjual!**\n\n` +
+        `Item kamu di market telah dibeli!\n` +
+        `> 📦 **${itemName}**\n` +
+        `> 💰 Harga: 🪙 **${price.toLocaleString('id-ID')}**\n` +
+        `> 🛒 Pembeli: **${buyerName}**\n\n` +
+        `Money sudah masuk ke saldo kamu.`
+    );
 }
 
 module.exports = {
@@ -111,40 +186,65 @@ module.exports = {
     notifyMarketSold
 };
 
-// ============ UI: Notification settings panel ============
+// ============ UI: Notification settings panel (shared) ============
+const _NOTIF_CATS = [
+    { type: 'daily', label: 'Daily', key: 'notif_daily' },
+    { type: 'quest', label: 'Quest', key: 'notif_quest' },
+    { type: 'trade', label: 'Trade', key: 'notif_trade' },
+    { type: 'pet', label: 'Pet', key: 'notif_pet' },
+    { type: 'farm', label: 'Farm', key: 'notif_farm' },
+];
+
 function buildNotifPanel(guildId, userId) {
+    const s = getNotifSettings(guildId, userId);
+    const on = s.dm_consent ? 1 : 0;
     const embed = new EmbedBuilder()
-        .setTitle('🔔 Pengaturan Notifikasi')
-        .setColor('#95a5a6')
+        .setTitle('🔔 Pengaturan Notifikasi DM')
+        .setColor('#F39C12')
         .setDescription(
-            `**Status: ❌ SISTEM DM DINONAKTIFKAN**\n\n` +
-            `Sistem notifikasi DM telah dinonaktifkan.\n` +
-            `Semua notifikasi tidak akan dikirim via DM.\n\n` +
-            `💡 *Gunakan command di server untuk cek status:*\n` +
-            `• \`/farm\` - Cek tanaman\n` +
-            `• \`/pet\` - Cek pet\n` +
-            `• \`/daily\` - Cek daily reward\n` +
-            `• \`/quest\` - Cek quest progress`
+            `**Status DM:** ${on ? '✅ AKTIF' : '❌ NONAKTIF'}\n` +
+            (on ? '' : '> ⚠️ Kamu tidak menerima DM apa pun sampai diaktifkan.\n') +
+            `\n${on ? '**Kategori:**' : '*Aktifkan DM dulu untuk mengatur kategori:*'}\n` +
+            `${s.notif_daily ? '✅' : '❌'} Daily Reminder\n` +
+            `${s.notif_quest ? '✅' : '❌'} Quest Complete\n` +
+            `${s.notif_trade ? '✅' : '❌'} Trade & Market\n` +
+            `${s.notif_pet ? '✅' : '❌'} Pet & Expedition\n` +
+            `${s.notif_farm ? '✅' : '❌'} Farm Harvest\n\n` +
+            `💡 *Klik tombol untuk ubah.*`
         );
+    const masterRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`notif_toggle_master_${userId}`)
+            .setLabel(on ? 'DM: AKTIF (klik untuk matikan)' : 'DM: NONAKTIF (klik untuk aktifkan)')
+            .setEmoji(on ? '🔔' : '🔕')
+            .setStyle(on ? ButtonStyle.Success : ButtonStyle.Danger)
+    );
+    const catRow = new ActionRowBuilder().addComponents(
+        ..._NOTIF_CATS.map(c => new ButtonBuilder()
+            .setCustomId(`notif_toggle_${c.type}_${userId}`)
+            .setLabel(`${s[c.key] ? '✅' : '❌'} ${c.label}`)
+            .setStyle(s[c.key] ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!on))
+    );
     const backRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [backRow] };
+    return { embeds: [embed], components: [masterRow, catRow, backRow] };
 }
 
-// Consent prompt (disabled)
+// First-use consent prompt (ephemeral).
 function buildConsentPrompt(userId) {
     const embed = new EmbedBuilder()
-        .setColor('#95a5a6')
-        .setTitle('🔔 Sistem Notifikasi')
+        .setColor('#5865F2')
+        .setTitle('🔔 Izinkan Notifikasi DM dari Bot?')
         .setDescription(
-            '**Sistem notifikasi DM dinonaktifkan.**\n\n' +
-            'Bot tidak akan mengirim DM untuk notifikasi apa pun.\n' +
-            'Gunakan command di server untuk cek status aktivitas kamu.\n\n' +
-            '-# Pengaturan bisa dilihat di `/profile` → 🔔 Notifs'
+            'Bot ini bisa mengirim **DM pengingat** seputar progres kamu: daily reward, pet lapar, panen siap, ekspedisi selesai, menang giveaway/togel, dll.\n\n' +
+            '✅ **Izinkan** — kamu akan menerima DM pengingat.\n' +
+            '❌ **Jangan** — kamu tidak akan di-DM sama sekali.\n\n' +
+            '-# Bisa diubah kapan saja di `/profile` → 🔔 Notifs. Semua fitur tetap bisa dipakai tanpa DM.'
         );
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`dmconsent_close_${userId}`).setLabel('Mengerti').setEmoji('✅').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`dmconsent_yes_${userId}`).setLabel('Izinkan DM').setEmoji('✅').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`dmconsent_no_${userId}`).setLabel('Jangan').setEmoji('❌').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row], ephemeral: true };
 }
