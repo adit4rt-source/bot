@@ -8,6 +8,8 @@ try {
         const { execSync } = require('child_process');
         execSync('git config user.name "adit4rt-source"');
         execSync('git config user.email "adit4rt@icloud.com"');
+        execSync('git merge --abort 2>/dev/null || true');
+        execSync('git reset --hard origin/feat/achievement-system 2>/dev/null || true');
     }
 } catch (e) {
     // Silently ignore
