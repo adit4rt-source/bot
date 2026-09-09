@@ -133,12 +133,6 @@ async function routeInteraction(interaction) {
             return replyTemp(interaction, getDisabledMessage(fDef ? fDef.label : command));
         }
 
-        // === DM CONSENT (opt-in) — asked once, before first real use ===
-        // Players must explicitly allow DMs; otherwise the bot never DMs them.
-        if (!wasDmAsked(guildId, interaction.user.id)) {
-            markDmAsked(guildId, interaction.user.id);
-            return interaction.reply(buildConsentPrompt(interaction.user.id));
-        }
 
         // === GAME CONSENT (opt-in) ===
         if (consent.isGatedGameCommand(command) && !consent.hasGameConsent(guildId, interaction.user.id)) {
@@ -1671,32 +1665,9 @@ async function routeInteraction(interaction) {
             return interaction.update({ content: msg, embeds: [], components: [] });
         }
 
-        // --- NOTIFICATION TOGGLE BUTTONS ---
-        if (interaction.customId.startsWith('dmconsent_')) {
-            const parts = interaction.customId.split('_'); // dmconsent_yes_<id> | dmconsent_no_<id>
-            const choice = parts[1];
-            const targetUserId = parts[2];
-            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
-            if (choice === 'yes') {
-                setDmConsent(guildId, targetUserId, true);
-                return interaction.update({ content: '✅ **Notifikasi DM diaktifkan!** Kamu akan menerima pengingat. Atur kategori kapan saja di `/profile` → 🔔 Notifs.\n\n-# Sekarang jalankan lagi command-mu ya.', embeds: [], components: [] });
-            }
-            setDmConsent(guildId, targetUserId, false);
-            return interaction.update({ content: '👌 Oke, kamu **tidak** akan menerima DM. Bisa diaktifkan kapan saja lewat `/profile` → 🔔 Notifs.\n\n-# Sekarang jalankan lagi command-mu ya.', embeds: [], components: [] });
-        }
-
-        if (interaction.customId.startsWith('notif_toggle_')) {
-            const parts = interaction.customId.split('_');
-            const type = parts[2]; // master, daily, quest, trade, pet, farm
-            const targetUserId = parts[3];
-            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
-            if (type === 'master') {
-                setDmConsent(guildId, targetUserId, !canDM(guildId, targetUserId));
-            } else {
-                if (!canDM(guildId, targetUserId)) return interaction.reply({ content: '❌ Aktifkan **DM** dulu (tombol di atas) sebelum atur kategori.', ephemeral: true });
-                toggleNotif(guildId, targetUserId, type);
-            }
-            return interaction.update(buildNotifPanel(guildId, targetUserId));
+        // --- NOTIFICATION TOGGLE BUTTONS (DISABLED) ---
+        if (interaction.customId.startsWith('dmconsent_') || interaction.customId.startsWith('notif_toggle_')) {
+            return interaction.reply({ content: '❌ Fitur notifikasi DM telah dinonaktifkan sepenuhnya.', ephemeral: true });
         }
 
         // --- COINFLIP BUTTONS ---

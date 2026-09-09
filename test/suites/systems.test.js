@@ -334,14 +334,9 @@ module.exports = function register() {
     });
   });
 
-  test('togelPromo: drop gating — spam never counts; threshold drops once; cooldown & disabled block', async () => {
+  test('togelPromo: drop gating — permanently disabled, drops 0 cards', async () => {
     const N = togelPromo.MESSAGES_PER_PROMO;
     const g = 'TPROMO_GATE';
-    // Reset per-guild state so other suites don't leak in.
-    stateMod.togelPromoCounters.delete(g);
-    stateMod.togelPromoCooldown.delete(g);
-    stateMod.activeMiniEvents.delete(g);
-
     let sent = 0;
     const channel = { send: async () => { sent++; return { delete: async () => {} }; } };
     const mkMsg = () => ({
@@ -350,31 +345,9 @@ module.exports = function register() {
       channel,
     });
 
-    // (a) Spam messages must NOT increment the counter or trigger a drop, even past the threshold.
-    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), /*spam*/ true);
-    if (sent !== 0) throw new Error('spam messages must not drop a promo');
-    if ((stateMod.togelPromoCounters.get(g) || 0) !== 0) throw new Error('spam should not bump the counter');
-
-    // (b) Non-spam messages: counter accrues silently; only the Nth drops exactly one card.
-    for (let i = 0; i < N - 1; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-    if (sent !== 0) throw new Error('must not drop before reaching threshold');
-    await togelPromo.maybeDropTogelPromo(mkMsg(), false);     // Nth message → drop
-    if (sent !== 1) throw new Error('expected exactly 1 drop at threshold, got ' + sent);
-
-    // (c) Cooldown is now armed: subsequent messages (even past N) must NOT drop again.
-    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-    if (sent !== 1) throw new Error('cooldown should block further drops, got sent=' + sent);
-
-    // (d) Admin disable switch: even with cooldown cleared and counter primed, no drop.
-    stateMod.togelPromoCooldown.delete(g);
-    stateMod.togelPromoCounters.set(g, N - 1);
-    dbMod.setSetting(g, 'togel_promo_enabled', '0');
-    try {
-      for (let i = 0; i < 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-      if (sent !== 1) throw new Error('disabled guild must not drop, got sent=' + sent);
-    } finally {
-      dbMod.setSetting(g, 'togel_promo_enabled', '1');
-    }
+    for (let i = 0; i < N + 10; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
+    if (sent !== 0) throw new Error('promo drops must be disabled, got sent=' + sent);
+    if (togelPromo.isEnabled(g) !== false) throw new Error('isEnabled must return false');
   });
 
   // ---- Shop balance: Refine Stone is drop-only, no free buyables ----
@@ -877,48 +850,40 @@ module.exports = function register() {
     if (mc.isSpamMessage(g, mk('pesan yang berbeda lagi'))) throw new Error('different message should NOT be spam');
   });
 
-  // ---- DM notification consent (opt-in) ----
+  // ---- DM notifications (COMPLETELY DISABLED) ----
   const notif = botRequire('systems/notifications.js');
-  test('notif: consent defaults OFF and gates canDM', () => {
+  test('notif: notifications are completely disabled', () => {
     const g = 'NOTIF_G', u = 'NOTIFU1';
-    if (notif.canDM(g, u)) throw new Error('should default to NO consent');
+    if (notif.canDM(g, u)) throw new Error('canDM must return false');
     notif.setDmConsent(g, u, true);
-    if (!notif.canDM(g, u)) throw new Error('should be allowed after opt-in');
-    notif.setDmConsent(g, u, false);
-    if (notif.canDM(g, u)) throw new Error('should be off after opt-out');
+    if (notif.canDM(g, u)) throw new Error('canDM must stay false even after setDmConsent');
+    if (notif.getDmConsent(g, u) !== 0) throw new Error('dm consent must be 0');
   });
-  test('notif: sendNotification only sends with consent', () => {
+  test('notif: sendNotification always returns false', () => {
     const g = 'NOTIF_G2', u = 'NOTIFU2';
     let sent = 0;
     const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
     return Promise.resolve(notif.sendNotification(client, g, u, 'daily', 'hi')).then(r1 => {
-      if (r1 !== false || sent !== 0) throw new Error('must not DM without consent');
-      notif.setDmConsent(g, u, true);
-      return notif.sendNotification(client, g, u, 'daily', 'hi');
-    }).then(r2 => {
-      if (r2 !== true || sent !== 1) throw new Error('should DM once with consent');
+      if (r1 !== false || sent !== 0) throw new Error('must not DM');
     });
   });
-  test('notif: dmUser respects consent', () => {
+  test('notif: dmUser respects consent and is disabled', () => {
     const g = 'NOTIF_G4', u = 'NOTIFU4';
     let sent = 0;
     const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
     return Promise.resolve(notif.dmUser(client, g, u, 'win')).then(r => {
-      if (r !== false || sent !== 0) throw new Error('dmUser must respect consent');
+      if (r !== false || sent !== 0) throw new Error('dmUser must return false');
     });
   });
-  test('notif: dm_asked flips after marking', () => {
+  test('notif: wasDmAsked returns true to prevent prompting', () => {
     const g = 'NOTIF_G5', u = 'NOTIFU5';
-    if (notif.wasDmAsked(g, u)) throw new Error('should not be asked initially');
-    notif.markDmAsked(g, u);
-    if (!notif.wasDmAsked(g, u)) throw new Error('should be asked after mark');
+    if (!notif.wasDmAsked(g, u)) throw new Error('should return true to prevent prompt');
   });
-  test('notif: consent prompt + panel build correctly', () => {
+  test('notif: consent prompt + panel build with disabled info', () => {
     const p = notif.buildConsentPrompt('123');
-    const ids = p.components[0].components.map(c => c.data.custom_id);
-    if (!ids.includes('dmconsent_yes_123') || !ids.includes('dmconsent_no_123')) throw new Error('consent buttons missing');
+    if (!p.embeds || p.embeds.length === 0) throw new Error('consent prompt embed missing');
     const panel = notif.buildNotifPanel('NOTIF_G3', '123');
-    if (!String(panel.components[0].components[0].data.custom_id).startsWith('notif_toggle_master_')) throw new Error('master toggle missing');
+    if (!panel.embeds || panel.embeds.length === 0) throw new Error('panel embed missing');
   });
 
   // ---- Crafting recipes integrity ----

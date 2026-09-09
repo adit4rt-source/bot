@@ -154,24 +154,10 @@ function start(client) {
         console.log('🌾 Farm plots cleanup done on startup');
     } catch (_) { /* non-critical */ }
 
-    registerJob('daily-reminder',      reminders.DAILY_INTERVAL_MS,           () => reminders.runDailyReminderCheck(client),      { startupDelay: 45000 });
-    registerJob('pet-hungry',          reminders.PET_INTERVAL_MS,             () => reminders.runPetHungryCheck(client),           { startupDelay: 45000 });
-    registerJob('expedition-check',    reminders.EXPEDITION_INTERVAL_MS,      () => reminders.runExpeditionCheck(client),          { startupDelay: 45000 });
-    registerJob('quest-reminder',      reminders.QUEST_CHECK_INTERVAL_MS,     () => reminders.runQuestReminderCheck(client));
-    registerJob('streak-reminder',     reminders.STREAK_CHECK_INTERVAL_MS,    () => reminders.runStreakReminderCheck(client));
-    registerJob('farm-ready',          reminders.FARM_CHECK_INTERVAL_MS,      () => reminders.runFarmReadyCheck(client),           { startupDelay: 45000 });
-    registerJob('world-boss-reminder', 3600000,                               () => reminders.runWorldBossReminderCheck(client));
     registerJob('ability-tick',        reminders.ABILITY_TICK_INTERVAL_MS,    () => reminders.runAbilityTickAll(client));
     registerJob('pest-tick',           1800000,                               () => reminders.runPestTick());
 
-    console.log('⏰ Reminder System v2 started (9 jobs via scheduler)');
-
-    // ===== AUTO-HARVEST (from systems/autoHarvest.js) =====
-    try {
-        const { runAutoHarvestCheck } = require('./autoHarvest');
-        registerJob('auto-harvest', 120000, () => runAutoHarvestCheck(client)); // every 2 min
-        console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
-    } catch (e) { console.error('Auto-harvest scheduler error:', e.message); }
+    console.log('⏰ Gameplay timers started (ability-tick & pest-tick via scheduler; DM reminders disabled)');
 
     // ===== PANEL REFRESH (from systems/panelRefresh.js) =====
     try {

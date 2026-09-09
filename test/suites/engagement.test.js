@@ -144,19 +144,13 @@ module.exports = function register() {
     });
   });
 
-  // ============ DAILY REMINDER TRIGGER ============
-  test('daily reminder: sent on first non-spam message, skipped for spam message and subsequent messages', async () => {
+  // ============ DAILY REMINDER TRIGGER (DISABLED) ============
+  test('daily reminder: disabled, no reminder sent on valid message', async () => {
     const G = 'engG_daily_rem', U = '910000000000000009';
     D.getOrCreateUser(G, U);
     D.db.prepare('UPDATE users SET lastDaily = ? WHERE userId = ?').run('2030-05-31', U);
 
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    const state = botRequire('state.js');
     const handleMessageCreate = botRequire('events/messageCreate.js');
-
-    // Clean up state
-    const reminderKey = `${U}_${today}`;
-    state.dailyRemindedUsers.delete(reminderKey);
 
     let sentMessage = null;
     const mockChannel = {
@@ -186,7 +180,7 @@ module.exports = function register() {
       roles: { size: 0 }
     };
 
-    // 1. Send a spam message (length < 2)
+    // 1. Send a spam message
     const msgSpam = {
       author: { id: U, bot: false },
       guild: mockGuild,
@@ -202,7 +196,7 @@ module.exports = function register() {
       throw new Error('daily reminder should not be sent for spam messages');
     }
 
-    // 2. Send a valid message
+    // 2. Send a valid message - should still NOT send reminder (feature disabled)
     const msgValid1 = {
       author: { id: U, bot: false },
       guild: mockGuild,
@@ -214,29 +208,8 @@ module.exports = function register() {
     };
 
     await handleMessageCreate(msgValid1);
-    if (sentMessage === null) {
-      throw new Error('daily reminder should be sent on the first valid (non-spam) message');
-    }
-    if (!sentMessage.content.includes('Kamu belum claim')) {
-      throw new Error('daily reminder message should contain reward claim prompt');
-    }
-    sentMessage = null; // reset
-
-    // 3. Send another valid message on the same day
-    const msgValid2 = {
-      author: { id: U, bot: false },
-      guild: mockGuild,
-      member: mockMember,
-      channel: mockChannel,
-      content: 'halo pesan kedua',
-      mentions: mockMentions,
-      reply: async () => ({ delete: async () => {} })
-    };
-
-
-    await handleMessageCreate(msgValid2);
     if (sentMessage !== null) {
-      throw new Error('daily reminder should not be sent again on subsequent messages');
+      throw new Error('daily reminder should be disabled and not sent');
     }
   });
 };

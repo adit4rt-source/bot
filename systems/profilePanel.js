@@ -140,8 +140,7 @@ function buildProfilePanel(guildId, userId, username, member) {
         new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('🏆 Achievement').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('🎒 Inventory').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_rank_${userId}`).setLabel('🏅 Rank').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('🔔 Notifs').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary)
     );
 
     const row2 = new ActionRowBuilder().addComponents(
@@ -503,9 +502,9 @@ async function handleProfileButton(interaction) {
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // === NOTIFICATIONS ===
+    // === NOTIFICATIONS (DISABLED) ===
     if (action === 'notifs') {
-        return interaction.update(buildNotifPanel(guildId, userId));
+        return interaction.reply({ content: '❌ Fitur notifikasi telah dinonaktifkan sepenuhnya.', ephemeral: true });
     }
 }
 

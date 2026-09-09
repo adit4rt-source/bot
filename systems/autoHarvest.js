@@ -29,42 +29,8 @@ function isPlotReady(plot) {
 }
 
 async function runAutoHarvestCheck(client) {
-    let enabledRows;
-    try {
-        enabledRows = db.prepare('SELECT userId FROM auto_harvest WHERE enabled = 1 AND purchased = 1').all();
-    } catch (e) {
-        log('ERROR', 'autoHarvest: failed to read auto_harvest table', e);
-        return;
-    }
-
-    for (const { userId } of enabledRows) {
-        try {
-            // Plots that are alive and not yet notified for this planting.
-            const plots = db.prepare(
-                "SELECT * FROM farm_plots WHERE userId = ? AND status != 'dead' AND COALESCE(notified, 0) = 0"
-            ).all(userId);
-
-            const readyPlots = plots.filter(isPlotReady);
-            if (readyPlots.length === 0) continue;
-
-            // Mark as notified first so we never double-ping (even if the DM fails).
-            const markStmt = db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?');
-            for (const p of readyPlots) markStmt.run(p.id);
-
-            // Build a short summary of ready crops, e.g. "🌾 Gandum x2, 🍅 Tomat x1".
-            const counts = {};
-            for (const p of readyPlots) {
-                const crop = findCrop(p.cropId);
-                const label = crop ? `${crop.emoji} ${crop.name}` : p.cropId;
-                counts[label] = (counts[label] || 0) + 1;
-            }
-            const summary = Object.entries(counts).map(([label, c]) => `${label} x${c}`).join(', ');
-
-            await notifyFarmReady(client, 'global', userId, summary).catch(() => {});
-        } catch (e) {
-            log('ERROR', `autoHarvest: check failed for userId ${userId}`, e);
-        }
-    }
+    // DM notifications are disabled
+    return;
 }
 
 function startAutoHarvestSchedule(client) {

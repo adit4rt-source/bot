@@ -445,12 +445,6 @@ async function announceDraw(client, guildId, result) {
         allowedMentions: { users: result.winners.map(w => w.userId) },
     }).catch(() => {});
 
-    for (const w of result.winners) {
-        try {
-            const { dmUser } = require('./notifications');
-            await dmUser(client, guildId, w.userId, `🎉 Selamat! Angka **${result.drawnNumber}** tembus — kamu dapat 🪙 **${result.payoutEach.toLocaleString('id-ID')}** dari Togel!`).catch(() => {});
-        } catch (_) { /* DMs closed */ }
-    }
 }
 
 let _schedulerStarted = false;
