@@ -4,12 +4,10 @@ const { db, getUserStat } = require('../database');
 const { PET_DATA } = require('../data/pets');
 const { getTitleFromScore, computeScore } = require('./titles');
 
+const ui = require('./ui');
+
 // ==================== VISUAL HELPERS ====================
-function medal(i) {
-    const medals = ['🥇', '🥈', '🥉'];
-    if (i < 3) return medals[i];
-    return `\`#${i + 1}\``;
-}
+const { medal, shortNum } = ui;
 
 function getStat(guildId, userId, key) { return getUserStat(guildId, userId, key) || 0; }
 
@@ -18,15 +16,8 @@ function getGlobalStat(userId, key) {
     return row ? row.stat_value : 0;
 }
 
-function shortNum(n) {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-    return n.toString();
-}
-
 function progressBar(value, max, length = 8) {
-    const filled = Math.round((value / max) * length);
-    return '▓'.repeat(Math.min(filled, length)) + '░'.repeat(Math.max(0, length - filled));
+    return ui.progressBar(value, max, length);
 }
 
 function streakFire(count) {

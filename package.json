@@ -5,7 +5,7 @@
   "scripts": {
     "preinstall": "node -e \"const fs = require('fs'); try { fs.unlinkSync('tsconfig.json'); console.log('Removed corrupt tsconfig.json'); } catch(e) {}\" && (npx -y allow-scripts auto || npm approve-scripts --allow-scripts-pending || true)",
     "start": "node bot.js",
-    "test": "node --experimental-sqlite test/run.js"
+    "test": "node --test test/ui-refresh.test.js && node --experimental-sqlite test/run.js"
   },
   "engines": {
     "node": "20.x || 22.x"

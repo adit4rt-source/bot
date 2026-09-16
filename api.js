@@ -11,9 +11,10 @@ const API_PORT = process.env.API_PORT || 25922;
 // Set API_HOST=0.0.0.0 in env if the dashboard runs on another machine.
 const API_HOST = process.env.API_HOST || '127.0.0.1';
 const DEFAULT_API_KEY = 'change-this-secret-key';
-const API_KEY = process.env.API_KEY || DEFAULT_API_KEY;
+const API_KEY = (process.env.API_KEY || '').trim();
+const API_CONFIGURED = API_KEY.length > 0 && API_KEY !== DEFAULT_API_KEY;
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-const IS_DEFAULT_API_KEY = !process.env.API_KEY || API_KEY === DEFAULT_API_KEY;
+const IS_DEFAULT_API_KEY = !API_CONFIGURED;
 
 // Discord client reference (set by bot.js)
 let discordClient = null;
@@ -54,12 +55,15 @@ app.use(express.json());
 
 // ==================== AUTH MIDDLEWARE ====================
 function authMiddleware(req, res, next) {
+    if (!API_CONFIGURED) {
+        return res.status(503).json({ error: 'Service unavailable', message: 'API authentication is not configured' });
+    }
     // Prefer header. Query-string keys leak into access logs / browser history.
     const key = req.headers['x-api-key'] || req.query.apikey;
     if (req.query.apikey && !req.headers['x-api-key']) {
         console.warn('[api] apikey via query string is deprecated — use x-api-key header');
     }
-    if (!key || key !== API_KEY) {
+    if (typeof key !== 'string' || key !== API_KEY) {
         return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing API key' });
     }
     next();

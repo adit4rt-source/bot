@@ -26,12 +26,12 @@ function buildQuestPanel(guildId, userId, username) {
 
     const embed = new EmbedBuilder()
         .setTitle(ui.title('📜', 'QUEST', username))
-        .setColor(dailyDone === 3 && weeklyDone === 3 ? ui.COLORS.success : ui.COLORS.quest)
+        .setColor(quests.length > 0 && weeklyQuests.length > 0 && dailyDone === quests.length && weeklyDone === weeklyQuests.length ? ui.COLORS.success : ui.COLORS.quest)
         .setDescription(
             `Selesaikan misi, kumpulkan hadiah! Cek progress kamu di bawah 👇\n` +
             ui.statBlock([
-                `📋 **Harian:** ${ui.progressLine(dailyDone, 3)}  (${dailyDone}/3 selesai)`,
-                `📅 **Mingguan:** ${ui.progressLine(weeklyDone, 3)}  (${weeklyDone}/3 selesai)`,
+                `📋 **Harian:** ${ui.progressLine(dailyDone, quests.length)}  (${dailyDone}/${quests.length} diklaim)`,
+                `📅 **Mingguan:** ${ui.progressLine(weeklyDone, weeklyQuests.length)}  (${weeklyDone}/${weeklyQuests.length} diklaim)`,
                 `🏅 Perfect Day: **${perfectDays}**  •  🔥 Beruntun: **${consecutive}/7**`,
             ]) +
             `\n**Pilih jenis misi:**\n` +
@@ -56,7 +56,7 @@ function buildQuestPanel(guildId, userId, username) {
 // ============ BUILD: Daily Quest Sub-panel ============
 function buildDailyPanel(guildId, userId, username) {
     const quests = getDailyQuests(guildId, userId);
-    const allDailyDone = quests.every(q => q.claimed);
+    const allDailyDone = quests.length > 0 && quests.every(q => q.claimed);
     const perfectDays = getUserStat(guildId, userId, 'quest_perfect_days') || 0;
     const consecutive = getUserStat(guildId, userId, 'quest_consecutive_perfect') || 0;
 
@@ -66,13 +66,14 @@ function buildDailyPanel(guildId, userId, username) {
     const bonusGiven = getUserStat(guildId, userId, bonusKey);
 
     let desc = `📋 **MISI HARIAN** — Reset 00:00 WIB\n\n`;
+    if (!quests.length) desc += 'Belum ada misi harian. Kembali lalu refresh panel.\n';
 
     quests.forEach((q, i) => {
         const diff = DIFFICULTY_TIERS[q.difficulty] || DIFFICULTY_TIERS.easy;
-        const status = q.claimed ? '✅ DIKLAIM' : `${q.progress}/${q.target}`;
+        const status = q.claimed ? '✅ DIKLAIM' : q.progress >= q.target ? '🎁 SIAP DIKLAIM' : `${q.progress}/${q.target}`;
         desc += `${diff.stars} **Misi ${i + 1}** — ${diff.label}\n`;
         desc += `${q.desc}\n`;
-        desc += `> 🪙 **${q.reward} Money**\n`;
+        desc += `> ${ui.money(q.reward)} **Money**\n`;
         desc += `> ${ui.progressLine(q.progress, q.target)} — ${status}\n\n`;
     });
 
@@ -117,19 +118,20 @@ function buildDailyPanel(guildId, userId, username) {
 
     const navRow = ui.backRow(`quest_back_${userId}`);
 
-    return { embeds: [embed], components: [buttons, rerollRow, navRow] };
+    return { embeds: [embed], components: quests.length ? [buttons, rerollRow, navRow] : [navRow] };
 }
 
 // ============ BUILD: Weekly Quest Sub-panel ============
 function buildWeeklyPanel(guildId, userId, username) {
     const weeklyQuests = getOrCreateWeeklyQuests(guildId, userId);
-    const allWeeklyDone = weeklyQuests.every(q => q.claimed);
+    const allWeeklyDone = weeklyQuests.length > 0 && weeklyQuests.every(q => q.claimed);
 
     let desc = `📅 **MISI MINGGUAN** — Reset Senin 00:00 WIB\n`;
     desc += `> 🆔 Week: **${getWeekId()}**\n\n`;
+    if (!weeklyQuests.length) desc += 'Belum ada misi mingguan. Kembali lalu refresh panel.\n';
 
     weeklyQuests.forEach((q, i) => {
-        const status = q.claimed ? '✅ DIKLAIM' : `${q.progress}/${q.target}`;
+        const status = q.claimed ? '✅ DIKLAIM' : q.progress >= q.target ? '🎁 SIAP DIKLAIM' : `${q.progress}/${q.target}`;
         desc += `🏆 **Weekly ${i + 1}**\n`;
         desc += `${q.desc}\n`;
         desc += `> 🪙 **${q.reward.toLocaleString('id-ID')} Money**\n`;
@@ -155,7 +157,7 @@ function buildWeeklyPanel(guildId, userId, username) {
 
     const navRow = ui.backRow(`quest_back_${userId}`);
 
-    return { embeds: [embed], components: [buttons, navRow] };
+    return { embeds: [embed], components: weeklyQuests.length ? [buttons, navRow] : [navRow] };
 }
 
 // ============ HANDLER: /quest command ============

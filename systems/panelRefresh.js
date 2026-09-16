@@ -33,15 +33,27 @@ function untrack(messageId) {
     if (messageId) registry.delete(messageId);
 }
 
+let ticking = false;
 async function tick() {
-    const now = Date.now();
-    for (const [id, entry] of registry) {
-        if (now > entry.expiresAt) { registry.delete(id); continue; }
-        let payload;
-        try { payload = entry.build(); }
-        catch (e) { registry.delete(id); continue; }       // builder broke — drop it
-        try { await entry.message.edit(payload); }
-        catch (e) { registry.delete(id); }                 // message deleted / not editable
+    if (ticking) return;
+    ticking = true;
+    try {
+        for (const [id, entry] of [...registry]) {
+            if (registry.get(id) !== entry) continue;
+            if (Date.now() >= entry.expiresAt) { registry.delete(id); continue; }
+            try {
+                const payload = await entry.build();
+                // Navigation may remove or replace this entry while its builder awaits.
+                if (registry.get(id) !== entry) continue;
+                if (Date.now() >= entry.expiresAt) { registry.delete(id); continue; }
+                await entry.message.edit(payload);
+            } catch (e) {
+                // A failing old request must not remove a newly tracked panel.
+                if (registry.get(id) === entry) registry.delete(id);
+            }
+        }
+    } finally {
+        ticking = false;
     }
 }
 

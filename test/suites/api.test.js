@@ -61,9 +61,10 @@ module.exports = function register() {
         .run(week, 'wbu1', 'Hero', 5000, 3, now);
 
     // ---------------- dispatch helper ----------------
+    const KEY = 'local-test-key-not-for-production';
+    process.env.API_KEY = KEY;
     botRequire('api.js'); // registers routes on the express mock
     const app = require('express').__app;
-    const KEY = 'change-this-secret-key'; // default API_KEY when env unset
     const call = (url, withKey = true) => app.__dispatch('GET', url, { headers: withKey ? { 'x-api-key': KEY } : {} });
 
     // ---------------- auth ----------------
