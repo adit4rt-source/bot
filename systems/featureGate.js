@@ -27,6 +27,7 @@ const FEATURES = [
     { key: 'feature_belajar',      label: 'Belajar',       emoji: '📚', desc: '/belajar (Duolingo-style)', commands: ['belajar'] },
     { key: 'leveling_enabled',     label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
     { key: 'streak_enabled',       label: 'Streak System',   emoji: '🔥', desc: 'Sistem streak harian chat', commands: [] },
+    { key: 'streak_freeze',        label: 'Streak Freeze',   emoji: '🧊', desc: 'Freeze streak api agar tidak mati saat skip daily', commands: [], default: '1' },
     { key: 'love_enabled',         label: 'Love System',     emoji: '❤️', desc: 'Sistem status love, /love, /marry, /divorce', commands: ['love', 'marry', 'divorce'] },
     { key: 'onboarding_enabled',   label: 'Onboarding DM',   emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
     { key: 'tiktok_convert',       label: 'TikTok Auto-Convert', emoji: '🎵', desc: 'Deteksi link TikTok & convert mp4', commands: [] },

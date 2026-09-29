@@ -295,8 +295,21 @@ async function checkAndUpdateStreak(message) {
     
     if (!streakActivatedToday && streakData.last_date !== today) {
         const diffDays = Math.floor((new Date(today) - new Date(streakData.last_date)) / 86400000);
-        if (diffDays >= 1 && diffDays <= 3) streakData.count += 1;
-        else { if (streakData.count > 1) db.prepare('INSERT OR REPLACE INTO streak_history (guildId, userId, lost_count) VALUES (?, ?, ?)').run(guildId, userId, streakData.count); streakData.count = 1; }
+        const streakFreeze = getSetting(guildId, 'streak_freeze', '1');
+        const isFrozen = streakFreeze !== '0' && streakFreeze !== 'false';
+
+        if (isFrozen) {
+            // FREEZE AKTIF: Streak api tidak bisa mati/reset jika skip hari / tidak daily.
+            // Beda hari (diffDays >= 1) tetap menyalakan dan menambah streak (+1).
+            if (diffDays >= 1) {
+                streakData.count = (streakData.count || 0) + 1;
+            } else if (!streakData.count) {
+                streakData.count = 1;
+            }
+        } else {
+            if (diffDays >= 1 && diffDays <= 3) streakData.count += 1;
+            else { if (streakData.count > 1) db.prepare('INSERT OR REPLACE INTO streak_history (guildId, userId, lost_count) VALUES (?, ?, ?)').run(guildId, userId, streakData.count); streakData.count = 1; }
+        }
         db.prepare('UPDATE streaks SET count = ?, last_date = ? WHERE guildId = ? AND userId = ?').run(streakData.count, today, guildId, userId);
         streakActivatedToday = true;
     }

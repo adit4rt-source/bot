@@ -421,17 +421,19 @@ async function handleProfileButton(interaction) {
         const currentMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
         const restoreRow = db.prepare('SELECT count FROM streak_restores WHERE guildId = ? AND userId = ? AND month = ?').get(guildId, userId, currentMonth);
         const restoreCount = restoreRow ? restoreRow.count : 0;
-        const streakEmoji = getSetting(guildId, 'streak_emoji', '\ud83d\udd25');
+        const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+        const isFrozen = getSetting(guildId, 'streak_freeze', '1') !== '0';
 
         const embed = new EmbedBuilder()
-            .setTitle(`${streakEmoji} Streak Info \u2014 ${interaction.user.username}`)
+            .setTitle(`${streakEmoji} Streak Info — ${interaction.user.username}`)
             .setColor('#E74C3C')
             .setDescription(
                 `> ${streakEmoji} **Streak:** ${streakCount} hari\n` +
-                `> \ud83d\udcc5 **Last Active:** ${lastDate}\n` +
-                `> \u267b\ufe0f **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
-                `*Ketik pesan setiap hari untuk menjaga streak!*\n` +
-                `*Jika streak terputus, klik \u267b\ufe0f Restore (maks 3x/bulan).*`
+                `> 📅 **Last Active:** ${lastDate}\n` +
+                (isFrozen ? `> 🧊 **Status:** Freeze Aktif *(Streak aman & tidak akan mati saat skip hari)*\n` : '') +
+                `> ♻️ **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
+                `*Ketik pesan di chat setiap hari untuk menyalakan/menambah streak!*\n` +
+                (isFrozen ? `*Streak saat ini dibekukan: tidak akan pernah mati meski tidak aktif.*` : `*Jika streak terputus, klik ♻️ Restore (maks 3x/bulan).*`)
             );
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_streakrestore_${userId}`).setLabel('\u267b\ufe0f Restore Streak').setStyle(ButtonStyle.Success).setDisabled(restoreCount >= 3),
