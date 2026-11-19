@@ -63,7 +63,10 @@ const commands = [
             .setDescription('🏛️ VVIP High-Table Lounge — Khusus member streak 100+ hari'))
         .addSubcommand(sub => sub
             .setName('setup_lounge')
-            .setDescription('[Admin] Auto-setup category & channel VVIP Lounge')),
+            .setDescription('[Admin] Auto-setup category & channel VVIP Lounge'))
+        .addSubcommand(sub => sub
+            .setName('sync')
+            .setDescription('[Admin] Sinkronkan role streak ke semua member sesuai database')),
     new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
     new SlashCommandBuilder()
         .setName('welcomer')

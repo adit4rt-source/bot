@@ -297,6 +297,20 @@ client.once(Events.ClientReady, async () => {
     await cacheAllGuildInvites(client);
     console.log('📨 Invite cache loaded for all guilds');
 
+    // Auto-sync streak roles for veterans across all guilds on startup
+    try {
+        const { syncAllMemberStreakRoles } = require('./systems/streakTier');
+        for (const [, guild] of client.guilds.cache) {
+            syncAllMemberStreakRoles(guild).then(r => {
+                if (r && r.syncedCount > 0) {
+                    log('INFO', `[StreakTier] Auto-synced ${r.syncedCount} veteran members in ${guild.name}`);
+                }
+            }).catch(e => {
+                log('WARN', `[StreakTier] Auto-sync skipped in ${guild.name}: ${e.message}`);
+            });
+        }
+    } catch (_) {}
+
     // Auto-post changelog
     try {
         const { autoPostChangelog } = require('./systems/changelog');

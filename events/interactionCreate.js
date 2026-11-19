@@ -40,7 +40,7 @@ const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRol
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTempvoiceCommand, handleTempvoiceButton, handleTempvoiceUserSelect, handleTempvoiceModal, isTempvoicePanelButton, isTempvoiceUserSelect, isTempvoiceModal } = require('../systems/tempvoicePanel');
-const { handleStreakButton, isStreakPanelButton, buildStreakStatusPanel, buildStreakLeaderboard, buildLoungePanel, setupLounge } = require('../systems/streakTier');
+const { handleStreakButton, isStreakPanelButton, buildStreakStatusPanel, buildStreakLeaderboard, buildLoungePanel, setupLounge, syncMemberStreakRole, syncAllMemberStreakRoles } = require('../systems/streakTier');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const i18n = require('../systems/i18n');
 const consent = require('../systems/consent');
@@ -777,6 +777,20 @@ async function routeInteraction(interaction) {
             const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
             const streakCount = streakRow ? Number(streakRow.count) || 0 : 0;
 
+            if (sub === 'sync') {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator) && !interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+                    return interaction.reply({ content: '❌ Hanya admin atau member dengan permission Manage Roles yang bisa menjalankan sync role.', ephemeral: true });
+                }
+                await interaction.deferReply({ ephemeral: true });
+                const res = await syncAllMemberStreakRoles(interaction.guild);
+                if (!res.ok) {
+                    return interaction.editReply({ content: `❌ Gagal sync role streak: ${res.error}` });
+                }
+                const sampleText = res.details.length > 0 ? `\n\n**Daftar Member yang Disinkronkan:**\n${res.details.join('\n')}` : '';
+                return interaction.editReply({
+                    content: `✅ **Sinkronisasi Role Streak Berhasil!**\n> 👥 Total Member Disinkronkan: **${res.syncedCount}** dari **${res.totalEligible}** pemilik streak\n> 🎭 Role Tier Aktif: **${res.rolesCreated}/7** tier${sampleText}`
+                });
+            }
             if (sub === 'leaderboard') {
                 return interaction.reply(buildStreakLeaderboard(guildId, interaction.user.id));
             }
@@ -792,8 +806,12 @@ async function routeInteraction(interaction) {
                 if (!res.ok) {
                     return interaction.editReply({ content: `❌ Gagal setup lounge: ${res.error}` });
                 }
-                return interaction.editReply({ content: `✅ **VVIP High-Table Lounge Berhasil Dikonfigurasi!**\n> 📁 Category: <#${res.category.id}>\n> 💬 Text: <#${res.textChannel.id}>\n> 🔊 Voice: <#${res.voiceChannel.id}>\n> 👑 Hak akses otomatis disinkronkan ke member streak 100+ & 200+!` });
+                // Auto sync roles when lounge is configured
+                syncAllMemberStreakRoles(interaction.guild).catch(() => {});
+                return interaction.editReply({ content: `✅ **VVIP High-Table Lounge Berhasil Dikonfigurasi!**\n> 📁 Category: <#${res.category.id}>\n> 💬 Text: <#${res.textChannel.id}>\n> 🔊 Voice: <#${res.voiceChannel.id}>\n> 👑 Hak akses dan role tier otomatis disinkronkan ke member!` });
             }
+            // Auto sync user's role when checking status
+            syncMemberStreakRole(interaction.member, streakCount).catch(() => {});
             return interaction.reply(buildStreakStatusPanel(guildId, interaction.user.id, interaction.user.username, streakCount));
         }
     }

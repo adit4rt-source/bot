@@ -82,11 +82,16 @@ async function checkAndUpdateStreak(message) {
         }
     } catch (_) {}
 
+    // Auto-sync prestige streak role on ANY message if member is missing their tier role, or on daily activation
+    const highestTier = getStreakTier(streakData.count);
+    const tierRoleName = highestTier ? highestTier.name : null;
+    const hasTierRole = tierRoleName && member.roles?.cache ? member.roles.cache.some(r => r.name === tierRoleName) : false;
+    if (tierRoleName && (!hasTierRole || streakActivatedToday)) {
+        await syncMemberStreakRole(member, streakData.count).catch(() => null);
+    }
+
     if (streakActivatedToday) {
         await checkAchievements(member.guild, userId, { type: 'streak' });
-
-        // Auto-sync prestige streak role (Gaya A: Sparks, Blazing, Tempest, Sovereign, Luminary, Eternal, Mythos)
-        await syncMemberStreakRole(member, streakData.count).catch(() => null);
 
         // Milestone announcement & tier rewards
         const tierHit = STREAK_TIERS.find(t => t.days === streakData.count);

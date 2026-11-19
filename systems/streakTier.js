@@ -49,24 +49,81 @@ function getStreakChatBonus(days) {
     return tier ? tier.chatBonus : 0;
 }
 
+// ==================== ROLE HELPERS (supports Discord.js Collection & Map) ====================
+function findRoleByName(guild, name) {
+    if (!guild || !guild.roles || !guild.roles.cache) return null;
+    const cache = guild.roles.cache;
+    if (typeof cache.find === 'function') {
+        return cache.find(r => r && r.name === name);
+    }
+    for (const [, role] of cache) {
+        if (role && role.name === name) return role;
+    }
+    return null;
+}
+
+function memberHasRole(member, roleId) {
+    if (!member || !member.roles || !member.roles.cache) return false;
+    const cache = member.roles.cache;
+    if (typeof cache.has === 'function') {
+        return cache.has(roleId);
+    }
+    for (const [id, role] of cache) {
+        if (id === roleId || (role && role.id === roleId)) return true;
+    }
+    return false;
+}
+
 // ==================== AUTO-ROLE SYNC & CLEANUP ====================
+async function ensureAllStreakRoles(guild) {
+    if (!guild) return {};
+    const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
+    if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) {
+        return {};
+    }
+    await guild.roles.fetch().catch(() => {});
+    const roleMap = {};
+    for (const tier of STREAK_TIERS) {
+        let role = findRoleByName(guild, tier.name);
+        if (!role) {
+            try {
+                role = await guild.roles.create({
+                    name: tier.name,
+                    color: tier.color,
+                    hoist: true,
+                    reason: `Auto-create streak prestige role: ${tier.name}`
+                });
+            } catch (err) {
+                console.error(`[StreakTier] Gagal membuat role ${tier.name}:`, err.message);
+            }
+        }
+        if (role) roleMap[tier.name] = role;
+    }
+    return roleMap;
+}
+
 async function syncMemberStreakRole(member, streakCount) {
     if (!member || !member.guild) return { highestTier: null, roleAdded: false, roleRemoved: false };
     const guild = member.guild;
     const streak = Math.max(0, Number(streakCount) || 0);
     const highestTier = getStreakTier(streak);
 
-    const me = guild.members?.me;
+    const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
     if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) {
         return { highestTier, roleAdded: false, roleRemoved: false };
     }
 
     const tierNames = new Set(STREAK_TIERS.map(t => t.name));
 
+    // Ensure roles cache is loaded
+    if (!guild.roles.cache.size) {
+        await guild.roles.fetch().catch(() => {});
+    }
+
     // Find or create the highest tier role
     let highestRole = null;
     if (highestTier) {
-        highestRole = guild.roles.cache.find(r => r.name === highestTier.name);
+        highestRole = findRoleByName(guild, highestTier.name);
         if (!highestRole) {
             try {
                 highestRole = await guild.roles.create({
@@ -75,7 +132,9 @@ async function syncMemberStreakRole(member, streakCount) {
                     hoist: true,
                     reason: `Auto-create streak tier role: ${highestTier.name}`
                 });
-            } catch (_) {}
+            } catch (err) {
+                console.error(`[StreakTier] Error creating role ${highestTier.name}:`, err.message);
+            }
         }
     }
 
@@ -97,11 +156,16 @@ async function syncMemberStreakRole(member, streakCount) {
     }
 
     // Assign highest role if member does not have it yet
-    if (highestRole && member.roles?.cache && !member.roles.cache.has(highestRole.id)) {
-        try {
-            await member.roles.add(highestRole, `Streak milestone reached: ${highestTier.days} days`);
-            roleAdded = true;
-        } catch (_) {}
+    if (highestRole) {
+        const hasIt = memberHasRole(member, highestRole.id);
+        if (!hasIt) {
+            try {
+                await member.roles.add(highestRole, `Streak milestone reached: ${highestTier.days} days`);
+                roleAdded = true;
+            } catch (err) {
+                console.error(`[StreakTier] Error adding role ${highestRole.name} to member ${member.id}:`, err.message);
+            }
+        }
     }
 
     return {
@@ -109,6 +173,56 @@ async function syncMemberStreakRole(member, streakCount) {
         highestRole,
         roleAdded,
         roleRemoved
+    };
+}
+
+async function syncAllMemberStreakRoles(guild) {
+    if (!guild) return { ok: false, error: 'Guild tidak valid' };
+    const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
+    if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) {
+        return { ok: false, error: 'Bot membutuhkan permission "Manage Roles"!' };
+    }
+
+    // 1. Ensure all 7 roles exist in server
+    const roleMap = await ensureAllStreakRoles(guild);
+
+    // 2. Fetch all guild members into cache
+    await guild.members.fetch().catch(() => {});
+
+    // 3. Query streaks from DB
+    let rows = [];
+    try {
+        rows = db.prepare('SELECT userId, count FROM streaks WHERE guildId = ? AND count >= 7 ORDER BY count DESC').all(guild.id);
+    } catch (_) {
+        rows = db.prepare('SELECT userId, count FROM streaks WHERE count >= 7 ORDER BY count DESC').all();
+    }
+
+    let syncedCount = 0;
+    const details = [];
+
+    for (const r of rows) {
+        const member = guild.members.cache.get(r.userId);
+        if (!member) continue;
+
+        const tier = getStreakTier(r.count);
+        if (!tier) continue;
+
+        const res = await syncMemberStreakRole(member, r.count);
+        if (res.roleAdded || res.highestRole) {
+            syncedCount++;
+            if (details.length < 10) {
+                details.push(`• <@${member.id}> (${r.count} hari) → ${tier.emoji} **${tier.name}**`);
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    return {
+        ok: true,
+        syncedCount,
+        totalEligible: rows.length,
+        rolesCreated: Object.keys(roleMap).length,
+        details
     };
 }
 
@@ -124,7 +238,7 @@ async function setupLounge(guild) {
     const loungeTiers = STREAK_TIERS.filter(t => t.lounge);
     const loungeRoles = [];
     for (const t of loungeTiers) {
-        let r = guild.roles.cache.find(role => role.name === t.name);
+        let r = findRoleByName(guild, t.name);
         if (!r) {
             try {
                 r = await guild.roles.create({
@@ -430,7 +544,9 @@ module.exports = {
     getNextStreakTier,
     getStreakEmoji,
     getStreakChatBonus,
+    ensureAllStreakRoles,
     syncMemberStreakRole,
+    syncAllMemberStreakRoles,
     setupLounge,
     claimLoungeCrate,
     buildStreakStatusPanel,

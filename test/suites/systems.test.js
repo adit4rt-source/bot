@@ -1262,6 +1262,60 @@ module.exports = function register() {
     if (rDup.ok) throw new Error('duplicate crate claim should be blocked');
   });
 
+    test('streakTier: ensureAllStreakRoles and syncAllMemberStreakRoles work properly', async () => {
+    const rolesCreated = [];
+    const membersMap = new Map();
+
+    const mockRole = (name, color) => ({ id: `role_${name}`, name, color });
+
+    const fakeGuild = {
+      id: 'ST_SYNC_GUILD',
+      members: {
+        me: { permissions: { has: () => true } },
+        fetch: async () => membersMap,
+        fetchMe: async () => fakeGuild.members.me,
+        cache: membersMap
+      },
+      roles: {
+        cache: new Map(),
+        fetch: async () => fakeGuild.roles.cache,
+        create: async (data) => {
+          const r = mockRole(data.name, data.color);
+          fakeGuild.roles.cache.set(r.id, r);
+          rolesCreated.push(r);
+          return r;
+        }
+      }
+    };
+
+    // 1. ensureAllStreakRoles creates 7 roles
+    const createdMap = await streakTier.ensureAllStreakRoles(fakeGuild);
+    if (Object.keys(createdMap).length !== 7) throw new Error('expected 7 streak roles created');
+
+    // 2. Setup mock member with streak 224
+    const addedRoles = [];
+    const mockMember = {
+      id: 'u_veteran_224',
+      guild: fakeGuild,
+      roles: {
+        cache: new Map(),
+        add: async (r) => { addedRoles.push(r.name); mockMember.roles.cache.set(r.id, r); },
+        remove: async (r) => { mockMember.roles.cache.delete(r.id); }
+      }
+    };
+    membersMap.set('u_veteran_224', mockMember);
+
+    // Seed database streak
+    db.db.prepare('DELETE FROM streaks WHERE userId = ?').run('u_veteran_224');
+    db.db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 224, ?)').run('ST_SYNC_GUILD', 'u_veteran_224', '2026-11-20');
+
+    // 3. syncAllMemberStreakRoles should sync u_veteran_224 to ✦ Eternal
+    const res = await streakTier.syncAllMemberStreakRoles(fakeGuild);
+    if (!res.ok) throw new Error('syncAllMemberStreakRoles failed: ' + res.error);
+    if (res.syncedCount < 1) throw new Error('expected at least 1 member synced');
+    if (!addedRoles.includes('✦ Eternal')) throw new Error('member 224 days should be granted ✦ Eternal');
+  });
+
   test('dailyReward: milestones extended to 200 and 365 days', () => {
     const r200 = dr.computeDailyReward(200);
     if (!r200.milestoneLabel || !r200.milestoneLabel.includes('200 HARI')) throw new Error('missing 200-day milestone');
