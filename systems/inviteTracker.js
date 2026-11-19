@@ -1,6 +1,6 @@
 // systems/inviteTracker.js — Invite Tracking System
 // Tracks who invited whom, invite counts, and leaderboard.
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const { db, getSetting } = require('../database');
 
 // ==================== DATABASE SETUP ====================
@@ -42,12 +42,13 @@ function getAllInviteSettings(guildId) {
 // ==================== CACHE MANAGEMENT ====================
 async function cacheGuildInvites(guild) {
     try {
+        if (!guild?.members?.me?.permissions?.has(PermissionsBitField.Flags.ManageGuild)) return;
         const invites = await guild.invites.fetch();
         const cacheMap = new Map();
         invites.forEach(inv => cacheMap.set(inv.code, inv.uses || 0));
         inviteCache.set(guild.id, cacheMap);
     } catch (e) {
-        // Bot might not have MANAGE_GUILD permission
+        // Bot might not have MANAGE_GUILD permission or guild unavailable
     }
 }
 
@@ -148,10 +149,18 @@ async function handleMemberJoin(member) {
         return;
     }
 
-    // Check if fake (account age)
+    // Anti-abuse checks
     const fakeThreshold = parseInt(getInviteSetting(guildId, 'invite_fake_threshold', '7')) || 7;
     const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
-    const isFake = accountAgeDays < fakeThreshold ? 1 : 0;
+    const isTooYoung = accountAgeDays < fakeThreshold;
+    const isSelf = inviterUserId === member.id;
+    const isBot = Boolean(member.user?.bot);
+
+    // Rejoin exploit prevention: check if member previously joined this server
+    const prevRecord = db.prepare('SELECT 1 FROM invites WHERE guildId = ? AND invitedId = ?').get(guildId, member.id);
+    const isRejoin = Boolean(prevRecord);
+
+    const isFake = (isTooYoung || isSelf || isBot || isRejoin) ? 1 : 0;
 
     // Store invite record
     db.prepare('INSERT OR REPLACE INTO invites (guildId, inviterId, invitedId, code, joinedAt, leftAt, fake) VALUES (?, ?, ?, ?, ?, NULL, ?)').run(guildId, inviterUserId, member.id, usedCode, Date.now(), isFake);
@@ -178,6 +187,12 @@ async function handleMemberJoin(member) {
         if (channel) {
             const stats = getInviterStats(guildId, inviterUserId);
 
+            const notes = [];
+            if (isSelf) notes.push('⚠️ *Self-invite — tidak dihitung*');
+            else if (isBot) notes.push('🤖 *Bot invite — tidak dihitung*');
+            else if (isRejoin) notes.push('🔄 *Rejoin — tidak dihitung ulang*');
+            else if (isTooYoung) notes.push(`⚠️ *Akun baru (< ${fakeThreshold} hari)*`);
+
             const embed = new EmbedBuilder()
                 .setColor(isFake ? '#FAA61A' : '#E91E63')
                 .setDescription(inviteFrame([
@@ -185,7 +200,7 @@ async function handleMemberJoin(member) {
                     `**Invited by :** <@${inviterUserId}>`,
                     `**Total Invite :** ${stats.total}`,
                     `**Total Member :** ${member.guild.memberCount}`,
-                    ...(isFake ? [`⚠️ *Possible fake — akun < ${fakeThreshold} hari*`] : []),
+                    ...notes,
                 ]))
                 .setFooter({ text: `ID: ${member.id}` })
                 .setTimestamp();
@@ -274,15 +289,37 @@ function getInviterStats(guildId, userId) {
 
 function getInviteLeaderboard(guildId, limit = 20) {
     const rows = db.prepare(`
-        SELECT inviterId as userId, 
-            COUNT(CASE WHEN fake = 0 AND leftAt IS NULL THEN 1 END) as total,
-            COUNT(CASE WHEN fake = 1 THEN 1 END) as fake,
-            COUNT(CASE WHEN leftAt IS NOT NULL AND fake = 0 THEN 1 END) as 'left',
-            COUNT(*) as totalAll
-        FROM invites WHERE guildId = ? 
-        GROUP BY inviterId 
-        ORDER BY total DESC LIMIT ?
-    `).all(guildId, limit);
+        WITH inviter_totals AS (
+            SELECT 
+                u.userId,
+                COALESCE(i.real_count, 0) as real,
+                COALESCE(i.fake_count, 0) as fake,
+                COALESCE(i.left_count, 0) as left_count,
+                COALESCE(i.total_all, 0) as totalAll,
+                COALESCE(b.bonus, 0) as bonus,
+                (COALESCE(i.real_count, 0) + COALESCE(b.bonus, 0)) as total
+            FROM (
+                SELECT inviterId as userId FROM invites WHERE guildId = ?
+                UNION
+                SELECT userId FROM invite_bonus WHERE guildId = ?
+            ) u
+            LEFT JOIN (
+                SELECT inviterId,
+                    COUNT(CASE WHEN fake = 0 AND leftAt IS NULL THEN 1 END) as real_count,
+                    COUNT(CASE WHEN fake = 1 THEN 1 END) as fake_count,
+                    COUNT(CASE WHEN leftAt IS NOT NULL AND fake = 0 THEN 1 END) as left_count,
+                    COUNT(*) as total_all
+                FROM invites WHERE guildId = ?
+                GROUP BY inviterId
+            ) i ON i.inviterId = u.userId
+            LEFT JOIN invite_bonus b ON b.guildId = ? AND b.userId = u.userId
+        )
+        SELECT userId, total, real, fake, left_count as 'left', bonus, totalAll
+        FROM inviter_totals
+        WHERE total > 0 OR totalAll > 0
+        ORDER BY total DESC
+        LIMIT ?
+    `).all(guildId, guildId, guildId, guildId, limit);
     return rows;
 }
 

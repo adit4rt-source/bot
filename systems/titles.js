@@ -25,7 +25,7 @@ const TITLE_TIERS = [
 //
 // Philosophy ("prestige"): raw wealth is capped, and afk/spam-able stats (chat, voice,
 // reactions) are heavily down-weighted + capped, so rank reflects real mastery across
-// every system (battle, fishing, pets, quests, social), not just being rich or chatty.
+// every system (battle, fishing, pets, social), not just being rich or chatty.
 function computeScore(p = {}) {
     const n = (v) => Number(v) || 0;
     const b = {};
@@ -42,7 +42,6 @@ function computeScore(p = {}) {
         + n(p.worldBossHits) * 5 + n(p.worldBossKills) * 100;
     b['Pet Mastery'] = n(p.expeditions) * 10 + n(p.refines) * 8 + n(p.relicMelts) * 3
         + n(p.fusions) * 15 + n(p.awakenings) * 60;
-    b['Quest'] = n(p.quests) * 10 + n(p.weeklyQuests) * 40;
     b['Sosial'] = n(p.gifts) * 15 + n(p.trades) * 20
         + Math.min(Math.floor(n(p.chats) / 10), 2000)
         + Math.min(Math.floor(n(p.reactions) / 5), 500)
@@ -73,7 +72,6 @@ function gatherScoreParts(guildId, userId) {
         worldBossHits: s('world_boss_attacks'), worldBossKills: s('world_boss_last_hit'),
         expeditions: s('total_expeditions'), refines: s('refine_successes'), relicMelts: s('relic_melts'),
         fusions: s('fusion_success'), awakenings: s('total_awakenings'),
-        quests: s('total_quests_done'), weeklyQuests: s('total_weekly_quests_done'),
         gifts: s('total_gifts_sent'), trades: s('trades_completed'),
         chats: s('total_chats'), reactions: s('total_reactions'), voice: s('total_voice_mins'),
         gambling: s('slot_wins') + s('coinflip_wins') + s('roulette_wins'), togelWins: s('togel_wins'),

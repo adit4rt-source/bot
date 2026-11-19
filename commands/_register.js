@@ -6,7 +6,6 @@ const commands = [
     new SlashCommandBuilder().setName('pet').setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
     new SlashCommandBuilder().setName('fishing').setDescription('🎣 Fishing Panel — Kelola memancing'),
     new SlashCommandBuilder().setName('farm').setDescription('🌾 Farm Panel — Kelola kebun'),
-    new SlashCommandBuilder().setName('quest').setDescription('📜 Quest Panel — Misi Harian & Mingguan'),
     new SlashCommandBuilder().setName('casino').setDescription('🎰 Casino Panel — Coinflip, Slot, Roulette'),
     new SlashCommandBuilder().setName('wallet').setDescription('💰 Economy Panel — Saldo, Gift, Redeem, Leaderboard'),
     new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, Achievement, Inventory, Stats'),
@@ -15,7 +14,6 @@ const commands = [
     // ================= QUICK ACTION COMMANDS =================
     new SlashCommandBuilder().setName('fish').setDescription('🎣 Lempar pancing (quick cast)'),
     new SlashCommandBuilder().setName('daily').setDescription('🎁 Klaim hadiah harian'),
-    new SlashCommandBuilder().setName('calendar').setDescription('📅 Daily Login Calendar'),
     new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP')
         .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
@@ -52,15 +50,6 @@ const commands = [
 
     // ================= SOCIAL / SERVER TOOLS =================
     new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
-    new SlashCommandBuilder().setName('love').setDescription('❤️ Love — Lihat berapa orang yang menyukaimu (react ❤️ di chat orang untuk kasih love)')
-        .addUserOption(opt => opt.setName('user').setDescription('Lihat love milik user lain').setRequired(false))
-        .addChannelOption(opt => opt.setName('channel').setDescription('[Admin] Set channel notifikasi saat ada yang memberi love').setRequired(false).addChannelTypes(ChannelType.GuildText))
-        .addStringOption(opt => opt.setName('admin').setDescription('[Admin] Atur fitur love').setRequired(false)
-            .addChoices(
-                { name: 'Aktifkan Fitur', value: 'on' },
-                { name: 'Nonaktifkan Fitur', value: 'off' },
-                { name: 'Matikan Notifikasi Channel', value: 'notif_off' },
-            )),
     new SlashCommandBuilder()
         .setName('welcomer')
         .setDescription('👋 Welcomer Panel — Konfigurasi welcome & goodbye')
@@ -110,39 +99,10 @@ const commands = [
                 { name: '🧩 Teka-Teki', value: 'tekateki' },
                 { name: '🤫 Truth', value: 'truth' },
             )),
-    new SlashCommandBuilder().setName('ship').setDescription('💘 Love Calculator — Hitung kecocokan 2 orang')
-        .addUserOption(opt => opt.setName('user1').setDescription('Orang pertama').setRequired(true))
-        .addUserOption(opt => opt.setName('user2').setDescription('Orang kedua (kosong = kamu)').setRequired(false))
-        .addStringOption(opt => opt.setName('tema').setDescription('Tema card (dark/pink/light)').setRequired(false)
-            .addChoices(
-                { name: '🌙 Dark', value: 'dark' },
-                { name: '💗 Pink', value: 'pink' },
-                { name: '☀️ Light', value: 'light' },
-            )),
-    new SlashCommandBuilder().setName('marry').setDescription('💍 Lamar seseorang untuk menikah')
-        .addUserOption(opt => opt.setName('user').setDescription('Yang mau dilamar').setRequired(true)),
-    new SlashCommandBuilder().setName('divorce').setDescription('💔 Cerai dari pasangan saat ini'),
 
     // ================= AFK =================
     new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')
         .addStringOption(opt => opt.setName('alasan').setDescription('Alasan AFK (opsional)').setRequired(false)),
-
-    // ================= STARBOARD =================
-    new SlashCommandBuilder()
-        .setName('starboard')
-        .setDescription('⭐ Starboard — Pesan populer di-highlight otomatis')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild)
-        .addSubcommand(sub => sub.setName('setup').setDescription('⭐ Set channel starboard')
-            .addChannelOption(opt => opt.setName('channel').setDescription('Channel untuk starboard').setRequired(true).addChannelTypes(ChannelType.GuildText)))
-        .addSubcommand(sub => sub.setName('threshold').setDescription('⭐ Set minimum star untuk masuk starboard')
-            .addIntegerOption(opt => opt.setName('jumlah').setDescription('Minimum jumlah star (default: 3)').setRequired(true).setMinValue(1).setMaxValue(50)))
-        .addSubcommand(sub => sub.setName('emoji').setDescription('⭐ Ganti emoji starboard')
-            .addStringOption(opt => opt.setName('emoji').setDescription('Emoji yang dipakai (default: ⭐)').setRequired(true)))
-        .addSubcommand(sub => sub.setName('selfstar').setDescription('⭐ Bolehkan star pesan sendiri?')
-            .addStringOption(opt => opt.setName('allow').setDescription('Bolehkan?').setRequired(true)
-                .addChoices({ name: 'Ya', value: '1' }, { name: 'Tidak', value: '0' })))
-        .addSubcommand(sub => sub.setName('disable').setDescription('⭐ Nonaktifkan starboard'))
-        .addSubcommand(sub => sub.setName('status').setDescription('⭐ Lihat status starboard saat ini')),
 
     // ================= LANGUAGE / LOCALE =================
     new SlashCommandBuilder().setName('language').setDescription('🌐 Ganti bahasa bot / Change bot language')

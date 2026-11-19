@@ -140,40 +140,8 @@ module.exports = function register() {
     });
   });
 
-  // ---- Quest system (new types + progress wiring) ----
-  const quests = botRequire('systems/quests.js');
-  assert('quest: new quest types defined in pool',
-    ['boss','gift','togel','expedition','refine','daily','worldboss']
-      .every(t => quests.QUEST_POOL.some(q => q.type === t)));
-  test('quest: every generated daily quest has desc + valid target/reward', () => {
-    for (let i = 0; i < 50; i++) {
-      const qs = quests.generateDailyQuests();
-      if (qs.length !== 3) throw new Error('expected 3 daily quests');
-      for (const q of qs) {
-        if (typeof q.desc !== 'string' || !q.desc) throw new Error('quest missing desc: ' + q.type);
-        if (!(q.target >= 1) || !(q.reward >= 1)) throw new Error('bad target/reward for ' + q.type);
-      }
-    }
-  });
-  test('quest: weekly quests generate with desc for new types too', () => {
-    for (let i = 0; i < 50; i++) {
-      const qs = quests.generateWeeklyQuests();
-      for (const q of qs) { if (typeof q.desc !== 'string' || !q.desc) throw new Error('weekly quest missing desc: ' + q.type); }
-    }
-  });
-  test('quest: updateQuestProgress advances a new-type (boss) daily quest', () => {
-    const QU = '300000000000000044';
-    db.getOrCreateUser(G, QU);
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    const crafted = [{ type: 'boss', target: 2, reward: 500, progress: 0, claimed: false, difficulty: 'medium', desc: '👹 Kalahkan 2 boss' }];
-    db.db.prepare('INSERT OR REPLACE INTO daily_quests (guildId, userId, date, data) VALUES (?, ?, ?, ?)').run(G, QU, today, JSON.stringify(crafted));
-    quests.updateQuestProgress(G, QU, 'boss', 1);
-    const row = db.db.prepare('SELECT data FROM daily_quests WHERE guildId = ? AND userId = ?').get(G, QU);
-    const q = JSON.parse(row.data)[0];
-    if (q.progress !== 1) throw new Error('boss quest progress not advanced: ' + q.progress);
-  });
-
   // ---- Leveling formula (XP no longer stuck) ----
+  const activity = botRequire('systems/activity.js');
   test('level: XP threshold is (level+1)*100 and grants a level', () => {
     const LU = '300000000000000061';
     db.getOrCreateUser(G, LU);
@@ -181,7 +149,7 @@ module.exports = function register() {
     setS('msg_xp_min', '1'); setS('msg_xp_max', '1'); setS('levelup_announce_enabled', '0');
     db.db.prepare('UPDATE users SET level = 0, xp = 99 WHERE guildId = ? AND userId = ?').run(G, LU);
     const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
-    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+    return Promise.resolve(activity.addXpAndMoney(member, 'message')).then(() => {
       const u = db.getOrCreateUser(G, LU);
       if (u.level !== 1) throw new Error('expected level 1, got ' + u.level);
       if (u.xp !== 0) throw new Error('expected xp 0 after exact level up, got ' + u.xp);
@@ -195,7 +163,7 @@ module.exports = function register() {
     db.db.prepare('UPDATE users SET level = 12, xp = 2892 WHERE guildId = ? AND userId = ?').run(G, LU);
     const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
     // 2892 + 1 = 2893 -> L13 (-1300 => 1593) -> L14 (-1400 => 193) -> stop (<1500)
-    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+    return Promise.resolve(activity.addXpAndMoney(member, 'message')).then(() => {
       const u = db.getOrCreateUser(G, LU);
       if (u.level !== 14) throw new Error('expected level 14 after catch-up, got ' + u.level);
       if (u.xp !== 193) throw new Error('expected leftover xp 193, got ' + u.xp);
@@ -463,12 +431,11 @@ module.exports = function register() {
   });
   test('rank score: comprehensive formula covers all major systems', () => {
     // Each new component must contribute its documented weight.
-    const r = titles.computeScore({ worldBossKills: 1, godFish: 1, awakenings: 1, secretLocs: 1, expeditions: 1, trades: 1, weeklyQuests: 1 });
+    const r = titles.computeScore({ worldBossKills: 1, godFish: 1, awakenings: 1, secretLocs: 1, expeditions: 1, trades: 1 });
     // worldBossKills100 + expeditions10 (Battle/Pet Mastery) ... assert a few key high-prestige weights:
     if (r.breakdown['Battle'] !== 100) throw new Error('worldBossKills should add 100 to Battle, got ' + r.breakdown['Battle']);
     if (r.breakdown['Fishing'] !== 350) throw new Error('godFish(150)+secretLocs(200)=350 Fishing, got ' + r.breakdown['Fishing']);
     if (r.breakdown['Pet Mastery'] !== 70) throw new Error('expeditions(10)+awakenings(60)=70, got ' + r.breakdown['Pet Mastery']);
-    if (r.breakdown['Quest'] !== 40) throw new Error('weeklyQuests=40, got ' + r.breakdown['Quest']);
     if (r.breakdown['Sosial'] !== 20) throw new Error('trades=20, got ' + r.breakdown['Sosial']);
   });
   test('rank score: afk/spam stats are down-weighted and capped', () => {

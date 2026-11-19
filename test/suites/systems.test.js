@@ -1149,4 +1149,80 @@ module.exports = function register() {
       failedUrls.delete(testUrlFail);
     }
   });
+
+  // ---- InviteTracker upgrades (anti-abuse & bonus in leaderboard) ----
+  const itrack = botRequire('systems/inviteTracker.js');
+  test('inviteTracker: leaderboard includes bonus invites and orders accurately', () => {
+    const g = 'IT_GUILD';
+    itrack.resetInvites(g);
+    db.db.prepare('DELETE FROM invite_bonus WHERE guildId = ?').run(g);
+
+    // Seed inviter A: 2 real invites
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_A', 'sub_1', 'codeA', Date.now());
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_A', 'sub_2', 'codeA', Date.now());
+
+    // Seed inviter B: 1 real invite + 3 bonus invites = 4 total
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_B', 'sub_3', 'codeB', Date.now());
+    itrack.addBonusInvites(g, 'u_inv_B', 3);
+
+    const lb = itrack.getInviteLeaderboard(g, 10);
+    if (lb.length < 2) throw new Error('expected at least 2 in leaderboard, got ' + lb.length);
+    if (lb[0].userId !== 'u_inv_B' || lb[0].total !== 4) throw new Error(`expected u_inv_B top with 4, got ${lb[0].userId} with ${lb[0].total}`);
+    if (lb[1].userId !== 'u_inv_A' || lb[1].total !== 2) throw new Error(`expected u_inv_A second with 2, got ${lb[1].userId} with ${lb[1].total}`);
+  });
+
+  test('inviteTracker: self-invite and bot invites marked as fake', async () => {
+    const g = 'IT_GUILD_2';
+    itrack.resetInvites(g);
+
+    // Mock guild and members
+    const fakeGuild = {
+      id: g,
+      memberCount: 50,
+      invites: {
+        fetch: async () => new Map([['c_self', { code: 'c_self', uses: 1, inviterId: 'self_user' }]])
+      },
+      channels: { cache: new Map() }
+    };
+    itrack.inviteCache.set(g, new Map([['c_self', 0]]));
+
+    const selfMember = {
+      id: 'self_user',
+      guild: fakeGuild,
+      user: { id: 'self_user', bot: false, createdTimestamp: Date.now() - 30 * 86400000 }
+    };
+
+    await itrack.handleMemberJoin(selfMember);
+    const rec = itrack.getInvitedBy(g, 'self_user');
+    if (!rec || rec.fake !== 1) throw new Error('self-invite should be recorded as fake (1)');
+  });
+
+  // ---- TempvoicePanel upgrades (controls & cleanup) ----
+  const tvp = botRequire('systems/tempvoicePanel.js');
+  test('tempvoicePanel: buildManagePanel renders status and cleanupMemberSpace removes record', async () => {
+    const g = 'TV_GUILD', owner = 'u_tv_owner';
+    db.db.prepare('DELETE FROM private_spaces WHERE guildId = ? AND ownerId = ?').run(g, owner);
+    db.db.prepare('INSERT INTO private_spaces (guildId, ownerId, categoryId, textChannelId, voiceChannelId, hidden) VALUES (?, ?, ?, ?, ?, 0)')
+      .run(g, owner, 'cat_1', 'txt_1', 'vc_1');
+
+    const fakeGuild = {
+      id: g,
+      name: 'TV Guild',
+      roles: { everyone: { id: 'role_everyone' } },
+      channels: {
+        cache: new Map([
+          ['cat_1', { id: 'cat_1', delete: async () => {} }],
+          ['txt_1', { id: 'txt_1', delete: async () => {} }],
+          ['vc_1', { id: 'vc_1', userLimit: 5, permissionOverwrites: { cache: new Map() }, delete: async () => {} }]
+        ])
+      }
+    };
+
+    const pnl = tvp.buildManagePanel(fakeGuild, owner);
+    if (!pnl.embeds || !pnl.embeds[0].data.description.includes('Voice Limit')) throw new Error('manage panel should show Voice Limit');
+
+    await tvp.cleanupMemberSpace(fakeGuild, owner);
+    const after = db.db.prepare('SELECT * FROM private_spaces WHERE guildId = ? AND ownerId = ?').get(g, owner);
+    if (after) throw new Error('cleanupMemberSpace should remove record from database');
+  });
 };

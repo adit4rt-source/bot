@@ -5,7 +5,7 @@ const { getRandomInt } = require('../utils');
 const { spinSlot, getSlotResult } = require('./slots');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
+
 const state = require('../state');
 const { fishCooldowns, activeCoinflips } = state;
 const ui = require('./ui');
@@ -347,7 +347,7 @@ async function handleCasinoButton(interaction) {
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_coinflips');
         incrementUserStat(guildId, userId, 'total_bets', bet);
-        updateQuestProgress(guildId, userId, 'coinflip', 1);
+        
 
         // Show animation
         const animEmbed = new EmbedBuilder()
@@ -430,7 +430,7 @@ async function handleCasinoButton(interaction) {
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_slot_spins');
         incrementUserStat(guildId, userId, 'total_bets', bet);
-        updateQuestProgress(guildId, userId, 'slot', 1);
+        
 
         // Show spinning
         const spinEmbed = new EmbedBuilder()

@@ -10,10 +10,8 @@ module.exports = function register() {
 
     // Load feature systems first so their tables exist before we seed.
     const ach = botRequire('systems/achievements.js');
-    botRequire('systems/quests.js');
     botRequire('systems/giveaway.js');
     botRequire('systems/selfRoles.js');
-    botRequire('systems/starboard.js');
     const { TITLE_TIERS } = botRequire('systems/titles.js');
     const wb = botRequire('systems/worldBoss.js');
 
@@ -23,10 +21,6 @@ module.exports = function register() {
     // Achievements
     db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run('global', 'u_ach', 'first_chat', now);
     db.prepare('INSERT OR IGNORE INTO achievements (guildId, userId, achievementId, unlockedAt) VALUES (?, ?, ?, ?)').run('global', 'u_ach', 'level_5', now);
-
-    // Quests
-    db.prepare('INSERT OR REPLACE INTO daily_quests (guildId, userId, date, data) VALUES (?, ?, ?, ?)')
-        .run('gtest', 'u_q', '2030-01-01', JSON.stringify([{ type: 'fish', target: 3, progress: 1, claimed: false }]));
 
     // Giveaways
     db.prepare('INSERT INTO giveaways (guildId, channelId, messageId, prize, winners, hostId, endsAt, ended, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -41,11 +35,6 @@ module.exports = function register() {
     const menuId = db.prepare('SELECT id FROM selfrole_menus WHERE messageId = ?').get('m_sr').id;
     db.prepare('INSERT INTO selfrole_options (menuId, roleId, label, emoji, description, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
         .run(menuId, 'role_red', 'Red', '🔴', 'Red team', now);
-
-    // Starboard
-    db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run('gtest', 'starboard_channel', 'chan_star');
-    db.prepare('INSERT OR REPLACE INTO starboard (messageId, guildId, channelId, authorId, starboardMsgId, stars, content, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run('sm1', 'gtest', 'c1', 'author1', 'sb1', 12, 'hello world', null, now);
 
     // Titles (just needs a user to exist)
     D.getOrCreateUser(null, 'u_title');
@@ -89,20 +78,6 @@ module.exports = function register() {
         if (!Array.isArray(r.body.locked)) throw new Error('locked not an array');
     });
 
-    // ---------------- quests ----------------
-    test('api: GET /api/quests returns quest types + difficulties', async () => {
-        const r = await call('/api/quests');
-        if (r.status !== 200) throw new Error('status ' + r.status);
-        if (!(r.body.totalQuestTypes > 0)) throw new Error('no quest types');
-        if (r.body.usersWithDailyQuests < 1) throw new Error('expected >=1 daily-quest user');
-    });
-    test('api: GET /api/quests/:guildId/:userId returns parsed daily quests', async () => {
-        const r = await call('/api/quests/gtest/u_q');
-        if (r.status !== 200) throw new Error('status ' + r.status);
-        if (!r.body.daily || !Array.isArray(r.body.daily.quests) || r.body.daily.quests.length !== 1) throw new Error('daily quests not parsed');
-        if (r.body.daily.quests[0].type !== 'fish') throw new Error('wrong quest type');
-    });
-
     // ---------------- giveaways ----------------
     test('api: GET /api/giveaways/:guildId lists giveaways with entry counts', async () => {
         const r = await call('/api/giveaways/gtest');
@@ -119,14 +94,6 @@ module.exports = function register() {
         if (r.body.total < 1) throw new Error('expected a menu');
         const menu = r.body.menus.find(m => m.title === 'Pick Roles');
         if (!menu || menu.options.length !== 1 || menu.options[0].roleId !== 'role_red') throw new Error('options not returned');
-    });
-
-    // ---------------- starboard ----------------
-    test('api: GET /api/starboard/:guildId returns settings + top messages', async () => {
-        const r = await call('/api/starboard/gtest');
-        if (r.status !== 200) throw new Error('status ' + r.status);
-        if (!r.body.enabled || r.body.settings.channel !== 'chan_star') throw new Error('settings wrong');
-        if (r.body.totalMessages < 1 || !r.body.topMessages.find(m => m.stars === 12)) throw new Error('top messages wrong');
     });
 
     // ---------------- titles ----------------

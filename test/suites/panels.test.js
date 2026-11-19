@@ -21,8 +21,6 @@ module.exports = function register() {
   panel('levelPanel.buildLevelPanel', () => lvl.buildLevelPanel(G, U, NAME));
   const eco = botRequire('systems/economyPanel.js');
   panel('economyPanel.buildEconomyPanel', () => eco.buildEconomyPanel(G, U, NAME));
-  const quest = botRequire('systems/questPanel.js');
-  panel('questPanel.buildQuestPanel', () => quest.buildQuestPanel(G, U, NAME));
   const prof = botRequire('systems/profilePanel.js');
   panel('profilePanel.buildProfilePanel', () => prof.buildProfilePanel(G, U, NAME, null));
   const arena = botRequire('systems/arena.js');
@@ -111,9 +109,6 @@ module.exports = function register() {
   h('stats:activity', sp, 'handleStatsButton', `stats_activity_${U}`);
   h('stats:battle', sp, 'handleStatsButton', `stats_battle_${U}`);
   h('stats:gambling', sp, 'handleStatsButton', `stats_gambling_${U}`);
-  h('quest:daily', quest, 'handleQuestButton', `quest_daily_${U}`);
-  h('quest:weekly', quest, 'handleQuestButton', `quest_weekly_${U}`);
-  h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
   h('arena:lb', arena, 'handleArenaButton', `arena_lb_${U}`);
   h('arena:fight', arena, 'handleArenaButton', `arena_fight_${U}`);
   h('auction:browse', auction, 'handleAuctionButton', `auc_browse_${U}`);

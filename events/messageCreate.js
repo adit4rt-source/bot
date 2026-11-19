@@ -3,7 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { db, getOrCreateUser, getConf, getSetting, incrementUserStat, addItem } = require('../database');
 const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
 const { checkAchievements } = require('../systems/achievements');
-const { updateQuestProgress, checkAndUpdateStreak, addXpAndMoney } = require('../systems/quests');
+const { checkAndUpdateStreak, addXpAndMoney } = require('../systems/activity');
 const { addPetExp } = require('../systems/pets');
 const { getRandomInt, shuffleString } = require('../utils');
 const state = require('../state');
@@ -62,11 +62,6 @@ function isSpamMessage(guildId, message) {
 
 module.exports = async function handleMessageCreate(message) {
     if (message.author.bot || !message.guild) return;
-
-    // === AUTOMOD CHECK (before anything else) ===
-    const { processAutomod } = require('../systems/automod');
-    const automodResult = await processAutomod(message);
-    if (automodResult) return; // Message was deleted by automod, stop processing
 
     // Anti-abuse captcha: check if this message is a captcha answer
     const { verifyCaptchaMessage } = require('../systems/captcha');
@@ -218,30 +213,12 @@ module.exports = async function handleMessageCreate(message) {
         await handleAfkMessage(message);
     } catch (_) {}
 
-    // Social Interactions (GIF roleplay)
-    if (!spam && message.mentions.users.size > 0) {
-        try {
-            const { detectInteraction, handleSocialInteraction } = require('../systems/socialInteraction');
-            const detected = detectInteraction(message);
-            if (detected) {
-                handleSocialInteraction(message, detected.type, detected.targetId);
-            }
-        } catch (_) {}
-    }
-
     // Streak
     const streakActivated = await checkAndUpdateStreak(message);
     if (streakActivated) message.reply({ content: `🔥 **Berhasil!** Kamu telah mengaktifkan streak api hari ini!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 5000); }).catch(() => {});
 
-
-
-    // Quest progress + chat rewards — skipped entirely for spam messages
+    // Chat rewards — skipped entirely for spam messages
     if (!spam) {
-        const chatText = message.content;
-        updateQuestProgress(guildId, message.author.id, 'typing', 1, chatText);
-        updateQuestProgress(guildId, message.author.id, 'tebak', 1, chatText);
-        if (message.mentions.users.filter(u => !u.bot).size > 0) updateQuestProgress(guildId, message.author.id, 'tag', 1);
-
         incrementUserStat(guildId, message.author.id, 'total_chats');
         await checkAchievements(message.guild, message.author.id, { type: 'chat' });
 

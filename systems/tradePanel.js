@@ -1,7 +1,7 @@
 // systems/tradePanel.js - Trade Panel UI System (Button + Select-menu based)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
-const { updateQuestProgress } = require('./quests');
+
 const { notifyTradeReceived, notifyTradeAccepted } = require('./notifications');
 const { PET_DATA } = require('../data/pets');
 const { FISH_DATA } = require('../data/fish');
@@ -533,8 +533,8 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
         throw e;
     }
 
-    updateQuestProgress(guildId, userId, 'trade', 1);
-    updateQuestProgress(guildId, trade.senderId, 'trade', 1);
+    
+    
     incrementUserStat(guildId, userId, 'trades_completed');
     incrementUserStat(guildId, trade.senderId, 'trades_completed');
 

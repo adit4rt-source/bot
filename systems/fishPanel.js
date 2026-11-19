@@ -3,7 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getItemCount, addItem, removeItem, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt } = require('../utils');
 const { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, rollSeaMonster, getFishingWeather, getFishingCooldown, checkCollectionMilestones } = require('./fishing');
-const { updateQuestProgress } = require('./quests');
+
 const { checkAchievements } = require('./achievements');
 const { addComboFeature, getComboMultiplier, getComboTracker } = require('./combo');
 const { getContestState, addContestEntry, getContestLeaderboard } = require('./contest');
@@ -506,7 +506,7 @@ async function handleFishingButton(interaction) {
         // === NORMAL FISHING ===
         const result = catchFish(guildId, userId);
         incrementUserStat(guildId, userId, 'total_fish_caught');
-        updateQuestProgress(guildId, userId, 'fish', 1);
+        
         addPetExp(guildId, userId, 5);
         addComboFeature(guildId, userId, 'fishing');
 

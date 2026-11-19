@@ -8,7 +8,7 @@ const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
 const { ITEMS, COOKING_RECIPES } = require('../data/items');
 const { checkAchievements } = require('./achievements');
 const { getComboMultiplier, addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
+
 const { getUserStat, incrementUserStat, addIncome } = require('../database');
 const state = require('../state');
 const { fishCooldowns, activeBossParties } = state;
@@ -1056,7 +1056,7 @@ async function handlePetButton(interaction) {
 
         addItem(guildId, userId, recipeId, 1);
         incrementUserStat(guildId, userId, 'total_cooked', 1);
-        updateQuestProgress(guildId, userId, 'cook', 1);
+        
         await checkAchievements(interaction.guild, userId, { type: 'cook' });
 
         const msg = `Berhasil memasak ${recipe.emoji} **${recipe.name}**!`;
@@ -1294,7 +1294,7 @@ async function handlePetButton(interaction) {
         }
         fishCooldowns.set(playCdKey, Date.now() + 180000);
         addComboFeature(guildId, userId, 'pet');
-        updateQuestProgress(guildId, userId, 'pet_play', 1);
+        
         const newHappy = Math.min(100, pet.happiness + 10);
         const newHunger = Math.max(0, pet.hunger - 3);
         db.prepare('UPDATE pets SET happiness = ?, hunger = ? WHERE id = ?').run(newHappy, newHunger, pet.id);
@@ -1943,7 +1943,7 @@ async function handlePetSelectMenu(interaction) {
         if (userData.balance < food.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${food.price}**`, ephemeral: true });
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(food.price, guildId, userId);
         addPetFood(guildId, userId, foodId, 1);
-        updateQuestProgress(guildId, userId, 'spend_money', food.price);
+        
         const owned = getPetFoodCount(guildId, userId, foodId);
         const embed = new EmbedBuilder().setTitle('✅ Pembelian Berhasil!').setColor('#2ECC71')
             .setDescription(`${food.emoji} **${food.name}** masuk ke inventory!\n\n> 📦 Total ${food.name}: **${owned}**\n> 💰 Saldo: 🪙 **${(userData.balance - food.price).toLocaleString('id-ID')}**`);
@@ -1969,7 +1969,7 @@ async function handlePetSelectMenu(interaction) {
         const allPets = getAllPets(guildId, userId);
         if (allPets.length >= 10) return interaction.reply({ content: '❌ Slot pet penuh (max 10)!', ephemeral: true });
         db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(eggPrice, guildId, userId);
-        updateQuestProgress(guildId, userId, 'spend_money', eggPrice);
+        
         // Egg Whisperer: slight tilt toward higher tiers (~2% of roll)
         let roll = Math.random() * 100;
         try {
@@ -2099,7 +2099,7 @@ async function handlePetSelectMenu(interaction) {
             addPetExp(guildId, userId, expGain);
             incrementUserStat(guildId, userId, 'dungeon_clears');
             addIncome(guildId, userId, 'battle', reward);
-            updateQuestProgress(guildId, userId, 'dungeon', 1);
+            
             await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' });
             lootText = rollLoot(guildId, userId, dungeon.loot);
             let relicChance = dungeon.relicChance || 0;
@@ -2225,7 +2225,7 @@ async function handlePetSelectMenu(interaction) {
             addPetExp(guildId, userId, expGain);
             incrementUserStat(guildId, userId, 'boss_kills');
             addIncome(guildId, userId, 'battle', reward);
-            updateQuestProgress(guildId, userId, 'boss', 1);
+            
             await checkAchievements(interaction.guild, userId, { type: 'boss_kill' });
             let relicChance = boss.relicChance || 0;
             try {
@@ -2379,7 +2379,7 @@ async function handlePetSelectMenu(interaction) {
         db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relic.id);
 
         incrementUserStat(guildId, userId, 'relic_gems_socketed', 1);
-        updateQuestProgress(guildId, userId, 'relic_socket', 1);
+        
         await checkAchievements(interaction.guild, userId, { type: 'relic_socket' });
 
         const gemDef = GEM_STATS[gemId];
@@ -2523,7 +2523,7 @@ async function handleRefineAction(interaction, guildId, userId, slot, relic) {
     if (success) {
         db.prepare('UPDATE relics SET refine_level = refine_level + 1 WHERE id = ?').run(relic.id);
         incrementUserStat(guildId, userId, 'refine_successes');
-        updateQuestProgress(guildId, userId, 'refine', 1);
+        
         await checkAchievements(interaction.guild, userId, { type: 'refine_success', maxRefine: (lvl + 1) >= 20 });
         const embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✨ Refine Success!')
             .setDescription(`**${relic.name}** berhasil di-upgrade!\n\n> ${slotEmoji} **${relic.name}** +${lvl} → **+${lvl+1}**\n> Stats: +${Math.floor(relic.stat_value * (1 + (lvl+1)*0.05))} ${relic.stat_type}\n> Rate was: ${rate}%`);
@@ -2607,7 +2607,7 @@ async function handlePetModal(interaction) {
 
         addItem(guildId, userId, recipeId, quantity);
         incrementUserStat(guildId, userId, 'total_cooked', quantity);
-        updateQuestProgress(guildId, userId, 'cook', quantity);
+        
         await checkAchievements(interaction.guild, userId, { type: 'cook' });
 
         const msg = i18n.t(guildId, userId, 'cooking.success', { qty: quantity, item: `${recipe.emoji} ${recipe.name}` });

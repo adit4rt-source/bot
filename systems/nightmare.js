@@ -11,7 +11,7 @@ const { DUNGEON_TIERS } = require('../data/dungeons');
 const { ITEMS } = require('../data/items');
 const { hasAbility } = require('./petAbilities');
 const { getComboMultiplier, addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
+
 const { checkAchievements } = require('./achievements');
 const state = require('../state');
 const { fishCooldowns } = state;
@@ -368,7 +368,7 @@ async function runNightmare(interaction, guildId, userId, baseDungeonId) {
         incrementUserStat(guildId, userId, 'nightmare_clears');
         incrementUserStat(guildId, userId, 'dungeon_clears');
         addIncome(guildId, userId, 'battle', reward);
-        updateQuestProgress(guildId, userId, 'dungeon', 1);
+        
         try { await checkAchievements(interaction.guild, userId, { type: 'dungeon_clear' }); } catch (_) {}
         lootText = rollLoot(guildId, userId, dungeon.loot);
         let relicChance = dungeon.relicChance || 0;

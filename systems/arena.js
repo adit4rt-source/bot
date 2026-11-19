@@ -429,7 +429,7 @@ async function handleArenaButton(interaction) {
         cooldowns.setCooldown('arena', guildId, userId, arenaCd);
 
         // Quest progress + achievement check for arena fights
-        try { const { updateQuestProgress } = require('./quests'); updateQuestProgress(guildId, userId, 'arena', 1); } catch (_) {}
+        
         try { const { checkAchievements } = require('./achievements'); await checkAchievements(interaction.guild, userId, { type: 'arena' }); } catch (_) {}
 
         const tier = getTier(res.newRating);

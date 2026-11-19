@@ -116,7 +116,6 @@ function buildAdminPanel(guildId) {
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
     const levelingOn = getSetting(guildId, 'leveling_enabled', '1') !== '0';
     const streakOn = getSetting(guildId, 'streak_enabled', '1') !== '0';
-    const loveOn = getSetting(guildId, 'love_enabled', '1') !== '0';
 
     // Feature toggle summary
     const enabledCount = FEATURES.filter(f => isFeatureEnabled(guildId, f.key)).length;
@@ -129,8 +128,7 @@ function buildAdminPanel(guildId) {
             `Selamat datang di panel admin! Pilih kategori:\n\n` +
             `**🚀 QUICK SETUP** *(baru pakai bot? mulai di sini!)*\n` +
             `> ⚙️ Setting — Channel, blocked channels, streak\n` +
-            `> 🎛️ Features — ON/OFF fitur bot per server (Leveling, Game, dll)\n` +
-            `> 🎫 Ticket — Setup support ticket\n\n` +
+            `> 🎛️ Features — ON/OFF fitur bot per server (Leveling, Game, dll)\n\n` +
             `**💰 EKONOMI & GAME**\n` +
             `> 🛒 Shop — Tambah role/item/voucher\n` +
             `> 💰 Money — Kelola saldo user\n` +
@@ -143,7 +141,7 @@ function buildAdminPanel(guildId) {
             `> 📊 Analytics — Stats pemakaian\n` +
             `> 🚫 Blacklist — Block user\n` +
             `> 🔧 DB Tools — Restore data\n\n` +
-            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${loveOn ? '❤️ Love ✅' : '❤️ Love ❌'} | ${featureSummary}`
+            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${featureSummary}`
         )
         .setFooter({ text: '💡 Baru pertama? Klik ⚙️ Setting untuk setup awal' })
         .setTimestamp();
@@ -151,8 +149,7 @@ function buildAdminPanel(guildId) {
     // Row 1: Quick Setup (paling penting untuk admin baru)
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_setting').setLabel('⚙️ Setting').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success)
     );
     // Row 2: Economy & Game
     const row2 = new ActionRowBuilder().addComponents(
@@ -266,12 +263,10 @@ function buildSettingSubPanel(guildId) {
     const levelCh = getSetting(guildId, 'level_channel', null);
     const achCh = getSetting(guildId, 'achievement_channel', null);
     const streakCh = getSetting(guildId, 'streak_channel', null);
-    const loveCh = getSetting(guildId, 'love_announce_channel', null);
-    const logCh = getSetting(guildId, 'log_channel', null);
+        const logCh = getSetting(guildId, 'log_channel', null);
 
     const streakEnabled = getSetting(guildId, 'streak_enabled', '1');
-    const loveEnabled = getSetting(guildId, 'love_enabled', '1');
-    const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
+        const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
     const onboardingEnabled = getSetting(guildId, 'onboarding_enabled', '1');
     const xpMult = getSetting(guildId, 'xp_multiplier', '1');
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
@@ -301,8 +296,7 @@ function buildSettingSubPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
@@ -401,8 +395,7 @@ function buildChannelsSubPanel(guildId) {
     const levelCh = getSetting(guildId, 'level_channel', null);
     const achCh = getSetting(guildId, 'achievement_channel', null);
     const streakCh = getSetting(guildId, 'streak_channel', null);
-    const loveCh = getSetting(guildId, 'love_announce_channel', null);
-    const logCh = getSetting(guildId, 'log_channel', null);
+        const logCh = getSetting(guildId, 'log_channel', null);
     const serverlogCh = getSetting(guildId, 'serverlog_channel', null);
 
     const { getInviteSetting } = require('./inviteTracker');
@@ -541,21 +534,6 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_set_channels') return interaction.update(buildChannelsSubPanel(guildId));
     if (customId === 'admpnl_features') return interaction.update(buildFeatureTogglePanel(guildId, 0));
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
-
-    // === TICKET SUB-PANEL ===
-    if (customId === 'admpnl_ticket') {
-        const embed = new EmbedBuilder().setTitle('🎫 TICKET SETUP').setColor('#5865F2')
-            .setDescription('Setup sistem tiket support:\n\nAkan membuat:\n> 📁 **TICKETS** (kategori)\n> ├ 🎫 #open-ticket (panel)\n> └ 📋 #ticket-logs (transcript)\n\n⚠️ Ini akan membuat channel baru!');
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('admpnl_ticket_setup').setLabel('🎫 Setup Ticket').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-    if (customId === 'admpnl_ticket_setup') {
-        const { setupTicketSystem } = require('./ticket');
-        return setupTicketSystem(interaction);
-    }
 
     // === NEW PANELS ===
     if (customId === 'admpnl_giveaway') return interaction.update(buildGiveawaySubPanel(guildId));
@@ -1188,6 +1166,23 @@ async function handleAdminModal(interaction) {
     }
 
     // === SETTING: Streak Config ===
+    if (customId === 'admpnl_modal_streak_cfg') {
+        const updated = [];
+        const emoji = (interaction.fields.getTextInputValue('emoji') || '').trim();
+        if (emoji) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_emoji', emoji); updated.push(`Emoji: ${emoji}`); }
+        const minDays = (interaction.fields.getTextInputValue('min_days') || '').trim();
+        if (minDays && !isNaN(parseInt(minDays))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_min_days', minDays); updated.push(`Min Days: ${minDays}`); }
+        const autoNick = (interaction.fields.getTextInputValue('auto_nick') || '').trim();
+        if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
+        const tz = (interaction.fields.getTextInputValue('timezone') || '').trim();
+        if (tz) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_timezone', tz); updated.push(`Timezone: ${tz}`); }
+        if (interaction.message) {
+            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
+        }
+        return interaction.reply({ content: updated.length > 0 ? `✅ Streak config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+    }
+
+    // === SETTING: Love Config ===
     if (customId === 'admpnl_modal_streak_cfg') {
         const updated = [];
         const emoji = (interaction.fields.getTextInputValue('emoji') || '').trim();

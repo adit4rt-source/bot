@@ -6,7 +6,7 @@ const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, addSpend
 const { getRandomInt } = require('../utils');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
+
 
 // ==================== CARD DATA ====================
 const SUITS = ['♠️', '♥️', '♦️', '♣️'];
@@ -439,8 +439,7 @@ async function handleBlackjackButton(interaction) {
         if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
-        updateQuestProgress(guildId, userId, 'blackjack', 1); // counts as gambling activity
-
+        
         const embed = buildGameEmbed(game, true, result);
         const row = buildGameButtons(userId, game, true);
         activeBlackjackGames.set(`${guildId}_${userId}_lastbet`, game.bet);

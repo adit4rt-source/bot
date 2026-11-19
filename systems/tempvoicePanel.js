@@ -12,10 +12,8 @@ const {
     ModalBuilder,
     MessageFlags
 } = require('discord.js');
-const { db } = require('../database');
+const { db, getSetting } = require('../database');
 const ui = require('./ui');
-
-const SPACE_POSITION_AFTER_CATEGORY_ID = '1526405329917710387';
 
 const EVERYONE_PERMISSIONS = [
     PermissionsBitField.Flags.ViewChannel,
@@ -47,7 +45,7 @@ function deleteSpaceRecord(guildId, ownerId) {
 
 function buildMainPanel(guild, ownerId) {
     const space = getSpace(guild.id, ownerId);
-    const category = space ? guild.channels.cache.get(space.categoryId) : null;
+    const category = space ? guild.channels?.cache?.get(space.categoryId) : null;
     if (space && !category) {
         deleteSpaceRecord(guild.id, ownerId);
         return buildMainPanel(guild, ownerId);
@@ -82,6 +80,11 @@ function buildManagePanel(guild, ownerId) {
     const space = getSpace(guild.id, ownerId);
     if (!space) return buildMainPanel(guild, ownerId);
 
+    const voiceChannel = guild.channels?.cache?.get(space.voiceChannelId);
+    const everyoneId = guild.roles?.everyone?.id;
+    const isLocked = Boolean(everyoneId ? (voiceChannel?.permissionOverwrites?.cache?.get(everyoneId)?.deny?.has(PermissionsBitField.Flags.Connect) ?? true) : true);
+    const userLimit = voiceChannel?.userLimit || 0;
+
     const embed = new EmbedBuilder()
         .setTitle('🔒 Private Space Control')
         .setColor(ui.COLORS.trade)
@@ -89,18 +92,21 @@ function buildManagePanel(guild, ownerId) {
             `📁 <#${space.categoryId}>\n` +
             `💬 <#${space.textChannelId}>\n` +
             `🔊 <#${space.voiceChannelId}>\n\n` +
-            '> Add User memberi akses kategori, chat, dan voice.\n' +
-            '> Kick User mencabut akses lalu disconnect dari voice.\n' +
-            `> Category sekarang: **${space.hidden ? 'Hidden' : 'Visible untuk member'}**.`
+            `> 🔒 Voice Status: **${isLocked ? 'Terkunci (Private)' : 'Terbuka'}**\n` +
+            `> 👥 Voice Limit: **${userLimit > 0 ? `${userLimit} orang` : 'Unlimited'}**\n` +
+            `> 👻 Category: **${space.hidden ? 'Hidden' : 'Visible'}**\n\n` +
+            '> Gunakan tombol di bawah untuk mengatur member, voice limit, dan privasi.'
         );
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`psp_add_${ownerId}`).setLabel('➕ Add User').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`psp_kick_${ownerId}`).setLabel('👢 Kick User').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`psp_hide_${ownerId}`).setLabel(space.hidden ? '👁️ Show Category' : '👻 Hide Category').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`psp_rename_${ownerId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`psp_lock_${ownerId}`).setLabel(isLocked ? '🔓 Unlock Voice' : '🔒 Lock Voice').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`psp_limit_${ownerId}`).setLabel('👥 Voice Limit').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`psp_hide_${ownerId}`).setLabel(space.hidden ? '👁️ Show Cat' : '👻 Hide Cat').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`psp_rename_${ownerId}`).setLabel('✏️ Rename').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`psp_delete_${ownerId}`).setLabel('🗑️ Delete Space').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`psp_back_${ownerId}`).setLabel('🔙 Back').setStyle(ButtonStyle.Secondary)
     );
@@ -141,9 +147,12 @@ async function createPrivateSpace(interaction) {
             permissionOverwrites: overwrites,
             reason: `Private Space untuk ${user.tag}`
         });
-        const positionAnchor = await guild.channels.fetch(SPACE_POSITION_AFTER_CATEGORY_ID).catch(() => null);
-        if (positionAnchor?.type === ChannelType.GuildCategory) {
-            await category.setPosition(positionAnchor.position + 1);
+        const anchorId = getSetting(guild.id, 'private_space_category_anchor', null);
+        if (anchorId) {
+            const positionAnchor = await guild.channels.fetch(anchorId).catch(() => null);
+            if (positionAnchor?.type === ChannelType.GuildCategory) {
+                await category.setPosition(positionAnchor.position + 1).catch(() => {});
+            }
         }
 
         textChannel = await guild.channels.create({
@@ -169,7 +178,7 @@ async function createPrivateSpace(interaction) {
             embeds: [new EmbedBuilder()
                 .setTitle('🔒 Private Space Ready')
                 .setColor(ui.COLORS.trade)
-                .setDescription('Gunakan `/tempvoice open` lalu **Manage Space** untuk add user, kick user, hide category, atau rename Space.')]
+                .setDescription('Gunakan `/tempvoice` lalu **Manage Space** untuk atur member, voice limit, kunci voice, atau rename Space.')]
         }).catch(() => {});
 
         return interaction.editReply(buildManagePanel(guild, user.id));
@@ -186,7 +195,7 @@ function buildSetupPanel(guild) {
         .setColor(ui.COLORS.trade)
         .setDescription(
             'Buat ruang privat sendiri berisi kategori, channel chat, dan channel voice.\n\n' +
-            '> Owner bisa add user, kick user, hide category, rename, dan delete Space.'
+            '> Owner bisa add user, kick user, lock/unlock voice, set limit, rename, dan delete Space.'
         )
         .setFooter({ text: ui.footer(`${guild.name} • Klik tombol untuk mulai`) });
     const row = new ActionRowBuilder().addComponents(
@@ -225,7 +234,7 @@ async function handleTempvoiceButton(interaction) {
 
     const space = getSpace(guild.id, user.id);
     if (!space) return interaction.update(buildMainPanel(guild, user.id));
-    const category = guild.channels.cache.get(space.categoryId);
+    const category = guild.channels?.cache?.get(space.categoryId);
     if (!category) {
         deleteSpaceRecord(guild.id, user.id);
         return interaction.update(buildMainPanel(guild, user.id));
@@ -241,11 +250,40 @@ async function handleTempvoiceButton(interaction) {
         return interaction.reply({ content: action === 'add' ? 'Pilih member untuk ditambahkan.' : 'Pilih member untuk dikeluarkan.', components: [row], flags: MessageFlags.Ephemeral });
     }
 
+    if (action === 'lock') {
+        const voiceChannel = guild.channels?.cache?.get(space.voiceChannelId);
+        if (!voiceChannel) return interaction.reply({ content: '❌ Voice channel tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        const everyoneId = guild.roles?.everyone?.id;
+        if (!everyoneId) return interaction.reply({ content: '❌ Role everyone tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        const isLocked = Boolean(voiceChannel.permissionOverwrites?.cache?.get(everyoneId)?.deny?.has(PermissionsBitField.Flags.Connect) ?? true);
+        await voiceChannel.permissionOverwrites.edit(everyoneId, {
+            Connect: isLocked ? null : false
+        }).catch(() => {});
+        return interaction.update(buildManagePanel(guild, user.id));
+    }
+
+    if (action === 'limit') {
+        const voiceChannel = guild.channels?.cache?.get(space.voiceChannelId);
+        const modal = new ModalBuilder().setCustomId(`psp_modal_limit_${user.id}`).setTitle('Voice Channel Limit');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('psp_limit_val')
+                .setLabel('User Limit (0 = bebas, 1-99):')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setMaxLength(2)
+                .setValue(String(voiceChannel?.userLimit || 0))
+        ));
+        return interaction.showModal(modal);
+    }
+
     if (action === 'hide') {
         const nextHidden = space.hidden ? 0 : 1;
-        const members = category.permissionOverwrites.cache.filter(overwrite => overwrite.type === 1 && overwrite.id !== user.id);
-        for (const overwrite of members.values()) {
-            await category.permissionOverwrites.edit(overwrite.id, { ViewChannel: nextHidden ? false : true }).catch(() => {});
+        const members = category.permissionOverwrites?.cache?.filter(overwrite => overwrite.type === 1 && overwrite.id !== user.id);
+        if (members) {
+            for (const overwrite of members.values()) {
+                await category.permissionOverwrites.edit(overwrite.id, { ViewChannel: nextHidden ? false : true }).catch(() => {});
+            }
         }
         db.prepare('UPDATE private_spaces SET hidden = ? WHERE guildId = ? AND ownerId = ?').run(nextHidden, guild.id, user.id);
         return interaction.update(buildManagePanel(guild, user.id));
@@ -260,8 +298,8 @@ async function handleTempvoiceButton(interaction) {
     }
 
     if (action === 'delete') {
-        const textChannel = guild.channels.cache.get(space.textChannelId);
-        const voiceChannel = guild.channels.cache.get(space.voiceChannelId);
+        const textChannel = guild.channels?.cache?.get(space.textChannelId);
+        const voiceChannel = guild.channels?.cache?.get(space.voiceChannelId);
         await Promise.all([textChannel?.delete().catch(() => {}), voiceChannel?.delete().catch(() => {})]);
         await category.delete().catch(() => {});
         deleteSpaceRecord(guild.id, user.id);
@@ -277,8 +315,8 @@ async function handleTempvoiceUserSelect(interaction) {
     if (memberId === ownerId) return interaction.reply({ content: '❌ Kamu sudah owner Space ini.', flags: MessageFlags.Ephemeral });
 
     const space = getSpace(interaction.guild.id, ownerId);
-    const category = space && interaction.guild.channels.cache.get(space.categoryId);
-    const voiceChannel = space && interaction.guild.channels.cache.get(space.voiceChannelId);
+    const category = space && interaction.guild.channels?.cache?.get(space.categoryId);
+    const voiceChannel = space && interaction.guild.channels?.cache?.get(space.voiceChannelId);
     if (!space || !category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', flags: MessageFlags.Ephemeral });
 
     if (action === 'add') {
@@ -296,14 +334,42 @@ async function handleTempvoiceUserSelect(interaction) {
 
 async function handleTempvoiceModal(interaction) {
     if (!requireOwner(interaction)) return;
-    if (!interaction.customId.startsWith('psp_modal_rename_')) return;
     const space = getSpace(interaction.guild.id, interaction.user.id);
-    const category = space && interaction.guild.channels.cache.get(space.categoryId);
-    if (!category) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', flags: MessageFlags.Ephemeral });
-    const name = interaction.fields.getTextInputValue('psp_name').trim();
-    if (!name) return interaction.reply({ content: '❌ Nama wajib diisi.', flags: MessageFlags.Ephemeral });
-    await category.setName(`🔒 ${name}`).catch(() => null);
-    return interaction.reply({ content: '✅ Nama category diubah.', flags: MessageFlags.Ephemeral });
+    if (!space) return interaction.reply({ content: '❌ Private Space tidak ditemukan.', flags: MessageFlags.Ephemeral });
+
+    if (interaction.customId.startsWith('psp_modal_rename_')) {
+        const category = interaction.guild.channels?.cache?.get(space.categoryId);
+        if (!category) return interaction.reply({ content: '❌ Category tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        const name = interaction.fields.getTextInputValue('psp_name').trim();
+        if (!name) return interaction.reply({ content: '❌ Nama wajib diisi.', flags: MessageFlags.Ephemeral });
+        await category.setName(`🔒 ${name}`).catch(() => null);
+        return interaction.reply({ content: '✅ Nama category diubah.', flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId.startsWith('psp_modal_limit_')) {
+        const voiceChannel = interaction.guild.channels?.cache?.get(space.voiceChannelId);
+        if (!voiceChannel) return interaction.reply({ content: '❌ Voice channel tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        let limit = parseInt(interaction.fields.getTextInputValue('psp_limit_val'), 10);
+        if (isNaN(limit) || limit < 0) limit = 0;
+        if (limit > 99) limit = 99;
+        await voiceChannel.setUserLimit(limit).catch(() => {});
+        return interaction.reply({ content: `✅ Voice limit diset ke **${limit === 0 ? 'Unlimited' : limit}**.`, flags: MessageFlags.Ephemeral });
+    }
+}
+
+async function cleanupMemberSpace(guild, memberId) {
+    if (!guild || !memberId) return;
+    const space = getSpace(guild.id, memberId);
+    if (!space) return;
+    const textChannel = guild.channels?.cache?.get(space.textChannelId);
+    const voiceChannel = guild.channels?.cache?.get(space.voiceChannelId);
+    const category = guild.channels?.cache?.get(space.categoryId);
+    await Promise.all([
+        textChannel?.delete().catch(() => {}),
+        voiceChannel?.delete().catch(() => {})
+    ]);
+    await category?.delete().catch(() => {});
+    deleteSpaceRecord(guild.id, memberId);
 }
 
 function isTempvoicePanelButton(customId) {
@@ -325,6 +391,7 @@ module.exports = {
     handleTempvoiceButton,
     handleTempvoiceUserSelect,
     handleTempvoiceModal,
+    cleanupMemberSpace,
     isTempvoicePanelButton,
     isTempvoiceUserSelect,
     isTempvoiceModal

@@ -319,6 +319,7 @@ client.on(Events.GuildMemberRemove, wrapHandler('guildMemberRemove', async (memb
     const { handleMemberLeave } = require('./systems/inviteTracker');
     await handleMemberLeave(member);
     await handleGoodbye(member);
+    try { await require('./systems/tempvoicePanel').cleanupMemberSpace(member.guild, member.id); } catch (_) {}
     try { require('./systems/serverLog').logMemberLeave(member); } catch (_) {}
 }));
 

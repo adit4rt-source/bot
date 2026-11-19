@@ -31,7 +31,7 @@ function buildStatsPanel(guildId, userId, username) {
             `\n**Lihat rincian per kategori:**\n` +
             ui.menuList([
                 { emoji: '💰', label: 'Income', desc: 'Dari mana saja uangmu datang' },
-                { emoji: '🎮', label: 'Activity', desc: 'Mancing, bertani, quest, & lainnya' },
+                { emoji: '🎮', label: 'Activity', desc: 'Mancing, bertani, & lainnya' },
                 { emoji: '⚔️', label: 'Battle', desc: 'Rekor dungeon, boss, & PvP' },
                 { emoji: '🎰', label: 'Gambling', desc: 'Catatan untung-rugi di casino' },
             ])
@@ -54,7 +54,6 @@ function buildIncomePanel(guildId, userId, username) {
     const fishIncome = getUserStat(guildId, userId, 'income_fishing') || 0;
     const farmIncome = getUserStat(guildId, userId, 'income_farming') || 0;
     const gamblingIncome = getUserStat(guildId, userId, 'income_gambling') || 0;
-    const questIncome = getUserStat(guildId, userId, 'income_quest') || 0;
     const dailyIncome = getUserStat(guildId, userId, 'income_daily') || 0;
     const shopSpent = getUserStat(guildId, userId, 'total_spent_shop') || 0;
     const totalEarned = getUserStat(guildId, userId, 'total_earned') || 0;
@@ -65,7 +64,6 @@ function buildIncomePanel(guildId, userId, username) {
         { name: '🎣 Fishing', value: fishIncome },
         { name: '🌾 Farming', value: farmIncome },
         { name: '🎰 Gambling', value: gamblingIncome },
-        { name: '📜 Quest', value: questIncome },
         { name: '🎁 Daily', value: dailyIncome }
     ];
     const maxVal = Math.max(...sources.map(s => s.value), 1);
@@ -96,7 +94,6 @@ function buildActivityPanel(guildId, userId, username) {
     const fishCaught = getUserStat(guildId, userId, 'total_fish_caught') || 0;
     const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
     const crafts = getUserStat(guildId, userId, 'total_crafts') || 0;
-    const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
     const tradesCompleted = getUserStat(guildId, userId, 'trades_completed') || 0;
     const totalBuys = getUserStat(guildId, userId, 'total_buys') || 0;
     const fishSold = getUserStat(guildId, userId, 'total_fish_sold_count') || 0;
@@ -107,7 +104,6 @@ function buildActivityPanel(guildId, userId, username) {
         { name: '🎣 Fish Caught', value: fishCaught },
         { name: '🌾 Harvests', value: harvests },
         { name: '🧪 Crafts', value: crafts },
-        { name: '📜 Quests Done', value: questsDone },
         { name: '🔄 Trades', value: tradesCompleted }
     ];
     const maxVal = Math.max(...activities.map(a => a.value), 1);

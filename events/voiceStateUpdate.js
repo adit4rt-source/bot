@@ -2,7 +2,7 @@
 const { db, getConf, getSetting } = require('../database');
 const { incrementUserStat } = require('../database');
 const { checkAchievements } = require('../systems/achievements');
-const { updateQuestProgress, addXpAndMoney } = require('../systems/quests');
+const { addXpAndMoney } = require('../systems/activity');
 const state = require('../state');
 
 async function handleVoiceStateUpdate(oldState, newState) {
@@ -117,7 +117,6 @@ async function handleVoiceStateUpdate(oldState, newState) {
                 const voiceCd = parseInt(getSetting(guildId, 'voice_xp_cooldown', '') || getConf(guildId, 'voice_cooldown', 5)) || 5;
                 const multiplier = Math.floor(durationMins / voiceCd);
                 if (multiplier > 0) await addXpAndMoney(newState.member, 'voice', multiplier);
-                updateQuestProgress(guildId, newState.member.id, 'voice', durationMins);
                 incrementUserStat(guildId, newState.member.id, 'total_voice_mins', durationMins);
                 await checkAchievements(newState.guild, newState.member.id, { type: 'voice' });
             }
@@ -130,7 +129,6 @@ async function handleVoiceStateUpdate(oldState, newState) {
         if (state.voiceSessions.has(cdKey)) {
             const durationMins = Math.floor((Date.now() - state.voiceSessions.get(cdKey)) / 60000);
             if (durationMins >= 1) {
-                updateQuestProgress(guildId, newState.member.id, 'voice', durationMins);
                 incrementUserStat(guildId, newState.member.id, 'total_voice_mins', durationMins);
             }
             state.voiceSessions.delete(cdKey);
@@ -162,7 +160,6 @@ function startVoiceTickInterval() {
                 const idx = cdKey.indexOf('_');
                 const guildId = cdKey.substring(0, idx);
                 const userId = cdKey.substring(idx + 1);
-                updateQuestProgress(guildId, userId, 'voice', durationMins);
                 incrementUserStat(guildId, userId, 'total_voice_mins', durationMins);
                 // Reset start time so we don't double-count
                 state.voiceSessions.set(cdKey, now);

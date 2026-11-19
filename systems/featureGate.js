@@ -6,25 +6,22 @@ const { getSetting, setSetting } = require('../database');
 // Default is ON ('1'). Admin can set to '0' to disable.
 const FEATURES = [
     { key: 'feature_economy',      label: 'Economy',       emoji: '💰', desc: '/wallet, /gift', commands: ['wallet', 'gift'] },
-    { key: 'feature_daily',        label: 'Daily Reward',  emoji: '🎁', desc: '/daily, /calendar', commands: ['daily', 'calendar'] },
+    { key: 'feature_daily',        label: 'Daily Reward',  emoji: '🎁', desc: '/daily', commands: ['daily'] },
     { key: 'feature_shop',         label: 'Shop',          emoji: '🛒', desc: '/shop', commands: ['shop'] },
     { key: 'feature_fishing',      label: 'Fishing',       emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
     { key: 'feature_farming',      label: 'Farming',       emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
     { key: 'feature_pet',          label: 'Pet & Battle',  emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
     { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel', commands: ['casino', 'blackjack', 'togel'] },
-    { key: 'feature_quest',        label: 'Quest',         emoji: '📜', desc: '/quest (daily & weekly)', commands: ['quest'] },
     { key: 'feature_arena',        label: 'Arena',         emoji: '⚔️', desc: '/arena', commands: ['arena'] },
     { key: 'feature_auction',      label: 'Auction',       emoji: '🏛️', desc: '/auction', commands: ['auction'] },
     { key: 'feature_trade',        label: 'Trade',         emoji: '🤝', desc: '/trade, /market', commands: ['trade', 'market'] },
     { key: 'feature_giveaway',     label: 'Giveaway',      emoji: '🎉', desc: '/giveaway', commands: ['giveaway'] },
-    { key: 'feature_starboard',    label: 'Starboard',     emoji: '⭐', desc: '/starboard', commands: ['starboard'] },
     { key: 'feature_invite',       label: 'Invite Tracker',emoji: '📨', desc: '/invite', commands: ['invite'] },
     { key: 'feature_tempvoice',    label: 'TempVoice',     emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
     { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
     { key: 'leveling_enabled',     label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
     { key: 'streak_enabled',       label: 'Streak System',   emoji: '🔥', desc: 'Sistem streak harian chat', commands: [] },
     { key: 'streak_freeze',        label: 'Streak Freeze',   emoji: '🧊', desc: 'Freeze streak api agar tidak mati saat skip daily', commands: [], default: '1' },
-    { key: 'love_enabled',         label: 'Love System',     emoji: '❤️', desc: 'Sistem status love, /love, /marry, /divorce', commands: ['love', 'marry', 'divorce'] },
     { key: 'onboarding_enabled',   label: 'Onboarding DM',   emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
 ];
 
@@ -126,8 +123,6 @@ const INTERACTION_PREFIX_MAP = {
     'lottery_':        'feature_casino',
     'coinflip_':       'feature_casino',
     'slot_':           'feature_casino',
-    // Quest
-    'quest_':          'feature_quest',
     // Arena
     'arena_':          'feature_arena',
     // Auction

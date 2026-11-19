@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 127, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 122, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -53,15 +53,9 @@ const ACHIEVEMENTS = [
     { id: 'voice_10h', name: 'Voice Addict', emoji: '🎧', desc: 'Total 10 jam di voice chat', category: 'Voice', reward: 500 },
     { id: 'voice_50h', name: 'Voice Legend', emoji: '🎶', desc: 'Total 50 jam di voice chat', category: 'Voice', reward: 1500 },
     { id: 'voice_100h', name: 'Living in VC', emoji: '🏠', desc: 'Total 100 jam di voice chat', category: 'Voice', reward: 3000 },
-    // --- QUEST ---
-    { id: 'quest_first', name: 'Misi Pertama', emoji: '📜', desc: 'Selesaikan quest pertama', category: 'Quest', reward: 100 },
-    { id: 'quest_10', name: 'Quest Warrior', emoji: '⚔️', desc: 'Selesaikan 10 quest', category: 'Quest', reward: 400 },
-    { id: 'quest_50', name: 'Quest Master', emoji: '🎖️', desc: 'Selesaikan 50 quest', category: 'Quest', reward: 1500 },
-    { id: 'quest_100', name: 'Quiz Champion', emoji: '🧠', desc: 'Selesaikan 100 quest', category: 'Quest', reward: 3000 },
     // --- SPECIAL ---
     { id: 'redeem_first', name: 'Voucher Hunter', emoji: '🎟️', desc: 'Pertama kali redeem voucher', category: 'Special', reward: 50 },
     { id: 'custom_role', name: 'Fashionista', emoji: '🎨', desc: 'Membuat Custom Role', category: 'Special', reward: 200 },
-    { id: 'all_quest_day', name: 'Perfect Day', emoji: '✨', desc: 'Selesaikan semua quest dalam 1 hari', category: 'Special', reward: 500 },
     // --- FISHING ---
     { id: 'fish_first', name: 'Pemancing Pemula', emoji: '🎣', desc: 'Pertama kali memancing', category: 'Fishing', reward: 50 },
     { id: 'fish_10', name: 'Nelayan', emoji: '🚣', desc: 'Tangkap 10 ikan', category: 'Fishing', reward: 200 },
@@ -445,8 +439,7 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'coinflip') { const t = getUserStat(guildId, userId, 'total_coinflips'); const w = getUserStat(guildId, userId, 'coinflip_wins'); if (t >= 1) checks.push('coinflip_first'); if (w >= 5) checks.push('coinflip_win_5'); if (w >= 20) checks.push('coinflip_win_20'); if (w >= 50) checks.push('coinflip_win_50'); }
     if (context.type === 'event_win') { const c = getUserStat(guildId, userId, 'event_wins'); if (c >= 1) checks.push('event_first'); if (c >= 10) checks.push('event_10'); if (c >= 50) checks.push('event_50'); }
     if (context.type === 'voice') { const c = getUserStat(guildId, userId, 'total_voice_mins'); if (c >= 60) checks.push('voice_1h'); if (c >= 600) checks.push('voice_10h'); if (c >= 3000) checks.push('voice_50h'); if (c >= 6000) checks.push('voice_100h'); }
-    if (context.type === 'quest') { const c = getUserStat(guildId, userId, 'total_quests_done'); if (c >= 1) checks.push('quest_first'); if (c >= 10) checks.push('quest_10'); if (c >= 50) checks.push('quest_50'); if (c >= 100) checks.push('quest_100'); }
-    if (context.type === 'redeem') checks.push('redeem_first'); if (context.type === 'custom_role') checks.push('custom_role'); if (context.type === 'all_quest_day') checks.push('all_quest_day');
+    if (context.type === 'redeem') checks.push('redeem_first'); if (context.type === 'custom_role') checks.push('custom_role');
     if (context.type === 'fishing') { const c = getUserStat(guildId, userId, 'total_fish_caught'); if (c >= 1) checks.push('fish_first'); if (c >= 10) checks.push('fish_10'); if (c >= 50) checks.push('fish_50'); if (c >= 100) checks.push('fish_100'); if (c >= 500) checks.push('fish_500'); if (context.tier === 'Rare') checks.push('fish_rare'); if (context.tier === 'Epic') checks.push('fish_epic'); if (context.tier === 'Legendary') checks.push('fish_legendary'); if (context.tier === 'Mythic') checks.push('fish_mythic'); if (context.tier === 'Secret') checks.push('fish_secret'); if (context.tier === 'God') checks.push('fish_god'); if (context.weight > 500) checks.push('fish_heavy'); const godCount = getUserStat(guildId, userId, 'fish_caught_god_tier'); if (godCount >= 5) checks.push('fish_god_5'); if (context.fishId === 'omega_fish') checks.push('fish_omega'); if (context.fishId === 'eternal_one') checks.push('fish_eternal'); }
     if (context.type === 'giant_fish') { const c = getUserStat(guildId, userId, 'giant_fish_defeated'); if (c >= 1) checks.push('giant_fish_first'); if (c >= 5) checks.push('giant_fish_5'); if (c >= 15) checks.push('giant_fish_15'); if (context.giantFishId === 'giant_void_titan') checks.push('giant_fish_void_titan'); }
     if (context.type === 'secret_location_unlock') { checks.push('secret_location_unlock'); }
@@ -517,7 +510,6 @@ const ACH_PROGRESS = {
     coinflip_first: { stat: 'total_coinflips', target: 1 }, coinflip_win_5: { stat: 'coinflip_wins', target: 5 }, coinflip_win_20: { stat: 'coinflip_wins', target: 20 }, coinflip_win_50: { stat: 'coinflip_wins', target: 50 },
     event_first: { stat: 'event_wins', target: 1 }, event_10: { stat: 'event_wins', target: 10 }, event_50: { stat: 'event_wins', target: 50 },
     voice_1h: { stat: 'total_voice_mins', target: 60 }, voice_10h: { stat: 'total_voice_mins', target: 600 }, voice_50h: { stat: 'total_voice_mins', target: 3000 }, voice_100h: { stat: 'total_voice_mins', target: 6000 },
-    quest_first: { stat: 'total_quests_done', target: 1 }, quest_10: { stat: 'total_quests_done', target: 10 }, quest_50: { stat: 'total_quests_done', target: 50 }, quest_100: { stat: 'total_quests_done', target: 100 },
     fish_first: { stat: 'total_fish_caught', target: 1 }, fish_10: { stat: 'total_fish_caught', target: 10 }, fish_50: { stat: 'total_fish_caught', target: 50 }, fish_100: { stat: 'total_fish_caught', target: 100 }, fish_500: { stat: 'total_fish_caught', target: 500 },
     fish_god_5: { stat: 'fish_caught_god_tier', target: 5 },
     giant_fish_first: { stat: 'giant_fish_defeated', target: 1 }, giant_fish_5: { stat: 'giant_fish_defeated', target: 5 }, giant_fish_15: { stat: 'giant_fish_defeated', target: 15 },

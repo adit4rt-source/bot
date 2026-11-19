@@ -1,7 +1,7 @@
 // events/reactionAdd.js
 const { db, getConf, incrementUserStat } = require('../database');
 const { checkAchievements } = require('../systems/achievements');
-const { updateQuestProgress, addXpAndMoney } = require('../systems/quests');
+const { addXpAndMoney } = require('../systems/activity');
 const state = require('../state');
 
 module.exports = async function handleReactionAdd(reaction, user) {
@@ -11,12 +11,6 @@ module.exports = async function handleReactionAdd(reaction, user) {
     if (reaction.partial) await reaction.fetch().catch(() => {});
     const guildId = reaction.message.guild.id;
 
-    // === STARBOARD ===
-    try {
-        const { handleStarReaction } = require('../systems/starboard');
-        await handleStarReaction(reaction, user);
-    } catch (_) {}
-
     const awardSetting = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'reaction_award_to');
     const awardTo = awardSetting ? awardSetting.value : 'both';
     if (awardTo === 'none') return;
@@ -25,11 +19,14 @@ module.exports = async function handleReactionAdd(reaction, user) {
     const cdTime = getConf(guildId, 'reaction_cooldown', 10) * 1000;
 
     const processReactionXp = async (targetId) => {
-        updateQuestProgress(guildId, targetId, 'reaction', 1);
         const cdKey = `${guildId}_${targetId}_react`;
         if (!state.reactionCooldowns.has(cdKey)) {
             const member = await reaction.message.guild.members.fetch(targetId).catch(() => null);
-            if (member) { await addXpAndMoney(member, 'reaction'); state.reactionCooldowns.add(cdKey); setTimeout(() => state.reactionCooldowns.delete(cdKey), cdTime); }
+            if (member) {
+                await addXpAndMoney(member, 'reaction');
+                state.reactionCooldowns.add(cdKey);
+                setTimeout(() => state.reactionCooldowns.delete(cdKey), cdTime);
+            }
         }
     };
 
@@ -37,32 +34,4 @@ module.exports = async function handleReactionAdd(reaction, user) {
     await checkAchievements(reaction.message.guild, reactorId, { type: 'reaction' });
     if (awardTo === 'both' || awardTo === 'reactor') await processReactionXp(reactorId);
     if ((awardTo === 'both' || awardTo === 'author') && !isAuthorBot && reactorId !== authorId) await processReactionXp(authorId);
-
-    // ❤️ LOVE — reacting with the love emoji gives the message author +1 love
-    // (unique per reactor→author, no self-love). See systems/love.js.
-    try {
-        const love = require('../systems/love');
-        if (love.isEnabled(guildId) && love.isLoveEmoji(guildId, reaction.emoji && reaction.emoji.name)) {
-            // Re-derive the author safely (the message may be a partial that wasn't cached).
-            let msg = reaction.message;
-            if (msg.partial) msg = await msg.fetch().catch(() => null);
-            const lovedId = msg && msg.author ? msg.author.id : null;
-            const lovedBot = msg && msg.author ? msg.author.bot : true;
-            if (lovedId && !lovedBot && lovedId !== reactorId) {
-                const res = love.giveLove(guildId, reactorId, lovedId);
-                if (res.added) {
-                    incrementUserStat(guildId, lovedId, 'love_received');
-                    const lovedMember = await reaction.message.guild.members.fetch(lovedId).catch(() => null);
-                    if (lovedMember) await love.refreshMemberNick(lovedMember);
-                    // Notify the configured channel (like the streak announcement).
-                    await love.announceLove(
-                        reaction.message.guild,
-                        { id: reactorId, name: user.username },
-                        { id: lovedId, name: lovedMember ? lovedMember.user.username : (msg.author.username || 'User') },
-                        res.count
-                    );
-                }
-            }
-        }
-    } catch (_) { /* love is best-effort; never break reaction handling */ }
 };

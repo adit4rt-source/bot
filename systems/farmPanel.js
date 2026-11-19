@@ -3,7 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, getSeedCount, addSeed, removeSeed, getAllSeeds, getFertCount, addFert, removeFert, getAllFerts, addUserBalance, subtractUserBalance, getFarmDecorations, hasFarmDecoration, addFarmDecoration, getFarmPlot, insertFarmPlot, deleteDeadFarmPlots, clearFarmStorage, upgradeFarmLevel } = require('../database');
 const { getRandomInt } = require('../utils');
 const { getFarmData, getFarmSlots, getPlots, getStorage, addStorage, removeStorage, getStorageQty, getFarmToolYieldBonus, getGreenhouseLevel, getGreenhouseSlots, upgradeGreenhouse, getGreenhousePlots, insertGreenhousePlot, GREENHOUSE_COSTS } = require('./farming');
-const { updateQuestProgress } = require('./quests');
+
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
 const { addPetExp } = require('../systems/pets');
@@ -1122,7 +1122,7 @@ async function handleFarmButton(interaction) {
         } catch (_) {}
         
         incrementUserStat(guildId, userId, 'total_harvests', harvested);
-        updateQuestProgress(guildId, userId, 'farm_harvest', harvested);
+        
         addPetExp(guildId, userId, 5);
         addComboFeature(guildId, userId, 'farming');
         await checkAchievements(interaction.guild, userId, { type: 'farm_harvest', legendary: harvestedLegendary });
@@ -1939,7 +1939,7 @@ async function handleFarmModal(interaction) {
         addUserBalance(guildId, userId, totalMoney);
         incrementUserStat(guildId, userId, 'total_crafts', toCraft);
         addIncome(guildId, userId, 'farming', totalMoney);
-        updateQuestProgress(guildId, userId, 'craft', toCraft);
+        
         addComboFeature(guildId, userId, 'farming');
         try { require('./farmExtras').bumpContract(userId, { type: 'craft', amount: toCraft }); } catch (_) {}
         try { await checkAchievements(interaction.guild, userId, { type: 'farm_craft' }); } catch (_) {}

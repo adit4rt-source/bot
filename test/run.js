@@ -48,9 +48,9 @@ const suiteFiles = [
   try {
     const { shutdownPool } = require(path.join(__dirname, '../systems/imagePool.js'));
     await shutdownPool();
-  } catch (e) {}
+  } catch (e) { }
   // Cleanup temp dir
-  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
+  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { }
   process.exit(summary.fail ? 1 : 0);
 })().catch(e => {
   console.error('Test runner crashed:', e);

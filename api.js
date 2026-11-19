@@ -689,84 +689,6 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== AUTOMOD ====================
-app.get('/api/automod/:guildId', async (req, res) => {
-    try {
-        const { AUTOMOD_MODULES, getAllModuleStates, getAutomodSetting, getBlockedWords, getWhitelist, getIgnoredChannels } = require('./systems/automod');
-        const { guildId } = req.params;
-        res.json({
-            modules: AUTOMOD_MODULES,
-            states: getAllModuleStates(guildId),
-            settings: {
-                mod_log_channel: getAutomodSetting(guildId, 'mod_log_channel'),
-                audit_log_channel: getAutomodSetting(guildId, 'audit_log_channel'),
-            },
-            blockedWords: getBlockedWords(guildId),
-            whitelist: getWhitelist(guildId),
-            ignoredChannels: getIgnoredChannels(guildId),
-            recentLogs: db.prepare('SELECT * FROM automod_logs WHERE guildId = ? ORDER BY timestamp DESC LIMIT 20').all(guildId),
-        });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/toggle', adminCheck, (req, res) => {
-    try {
-        const { setModuleEnabled, isModuleEnabled } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { moduleId, enabled } = req.body;
-        if (!moduleId) return res.status(400).json({ error: 'Missing moduleId' });
-        setModuleEnabled(guildId, moduleId, enabled !== undefined ? enabled : !isModuleEnabled(guildId, moduleId));
-        res.json({ success: true, moduleId, enabled: isModuleEnabled(guildId, moduleId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/settings', adminCheck, (req, res) => {
-    try {
-        const { setAutomodSetting } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { key, value } = req.body;
-        if (!key) return res.status(400).json({ error: 'Missing key' });
-        setAutomodSetting(guildId, key, value || '');
-        res.json({ success: true, key, value });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/words', adminCheck, (req, res) => {
-    try {
-        const { addBlockedWord, removeBlockedWord, getBlockedWords } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, word } = req.body;
-        if (!word) return res.status(400).json({ error: 'Missing word' });
-        if (action === 'add') addBlockedWord(guildId, word);
-        else if (action === 'remove') removeBlockedWord(guildId, word);
-        res.json({ success: true, blockedWords: getBlockedWords(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/whitelist', adminCheck, (req, res) => {
-    try {
-        const { addWhitelist, removeWhitelist, getWhitelist } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, targetId, type } = req.body;
-        if (!targetId) return res.status(400).json({ error: 'Missing targetId' });
-        if (action === 'add') addWhitelist(guildId, targetId, type || 'user');
-        else if (action === 'remove') removeWhitelist(guildId, targetId);
-        res.json({ success: true, whitelist: getWhitelist(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
-    try {
-        const { addIgnoredChannel, removeIgnoredChannel, getIgnoredChannels } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, channelId } = req.body;
-        if (!channelId) return res.status(400).json({ error: 'Missing channelId' });
-        if (action === 'add') addIgnoredChannel(guildId, channelId);
-        else if (action === 'remove') removeIgnoredChannel(guildId, channelId);
-        res.json({ success: true, ignoredChannels: getIgnoredChannels(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ==================== STREAK SETTINGS ====================
 app.get('/api/streak/settings/:guildId', (req, res) => {
     try {
@@ -1174,37 +1096,6 @@ app.get('/api/achievements/:userId', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== QUESTS ====================
-app.get('/api/quests', (req, res) => {
-    try {
-        const { QUEST_POOL, DIFFICULTY_TIERS } = require('./systems/quests');
-        const questTypes = QUEST_POOL.map(q => q.type);
-        const usersWithDailyQuests = db.prepare('SELECT COUNT(*) as c FROM daily_quests').get();
-        res.json({
-            difficulties: DIFFICULTY_TIERS,
-            questTypes,
-            totalQuestTypes: questTypes.length,
-            usersWithDailyQuests: usersWithDailyQuests?.c || 0,
-        });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/api/quests/:guildId/:userId', (req, res) => {
-    try {
-        const { guildId, userId } = req.params;
-        const { getWeekId } = require('./systems/quests');
-        const parse = (s) => { try { return s ? JSON.parse(s) : null; } catch (_) { return null; } };
-        const dailyRow = db.prepare('SELECT date, data FROM daily_quests WHERE guildId = ? AND userId = ?').get(guildId, userId);
-        const week = getWeekId();
-        const weeklyRow = db.prepare('SELECT week, data FROM weekly_quests WHERE guildId = ? AND userId = ? AND week = ?').get(guildId, userId, week);
-        res.json({
-            guildId, userId,
-            daily: dailyRow ? { date: dailyRow.date, quests: parse(dailyRow.data) } : null,
-            weekly: weeklyRow ? { week: weeklyRow.week, quests: parse(weeklyRow.data) } : null,
-        });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ==================== GIVEAWAYS ====================
 app.get('/api/giveaways/:guildId', (req, res) => {
     try {
@@ -1237,30 +1128,6 @@ app.get('/api/selfroles/:guildId', (req, res) => {
             options: getOptions(m.id).map(o => ({ id: o.id, roleId: o.roleId, label: o.label, emoji: o.emoji, description: o.description })),
         }));
         res.json({ total: menus.length, menus });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ==================== STARBOARD ====================
-app.get('/api/starboard/:guildId', async (req, res) => {
-    try {
-        const { guildId } = req.params;
-        require('./systems/starboard'); // ensure the starboard table exists
-        const settings = {
-            channel: getSetting(guildId, 'starboard_channel', null),
-            threshold: parseInt(getSetting(guildId, 'starboard_threshold', '3'), 10) || 3,
-            emoji: getSetting(guildId, 'starboard_emoji', '⭐'),
-            selfStar: getSetting(guildId, 'starboard_self_star', '0') === '1',
-        };
-        const totalMessages = db.prepare('SELECT COUNT(*) as c FROM starboard WHERE guildId = ?').get(guildId);
-        const totalStars = db.prepare('SELECT SUM(stars) as s FROM starboard WHERE guildId = ?').get(guildId);
-        const topRaw = db.prepare('SELECT messageId, channelId, authorId, stars, content, createdAt FROM starboard WHERE guildId = ? ORDER BY stars DESC LIMIT 10').all(guildId);
-        res.json({
-            enabled: !!settings.channel,
-            settings,
-            totalMessages: totalMessages?.c || 0,
-            totalStars: totalStars?.s || 0,
-            topMessages: await enrichLeaderboard(topRaw, 'authorId'),
-        });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

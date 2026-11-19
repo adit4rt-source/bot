@@ -64,10 +64,10 @@ function computeDailyStreak(prevStreak, lastDaily, today, hasShield = false) {
 // ==================== PURE: REWARD CURVE ====================
 // Exact-day jackpots layered on top of the base escalation + recurring weekly bonus.
 const MILESTONES = {
-    7:   { money: 10000,  items: [{ id: 'mystery_box', qty: 3 }],                                    label: '1 Minggu Beruntun!' },
-    14:  { money: 25000,  items: [{ id: 'xp_booster_2x', qty: 2 }],                                 label: '2 Minggu Beruntun!' },
-    30:  { money: 75000,  items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }],  label: '30 Hari Beruntun!' },
-    60:  { money: 200000, items: [{ id: 'money_magnet', qty: 2 }],                                   label: '60 Hari — Dewa Login!' },
+    7: { money: 10000, items: [{ id: 'mystery_box', qty: 3 }], label: '1 Minggu Beruntun!' },
+    14: { money: 25000, items: [{ id: 'xp_booster_2x', qty: 2 }], label: '2 Minggu Beruntun!' },
+    30: { money: 75000, items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }], label: '30 Hari Beruntun!' },
+    60: { money: 200000, items: [{ id: 'money_magnet', qty: 2 }], label: '60 Hari — Dewa Login!' },
     100: { money: 500000, items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — LEGENDA!' },
 };
 
@@ -160,23 +160,23 @@ async function claimDaily(guildId, userId, opts = {}) {
     try {
         const { getTotalPetBonus, applyBonusPercent } = require('./pets');
         totalMoney = applyBonusPercent(totalMoney, getTotalPetBonus(guildId, userId, 'daily_bonus'));
-    } catch (_) {}
+    } catch (_) { }
 
     // ----- Persist -----
     db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(totalMoney, today, guildId, userId);
-    try { incrementUserStat(guildId, userId, 'total_dailies'); } catch (_) {}
-    try { addIncome(guildId, userId, 'daily', totalMoney); } catch (_) {}
+    try { incrementUserStat(guildId, userId, 'total_dailies'); } catch (_) { }
+    try { addIncome(guildId, userId, 'daily', totalMoney); } catch (_) { }
 
     for (const it of reward.items) {
-        try { addItem(guildId, userId, it.id, it.qty); } catch (_) {}
+        try { addItem(guildId, userId, it.id, it.qty); } catch (_) { }
     }
-    if (randomItem) { try { addItem(guildId, userId, randomItem, 1); } catch (_) {} }
+    if (randomItem) { try { addItem(guildId, userId, randomItem, 1); } catch (_) { } }
 
     // Bonus XP (matches old +15).
-    try { db.prepare('UPDATE users SET xp = xp + 15 WHERE guildId = ? AND userId = ?').run(guildId, userId); } catch (_) {}
+    try { db.prepare('UPDATE users SET xp = xp + 15 WHERE guildId = ? AND userId = ?').run(guildId, userId); } catch (_) { }
 
     // Pet exp via pets module (best-effort).
-    try { require('./pets').addPetExp(guildId, userId, totalPetExp); } catch (_) {}
+    try { require('./pets').addPetExp(guildId, userId, totalPetExp); } catch (_) { }
 
     return {
         alreadyClaimed: false,
