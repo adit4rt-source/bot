@@ -75,25 +75,35 @@ async function cleanServerLayout(guild) {
         } catch (_) {}
     }
 
-    // 4. Hapus channel settings redundan di VOICE PUBLIC & GAMING VOICE
+    // 4. Pastikan channel settings TempVoice di setiap kategori voice ADA (JANGAN DIHAPUS)
     const voicePubCat = findChannel(c => c.type === ChannelType.GuildCategory && c.name && c.name.toLowerCase().includes('voice public'));
     if (voicePubCat) {
-        const pubSettings = findChannel(c => c.parentId === voicePubCat.id && c.name && c.name.toLowerCase().includes('settings'));
-        if (pubSettings && typeof pubSettings.delete === 'function') {
+        const pubSettings = findChannel(c => c.parentId === voicePubCat.id && c.name && c.name.toLowerCase().includes('setting'));
+        if (!pubSettings && typeof guild.channels?.create === 'function') {
             try {
-                await pubSettings.delete('Hapus channel redundant settings');
-                log.push('🗑️ Hapus channel redundan `settings` di `[VOICE PUBLIC]`');
+                await guild.channels.create({
+                    name: '「✨」settings',
+                    type: ChannelType.GuildText,
+                    parent: voicePubCat.id,
+                    reason: 'Restore TempVoice settings channel'
+                });
+                log.push('✅ Buat ulang `「✨」settings` di `[VOICE PUBLIC]`');
             } catch (_) {}
         }
     }
 
     const gamingVoiceCat = findChannel(c => c.type === ChannelType.GuildCategory && c.name && c.name.toLowerCase().includes('gaming voice'));
     if (gamingVoiceCat) {
-        const gamingSettings = findChannel(c => c.parentId === gamingVoiceCat.id && c.name && c.name.toLowerCase().includes('settings'));
-        if (gamingSettings && typeof gamingSettings.delete === 'function') {
+        const gamingSettings = findChannel(c => c.parentId === gamingVoiceCat.id && c.name && c.name.toLowerCase().includes('setting'));
+        if (!gamingSettings && typeof guild.channels?.create === 'function') {
             try {
-                await gamingSettings.delete('Hapus channel redundant settings');
-                log.push('🗑️ Hapus channel redundan `settings` di `[GAMING VOICE]`');
+                await guild.channels.create({
+                    name: '「🌸」settings',
+                    type: ChannelType.GuildText,
+                    parent: gamingVoiceCat.id,
+                    reason: 'Restore TempVoice settings channel'
+                });
+                log.push('✅ Buat ulang `「🌸」settings` di `[GAMING VOICE]`');
             } catch (_) {}
         }
     }

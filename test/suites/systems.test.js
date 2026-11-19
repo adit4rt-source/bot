@@ -1325,13 +1325,13 @@ module.exports = function register() {
     if (!r365.milestoneLabel || !r365.milestoneLabel.includes('365 HARI')) throw new Error('missing 365-day milestone');
   });
 
-  test('layoutCleanup: cleanServerLayout fixes typo, moves spam, fixes staff, deletes redundant settings', async () => {
+  test('layoutCleanup: cleanServerLayout fixes typo, moves spam, fixes staff, preserves/restores voice settings', async () => {
     const { cleanServerLayout } = botRequire('systems/layoutCleanup.js');
     const channelsMap = new Map();
     let gipoweRenamed = null;
     let spamEdited = null;
     let testingRenamed = null;
-    let deletedSettings = [];
+    let createdChannels = [];
 
     const mockGuild = {
       id: 'CLEAN_LAYOUT_GUILD',
@@ -1349,7 +1349,12 @@ module.exports = function register() {
       channels: {
         cache: channelsMap,
         fetch: async () => channelsMap,
-        create: async (data) => ({ id: 'c_lounge_' + data.name, lockPermissions: async () => {}, send: async () => {} })
+        create: async (data) => {
+          createdChannels.push(data.name);
+          const ch = { id: 'c_new_' + data.name, ...data, lockPermissions: async () => {}, send: async () => {} };
+          channelsMap.set(ch.id, ch);
+          return ch;
+        }
       }
     };
 
@@ -1381,17 +1386,18 @@ module.exports = function register() {
       setName: async (n) => { testingRenamed = n; }
     });
 
-    // Add voice public category & settings
+    // Add voice public category WITHOUT settings (should be restored)
     channelsMap.set('cat_voicepub', {
       id: 'cat_voicepub',
       type: 4,
       name: '🌐 ll ----- [VOICE PUBLIC]'
     });
-    channelsMap.set('c_pubsettings', {
-      id: 'c_pubsettings',
-      parentId: 'cat_voicepub',
-      name: '「✨」settings',
-      delete: async () => { deletedSettings.push('pub'); }
+
+    // Add gaming voice category WITHOUT settings (should be restored)
+    channelsMap.set('cat_gamingvoice', {
+      id: 'cat_gamingvoice',
+      type: 4,
+      name: '🎮 ll ---- [GAMING VOICE]'
     });
 
     const res = await cleanServerLayout(mockGuild);
@@ -1399,6 +1405,7 @@ module.exports = function register() {
     if (gipoweRenamed !== '「🎁」giveaway') throw new Error('gipowe not renamed to giveaway');
     if (!spamEdited || spamEdited.name !== '「⚡」bot-spam' || spamEdited.parent !== 'cat_mainbot') throw new Error('spam not properly moved and renamed');
     if (testingRenamed !== '「🧪」bot-testing') throw new Error('testing-bot not formatted');
-    if (!deletedSettings.includes('pub')) throw new Error('redundant voice settings not deleted');
+    if (!createdChannels.includes('「✨」settings')) throw new Error('missing voice public settings not restored');
+    if (!createdChannels.includes('「🌸」settings')) throw new Error('missing gaming voice settings not restored');
   });
 };
