@@ -40,6 +40,7 @@ const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRol
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTempvoiceCommand, handleTempvoiceButton, handleTempvoiceUserSelect, handleTempvoiceModal, isTempvoicePanelButton, isTempvoiceUserSelect, isTempvoiceModal } = require('../systems/tempvoicePanel');
+const { handleStreakButton, isStreakPanelButton, buildStreakStatusPanel, buildStreakLeaderboard, buildLoungePanel, setupLounge } = require('../systems/streakTier');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const i18n = require('../systems/i18n');
 const consent = require('../systems/consent');
@@ -176,7 +177,7 @@ async function routeInteraction(interaction) {
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
                 { name: '\u200b', value: `> \`/pet\` — 🐾 Pet Panel (95+ pet)\n> Feed, Play, Hunt, Dungeon, Boss, Fusion, Evolve, Cook, Sockets\n> \`/battle @user\` — ⚔️ PvP auto-battle\n> \`/expedition\` — 🌊 Kirim pet ekspedisi\n> \`/worldboss\` — 🗺️ Boss global`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & PROGRESSION**', inline: false },
-                { name: '\u200b', value: `> \`/profile\` — 📋 Profil, Achievement, Stats\n> \`/levelpanel\` — 🌟 Level, Rank, Rewards\n> \`/stats\` — 📊 Statistics Dashboard\n> \`/leaderboard\` — 🏆 Ranking pemain`, inline: false },
+                { name: '\u200b', value: `> \`/profile\` — 📋 Profil, Achievement, Stats\n> \`/streak\` — 🔥 Streak Prestige & VVIP Lounge (Rank & Bonus Chat)\n> \`/levelpanel\` — 🌟 Level, Rank, Rewards\n> \`/stats\` — 📊 Statistics Dashboard\n> \`/leaderboard\` — 🏆 Ranking pemain`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🔧 **SERVER TOOLS**', inline: false },
                 { name: '\u200b', value: `> \`/invite\` — 📨 Invite Tracker (statistik invite)\n> \`/welcomer\` — 👋 Welcomer Panel (Admin)\n> \`/tempvoice\` — 🎙️ Buat voice channel privat`, inline: false }
             );
@@ -769,6 +770,32 @@ async function routeInteraction(interaction) {
         if (command === 'tempvoice') {
             return handleTempvoiceCommand(interaction);
         }
+
+        // ================= STREAK PRESTIGE & VVIP LOUNGE =================
+        if (command === 'streak') {
+            const sub = interaction.options.getSubcommand(false) || 'status';
+            const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, interaction.user.id);
+            const streakCount = streakRow ? Number(streakRow.count) || 0 : 0;
+
+            if (sub === 'leaderboard') {
+                return interaction.reply(buildStreakLeaderboard(guildId, interaction.user.id));
+            }
+            if (sub === 'lounge') {
+                return interaction.reply({ ...buildLoungePanel(guildId, interaction.user.id, streakCount), ephemeral: true });
+            }
+            if (sub === 'setup_lounge') {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                    return interaction.reply({ content: '❌ Hanya admin yang bisa setup VVIP Lounge.', ephemeral: true });
+                }
+                await interaction.deferReply({ ephemeral: true });
+                const res = await setupLounge(interaction.guild);
+                if (!res.ok) {
+                    return interaction.editReply({ content: `❌ Gagal setup lounge: ${res.error}` });
+                }
+                return interaction.editReply({ content: `✅ **VVIP High-Table Lounge Berhasil Dikonfigurasi!**\n> 📁 Category: <#${res.category.id}>\n> 💬 Text: <#${res.textChannel.id}>\n> 🔊 Voice: <#${res.voiceChannel.id}>\n> 👑 Hak akses otomatis disinkronkan ke member streak 100+ & 200+!` });
+            }
+            return interaction.reply(buildStreakStatusPanel(guildId, interaction.user.id, interaction.user.username, streakCount));
+        }
     }
 
 
@@ -1264,6 +1291,11 @@ async function routeInteraction(interaction) {
         // --- TEMPVOICE PANEL BUTTONS ---
         if (isTempvoicePanelButton(interaction.customId)) {
             return handleTempvoiceButton(interaction);
+        }
+
+        // --- STREAK PRESTIGE & VVIP LOUNGE BUTTONS ---
+        if (isStreakPanelButton(interaction.customId)) {
+            return handleStreakButton(interaction);
         }
 
         // --- GAME TERMS CONSENT BUTTONS ---

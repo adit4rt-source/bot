@@ -64,16 +64,20 @@ function computeDailyStreak(prevStreak, lastDaily, today, hasShield = false) {
 // ==================== PURE: REWARD CURVE ====================
 // Exact-day jackpots layered on top of the base escalation + recurring weekly bonus.
 const MILESTONES = {
-    7: { money: 10000, items: [{ id: 'mystery_box', qty: 3 }], label: '1 Minggu Beruntun!' },
-    14: { money: 25000, items: [{ id: 'xp_booster_2x', qty: 2 }], label: '2 Minggu Beruntun!' },
-    30: { money: 75000, items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }], label: '30 Hari Beruntun!' },
-    60: { money: 200000, items: [{ id: 'money_magnet', qty: 2 }], label: '60 Hari — Dewa Login!' },
-    100: { money: 500000, items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — LEGENDA!' },
+    7:   { money: 10000,   items: [{ id: 'mystery_box', qty: 3 }], label: '1 Minggu Beruntun!' },
+    14:  { money: 25000,   items: [{ id: 'xp_booster_2x', qty: 2 }], label: '2 Minggu Beruntun!' },
+    30:  { money: 75000,   items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }], label: '30 Hari Beruntun!' },
+    60:  { money: 200000,  items: [{ id: 'money_magnet', qty: 2 }], label: '60 Hari — Tempest!' },
+    100: { money: 500000,  items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — SOVEREIGN LOUNGE UNLOCKED!' },
+    150: { money: 1000000, items: [{ id: 'mystery_box', qty: 5 }, { id: 'lucky_charm', qty: 3 }], label: '150 HARI — LUMINARY ELITE!' },
+    200: { money: 2500000, items: [{ id: 'streak_shield', qty: 5 }, { id: 'daily_doubler', qty: 2 }], label: '200 HARI — ETERNAL IMMORTAL!' },
+    250: { money: 5000000, items: [{ id: 'mystery_box', qty: 10 }, { id: 'money_magnet', qty: 5 }], label: '250 HARI — GRAND MASTER OF TIME!' },
+    365: { money: 10000000, items: [{ id: 'streak_shield', qty: 10 }, { id: 'xp_booster_3x', qty: 5 }], label: '365 HARI — 1 YEAR MYTHOS LEGEND!' },
 };
 
 const BASE = 3000;
 const PER_DAY = 400;     // +400 money per consecutive day
-const CAP_DAYS = 60;     // escalation caps at day 60
+const CAP_DAYS = 365;    // escalation continues up to 1 full year
 const WEEKLY_BONUS = 5000;
 
 function baseMoneyFor(streak) {

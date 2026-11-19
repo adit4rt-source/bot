@@ -5,24 +5,24 @@ const { getSetting, setSetting } = require('../database');
 // Each feature maps a setting key to a group of commands/interactions.
 // Default is ON ('1'). Admin can set to '0' to disable.
 const FEATURES = [
-    { key: 'feature_economy',      label: 'Economy',       emoji: '💰', desc: '/wallet, /gift', commands: ['wallet', 'gift'] },
-    { key: 'feature_daily',        label: 'Daily Reward',  emoji: '🎁', desc: '/daily', commands: ['daily'] },
-    { key: 'feature_shop',         label: 'Shop',          emoji: '🛒', desc: '/shop', commands: ['shop'] },
-    { key: 'feature_fishing',      label: 'Fishing',       emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
-    { key: 'feature_farming',      label: 'Farming',       emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
-    { key: 'feature_pet',          label: 'Pet & Battle',  emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
-    { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel', commands: ['casino', 'blackjack', 'togel'] },
-    { key: 'feature_arena',        label: 'Arena',         emoji: '⚔️', desc: '/arena', commands: ['arena'] },
-    { key: 'feature_auction',      label: 'Auction',       emoji: '🏛️', desc: '/auction', commands: ['auction'] },
-    { key: 'feature_trade',        label: 'Trade',         emoji: '🤝', desc: '/trade, /market', commands: ['trade', 'market'] },
-    { key: 'feature_giveaway',     label: 'Giveaway',      emoji: '🎉', desc: '/giveaway', commands: ['giveaway'] },
-    { key: 'feature_invite',       label: 'Invite Tracker',emoji: '📨', desc: '/invite', commands: ['invite'] },
-    { key: 'feature_tempvoice',    label: 'TempVoice',     emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
-    { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
-    { key: 'leveling_enabled',     label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
-    { key: 'streak_enabled',       label: 'Streak System',   emoji: '🔥', desc: 'Sistem streak harian chat', commands: [] },
-    { key: 'streak_freeze',        label: 'Streak Freeze',   emoji: '🧊', desc: 'Freeze streak api agar tidak mati saat skip daily', commands: [], default: '1' },
-    { key: 'onboarding_enabled',   label: 'Onboarding DM',   emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
+    { key: 'feature_economy', label: 'Economy', emoji: '💰', desc: '/wallet, /gift', commands: ['wallet', 'gift'] },
+    { key: 'feature_daily', label: 'Daily Reward', emoji: '🎁', desc: '/daily', commands: ['daily'] },
+    { key: 'feature_shop', label: 'Shop', emoji: '🛒', desc: '/shop', commands: ['shop'] },
+    { key: 'feature_fishing', label: 'Fishing', emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
+    { key: 'feature_farming', label: 'Farming', emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
+    { key: 'feature_pet', label: 'Pet & Battle', emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
+    { key: 'feature_casino', label: 'Casino', emoji: '🎰', desc: '/casino, /blackjack, /togel', commands: ['casino', 'blackjack', 'togel'] },
+    { key: 'feature_arena', label: 'Arena', emoji: '⚔️', desc: '/arena', commands: ['arena'] },
+    { key: 'feature_auction', label: 'Auction', emoji: '🏛️', desc: '/auction', commands: ['auction'] },
+    { key: 'feature_trade', label: 'Trade', emoji: '🤝', desc: '/trade, /market', commands: ['trade', 'market'] },
+    { key: 'feature_giveaway', label: 'Giveaway', emoji: '🎉', desc: '/giveaway', commands: ['giveaway'] },
+    { key: 'feature_invite', label: 'Invite Tracker', emoji: '📨', desc: '/invite', commands: ['invite'] },
+    { key: 'feature_tempvoice', label: 'TempVoice', emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
+    { key: 'feature_selfrole', label: 'Self Role', emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
+    { key: 'leveling_enabled', label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
+    { key: 'streak_enabled', label: 'Streak System', emoji: '🔥', desc: 'Sistem streak harian chat & /streak', commands: ['streak'] },
+    { key: 'streak_freeze', label: 'Streak Freeze', emoji: '🧊', desc: 'Freeze streak api agar tidak mati saat skip daily', commands: [], default: '1' },
+    { key: 'onboarding_enabled', label: 'Onboarding DM', emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
 ];
 
 const PAGE_SIZE = 8;
@@ -95,47 +95,49 @@ function getFeatureDef(featureKey) {
 // Used to gate button/select/modal interactions when the parent feature is OFF.
 const INTERACTION_PREFIX_MAP = {
     // Economy
-    'economy_':        'feature_economy',
-    'econ_':           'feature_economy',
+    'economy_': 'feature_economy',
+    'econ_': 'feature_economy',
     // Daily Reward
-    'daily_':          'feature_daily',
+    'daily_': 'feature_daily',
     // Shop
-    'shop_buy_':       'feature_shop',
+    'shop_buy_': 'feature_shop',
     // Farming (has seed_qty)
-    'seed_qty_':       'feature_farming',
+    'seed_qty_': 'feature_farming',
     // Fishing
-    'fish_':           'feature_fishing',
-    'fishing_':        'feature_fishing',
+    'fish_': 'feature_fishing',
+    'fishing_': 'feature_fishing',
     // Farming
-    'farm_':           'feature_farming',
+    'farm_': 'feature_farming',
     // Pet & Battle
-    'pet_':            'feature_pet',
-    'expedition_':     'feature_pet',
-    'worldboss_':      'feature_pet',
-    'fusion_':         'feature_pet',
-    'mutation_':       'feature_pet',
-    'dungeon_':        'feature_pet',
-    'ability_':        'feature_pet',
-    'awakening_':      'feature_pet',
+    'pet_': 'feature_pet',
+    'expedition_': 'feature_pet',
+    'worldboss_': 'feature_pet',
+    'fusion_': 'feature_pet',
+    'mutation_': 'feature_pet',
+    'dungeon_': 'feature_pet',
+    'ability_': 'feature_pet',
+    'awakening_': 'feature_pet',
     // Casino
-    'casino_':         'feature_casino',
-    'bj_':             'feature_casino',
-    'lottery_':        'feature_casino',
-    'coinflip_':       'feature_casino',
-    'slot_':           'feature_casino',
+    'casino_': 'feature_casino',
+    'bj_': 'feature_casino',
+    'lottery_': 'feature_casino',
+    'coinflip_': 'feature_casino',
+    'slot_': 'feature_casino',
     // Arena
-    'arena_':          'feature_arena',
+    'arena_': 'feature_arena',
     // Auction
-    'auction_':        'feature_auction',
+    'auction_': 'feature_auction',
     // Trade
-    'trade_':          'feature_trade',
-    'market_':         'feature_trade',
+    'trade_': 'feature_trade',
+    'market_': 'feature_trade',
     // Giveaway (public join button)
-    'giveaway_join':   'feature_giveaway',
+    'giveaway_join': 'feature_giveaway',
     // Starboard — no interactive components
     // Invite — no interactive components
     // TempVoice
-    'tv_':             'feature_tempvoice',
+    'tv_': 'feature_tempvoice',
+    // Streak Prestige
+    'strk_': 'streak_enabled',
 };
 
 /**

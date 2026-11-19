@@ -49,6 +49,21 @@ const commands = [
             )),
 
     // ================= SOCIAL / SERVER TOOLS =================
+    new SlashCommandBuilder()
+        .setName('streak')
+        .setDescription('🔥 Streak Prestige — Cek rank keaktifan, bonus chat, & VVIP Lounge')
+        .addSubcommand(sub => sub
+            .setName('status')
+            .setDescription('Lihat status streak, rank role, dan bonus chat kamu'))
+        .addSubcommand(sub => sub
+            .setName('leaderboard')
+            .setDescription('🏆 Hall of Fame — Top 10 streak terpanjang server'))
+        .addSubcommand(sub => sub
+            .setName('lounge')
+            .setDescription('🏛️ VVIP High-Table Lounge — Khusus member streak 100+ hari'))
+        .addSubcommand(sub => sub
+            .setName('setup_lounge')
+            .setDescription('[Admin] Auto-setup category & channel VVIP Lounge')),
     new SlashCommandBuilder().setName('invite').setDescription('📨 Invite Panel — Lihat statistik invite kamu'),
     new SlashCommandBuilder()
         .setName('welcomer')

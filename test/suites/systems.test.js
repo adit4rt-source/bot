@@ -1225,4 +1225,49 @@ module.exports = function register() {
     const after = db.db.prepare('SELECT * FROM private_spaces WHERE guildId = ? AND ownerId = ?').get(g, owner);
     if (after) throw new Error('cleanupMemberSpace should remove record from database');
   });
+
+  // ---- Streak Prestige & VVIP Lounge (Gaya A) ----
+  const streakTier = botRequire('systems/streakTier.js');
+  const dr = botRequire('systems/dailyReward.js');
+
+  test('streakTier: tiers define aesthetic ranks, bonuses and lounge unlocks', () => {
+    const t7 = streakTier.getStreakTier(7);
+    if (t7.name !== '✦ Sparks' || t7.chatBonus !== 0.10) throw new Error('t7 wrong');
+
+    const t100 = streakTier.getStreakTier(100);
+    if (t100.name !== '✦ Sovereign' || !t100.lounge) throw new Error('t100 should unlock lounge');
+
+    const t200 = streakTier.getStreakTier(215);
+    if (t200.name !== '✦ Eternal' || t200.chatBonus !== 1.50) throw new Error('t200 should be Eternal with 1.50 bonus');
+
+    const t365 = streakTier.getStreakTier(400);
+    if (t365.name !== '✦ Mythos' || t365.chatBonus !== 2.00) throw new Error('t365 should be Mythos');
+  });
+
+  test('streakTier: claimLoungeCrate checks streak threshold and awards rewards', () => {
+    const g = 'ST_G', u = 'ST_U';
+    db.getOrCreateUser(g, u);
+    // User with streak 50 should be rejected
+    const rLow = streakTier.claimLoungeCrate(g, u, 50);
+    if (rLow.ok) throw new Error('streak 50 should not claim lounge crate');
+
+    // User with streak 200 should receive crate
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    db.db.prepare('DELETE FROM user_stats WHERE userId = ? AND stat_key = ?').run(u, `lounge_crate_${today}`);
+    const rHigh = streakTier.claimLoungeCrate(g, u, 200);
+    if (!rHigh.ok || rHigh.money < 100000) throw new Error('streak 200 crate failed');
+
+    // Second claim same day blocked
+    const rDup = streakTier.claimLoungeCrate(g, u, 200);
+    if (rDup.ok) throw new Error('duplicate crate claim should be blocked');
+  });
+
+  test('dailyReward: milestones extended to 200 and 365 days', () => {
+    const r200 = dr.computeDailyReward(200);
+    if (!r200.milestoneLabel || !r200.milestoneLabel.includes('200 HARI')) throw new Error('missing 200-day milestone');
+    if (r200.money < 2500000) throw new Error('200-day money reward too low');
+
+    const r365 = dr.computeDailyReward(365);
+    if (!r365.milestoneLabel || !r365.milestoneLabel.includes('365 HARI')) throw new Error('missing 365-day milestone');
+  });
 };
