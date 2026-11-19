@@ -11,27 +11,21 @@ const FEATURES = [
     { key: 'feature_fishing',      label: 'Fishing',       emoji: '🎣', desc: '/fish, /fishing', commands: ['fish', 'fishing'] },
     { key: 'feature_farming',      label: 'Farming',       emoji: '🌾', desc: '/farm (tanaman, ternak, craft)', commands: ['farm'] },
     { key: 'feature_pet',          label: 'Pet & Battle',  emoji: '🐾', desc: '/pet, /battle, /expedition, /worldboss', commands: ['pet', 'battle', 'expedition', 'worldboss'] },
-    { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel, /rps, /horserace', commands: ['casino', 'blackjack', 'togel', 'rps', 'horserace'] },
+    { key: 'feature_casino',       label: 'Casino',        emoji: '🎰', desc: '/casino, /blackjack, /togel', commands: ['casino', 'blackjack', 'togel'] },
     { key: 'feature_quest',        label: 'Quest',         emoji: '📜', desc: '/quest (daily & weekly)', commands: ['quest'] },
     { key: 'feature_arena',        label: 'Arena',         emoji: '⚔️', desc: '/arena', commands: ['arena'] },
     { key: 'feature_auction',      label: 'Auction',       emoji: '🏛️', desc: '/auction', commands: ['auction'] },
     { key: 'feature_trade',        label: 'Trade',         emoji: '🤝', desc: '/trade, /market', commands: ['trade', 'market'] },
-    { key: 'feature_globalmarket', label: 'Global Market', emoji: '🌍', desc: '/globalmarket, /globaltrade', commands: ['globalmarket', 'globaltrade'] },
-    { key: 'feature_card',         label: 'Cards',         emoji: '🃏', desc: '/card, /drop, /cards, /cardview, /wishlist, /cardlb', commands: ['card', 'drop', 'cards', 'cardview', 'wishlist', 'cardlb'] },
     { key: 'feature_giveaway',     label: 'Giveaway',      emoji: '🎉', desc: '/giveaway', commands: ['giveaway'] },
     { key: 'feature_starboard',    label: 'Starboard',     emoji: '⭐', desc: '/starboard', commands: ['starboard'] },
     { key: 'feature_invite',       label: 'Invite Tracker',emoji: '📨', desc: '/invite', commands: ['invite'] },
     { key: 'feature_tempvoice',    label: 'TempVoice',     emoji: '🎙️', desc: '/tempvoice', commands: ['tempvoice'] },
-    { key: 'feature_aibot',        label: 'AI Bot',        emoji: '🤖', desc: '/tanya, /aibot', commands: ['tanya', 'aibot'] },
     { key: 'feature_selfrole',     label: 'Self Role',     emoji: '🏷️', desc: '/selfrole', commands: ['selfrole'] },
-    { key: 'feature_belajar',      label: 'Belajar',       emoji: '📚', desc: '/belajar (Duolingo-style)', commands: ['belajar'] },
     { key: 'leveling_enabled',     label: 'Leveling System', emoji: '📊', desc: 'XP chat & voice, /levelpanel, /leaderboard', commands: ['levelpanel'] },
     { key: 'streak_enabled',       label: 'Streak System',   emoji: '🔥', desc: 'Sistem streak harian chat', commands: [] },
     { key: 'streak_freeze',        label: 'Streak Freeze',   emoji: '🧊', desc: 'Freeze streak api agar tidak mati saat skip daily', commands: [], default: '1' },
     { key: 'love_enabled',         label: 'Love System',     emoji: '❤️', desc: 'Sistem status love, /love, /marry, /divorce', commands: ['love', 'marry', 'divorce'] },
     { key: 'onboarding_enabled',   label: 'Onboarding DM',   emoji: '👋', desc: 'Kirim DM panduan saat member baru masuk', commands: [] },
-    { key: 'tiktok_convert',       label: 'TikTok Auto-Convert', emoji: '🎵', desc: 'Deteksi link TikTok & convert mp4', commands: [] },
-    { key: 'video_convert',        label: 'Video Auto-Convert', emoji: '🎬', desc: 'Deteksi link YT/IG/X/FB & convert mp4', commands: [], default: '0' },
 ];
 
 const PAGE_SIZE = 8;
@@ -132,8 +126,6 @@ const INTERACTION_PREFIX_MAP = {
     'lottery_':        'feature_casino',
     'coinflip_':       'feature_casino',
     'slot_':           'feature_casino',
-    'rps_':            'feature_casino',
-    'hr_':             'feature_casino',
     // Quest
     'quest_':          'feature_quest',
     // Arena
@@ -143,21 +135,12 @@ const INTERACTION_PREFIX_MAP = {
     // Trade
     'trade_':          'feature_trade',
     'market_':         'feature_trade',
-    // Global Market
-    'gmarket_':        'feature_globalmarket',
-    'gtrade_':         'feature_globalmarket',
-    // Cards
-    'card_':           'feature_card',
     // Giveaway (public join button)
     'giveaway_join':   'feature_giveaway',
     // Starboard — no interactive components
     // Invite — no interactive components
     // TempVoice
     'tv_':             'feature_tempvoice',
-    // AI Bot
-    'aibot_':          'feature_aibot',
-    // Belajar
-    'belajar_':        'feature_belajar',
 };
 
 /**

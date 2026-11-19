@@ -1430,12 +1430,6 @@ app.get('/api/analytics', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== QR CODE REDIRECT ROUTES ====================
-try {
-    const { registerQrRoutes } = require('./systems/qrcode');
-    registerQrRoutes(app);
-} catch (e) { console.error('⚠️ QR routes:', e.message); }
-
 // ==================== START SERVER ====================
 function startApiServer() {
     app.listen(API_PORT, API_HOST, () => {

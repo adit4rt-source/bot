@@ -3,8 +3,35 @@
 // refunded when outbid). On settle: winner gets the asset, seller gets the gold.
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, addUserBalance, subtractUserBalance, addIncome, addItem } = require('../database');
-const { getOfferableItems } = require('./globalTrade');
 const { PET_DATA } = require('../data/pets');
+const { ITEMS } = require('../data/items');
+const { FISH_DATA } = require('../data/fish');
+
+function getOfferableItems(guildId, userId) {
+    const out = [];
+    const relics = db.prepare('SELECT * FROM relics WHERE userId = ?').all(userId);
+    for (const r of relics) {
+        if (r.equipped_pet_id > 0) continue;
+        out.push({ type: 'relic', id: String(r.id), label: `💎 ${r.name} [${r.rarity}] +${r.refine_level}`, desc: `+${r.stat_value} ${r.stat_type}`, details: `${r.rarity} | +${r.stat_value} ${r.stat_type}` });
+    }
+    const pets = db.prepare('SELECT * FROM pets WHERE userId = ? AND active = 0').all(userId);
+    for (const p of pets) {
+        const pd = PET_DATA.find(x => x.id === p.petId);
+        out.push({ type: 'pet', id: String(p.id), label: `${pd ? pd.emoji : '🐾'} ${p.name} (Lv.${p.level})`, desc: `${pd ? pd.tier : '?'} | ATK:${p.atk}`, details: `${pd ? pd.tier : '?'} | Lv.${p.level} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}` });
+    }
+    const inv = db.prepare('SELECT * FROM item_inventory WHERE userId = ? AND quantity > 0').all(userId);
+    for (const it of inv) {
+        const def = ITEMS.find(x => x.id === it.itemId);
+        if (def) out.push({ type: 'item', id: it.itemId, label: `${def.emoji} ${def.name} (x${it.quantity})`, desc: (def.desc || '').substring(0, 50), details: def.desc || '' });
+    }
+    const fish = db.prepare("SELECT * FROM fish_inventory WHERE userId = ? AND locked = 0 ORDER BY weight DESC LIMIT 20").all(userId);
+    for (const f of fish) {
+        const fd = FISH_DATA.find(x => x.id === f.fishId);
+        if (!fd) continue;
+        out.push({ type: 'fish', id: String(f.id), label: `${fd.emoji} ${fd.name} (${f.weight}kg)`, desc: `${fd.tier} • ${fd.rarity}`, details: `${fd.name} (${f.weight}kg) [${fd.tier}]` });
+    }
+    return out;
+}
 
 const AUCTION_ESCROW = 'AUCTION_ESCROW';
 const MAX_ACTIVE_PER_USER = 5;

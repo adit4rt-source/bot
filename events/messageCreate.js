@@ -81,22 +81,6 @@ module.exports = async function handleMessageCreate(message) {
         return;
     }
 
-    // === AI ASSISTANT (mention bot / dedicated AI channel) ===
-    const { maybeHandleAiMessage } = require('../systems/aiAssistant');
-    if (await maybeHandleAiMessage(message)) return; // handled as an AI query
-
-    // === TIKTOK AUTO-CONVERT (no-watermark) ===
-    // Detect TikTok links in any channel and re-upload the video without the
-    // watermark. Run in the background so normal chat rewards (XP/quests/etc.)
-    // still apply to the same message without waiting on the download.
-    const { maybeHandleTikTok } = require('../systems/tiktok');
-    maybeHandleTikTok(message).catch(() => {});
-
-    // === MULTI-PLATFORM VIDEO DOWNLOADER (YouTube, Instagram, Twitter/X, etc.) ===
-    // Same pattern as TikTok: fire-and-forget in the background.
-    const { maybeHandleVideo } = require('../systems/videoDownloader');
-    maybeHandleVideo(message).catch(() => {});
-
     // === QUIZ ANSWER CHECK ===
     // Check if message is an answer to an active /games quiz in this channel.
     const { checkQuizAnswer } = require('../systems/quiz');

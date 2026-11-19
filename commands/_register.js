@@ -27,15 +27,11 @@ const commands = [
         .addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (pajak 10%)').setRequired(true).setMinValue(1)),
     new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
     new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
-    new SlashCommandBuilder().setName('globalmarket').setDescription('🌍 Global Market — Jual beli item lintas server'),
-    new SlashCommandBuilder().setName('globaltrade').setDescription('🔄 Global Trade — Barter item lintas server'),
     new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
     new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
     new SlashCommandBuilder().setName('togel').setDescription('🎟️ Togel — Pasang angka 1-100 (5.000/angka), diundi tiap 1 jam')
         .addIntegerOption(opt => opt.setName('angka').setDescription('Pasang angka 1-100 (bayar 5.000)').setRequired(false).setMinValue(1).setMaxValue(100))
-        .addIntegerOption(opt => opt.setName('setpot').setDescription('[Admin] Set pot awal / seed per ronde').setRequired(false).setMinValue(0))
-        .addStringOption(opt => opt.setName('promo').setDescription('[Admin] Promo togel otomatis di channel ramai').setRequired(false)
-            .addChoices({ name: 'Aktifkan', value: 'on' }, { name: 'Nonaktifkan', value: 'off' })),
+        .addIntegerOption(opt => opt.setName('setpot').setDescription('[Admin] Set pot awal / seed per ronde').setRequired(false).setMinValue(0)),
     new SlashCommandBuilder().setName('blackjack').setDescription('🃏 Blackjack — Main kartu 21')
         .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan (100-100000)').setRequired(true).setMinValue(100).setMaxValue(100000)),
     new SlashCommandBuilder().setName('stats').setDescription('📊 Statistics — Dashboard statistik lengkap'),
@@ -91,28 +87,11 @@ const commands = [
         .setName('giveaway')
         .setDescription('🎉 Giveaway Panel — Buat & kelola giveaway')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
-    new SlashCommandBuilder()
-        .setName('tanya')
-        .setDescription('🤖 Tanya AI seputar fitur bot ini')
-        .addStringOption(o => o.setName('pertanyaan').setDescription('Pertanyaanmu tentang fitur bot').setRequired(true)),
-    new SlashCommandBuilder()
-        .setName('aibot')
-        .setDescription('🤖 AI Assistant Panel — Atur AI bantuan bot')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
     new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
-    new SlashCommandBuilder().setName('quote').setDescription('💬 Random Quote — Galau, Bucin, Jawa, Dilan, Random')
-        .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quote').setRequired(false)
-            .addChoices(
-                { name: '💔 Galau', value: 'galauquote' },
-                { name: '💕 Bucin', value: 'bucinquote' },
-                { name: '🎲 Random', value: 'randomquote' },
-                { name: '🏝️ Jawa', value: 'jawaquote' },
-                { name: '📖 Dilan', value: 'dilanquote' },
-            )),
     new SlashCommandBuilder().setName('games').setDescription('🎮 Quiz Game — Jawab soal, dapet Money!')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quiz').setRequired(false)
             .addChoices(
@@ -131,8 +110,6 @@ const commands = [
                 { name: '🧩 Teka-Teki', value: 'tekateki' },
                 { name: '🤫 Truth', value: 'truth' },
             )),
-    new SlashCommandBuilder().setName('roblox').setDescription('🎮 Roblox Profile — Lihat avatar & item yang dipakai')
-        .addStringOption(opt => opt.setName('username').setDescription('Username Roblox').setRequired(true)),
     new SlashCommandBuilder().setName('ship').setDescription('💘 Love Calculator — Hitung kecocokan 2 orang')
         .addUserOption(opt => opt.setName('user1').setDescription('Orang pertama').setRequired(true))
         .addUserOption(opt => opt.setName('user2').setDescription('Orang kedua (kosong = kamu)').setRequired(false))
@@ -145,42 +122,6 @@ const commands = [
     new SlashCommandBuilder().setName('marry').setDescription('💍 Lamar seseorang untuk menikah')
         .addUserOption(opt => opt.setName('user').setDescription('Yang mau dilamar').setRequired(true)),
     new SlashCommandBuilder().setName('divorce').setDescription('💔 Cerai dari pasangan saat ini'),
-    new SlashCommandBuilder().setName('tarot').setDescription('🔮 Ramalan Tarot — Tarik 3 kartu (Bahasa Indonesia)')
-        .addStringOption(opt => opt.setName('pertanyaan').setDescription('Pertanyaan/niat (opsional)').setRequired(false)),
-    new SlashCommandBuilder().setName('belajar').setDescription('📚 Pusat Belajar — Kuis Bahasa Inggris interaktif (dapat Money!)'),
-    new SlashCommandBuilder().setName('qr').setDescription('📱 QR Code Generator — Generate, Track, Invite')
-        .addSubcommand(sub => sub.setName('generate').setDescription('📱 Generate QR Code dari link')
-            .addStringOption(opt => opt.setName('url').setDescription('Link yang mau dijadikan QR code').setRequired(true))
-            .addStringOption(opt => opt.setName('warna').setDescription('Tema warna QR code').setRequired(false)
-                .addChoices(
-                    { name: '🔴 Merah', value: 'red' },
-                    { name: '🔵 Biru', value: 'blue' },
-                    { name: '🟢 Hijau', value: 'green' },
-                    { name: '🟣 Ungu', value: 'purple' },
-                    { name: '🟡 Emas', value: 'gold' },
-                    { name: '⚫ Hitam', value: 'black' },
-                    { name: '🩷 Pink', value: 'pink' },
-                ))
-            .addAttachmentOption(opt => opt.setName('logo').setDescription('Upload logo custom untuk ditaruh di tengah QR').setRequired(false)))
-        .addSubcommand(sub => sub.setName('invite').setDescription('📨 Generate QR Code untuk invite server'))
-        .addSubcommand(sub => sub.setName('stats').setDescription('📊 Lihat statistik scan QR code kamu')
-            .addStringOption(opt => opt.setName('id').setDescription('ID QR code (opsional, kosongkan untuk lihat semua)').setRequired(false))),
-
-    // ================= POKEMON TCG CARDS =================
-    new SlashCommandBuilder().setName('card').setDescription('🃏 Pokemon TCG Panel — Kelola koleksi kartu Pokemon'),
-    new SlashCommandBuilder().setName('drop').setDescription('🃏 Drop Basic Pack — Beli dan buka Basic Pack kartu Pokemon (💰15k)'),
-    new SlashCommandBuilder().setName('cardview').setDescription('🔍 Lihat detail kartu Pokemon')
-        .addIntegerOption(opt => opt.setName('id').setDescription('ID kartu (dari koleksi)').setRequired(true)),
-    new SlashCommandBuilder().setName('cards').setDescription('📖 Koleksi kartu Pokemon')
-        .addUserOption(opt => opt.setName('user').setDescription('Lihat koleksi user lain').setRequired(false)),
-    new SlashCommandBuilder().setName('cardlb').setDescription('📊 Card Leaderboard — Top collectors')
-        .addStringOption(opt => opt.setName('tipe').setDescription('Tipe leaderboard').setRequired(false)
-            .addChoices(
-                { name: '🃏 Total Cards', value: 'total' },
-                { name: '🎴 Unique Cards', value: 'unique' },
-                { name: '👑 Rare+ Cards', value: 'rare' },
-                { name: '💰 Most Valuable', value: 'value' },
-            )),
 
     // ================= AFK =================
     new SlashCommandBuilder().setName('afk').setDescription('💤 Set status AFK — orang yang mention kamu akan diberi tahu')
@@ -209,21 +150,6 @@ const commands = [
             .addChoices(
                 { name: 'Bahasa Indonesia 🇮🇩', value: 'id' },
                 { name: 'English 🇬🇧', value: 'en' }
-            )),
-
-    // ================= NEW MINI-GAMES =================
-    new SlashCommandBuilder().setName('rps').setDescription('🤝 Rock-Paper-Scissors (RPS) PvP Betting — Duel koin dengan pemain lain')
-        .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang ingin Anda tantang?').setRequired(true))
-        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan koin').setRequired(true).setMinValue(1)),
-    new SlashCommandBuilder().setName('horserace').setDescription('🐎 Balapan Kuda — Buka taruhan event balap kuda live server')
-        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Jumlah taruhan awal').setRequired(true).setMinValue(100))
-        .addStringOption(opt => opt.setName('kuda').setDescription('Kuda pilihan Anda').setRequired(true)
-            .addChoices(
-                { name: '🔴 Merah', value: 'red' },
-                { name: '🔵 Biru', value: 'blue' },
-                { name: '🟢 Hijau', value: 'green' },
-                { name: '🟡 Kuning', value: 'yellow' },
-                { name: '🟣 Ungu', value: 'purple' }
             )),
 
     // ================= ADMIN (satu command saja) =================

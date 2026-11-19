@@ -11,8 +11,6 @@ const { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, a
 const { handlePetCommand, handlePetButton, handlePetSelectMenu, handlePetModal, isPetPanelButton, isPetPanelSelectMenu, isPetPanelModal } = require('../systems/petPanel');
 const { handleExpeditionButton, handleExpeditionSelectMenu, handleExpeditionConfirm, isExpeditionButton, isExpeditionSelectMenu, isExpeditionConfirm } = require('../systems/expedition');
 const ui = require('../systems/ui');
-const { handleGlobalMarketButton, handleGlobalMarketSelectMenu, handleGlobalMarketModal, isGlobalMarketButton, isGlobalMarketSelectMenu, isGlobalMarketModal } = require('../systems/globalMarket');
-const { handleGlobalTradeButton, handleGlobalTradeSelect, isGlobalTradeButton, isGlobalTradeSelect, buildGlobalTradePanel } = require('../systems/globalTrade');
 const { handleFusionButton, handleFusionSelectMenu, isFusionButton, isFusionSelectMenu } = require('../systems/petFusion');
 const { handleMutationButton, isMutationButton } = require('../systems/mutationLab');
 const { handleDungeonCoopButton, isDungeonCoopButton } = require('../systems/dungeonCoop');
@@ -43,7 +41,6 @@ const { handleSelfRoleCommand, handleSelfRoleButton, handleSelfRoleSelect, handl
 const { handleSelfRolePick, isSelfRolePublicPick } = require('../systems/selfRoles');
 const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handleGiveawayChannelSelect, handleGiveawayRoleSelect, handleGiveawayBonusRoleSelect, handleGiveawayModal, isGiveawayPanelButton, isGiveawayPanelSelect, isGiveawayChannelSelect, isGiveawayRoleSelect, isGiveawayBonusRoleSelect, isGiveawayPanelModal } = require('../systems/giveawayPanel');
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
-const { handleTanyaCommand, handleAiBotCommand, handleAiBotButton, handleAiBotChannelSelect, isAiBotButton, isAiBotChannelSelect } = require('../systems/aiBotPanel');
 const { handleTempvoiceCommand, handleTempvoiceButton, handleTempvoiceUserSelect, handleTempvoiceModal, isTempvoicePanelButton, isTempvoiceUserSelect, isTempvoiceModal } = require('../systems/tempvoicePanel');
 const { handleTicketButton, handleTicketModal, isTicketButton, isTicketModal } = require('../systems/ticket');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
@@ -59,8 +56,6 @@ const { PET_DATA, PET_FOODS, PET_EGGS, PET_CLASSES, PET_ELEMENTS, PET_EVOLUTIONS
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
 const { FARM_LEVELS, FARM_CROPS, FARM_RECIPES, FARM_FERTILIZERS, FARM_DECORATIONS } = require('../data/farming');
 const { DUNGEON_TIERS, BOSS_LIST } = require('../data/dungeons');
-const { createRpsChallenge, acceptRpsChallenge, declineRpsChallenge, playRpsMove } = require('../systems/rps');
-const { createHorseRace, joinHorseRace, startRace } = require('../systems/horserace');
 
 const { fishCooldowns, activeCoinflips, slashCooldowns, activeMiniEvents, activeFishEvents, activeBossParties } = state;
 const cooldowns = require('../systems/cooldowns');
@@ -178,7 +173,7 @@ async function routeInteraction(interaction) {
         if (command === 'help') {
             const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor(ui.COLORS.info).setDescription('Selamat datang! 👋 Hampir semua fitur pakai **panel interaktif** — cukup jalankan command, lalu klik tombolnya. Gampang banget!\n\n💡 Baru pertama kali? Mulai dari `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
-                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli\n> \`/globalmarket\` — 🌍 Market lintas server\n> \`/globaltrade\` — 🔄 Barter item lintas server`, inline: false },
+                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/calendar\` — 📅 Kalender login & reward\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
                 { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel lengkap\n> 13 Rod tier | 12 Bait | 8+ Lokasi | Giant Fish | Sea Monsters`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING & PETERNAKAN** (`/farm`)', inline: false },
@@ -233,7 +228,6 @@ async function routeInteraction(interaction) {
                 new ButtonBuilder().setCustomId('menu_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('menu_daily').setLabel('🎁 Daily').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('menu_quest').setLabel('📜 Quest').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('menu_belajar').setLabel('📚 Belajar').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('menu_fun').setLabel('🎮 Fun').setStyle(ButtonStyle.Secondary)
             );
             return interaction.reply({ embeds: [menuEmbed], components: [row1, row2] });
@@ -636,19 +630,6 @@ async function routeInteraction(interaction) {
             return handleMarketCommand(interaction);
         }
 
-        // ================= GLOBAL MARKET =================
-        if (command === 'globalmarket') {
-            const { buildGlobalMarketPanel } = require('../systems/globalMarket');
-            const panel = buildGlobalMarketPanel(guildId, interaction.user.id, interaction.user.username);
-            return interaction.reply(panel);
-        }
-
-        // ================= GLOBAL TRADE =================
-        if (command === 'globaltrade') {
-            const panel = buildGlobalTradePanel(guildId, interaction.user.id, interaction.user.username);
-            return interaction.reply(panel);
-        }
-
         // ================= EXPEDITION =================
         if (command === 'expedition') {
             const { buildExpeditionPanel } = require('../systems/expedition');
@@ -857,26 +838,6 @@ async function routeInteraction(interaction) {
             return handleGiveawayCommand(interaction);
         }
 
-        // ================= AI ASSISTANT =================
-        if (command === 'tanya') {
-            return handleTanyaCommand(interaction);
-        }
-        if (command === 'aibot') {
-            return handleAiBotCommand(interaction);
-        }
-
-        // ================= QR CODE GENERATOR =================
-        if (command === 'qr') {
-            const { handleQrCommand } = require('../systems/qrcode');
-            return handleQrCommand(interaction);
-        }
-
-        // ================= QUOTE =================
-        if (command === 'quote') {
-            const { handleQuoteCommand } = require('../systems/quote');
-            return handleQuoteCommand(interaction);
-        }
-
         // ================= GAMES (QUIZ) =================
         if (command === 'games') {
             const { handleGamesCommand } = require('../systems/quiz');
@@ -887,12 +848,6 @@ async function routeInteraction(interaction) {
         if (command === 'afk') {
             const { handleAfkCommand } = require('../systems/afk');
             return handleAfkCommand(interaction);
-        }
-
-        // ================= ROBLOX PROFILE =================
-        if (command === 'roblox') {
-            const { handleRobloxCommand } = require('../systems/robloxProfile');
-            return handleRobloxCommand(interaction);
         }
 
         // ================= SOCIAL: SHIP / MARRY / DIVORCE =================
@@ -907,44 +862,6 @@ async function routeInteraction(interaction) {
         if (command === 'divorce') {
             const { handleDivorceCommand } = require('../systems/social');
             return handleDivorceCommand(interaction);
-        }
-
-        // ================= TAROT =================
-        if (command === 'tarot') {
-            const { handleTarotCommand } = require('../systems/tarot');
-            return handleTarotCommand(interaction);
-        }
-
-        // ================= BELAJAR =================
-        if (command === 'belajar') {
-            const { handleBelajarCommand } = require('../systems/belajar');
-            return handleBelajarCommand(interaction);
-        }
-
-        // ================= ANIME CARDS =================
-        if (command === 'card') {
-            const { handleCardPanelCommand } = require('../systems/cardGame');
-            return handleCardPanelCommand(interaction);
-        }
-        if (command === 'drop') {
-            const { handleDropCommand } = require('../systems/cardGame');
-            return handleDropCommand(interaction);
-        }
-        if (command === 'cards') {
-            const { handleCardsCommand } = require('../systems/cardGame');
-            return handleCardsCommand(interaction);
-        }
-        if (command === 'cardview') {
-            const { handleCardViewCommand } = require('../systems/cardGame');
-            return handleCardViewCommand(interaction);
-        }
-        if (command === 'wishlist') {
-            const { handleCardWishlist } = require('../systems/cardGame');
-            return handleCardWishlist(interaction);
-        }
-        if (command === 'cardlb') {
-            const { handleCardLeaderboard } = require('../systems/cardGame');
-            return handleCardLeaderboard(interaction);
         }
 
         // ================= STARBOARD =================
@@ -1007,28 +924,6 @@ async function routeInteraction(interaction) {
                 .setDescription(`${calVisual}\n\n> 📊 Total login bulan ini: **${totalClaimed}/30 hari**\n> 🎁 Reward berikutnya (Hari ${totalClaimed + 1}): ${nextReward.desc}${claimMsg}`)
                 .setFooter({ text: alreadyClaimed ? '✅ Sudah klaim hari ini! Kembali besok.' : '🎁 Reward diklaim otomatis! Kembali besok.' });
             return interaction.reply({ embeds: [embed] });
-        }
-
-        // ================= RPS (Rock-Paper-Scissors) =================
-        if (command === 'rps') {
-            const opponent = interaction.options.getUser('lawan');
-            const bet = interaction.options.getInteger('taruhan');
-            const challenge = createRpsChallenge(interaction, interaction.user.id, opponent.id, bet);
-            if (challenge.error) {
-                return interaction.reply({ content: challenge.error, ephemeral: true });
-            }
-            return interaction.reply(challenge);
-        }
-
-        // ================= HORSE RACING =================
-        if (command === 'horserace') {
-            const bet = interaction.options.getInteger('taruhan');
-            const horse = interaction.options.getString('kuda');
-            const race = createHorseRace(interaction, bet, horse);
-            if (race.error) {
-                return interaction.reply({ content: race.error, ephemeral: true });
-            }
-            return interaction.reply(race);
         }
 
     }
@@ -1164,16 +1059,6 @@ async function routeInteraction(interaction) {
         // --- MARKET PANEL SELECT MENUS ---
         if (isMarketPanelSelectMenu(interaction.customId)) {
             return handleMarketSelectMenu(interaction);
-        }
-
-        // --- GLOBAL MARKET SELECT MENUS ---
-        if (isGlobalMarketSelectMenu(interaction.customId)) {
-            return handleGlobalMarketSelectMenu(interaction);
-        }
-
-        // --- GLOBAL TRADE SELECT MENUS ---
-        if (isGlobalTradeSelect(interaction.customId)) {
-            return handleGlobalTradeSelect(interaction);
         }
 
         // --- TRADE PANEL SELECT MENUS ---
@@ -1340,38 +1225,6 @@ async function routeInteraction(interaction) {
             return interaction.reply({ content: getDisabledMessage(fDef ? fDef.label : 'ini'), ephemeral: true });
         }
 
-        // --- QR CODE SIZE BUTTONS ---
-        if (interaction.customId.startsWith('qr_')) {
-            const { isQrButton, handleQrButton } = require('../systems/qrcode');
-            if (isQrButton(interaction.customId)) {
-                return handleQrButton(interaction);
-            }
-        }
-
-        // --- ANIME CARD GRAB BUTTONS ---
-        if (interaction.customId.startsWith('cardgrab_')) {
-            const { isCardGrabButton, handleCardGrab } = require('../systems/cardGame');
-            if (isCardGrabButton(interaction.customId)) {
-                return handleCardGrab(interaction);
-            }
-        }
-
-        // --- ANIME CARD TRADE BUTTONS ---
-        if (interaction.customId.startsWith('cardtrade_')) {
-            const { isCardTradeButton, handleCardTradeButton } = require('../systems/cardGame');
-            if (isCardTradeButton(interaction.customId)) {
-                return handleCardTradeButton(interaction);
-            }
-        }
-
-        // --- CARD PANEL + PAGINATION BUTTONS ---
-        if (interaction.customId.startsWith('card_') || interaction.customId.startsWith('cardpage_')) {
-            const { isCardPanelButton, handleCardPanelButton } = require('../systems/cardGame');
-            if (isCardPanelButton(interaction.customId)) {
-                return handleCardPanelButton(interaction);
-            }
-        }
-
         // --- WELCOME HELP BUTTON ---
         if (interaction.customId === 'welcome_help') {
             return interaction.reply({ content: '📖 Gunakan `/help` untuk panduan lengkap, atau `/menu` untuk navigasi cepat!', ephemeral: true });
@@ -1531,16 +1384,6 @@ async function routeInteraction(interaction) {
             return handleMarketButton(interaction);
         }
 
-        // --- GLOBAL MARKET BUTTONS ---
-        if (isGlobalMarketButton(interaction.customId)) {
-            return handleGlobalMarketButton(interaction);
-        }
-
-        // --- GLOBAL TRADE PANEL BUTTONS ---
-        if (isGlobalTradeButton(interaction.customId)) {
-            return handleGlobalTradeButton(interaction);
-        }
-
         // --- STATS PANEL BUTTONS ---
         if (isStatsPanelButton(interaction.customId)) {
             return handleStatsButton(interaction);
@@ -1561,14 +1404,6 @@ async function routeInteraction(interaction) {
             return handleWelcomerButton(interaction);
         }
 
-        // --- QUOTE BUTTONS ---
-        if (interaction.customId.startsWith('quote_')) {
-            const { isQuoteButton, handleQuoteButton } = require('../systems/quote');
-            if (isQuoteButton(interaction.customId)) {
-                return handleQuoteButton(interaction);
-            }
-        }
-
         // --- GAMES BUTTONS ---
         if (interaction.customId.startsWith('games_')) {
             const { isGamesButton, handleGamesButton } = require('../systems/quiz');
@@ -1582,14 +1417,6 @@ async function routeInteraction(interaction) {
             const { isMarryButton, handleMarryButton } = require('../systems/social');
             if (isMarryButton(interaction.customId)) {
                 return handleMarryButton(interaction);
-            }
-        }
-
-        // --- BELAJAR BUTTONS ---
-        if (interaction.customId.startsWith('belajar_')) {
-            const { isBelajarButton, handleBelajarButton } = require('../systems/belajar');
-            if (isBelajarButton(interaction.customId)) {
-                return handleBelajarButton(interaction);
             }
         }
 
@@ -1608,45 +1435,9 @@ async function routeInteraction(interaction) {
             return handleGiveawayButton(interaction);
         }
 
-        // --- AI ASSISTANT PANEL BUTTONS (admin) ---
-        if (isAiBotButton(interaction.customId)) {
-            return handleAiBotButton(interaction);
-        }
-
         // --- TEMPVOICE PANEL BUTTONS ---
         if (isTempvoicePanelButton(interaction.customId)) {
             return handleTempvoiceButton(interaction);
-        }
-
-        // --- RPS BUTTONS ---
-        if (interaction.customId.startsWith('rps_accept_')) {
-            const parts = interaction.customId.split('_');
-            const challengerId = parts[2];
-            const opponentId = parts[3];
-            const bet = parseInt(parts[4]);
-            return acceptRpsChallenge(interaction, challengerId, opponentId, bet);
-        }
-        if (interaction.customId.startsWith('rps_decline_')) {
-            const parts = interaction.customId.split('_');
-            const challengerId = parts[2];
-            const opponentId = parts[3];
-            return declineRpsChallenge(interaction, challengerId, opponentId);
-        }
-        if (interaction.customId.startsWith('rps_play_')) {
-            const parts = interaction.customId.split('_');
-            const move = parts[2];
-            const challengerId = parts[3];
-            const opponentId = parts[4];
-            const bet = parseInt(parts[5]);
-            return playRpsMove(interaction, move, challengerId, opponentId, bet);
-        }
-
-        // --- HORSE RACING BUTTONS ---
-        if (interaction.customId.startsWith('hr_bet_')) {
-            const parts = interaction.customId.split('_');
-            const chosenHorse = parts[2];
-            const creatorId = parts[3];
-            return joinHorseRace(interaction, chosenHorse, creatorId);
         }
 
         // --- GAME TERMS CONSENT BUTTONS ---
@@ -1817,8 +1608,7 @@ async function routeInteraction(interaction) {
             else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
             else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';
             else if (cat === 'quest') content = '📜 **Quest:**\n\n> `/quest` — 📜 Quest Panel\n> Misi harian (3/hari) & mingguan (3/minggu)\n> Selesaikan untuk dapat money bonus!\n> Reset setiap 00:00 WIB';
-            else if (cat === 'belajar') content = '📚 **Belajar Bahasa Inggris:**\n\n> `/belajar` — 📚 Pusat Belajar (ala Duolingo)\n> 10 topik, 6 tipe soal, streak harian, XP\n> 🎧 Listening + ✍️ Ketik + 🧩 Susun + 🔗 Pasangkan\n> Speed Round ⚡ + Review 🔄 + Leaderboard 🏆';
-            else if (cat === 'fun') content = '🎮 **Fun & Social:**\n\n> `/ship @a @b` — 💘 Love Calculator (canvas)\n> `/marry @user` — 💍 Lamar seseorang\n> `/divorce` — 💔 Cerai\n> `/tarot` — 🔮 Ramalan Tarot\n> `/games` — 🎮 Quiz 14 kategori (reward money)\n> `/quote` — 💬 Random quotes\n> `/roblox <user>` — 🎮 Lihat avatar Roblox';
+            else if (cat === 'fun') content = '🎮 **Fun & Social:**\n\n> `/ship @a @b` — 💘 Love Calculator (canvas)\n> `/marry @user` — 💍 Lamar seseorang\n> `/divorce` — 💔 Cerai\n> `/games` — 🎮 Quiz 14 kategori (reward money)';
             return interaction.reply({ content, ephemeral: true });
         }
 
@@ -2001,11 +1791,6 @@ async function routeInteraction(interaction) {
         if (isWelcomerPanelModal(interaction.customId)) {
             return handleWelcomerModal(interaction);
         }
-        // --- BELAJAR TYPE MODAL ---
-        if (interaction.customId.startsWith('belajar_typemodal_')) {
-            const { isBelajarModal, handleBelajarModal } = require('../systems/belajar');
-            if (isBelajarModal(interaction.customId)) return handleBelajarModal(interaction);
-        }
         // --- TOGEL / LOTTERY MODAL (one-click quick bet) ---
         if (isLotteryModal(interaction.customId)) {
             return handleLotteryModal(interaction);
@@ -2043,11 +1828,6 @@ async function routeInteraction(interaction) {
         // --- MARKET PANEL MODAL ---
         if (isMarketPanelModal(interaction.customId)) {
             return handleMarketModal(interaction);
-        }
-
-        // --- GLOBAL MARKET MODAL ---
-        if (isGlobalMarketModal(interaction.customId)) {
-            return handleGlobalMarketModal(interaction);
         }
 
         // --- SELF-ROLES PANEL MODALS ---

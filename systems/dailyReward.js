@@ -144,28 +144,12 @@ async function claimDaily(guildId, userId, opts = {}) {
     if (hasDoubler) incrementUserStat(guildId, userId, 'daily_doubler_active', -1);
 
     // Random surprise bonus (kept from the original handler).
-    let randomMoney = 0, randomItem = null, randomPetExp = 0, randomCards = null;
+    let randomMoney = 0, randomItem = null, randomPetExp = 0;
     const roll = Math.random();
-    if (roll < 0.10) {
-        // 10% chance to win 3 surprise Pokemon cards!
-        try {
-            const { fetchRandomCards } = require('./cardGame');
-            const dailyPool = ['Common', 'Uncommon', 'Rare'];
-            const cards = await fetchRandomCards(dailyPool, 3, userId);
-            if (cards && cards.length > 0) {
-                for (const c of cards) {
-                    db.prepare(`INSERT INTO pokemon_cards (userId,cardApiId,name,setName,rarity,imageUrl,types,hp,artist,obtainedAt,marketPrice) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(
-                        userId, c.cardApiId, c.name, c.setName, c.rarity, c.imageUrl, c.types, c.hp, c.artist, Date.now(), c.marketPrice||0);
-                }
-                randomCards = cards;
-            }
-        } catch (e) {
-            console.error('[Daily Surprise Cards] Failed:', e.message);
-        }
-    } else if (roll < 0.25) {
+    if (roll < 0.15) {
         const pool = ['mystery_box', 'lucky_charm', 'xp_booster_2x'];
         randomItem = pool[Math.floor(Math.random() * pool.length)];
-    } else if (roll < 0.40) {
+    } else if (roll < 0.35) {
         randomMoney = Math.floor(Math.random() * 401) + 100; // 100..500
     } else if (roll < 0.50) {
         randomPetExp = 15;
@@ -205,7 +189,6 @@ async function claimDaily(guildId, userId, opts = {}) {
         randomItem,
         randomMoney,
         randomPetExp,
-        randomCards,
         milestoneLabel: reward.milestoneLabel,
         isWeeklyBonus: reward.isWeeklyBonus,
         hasDoubler,

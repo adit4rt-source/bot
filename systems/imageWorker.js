@@ -45,10 +45,6 @@ function getRenderer(type) {
             case 'profile':
                 renderers[type] = require('./profileCard');
                 break;
-            case 'gacha':
-            case 'gallery':
-                renderers[type] = require('./cardGame');
-                break;
             default:
                 throw new Error(`Unknown render type: ${type}`);
         }
@@ -62,8 +58,6 @@ const TYPE_TO_FN = {
     welcomeGlitch: 'generateGlitchCard',
     welcomeRpg:    'generateRpgCard',
     profile:       'generateProfileCard',
-    gacha:         'generateCardImage',   // alias for generateGachaImage
-    gallery:       'generateGalleryImage',
 };
 
 // ---- Message handler ----

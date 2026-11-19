@@ -273,8 +273,6 @@ function buildSettingSubPanel(guildId) {
     const loveEnabled = getSetting(guildId, 'love_enabled', '1');
     const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
     const onboardingEnabled = getSetting(guildId, 'onboarding_enabled', '1');
-    const tiktokEnabled = getSetting(guildId, 'tiktok_convert', '1');
-    const videoEnabled = getSetting(guildId, 'video_convert', '0');
     const xpMult = getSetting(guildId, 'xp_multiplier', '1');
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
@@ -300,12 +298,10 @@ function buildSettingSubPanel(guildId) {
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_channels').setLabel('📡 Channels').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_xp').setLabel('📈 XP & Level').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_quote').setLabel('💬 Auto Quote').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_media').setLabel('🎬 Media').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
@@ -880,28 +876,6 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
-    if (customId === 'admpnl_set_media') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_media').setTitle('🎬 Media Downloader Config');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tiktok').setLabel('TikTok Convert (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'tiktok_convert', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('video').setLabel('Video Convert — YT/IG/X/FB (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'video_convert', '0'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cobalt_url').setLabel('Cobalt API URL (kosong = tanpa)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'cobalt_api_url', '') || 'https://your-cobalt.example.com')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('platforms').setLabel('Platform ON (youtube,instagram,twitter,...)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder('youtube,instagram,twitter,facebook,reddit'))
-        );
-        return interaction.showModal(modal);
-    }
-    if (customId === 'admpnl_tog_dailycard') {
-        return interaction.reply({ content: `🃏 Fitur Daily Card Bonus sudah dinonaktifkan secara permanen.`, ephemeral: true });
-    }
-    if (customId === 'admpnl_set_quote') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_quote').setTitle('Auto Quote Config');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel').setLabel('Channel ID (kosong = matikan)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_channel', '') || 'Channel ID')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('interval').setLabel('Interval (jam, mis. 6)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_interval', '6'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('category').setLabel('Kategori (galauquote/bucinquote/dll)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quote_auto_category', 'randomquote')))
-        );
-        return interaction.showModal(modal);
-    }
     if (customId === 'admpnl_set_misc') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_misc').setTitle('Settings Lainnya');
         modal.addComponents(
@@ -1243,49 +1217,6 @@ async function handleAdminModal(interaction) {
             await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
         }
         return interaction.reply({ content: updated.length > 0 ? `✅ Love config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
-    }
-
-    // === SETTING: Media (TikTok + Video Converter) ===
-    if (customId === 'admpnl_modal_media') {
-        const updated = [];
-        const tiktok = (interaction.fields.getTextInputValue('tiktok') || '').trim();
-        if (tiktok === '0' || tiktok === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'tiktok_convert', tiktok); updated.push(`TikTok: ${tiktok === '1' ? 'ON' : 'OFF'}`); }
-        const video = (interaction.fields.getTextInputValue('video') || '').trim();
-        if (video === '0' || video === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'video_convert', video); updated.push(`Video Convert: ${video === '1' ? 'ON' : 'OFF'}`); }
-        const cobaltUrl = (interaction.fields.getTextInputValue('cobalt_url') || '').trim();
-        if (cobaltUrl && /^https?:\/\/.+/i.test(cobaltUrl)) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'cobalt_api_url', cobaltUrl); updated.push(`Cobalt URL: ${cobaltUrl}`); }
-        else if (cobaltUrl === '') { db.prepare('DELETE FROM server_settings WHERE guildId = ? AND key = ?').run(guildId, 'cobalt_api_url'); updated.push('Cobalt URL: dihapus'); }
-        const platforms = (interaction.fields.getTextInputValue('platforms') || '').trim();
-        if (platforms) {
-            const valid = ['youtube', 'instagram', 'twitter', 'facebook', 'reddit', 'pinterest', 'bluesky', 'threads'];
-            const list = platforms.split(/[,\s]+/).map(p => p.toLowerCase().trim()).filter(Boolean);
-            // Disable all first, then enable listed ones
-            for (const p of valid) {
-                const on = list.includes(p) ? '1' : '0';
-                db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, `video_convert_${p}`, on);
-            }
-            updated.push(`Platforms: ${list.filter(p => valid.includes(p)).join(', ') || 'none'}`);
-        }
-        if (interaction.message) {
-            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
-        }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Media Config Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
-    }
-
-    // === SETTING: Auto Quote ===
-    if (customId === 'admpnl_modal_quote') {
-        const updated = [];
-        const ch = (interaction.fields.getTextInputValue('channel') || '').trim();
-        if (ch && /^\d+$/.test(ch)) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_channel', ch); updated.push(`Channel: <#${ch}>`); }
-        else if (ch === '') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_channel', ''); updated.push('Auto Quote: OFF'); }
-        const interval = (interaction.fields.getTextInputValue('interval') || '').trim();
-        if (interval && !isNaN(parseInt(interval)) && parseInt(interval) > 0) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_interval', String(parseInt(interval))); updated.push(`Interval: ${parseInt(interval)} jam`); }
-        const cat = (interaction.fields.getTextInputValue('category') || '').trim().toLowerCase();
-        if (cat) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quote_auto_category', cat); updated.push(`Kategori: ${cat}`); }
-        if (interaction.message) {
-            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
-        }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Auto Quote Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
     // === SETTING: Misc ===
@@ -1743,9 +1674,6 @@ async function handleDbToolsModal(interaction) {
         // Query pets dari database utama (semua userId matching, termasuk GLOBAL_MARKET)
         const allPets = db.prepare('SELECT * FROM pets WHERE userId = ? ORDER BY active DESC, level DESC').all(targetId);
         const activePet = allPets.find(p => p.active === 1);
-
-        // Cek apakah ada pet di Global Market
-        const marketPets = db.prepare("SELECT * FROM pets WHERE userId = 'GLOBAL_MARKET'").all();
         const { PET_DATA } = require('../data/pets');
 
         let desc = `**User ID:** \`${targetId}\`\n`;
@@ -1761,16 +1689,6 @@ async function handleDbToolsModal(interaction) {
                 desc += `> ${status} **#${p.id}** ${pd ? pd.emoji : '🐾'} **${p.name}** (Lv.${p.level}) — ${pd ? pd.tier : '?'}\n`;
                 desc += `>   ATK:${p.atk} DEF:${p.def} HP:${p.hp} | status: \`${p.status}\`\n`;
             });
-        }
-
-        // Cek pet yang mungkin terjebak di Global Market (sellerId = targetId)
-        const listedInMarket = db.prepare("SELECT * FROM global_market WHERE sellerId = ? AND status = 'active' AND itemType = 'pet'").all(targetId);
-        if (listedInMarket.length > 0) {
-            desc += `\n**🌍 Pet di Global Market (listing aktif):**\n`;
-            listedInMarket.forEach(l => {
-                desc += `> 🏷️ **${l.itemName}** — 🪙 ${l.price.toLocaleString('id-ID')} | ID listing: #${l.id}\n`;
-            });
-            desc += `> ⚠️ Pet ini bisa di-cancel di Global Market untuk kembali ke owner.\n`;
         }
 
         const embed = new EmbedBuilder()

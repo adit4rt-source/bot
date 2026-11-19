@@ -229,16 +229,6 @@ client.once(Events.ClientReady, async c => {
         console.log(`🗓️ Seasonal leaderboard: season ${info.seasonId} (sisa ${info.daysLeft} hari)`);
     } catch (e) { console.error('Season init error:', e); }
 
-    // Background card prefetch (downloads Pokemon cards while bot runs)
-    try {
-        const { db } = require('./database');
-        const count = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-        console.log(`🎴 TCG Cache: ${count.toLocaleString('id-ID')} cards currently cached`);
-
-        const { startBackgroundPrefetch } = require('./systems/cardPrefetch');
-        startBackgroundPrefetch();
-    } catch (e) { console.error('Card prefetch error:', e.message); }
-
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     try {
@@ -306,13 +296,6 @@ const { handleWelcome, handleGoodbye } = require('./systems/welcomer');
 client.once(Events.ClientReady, async () => {
     await cacheAllGuildInvites(client);
     console.log('📨 Invite cache loaded for all guilds');
-
-    // Start auto-quote scheduler
-    try {
-        const { startAutoQuote } = require('./systems/quote');
-        startAutoQuote(client);
-        console.log('💬 Auto-quote scheduler started');
-    } catch (_) {}
 
     // Auto-post changelog
     try {
