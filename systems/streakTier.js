@@ -12,13 +12,13 @@ const ui = require('./ui');
 
 // ==================== TIER DEFINITIONS (Gaya A: Aesthetic Minimalis & Prestige) ====================
 const STREAK_TIERS = [
-    { days: 7,   name: '✦ Sparks',    emoji: '✨', color: '#B0BEC5', reward: 15000,   lounge: false, chatBonus: 0.10 },
-    { days: 30,  name: '✦ Blazing',   emoji: '🔥', color: '#FBC02D', reward: 50000,   lounge: false, chatBonus: 0.25 },
-    { days: 60,  name: '✦ Tempest',   emoji: '⚡', color: '#00E5FF', reward: 120000,  lounge: false, chatBonus: 0.50 },
-    { days: 100, name: '✦ Sovereign', emoji: '👑', color: '#7C4DFF', reward: 300000,  lounge: true,  chatBonus: 0.75 },
-    { days: 150, name: '✦ Luminary',  emoji: '💠', color: '#00B0FF', reward: 600000,  lounge: true,  chatBonus: 1.00 },
-    { days: 200, name: '✦ Eternal',   emoji: '💎', color: '#FFD700', reward: 1200000, lounge: true,  chatBonus: 1.50 },
-    { days: 365, name: '✦ Mythos',    emoji: '🌌', color: '#FF1744', reward: 3000000, lounge: true,  chatBonus: 2.00 }
+    { days: 7, name: '✦ Sparks', emoji: '✨', color: '#B0BEC5', reward: 15000, lounge: false, chatBonus: 0.10 },
+    { days: 30, name: '✦ Blazing', emoji: '🔥', color: '#FBC02D', reward: 50000, lounge: false, chatBonus: 0.25 },
+    { days: 60, name: '✦ Tempest', emoji: '⚡', color: '#00E5FF', reward: 120000, lounge: false, chatBonus: 0.50 },
+    { days: 100, name: '✦ Sovereign', emoji: '👑', color: '#7C4DFF', reward: 300000, lounge: true, chatBonus: 0.75 },
+    { days: 150, name: '✦ Luminary', emoji: '💠', color: '#00B0FF', reward: 600000, lounge: true, chatBonus: 1.00 },
+    { days: 200, name: '✦ Eternal', emoji: '💎', color: '#FFD700', reward: 1200000, lounge: true, chatBonus: 1.50 },
+    { days: 365, name: '✦ Mythos', emoji: '🌌', color: '#FF1744', reward: 3000000, lounge: true, chatBonus: 2.00 }
 ];
 
 function getStreakTier(days) {
@@ -38,9 +38,9 @@ function getStreakEmoji(days) {
     if (d >= 200) return '💎';
     if (d >= 150) return '💠';
     if (d >= 100) return '👑';
-    if (d >= 60)  return '⚡';
-    if (d >= 30)  return '🔥';
-    if (d >= 7)   return '✨';
+    if (d >= 60) return '⚡';
+    if (d >= 30) return '🔥';
+    if (d >= 7) return '✨';
     return '🔥';
 }
 
@@ -75,13 +75,52 @@ function memberHasRole(member, roleId) {
 }
 
 // ==================== AUTO-ROLE SYNC & CLEANUP ====================
+async function reorderStreakRoles(guild) {
+    if (!guild) return false;
+    const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
+    if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) return false;
+
+    await guild.roles.fetch().catch(() => {});
+    const botMaxPos = me.roles?.highest ? me.roles.highest.position : 0;
+    if (botMaxPos <= 1) return false;
+
+    const tierRoles = [];
+    for (const tier of STREAK_TIERS) {
+        const r = findRoleByName(guild, tier.name);
+        if (r && r.position < botMaxPos) {
+            tierRoles.push({ tier, role: r });
+        }
+    }
+    if (tierRoles.length < 2) return false;
+
+    // Sparks (7 days) lowest position, Mythos (365 days) highest position
+    tierRoles.sort((a, b) => a.tier.days - b.tier.days);
+    const targetTop = Math.max(1, botMaxPos - 1);
+    const count = tierRoles.length;
+    const positions = [];
+    for (let i = 0; i < count; i++) {
+        const pos = Math.max(1, targetTop - (count - 1 - i));
+        positions.push({ role: tierRoles[i].role.id, position: pos });
+    }
+
+    if (typeof guild.roles.setPositions === 'function') {
+        try {
+            await guild.roles.setPositions(positions);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+    return false;
+}
+
 async function ensureAllStreakRoles(guild) {
     if (!guild) return {};
     const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
     if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) {
         return {};
     }
-    await guild.roles.fetch().catch(() => {});
+    await guild.roles.fetch().catch(() => { });
     const roleMap = {};
     for (const tier of STREAK_TIERS) {
         let role = findRoleByName(guild, tier.name);
@@ -99,6 +138,7 @@ async function ensureAllStreakRoles(guild) {
         }
         if (role) roleMap[tier.name] = role;
     }
+    await reorderStreakRoles(guild).catch(() => {});
     return roleMap;
 }
 
@@ -117,7 +157,7 @@ async function syncMemberStreakRole(member, streakCount) {
 
     // Ensure roles cache is loaded
     if (!guild.roles.cache.size) {
-        await guild.roles.fetch().catch(() => {});
+        await guild.roles.fetch().catch(() => { });
     }
 
     // Find or create the highest tier role
@@ -149,7 +189,7 @@ async function syncMemberStreakRole(member, streakCount) {
                     try {
                         await member.roles.remove(role, 'Auto-cleanup previous streak tier');
                         roleRemoved = true;
-                    } catch (_) {}
+                    } catch (_) { }
                 }
             }
         }
@@ -157,7 +197,7 @@ async function syncMemberStreakRole(member, streakCount) {
 
     // Assign highest role if member does not have it yet
     if (highestRole) {
-        const hasIt = memberHasRole(member, highestRole.id);
+        const hasIt = member.roles?.cache ? member.roles.cache.has(highestRole.id) : false;
         if (!hasIt) {
             try {
                 await member.roles.add(highestRole, `Streak milestone reached: ${highestTier.days} days`);
@@ -185,9 +225,10 @@ async function syncAllMemberStreakRoles(guild) {
 
     // 1. Ensure all 7 roles exist in server
     const roleMap = await ensureAllStreakRoles(guild);
+    await reorderStreakRoles(guild).catch(() => {});
 
     // 2. Fetch all guild members into cache
-    await guild.members.fetch().catch(() => {});
+    await guild.members.fetch().catch(() => { });
 
     // 3. Query streaks from DB
     let rows = [];
@@ -247,7 +288,7 @@ async function setupLounge(guild) {
                     hoist: true,
                     reason: `Auto-create lounge tier role: ${t.name}`
                 });
-            } catch (_) {}
+            } catch (_) { }
         }
         if (r) loungeRoles.push(r);
     }
@@ -285,7 +326,7 @@ async function setupLounge(guild) {
                 ViewChannel: true, SendMessages: true, ReadMessageHistory: true, Connect: true, Speak: true
             } : {
                 ViewChannel: false
-            }).catch(() => {});
+            }).catch(() => { });
         }
     }
 
@@ -298,7 +339,7 @@ async function setupLounge(guild) {
             parent: category.id,
             reason: 'VVIP Lounge text channel'
         });
-        await textChannel.lockPermissions().catch(() => {});
+        await textChannel.lockPermissions().catch(() => { });
         db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guild.id, 'streak_lounge_text', textChannel.id);
 
         const welcomeEmbed = new EmbedBuilder()
@@ -314,7 +355,7 @@ async function setupLounge(guild) {
             )
             .setFooter({ text: '✦ High Table • Reserved for the Loyal' })
             .setTimestamp();
-        textChannel.send({ embeds: [welcomeEmbed] }).catch(() => {});
+        textChannel.send({ embeds: [welcomeEmbed] }).catch(() => { });
     }
 
     let vcId = getSetting(guild.id, 'streak_lounge_voice', null);
@@ -328,7 +369,7 @@ async function setupLounge(guild) {
             bitrate: Math.min(384000, maxBitrate),
             reason: 'VVIP Lounge voice channel'
         });
-        await voiceChannel.lockPermissions().catch(() => {});
+        await voiceChannel.lockPermissions().catch(() => { });
         db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guild.id, 'streak_lounge_voice', voiceChannel.id);
     }
 
@@ -545,6 +586,7 @@ module.exports = {
     getStreakEmoji,
     getStreakChatBonus,
     ensureAllStreakRoles,
+    reorderStreakRoles,
     syncMemberStreakRole,
     syncAllMemberStreakRoles,
     setupLounge,
