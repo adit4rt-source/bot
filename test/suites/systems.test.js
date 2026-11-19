@@ -1324,4 +1324,81 @@ module.exports = function register() {
     const r365 = dr.computeDailyReward(365);
     if (!r365.milestoneLabel || !r365.milestoneLabel.includes('365 HARI')) throw new Error('missing 365-day milestone');
   });
+
+  test('layoutCleanup: cleanServerLayout fixes typo, moves spam, fixes staff, deletes redundant settings', async () => {
+    const { cleanServerLayout } = botRequire('systems/layoutCleanup.js');
+    const channelsMap = new Map();
+    let gipoweRenamed = null;
+    let spamEdited = null;
+    let testingRenamed = null;
+    let deletedSettings = [];
+
+    const mockGuild = {
+      id: 'CLEAN_LAYOUT_GUILD',
+      members: {
+        me: {
+          permissions: { has: () => true }
+        }
+      },
+      roles: {
+        cache: new Map(),
+        create: async () => ({ id: 'r_mock' }),
+        setPositions: async () => true,
+        everyone: { id: 'r_everyone' }
+      },
+      channels: {
+        cache: channelsMap,
+        fetch: async () => channelsMap,
+        create: async (data) => ({ id: 'c_lounge_' + data.name, lockPermissions: async () => {}, send: async () => {} })
+      }
+    };
+
+    // Add gipowe channel
+    channelsMap.set('c_gipowe', {
+      id: 'c_gipowe',
+      name: '「🎁」gipowe',
+      setName: async (n) => { gipoweRenamed = n; }
+    });
+
+    // Add main bot category
+    channelsMap.set('cat_mainbot', {
+      id: 'cat_mainbot',
+      type: 4, // GuildCategory
+      name: '🤖 ll ----- [MAIN BOT]'
+    });
+
+    // Add spam channel
+    channelsMap.set('c_spam', {
+      id: 'c_spam',
+      name: '「❗」spam',
+      edit: async (data) => { spamEdited = data; }
+    });
+
+    // Add staff testing-bot channel
+    channelsMap.set('c_testing', {
+      id: 'c_testing',
+      name: 'testing-bot',
+      setName: async (n) => { testingRenamed = n; }
+    });
+
+    // Add voice public category & settings
+    channelsMap.set('cat_voicepub', {
+      id: 'cat_voicepub',
+      type: 4,
+      name: '🌐 ll ----- [VOICE PUBLIC]'
+    });
+    channelsMap.set('c_pubsettings', {
+      id: 'c_pubsettings',
+      parentId: 'cat_voicepub',
+      name: '「✨」settings',
+      delete: async () => { deletedSettings.push('pub'); }
+    });
+
+    const res = await cleanServerLayout(mockGuild);
+    if (!res.ok) throw new Error('cleanServerLayout failed: ' + res.error);
+    if (gipoweRenamed !== '「🎁」giveaway') throw new Error('gipowe not renamed to giveaway');
+    if (!spamEdited || spamEdited.name !== '「⚡」bot-spam' || spamEdited.parent !== 'cat_mainbot') throw new Error('spam not properly moved and renamed');
+    if (testingRenamed !== '「🧪」bot-testing') throw new Error('testing-bot not formatted');
+    if (!deletedSettings.includes('pub')) throw new Error('redundant voice settings not deleted');
+  });
 };

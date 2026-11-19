@@ -149,7 +149,8 @@ function buildAdminPanel(guildId) {
     // Row 1: Quick Setup (paling penting untuk admin baru)
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_setting').setLabel('⚙️ Setting').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_cleanlayout').setLabel('🧹 Rapihkan Server').setStyle(ButtonStyle.Primary)
     );
     // Row 2: Economy & Game
     const row2 = new ActionRowBuilder().addComponents(
@@ -525,6 +526,25 @@ async function handleAdminButton(interaction) {
     }
 
     // === SUB-PANEL NAVIGATION ===
+    if (customId === 'admpnl_cleanlayout') {
+        await interaction.deferReply({ ephemeral: true });
+        const { cleanServerLayout } = require('./layoutCleanup');
+        const res = await cleanServerLayout(interaction.guild);
+        if (!res.ok) {
+            return interaction.editReply({ content: `❌ Gagal merapikan layout: ${res.error}` });
+        }
+        const logText = res.log.length > 0 ? res.log.join('\n') : '• Semua channel & role sudah rapi.';
+        const cleanEmbed = new EmbedBuilder()
+            .setTitle('🧹 Server Layout Cleaned Up!')
+            .setColor('#2ECC71')
+            .setDescription(
+                `Berhasil merapikan layout server Discord:\n\n` +
+                `${logText}\n\n` +
+                `> 💡 *Catatan: Pastikan posisi role bot (\`ID BOT\`) di Server Settings ditaruh di atas role member.*`
+            )
+            .setTimestamp();
+        return interaction.editReply({ embeds: [cleanEmbed] });
+    }
     if (customId === 'admpnl_shop') return interaction.update(buildShopSubPanel());
     // Pass userId so Money panel can show/disable banker buttons accordingly
     if (customId === 'admpnl_money') return interaction.update(buildMoneySubPanel(interaction.user.id));

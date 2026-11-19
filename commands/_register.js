@@ -130,10 +130,14 @@ const commands = [
                 { name: 'English 🇬🇧', value: 'en' }
             )),
 
-    // ================= ADMIN (satu command saja) =================
+    // ================= ADMIN & SERVER MAINTENANCE =================
     new SlashCommandBuilder()
         .setName('admin')
         .setDescription('🛡️ Admin Panel — Kelola semua fitur admin')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('rapihkan')
+        .setDescription('🧹 [Admin] Rapihkan channel typo, redundansi voice, VVIP lounge & role streak')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 ];
 

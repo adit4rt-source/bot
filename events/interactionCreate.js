@@ -41,6 +41,7 @@ const { handleGiveawayCommand, handleGiveawayButton, handleGiveawaySelect, handl
 const { handleGiveawayJoin, isGiveawayJoin } = require('../systems/giveaway');
 const { handleTempvoiceCommand, handleTempvoiceButton, handleTempvoiceUserSelect, handleTempvoiceModal, isTempvoicePanelButton, isTempvoiceUserSelect, isTempvoiceModal } = require('../systems/tempvoicePanel');
 const { handleStreakButton, isStreakPanelButton, buildStreakStatusPanel, buildStreakLeaderboard, buildLoungePanel, setupLounge, syncMemberStreakRole, syncAllMemberStreakRoles } = require('../systems/streakTier');
+const { cleanServerLayout } = require('../systems/layoutCleanup');
 const { getNotifSettings, toggleNotif, setDmConsent, canDM, wasDmAsked, markDmAsked, buildNotifPanel, buildConsentPrompt } = require('../systems/notifications');
 const i18n = require('../systems/i18n');
 const consent = require('../systems/consent');
@@ -451,6 +452,28 @@ async function routeInteraction(interaction) {
         // ================= ADMIN PANEL (Button-based) =================
         if (command === 'admin') {
             return handleAdminCommand(interaction);
+        }
+
+        if (command === 'rapihkan') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return interaction.reply({ content: '❌ Hanya administrator yang bisa merapikan layout server.', ephemeral: true });
+            }
+            await interaction.deferReply({ ephemeral: true });
+            const res = await cleanServerLayout(interaction.guild);
+            if (!res.ok) {
+                return interaction.editReply({ content: `❌ Gagal merapikan layout: ${res.error}` });
+            }
+            const logText = res.log.length > 0 ? res.log.join('\n') : '• Tidak ada channel atau role yang perlu diperbaiki.';
+            const embed = new EmbedBuilder()
+                .setTitle('🧹 Server Layout Cleaned Up!')
+                .setColor('#2ECC71')
+                .setDescription(
+                    `Berhasil merapikan layout server Discord:\n\n` +
+                    `${logText}\n\n` +
+                    `> 💡 *Catatan: Pastikan posisi role bot (\`ID BOT\`) di Server Settings ditaruh di atas role member.*`
+                )
+                .setTimestamp();
+            return interaction.editReply({ embeds: [embed] });
         }
 
         // ================= ECONOMY PANEL (Button-based) =================
