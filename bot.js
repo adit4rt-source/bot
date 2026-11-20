@@ -294,6 +294,16 @@ const { cacheAllGuildInvites, cacheGuildInvites, handleMemberJoin: handleInviteJ
 const { handleWelcome, handleGoodbye } = require('./systems/welcomer');
 
 client.once(Events.ClientReady, async () => {
+    // Single-Guild Lockdown: keluar dari semua server lain, HANYA aktif di server utama ID COMMUNITY
+    const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+    for (const [id, guild] of client.guilds.cache) {
+        const isMain = id === MAIN_GUILD_ID || (guild.name && guild.name.toUpperCase().includes('ID COMMUNITY'));
+        if (!isMain) {
+            log('WARN', `[GuildLock] Meninggalkan server selain ID COMMUNITY: ${guild.name} (${id})`);
+            await guild.leave().catch(e => log('ERROR', `Gagal keluar dari ${guild.name}: ${e.message}`));
+        }
+    }
+
     await cacheAllGuildInvites(client);
     console.log('📨 Invite cache loaded for all guilds');
 
@@ -357,8 +367,18 @@ client.on(Events.InviteDelete, async (invite) => {
     if (invite.guild) await cacheGuildInvites(invite.guild);
 });
 
-// Guild join/leave logging
-client.on(Events.GuildCreate, (guild) => { onGuildCreate(client, guild); cacheGuildInvites(guild); });
+// Guild join/leave logging & lock
+client.on(Events.GuildCreate, async (guild) => {
+    const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+    const isMain = guild.id === MAIN_GUILD_ID || (guild.name && guild.name.toUpperCase().includes('ID COMMUNITY'));
+    if (!isMain) {
+        log('WARN', `[GuildLock] Bot diundang ke server luar: ${guild.name} (${guild.id}). Otomatis keluar.`);
+        await guild.leave().catch(() => {});
+        return;
+    }
+    onGuildCreate(client, guild);
+    cacheGuildInvites(guild);
+});
 client.on(Events.GuildDelete, (guild) => onGuildDelete(client, guild));
 
 client.login(TOKEN);

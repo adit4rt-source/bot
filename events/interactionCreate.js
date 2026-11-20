@@ -62,6 +62,18 @@ async function routeInteraction(interaction) {
     if (!interaction.guild) return interaction.reply({content: 'Hanya di Server!', ephemeral: true});
     const guildId = interaction.guild.id;
 
+    // Single-Guild Lockdown: Bot hanya aktif di server utama ID COMMUNITY
+    if (process.env.NODE_ENV !== 'test') {
+        const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+        const isMainGuild = guildId === MAIN_GUILD_ID || (interaction.guild.name && interaction.guild.name.toUpperCase().includes('ID COMMUNITY'));
+        if (!isMainGuild) {
+            if (typeof interaction.guild.leave === 'function') {
+                interaction.guild.leave().catch(() => {});
+            }
+            return interaction.reply({ content: '❌ Bot ini hanya aktif eksklusif di server **ID COMMUNITY**.', ephemeral: true });
+        }
+    }
+
     // === MAINTENANCE MODE === semua fitur dimatikan sementara (kecuali Streak via chat).
     // Owner tetap boleh pakai untuk administrasi.
     const { isMaintenance, isOwner } = require('../systems/maintenance');

@@ -49,29 +49,22 @@ function getStreakChatBonus(days) {
     return tier ? tier.chatBonus : 0;
 }
 
-// ==================== ROLE HELPERS (supports Discord.js Collection & Map) ====================
 function findRoleByName(guild, name) {
     if (!guild || !guild.roles || !guild.roles.cache) return null;
     const cache = guild.roles.cache;
+    const target = (name || '').toLowerCase();
     if (typeof cache.find === 'function') {
-        return cache.find(r => r && r.name === name);
+        return cache.find(r => r && r.name && r.name.toLowerCase() === target) || null;
     }
-    for (const [, role] of cache) {
-        if (role && role.name === name) return role;
+    if (Array.isArray(cache)) {
+        return cache.find(r => r && r.name && r.name.toLowerCase() === target) || null;
+    }
+    if (typeof cache.values === 'function') {
+        for (const role of cache.values()) {
+            if (role && role.name && role.name.toLowerCase() === target) return role;
+        }
     }
     return null;
-}
-
-function memberHasRole(member, roleId) {
-    if (!member || !member.roles || !member.roles.cache) return false;
-    const cache = member.roles.cache;
-    if (typeof cache.has === 'function') {
-        return cache.has(roleId);
-    }
-    for (const [id, role] of cache) {
-        if (id === roleId || (role && role.id === roleId)) return true;
-    }
-    return false;
 }
 
 // ==================== AUTO-ROLE SYNC & CLEANUP ====================
@@ -80,7 +73,7 @@ async function reorderStreakRoles(guild) {
     const me = guild.members?.me || (await guild.members.fetchMe().catch(() => null));
     if (!me || !me.permissions?.has(PermissionsBitField.Flags.ManageRoles)) return false;
 
-    await guild.roles.fetch().catch(() => {});
+    await guild.roles.fetch().catch(() => { });
     const botMaxPos = me.roles?.highest ? me.roles.highest.position : 0;
     if (botMaxPos <= 1) return false;
 
@@ -138,7 +131,7 @@ async function ensureAllStreakRoles(guild) {
         }
         if (role) roleMap[tier.name] = role;
     }
-    await reorderStreakRoles(guild).catch(() => {});
+    await reorderStreakRoles(guild).catch(() => { });
     return roleMap;
 }
 
@@ -225,7 +218,7 @@ async function syncAllMemberStreakRoles(guild) {
 
     // 1. Ensure all 7 roles exist in server
     const roleMap = await ensureAllStreakRoles(guild);
-    await reorderStreakRoles(guild).catch(() => {});
+    await reorderStreakRoles(guild).catch(() => { });
 
     // 2. Fetch all guild members into cache
     await guild.members.fetch().catch(() => { });

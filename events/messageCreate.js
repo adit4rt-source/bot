@@ -63,6 +63,18 @@ function isSpamMessage(guildId, message) {
 module.exports = async function handleMessageCreate(message) {
     if (message.author.bot || !message.guild) return;
 
+    // Single-Guild Lockdown: Bot hanya aktif di server utama ID COMMUNITY
+    if (process.env.NODE_ENV !== 'test') {
+        const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+        const isMainGuild = message.guild.id === MAIN_GUILD_ID || (message.guild.name && message.guild.name.toUpperCase().includes('ID COMMUNITY'));
+        if (!isMainGuild) {
+            if (typeof message.guild.leave === 'function') {
+                message.guild.leave().catch(() => {});
+            }
+            return;
+        }
+    }
+
     // Anti-abuse captcha: check if this message is a captcha answer
     const { verifyCaptchaMessage } = require('../systems/captcha');
     if (verifyCaptchaMessage(message)) return; // consumed as captcha answer, don't process further
