@@ -206,6 +206,13 @@ function start(client) {
         console.log('💾 Auto-backup: setiap 6 jam → Discord channel');
     } catch (e) { console.error('Backup scheduler error:', e.message); }
 
+    // ===== DAILY RAMALAN ORACLE (07:00 AM WIB) =====
+    try {
+        const { checkAndSendDailyRamalan } = require('./dailyRamalan');
+        registerJob('daily-ramalan', 60000, () => checkAndSendDailyRamalan(client), { startupDelay: 10000 });
+        console.log('🔮 Daily Ramalan Oracle: cek jadwal kirim jam 07:00 WIB tiap 1 menit');
+    } catch (e) { console.error('Daily ramalan scheduler error:', e.message); }
+
     // ===== PRESENCE UPDATE =====
     const { ActivityType } = require('discord.js');
     registerJob('presence-update', 10 * 60000, () => {

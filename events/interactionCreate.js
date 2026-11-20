@@ -1,6 +1,6 @@
 // events/interactionCreate.js
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { db, getOrCreateUser, getConf, getSetting, getUserStat, incrementUserStat, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
+const { db, getOrCreateUser, getConf, getSetting, setSetting, getUserStat, incrementUserStat, addIncome, addSpending, getItemCount, addItem, removeItem, getPetFoodCount, addPetFood, removePetFood, getAllPetFood, getSeedCount, addSeed, removeSeed, getAllSeeds } = require('../database');
 const { getRandomInt, replyTemp } = require('../utils');
 const state = require('../state');
 const { isFeatureEnabled, getFeatureKeyForCommand, getFeatureDef, getDisabledMessage, getFeatureKeyForInteraction } = require('../systems/featureGate');
@@ -474,6 +474,40 @@ async function routeInteraction(interaction) {
                 )
                 .setTimestamp();
             return interaction.editReply({ embeds: [embed] });
+        }
+
+        // ================= RAMALAN HARIAN =================
+        if (command === 'ramalan') {
+            const sub = interaction.options.getSubcommand(false) || 'hari_ini';
+            const { getTodayRamalan, buildRamalanEmbed } = require('../systems/dailyRamalan');
+
+            if (sub === 'setup') {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                    return interaction.reply({ content: '❌ Hanya administrator yang bisa mengatur channel ramalan.', ephemeral: true });
+                }
+                const ch = interaction.options.getChannel('channel');
+                setSetting(guildId, 'ramalan_channel', ch.id);
+                setSetting(guildId, 'ramalan_enabled', '1');
+                return interaction.reply({
+                    content: `✅ Channel auto-ramalan harian diset ke <#${ch.id}>!\n> ⏰ Dikirim otomatis setiap hari jam **07:00 WIB**.`,
+                    ephemeral: true
+                });
+            }
+
+            if (sub === 'test') {
+                if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                    return interaction.reply({ content: '❌ Hanya administrator yang bisa melakukan tes ramalan.', ephemeral: true });
+                }
+                const todayRamalan = getTodayRamalan();
+                const embed = buildRamalanEmbed(todayRamalan);
+                await interaction.channel.send({ embeds: [embed] });
+                return interaction.reply({ content: '✅ Tes ramalan harian berhasil dikirim ke channel ini!', ephemeral: true });
+            }
+
+            // sub === 'hari_ini'
+            const todayRamalan = getTodayRamalan();
+            const embed = buildRamalanEmbed(todayRamalan);
+            return interaction.reply({ embeds: [embed] });
         }
 
         // ================= ECONOMY PANEL (Button-based) =================

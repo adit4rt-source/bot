@@ -1424,4 +1424,65 @@ module.exports = function register() {
     if (!gMenuAfter || gMenuAfter.type !== 'unique') throw new Error('gender menu not updated to unique');
     if (!invitePinned) throw new Error('invite milestone banner not pinned');
   });
+
+  test('dailyRamalan: 365 dataset, getTodayRamalan, embed builder & auto-send check', async () => {
+    const ramalan = botRequire('systems/dailyRamalan.js');
+    const { RAMALAN_DATA } = botRequire('data/ramalan.js');
+
+    if (RAMALAN_DATA.length !== 365) throw new Error(`expected 365 ramalan entries, got ${RAMALAN_DATA.length}`);
+
+    // Check entry structure
+    const sample = RAMALAN_DATA[0];
+    if (!sample.id || !sample.title || !sample.forecast || !sample.advice || !sample.luckyNumber || !sample.luckyColor) {
+      throw new Error('invalid ramalan entry structure');
+    }
+
+    const doy = ramalan.getDayOfYear(new Date());
+    if (doy < 1 || doy > 365) throw new Error(`invalid day of year: ${doy}`);
+
+    const todayR = ramalan.getTodayRamalan(new Date());
+    if (!todayR || !todayR.title) throw new Error('failed to get today ramalan');
+
+    const embed = ramalan.buildRamalanEmbed(todayR);
+    if (!embed || !embed.data.title.includes('RAMALAN HARI INI')) {
+      throw new Error('invalid ramalan embed generated');
+    }
+
+    // Mock client to test auto-send logic
+    let sentMessage = null;
+    const fakeClient = {
+      guilds: {
+        cache: new Map([
+          ['G_RAMALAN', {
+            id: 'G_RAMALAN',
+            name: 'Ramalan Guild',
+            members: { me: { permissions: { has: () => true } } },
+            channels: {
+              cache: new Map([
+                ['C_CHAT', {
+                  id: 'C_CHAT',
+                  name: 'chat',
+                  type: 0, // GuildText
+                  permissionsFor: () => ({ has: () => true }),
+                  send: async (payload) => { sentMessage = payload; return payload; }
+                }]
+              ])
+            }
+          }]
+        ])
+      }
+    };
+
+    // Clean previous date if any
+    db.db.prepare("DELETE FROM server_settings WHERE guildId = 'G_RAMALAN' AND key LIKE 'ramalan_%'").run();
+
+    await ramalan.checkAndSendDailyRamalan(fakeClient);
+    // If running at >= 7 WIB, sentMessage will be populated
+    const nowWib = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    if (nowWib.getHours() >= 7) {
+      if (!sentMessage) throw new Error('expected daily ramalan to be sent during >= 7 WIB');
+      const last = db.getSetting('G_RAMALAN', 'ramalan_last_date', null);
+      if (!last) throw new Error('expected ramalan_last_date to be saved');
+    }
+  });
 };

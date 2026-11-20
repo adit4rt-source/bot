@@ -27,12 +27,18 @@ module.exports = function register() {
   });
   test('mutation: base rate ~2% (1.2-2.8% over 300k)', () => {
     const orig = Math.random;
+    const fw = botRequire('systems/farmWeather.js');
+    const origWeather = fw.getCurrentWeather;
+    fw.getCurrentWeather = () => ({ id: 'sunny', mutationBonus: 0 });
     try {
       let hits = 0; const N = 300000;
       for (let i=0;i<N;i++) if (mut.rollMutation(G, U, 0)) hits++;
       const pct = hits/N*100;
       if (pct < 1.2 || pct > 2.8) throw new Error('rate out of range: ' + pct.toFixed(2) + '%');
-    } finally { Math.random = orig; }
+    } finally {
+      Math.random = orig;
+      fw.getCurrentWeather = origWeather;
+    }
   });
   test('mutation: yield is positive integer', () => {
     const y = mut.calculateHarvestYield({ minYield:2, maxYield:4, sellPrice:12 }, { fertYieldBonus:0.5, seedLevel:2, rotationBonus:0.1, petFarmBonus:20 });

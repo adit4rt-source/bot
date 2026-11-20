@@ -130,6 +130,25 @@ const commands = [
                 { name: 'English 🇬🇧', value: 'en' }
             )),
 
+    // ================= DAILY ORACLE / RAMALAN =================
+    new SlashCommandBuilder()
+        .setName('ramalan')
+        .setDescription('🔮 Ramalan Harian — Cek ramalan, angka hoki, warna hoki & energi hari ini')
+        .addSubcommand(sub => sub
+            .setName('hari_ini')
+            .setDescription('Lihat ramalan kamu hari ini'))
+        .addSubcommand(sub => sub
+            .setName('setup')
+            .setDescription('[Admin] Atur channel tujuan auto-ramalan jam 07:00 WIB')
+            .addChannelOption(opt => opt
+                .setName('channel')
+                .setDescription('Channel tempat ramalan dikirim tiap jam 07:00 WIB')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)))
+        .addSubcommand(sub => sub
+            .setName('test')
+            .setDescription('[Admin] Kirim tes ramalan hari ini sekarang juga')),
+
     // ================= ADMIN & SERVER MAINTENANCE =================
     new SlashCommandBuilder()
         .setName('admin')
