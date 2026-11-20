@@ -115,7 +115,7 @@ function drawSpacedText(ctx, text, cx, y, spacing) {
  * @param {string} [opts.username]
  * @param {Object} [opts.avatar]   pre-loaded image (skips the fetch)
  */
-async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, avatar = null }) {
+async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, subtitle, avatar = null, accent = '#5865F2' }) {
     const RING_COLOR = '#0c0c0c';          // aesthetic black border
     const min = Math.min(width, height);
     const size = Math.round(min * 0.36);   // a touch smaller so it breathes
@@ -127,10 +127,10 @@ async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, avat
     // text that's usually baked into the lower part of the source image.
     const cy = name ? Math.round(height * 0.30) : Math.round(height * 0.46);
 
-    // ---- Black ring with a soft drop shadow for separation ----
+    // ---- Black ring with glow halo and soft drop shadow ----
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.50)';
-    ctx.shadowBlur = ringW * 3;
+    ctx.shadowColor = accent || '#5865F2';
+    ctx.shadowBlur = Math.round(ringW * 3.5);
     ctx.shadowOffsetY = Math.round(ringW * 0.5);
     ctx.beginPath();
     ctx.arc(cx, cy, radius + ringW, 0, Math.PI * 2);
@@ -202,6 +202,22 @@ async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, avat
         ctx.shadowOffsetY = 1;
         drawSpacedText(ctx, fit.text, cx, pillY + pillH / 2, spacing);
         ctx.restore();
+
+        // Subtitle line under username (e.g. WELCOME TO ID COMMUNITY • MEMBER #1074)
+        if (subtitle) {
+            const subPx = Math.max(13, Math.round(height * 0.052));
+            const subSpacing = 2;
+            ctx.save();
+            ctx.font = `${subPx}px ${SUB_FONT}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.shadowColor = 'rgba(0,0,0,0.85)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2;
+            drawSpacedText(ctx, String(subtitle).toUpperCase(), cx, pillY + pillH + Math.round(subPx * 1.3), subSpacing);
+            ctx.restore();
+        }
     }
 }
 
@@ -396,7 +412,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
  * @param {string} [opts.accent]    hex accent for the ring + username (default #FFFFFF)
  * @returns {Promise<Buffer>} PNG buffer
  */
-async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFFFFF' }) {
+async function generateAvatarBanner({ bgURL, avatarURL, username, subtitle, accent = '#5865F2' }) {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
@@ -430,7 +446,7 @@ async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFF
     ctx.fillRect(0, 0, W, H);
 
     // ---- Avatar + username overlay (black aesthetic ring, upper-centered) ----
-    await drawAvatarOverlay(ctx, { width: W, height: H, avatarURL, username });
+    await drawAvatarOverlay(ctx, { width: W, height: H, avatarURL, username, subtitle, accent });
 
     return canvas.toBuffer('image/png');
 }
@@ -450,11 +466,12 @@ async function generateAvatarBanner({ bgURL, avatarURL, username, accent = '#FFF
  * @param {Buffer} opts.gifBuffer  raw GIF bytes
  * @param {string} [opts.avatarURL] PNG avatar URL (optional)
  * @param {string} [opts.username]  text drawn under the avatar (optional)
- * @param {string} [opts.accent]    hex accent for the ring + username (default #FFFFFF)
+ * @param {string} [opts.subtitle]  small subtitle under username (optional)
+ * @param {string} [opts.accent]    hex accent for the ring + username (default #5865F2)
  * @param {number} [opts.maxBytes]  max output size in bytes (default ~8MB)
  * @returns {Promise<Buffer|null>} animated GIF buffer, or null to signal fallback
  */
-async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent = '#FFFFFF', maxBytes = 8 * 1024 * 1024 }) {
+async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, subtitle, accent = '#5865F2', maxBytes = 8 * 1024 * 1024 }) {
     let sharp;
     try {
         sharp = require('sharp');
@@ -486,7 +503,7 @@ async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, accent 
         // ---- Render the static overlay once (transparent bg) ----
         const canvas = createCanvas(width, pageHeight);
         const ctx = canvas.getContext('2d');
-        await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username });
+        await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username, subtitle, accent });
         const overlayPng = canvas.toBuffer('image/png');
 
         // ---- Layer the overlay onto every frame of the filmstrip ----

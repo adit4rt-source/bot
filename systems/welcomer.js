@@ -240,6 +240,7 @@ async function handleWelcome(member) {
             const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
             const username = member.user.username;
 
+            const subtitle = `WELCOME TO ${member.guild.name.toUpperCase()} • MEMBER #${member.guild.memberCount}`;
             if (wcMod) {
                 try {
                     const srcBuffer = await fetchImageBufferCached(customImage);
@@ -248,16 +249,16 @@ async function handleWelcome(member) {
 
                     let card = null;
                     if (isGif && wcMod.generateAvatarBannerGif) {
-                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, accent });
+                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, subtitle, accent });
                         if (gifOut) {
                             card = new AttachmentBuilder(gifOut, { name: 'welcome.gif' });
                         } else {
                             log('WARN', `[welcomer] GIF welcomer di guild ${guildId} jatuh ke banner statis.`);
-                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
                             if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
                         }
                     } else if (wcMod.generateAvatarBanner) {
-                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
                         if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
                     }
 
@@ -365,6 +366,7 @@ async function handleGoodbye(member) {
             const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
             const username = member.user.username;
 
+            const subtitle = `FAREWELL • ${member.guild.name.toUpperCase()} (${member.guild.memberCount} MEMBERS)`;
             if (wcMod) {
                 try {
                     const srcBuffer = await fetchImageBufferCached(customImage);
@@ -373,15 +375,15 @@ async function handleGoodbye(member) {
 
                     let card = null;
                     if (isGif && wcMod.generateAvatarBannerGif) {
-                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, accent });
+                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, subtitle, accent });
                         if (gifOut) {
                             card = new AttachmentBuilder(gifOut, { name: 'goodbye.gif' });
                         } else {
-                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
                             if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
                         }
                     } else if (wcMod.generateAvatarBanner) {
-                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, accent });
+                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
                         if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
                     }
 

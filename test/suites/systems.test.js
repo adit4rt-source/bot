@@ -1400,6 +1400,18 @@ module.exports = function register() {
       name: '🎮 ll ---- [GAMING VOICE]'
     });
 
+    // Seed GENDER menu in multi mode
+    const sr = botRequire('systems/selfRoles.js');
+    const mid = sr.createMenu('CLEAN_LAYOUT_GUILD', { title: 'GENDER', type: 'multi' });
+
+    // Add invite-logs channel
+    let invitePinned = false;
+    channelsMap.set('c_invitelogs', {
+      id: 'c_invitelogs',
+      name: '「🤝」invite-logs',
+      send: async () => ({ pin: async () => { invitePinned = true; } })
+    });
+
     const res = await cleanServerLayout(mockGuild);
     if (!res.ok) throw new Error('cleanServerLayout failed: ' + res.error);
     if (gipoweRenamed !== '「🎁」giveaway') throw new Error('gipowe not renamed to giveaway');
@@ -1407,5 +1419,9 @@ module.exports = function register() {
     if (testingRenamed !== '「🧪」bot-testing') throw new Error('testing-bot not formatted');
     if (!createdChannels.includes('「✨」settings')) throw new Error('missing voice public settings not restored');
     if (!createdChannels.includes('「🌸」settings')) throw new Error('missing gaming voice settings not restored');
+
+    const gMenuAfter = sr.getMenu('CLEAN_LAYOUT_GUILD', mid);
+    if (!gMenuAfter || gMenuAfter.type !== 'unique') throw new Error('gender menu not updated to unique');
+    if (!invitePinned) throw new Error('invite milestone banner not pinned');
   });
 };

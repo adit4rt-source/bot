@@ -1,6 +1,8 @@
 // systems/layoutCleanup.js - Auto Server Layout Organizer
-const { PermissionsBitField, ChannelType } = require('discord.js');
+const { PermissionsBitField, ChannelType, EmbedBuilder } = require('discord.js');
 const { setupLounge, reorderStreakRoles } = require('./streakTier');
+const { db } = require('../database');
+const { getMenu, updateMenu, refreshPublicMessage } = require('./selfRoles');
 
 async function cleanServerLayout(guild) {
     if (!guild) return { ok: false, error: 'Guild tidak ditemukan' };
@@ -123,6 +125,49 @@ async function cleanServerLayout(guild) {
             log.push('🎭 Urutkan hierarki role streak (Mythos ➔ Sparks)');
         }
     } catch (_) {}
+
+    // 7. Ubah menu self-role GENDER menjadi single-choice (unique)
+    try {
+        const genderMenuRow = db.prepare("SELECT id, title, type FROM selfrole_menus WHERE guildId = ? AND UPPER(title) LIKE '%GENDER%'").get(guild.id);
+        if (genderMenuRow) {
+            if (genderMenuRow.type !== 'unique') {
+                updateMenu(guild.id, genderMenuRow.id, { type: 'unique', maxRoles: 1 });
+                const updated = getMenu(guild.id, genderMenuRow.id);
+                if (updated) await refreshPublicMessage(guild, updated);
+                log.push('🔘 Ubah menu self-role GENDER menjadi single-choice (`unique`, tidak bisa dobel)');
+            }
+        }
+    } catch (_) {}
+
+    // 8. Pin banner panduan hadiah invite di channel invite-logs
+    const inviteLogCh = findChannel(c => c.name && c.name.toLowerCase().includes('invite-logs'));
+    if (inviteLogCh && typeof inviteLogCh.send === 'function') {
+        try {
+            const pinnedMsgs = inviteLogCh.messages?.fetchPinned ? await inviteLogCh.messages.fetchPinned().catch(() => null) : null;
+            const alreadyPinned = pinnedMsgs && pinnedMsgs.some(m => m.embeds && m.embeds.some(e => e.title && e.title.includes('HADIAH INVITE')));
+            if (!alreadyPinned) {
+                const inviteEmbed = new EmbedBuilder()
+                    .setTitle('🤝 PANDUAN & REWARD INVITE — ID COMMUNITY')
+                    .setColor('#FFD700')
+                    .setDescription(
+                        `Ajak teman bergabung ke **ID COMMUNITY** dan dapatkan reward Money + Mystery Box eksklusif!\n\n` +
+                        `**🏆 TIER REWARD UNDANGAN:**\n` +
+                        `> 🥉 **3 Invite Valid:** 🪙 3.000 Money + 📦 2× Mystery Box\n` +
+                        `> 🥈 **5 Invite Valid:** 🪙 10.000 Money + 🥚 Rare Pet Egg\n` +
+                        `> 🥇 **10 Invite Valid:** 🪙 30.000 Money + 💎 2× Mythic Fragment\n` +
+                        `> 👑 **25 Invite Valid:** 🪙 100.000 Money + 👑 Role Exclusive Recruiter\n\n` +
+                        `💡 *Gunakan command \`/invite\` untuk melihat link invite dan progres tier kamu.*`
+                    )
+                    .setFooter({ text: 'Anti-Abuse: Akun fake / bot otomatis didiskualifikasi' })
+                    .setTimestamp();
+                const sentMsg = await inviteLogCh.send({ embeds: [inviteEmbed] });
+                if (sentMsg && typeof sentMsg.pin === 'function') {
+                    await sentMsg.pin().catch(() => {});
+                    log.push('📌 Pasang pin banner reward di `「🤝」invite-logs`');
+                }
+            }
+        } catch (_) {}
+    }
 
     return {
         ok: true,
