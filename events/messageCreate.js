@@ -112,13 +112,7 @@ module.exports = async function handleMessageCreate(message) {
             else if (game.match === 'includes') { if (content && content.toLowerCase().includes(String(game.answer).toLowerCase())) won = true; }
             if (won) {
                 clearTimeout(game.timer); state.activeMiniEvents.delete(guildId);
-                let reward = getRandomInt(game.rewardMin, game.rewardMax);
-                try {
-                    const { getTotalPetBonus, applyBonusPercent } = require('../systems/pets');
-                    // event_luck also lightly boosts payout
-                    const luck = getTotalPetBonus(guildId, message.author.id, 'event_luck') || 0;
-                    reward = applyBonusPercent(reward, Math.floor(luck * 0.5));
-                } catch (_) {}
+                const reward = getRandomInt(game.rewardMin, game.rewardMax);
                 const userData = getOrCreateUser(guildId, message.author.id); userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, message.author.id);
                 incrementUserStat(guildId, message.author.id, 'event_wins');
@@ -176,49 +170,6 @@ module.exports = async function handleMessageCreate(message) {
         } else state.guildMessageCounters.set(guildId, count);
     }
 
-    // Fishing tournament spawn
-    if (!spam && !state.activeFishEvents.has(guildId)) {
-        let fishCount = state.guildFishEventCounters.get(guildId) || 0; fishCount++;
-        if (fishCount >= FISH_EVENT_TARGET) {
-            state.guildFishEventCounters.set(guildId, 0);
-            const eventTypes = ['first_legendary', 'first_rare', 'heaviest', 'most_fish', 'first_trash'];
-            const chosen = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-            let eventDesc = '', eventData = { channelId: message.channel.id, type: chosen, startTime: Date.now(), participants: {} };
-            if (chosen === 'first_legendary') eventDesc = 'Siapa yang bisa menangkap ikan **Legendary** atau lebih tinggi pertama kali?';
-            else if (chosen === 'first_rare') eventDesc = 'Siapa yang bisa menangkap ikan **Rare** atau lebih tinggi pertama kali?';
-            else if (chosen === 'heaviest') eventDesc = 'Siapa yang bisa menangkap ikan **paling berat** dalam 5 menit?';
-            else if (chosen === 'most_fish') eventDesc = 'Siapa yang bisa menangkap ikan **paling banyak** dalam 5 menit?';
-            else if (chosen === 'first_trash') eventDesc = 'Siapa yang bisa menangkap **Sampah (Trash)** pertama kali? 🗑️';
-            // Balanced rewards: difficulty-scaled money + bonus items
-            const TOURNEY_REWARDS = {
-                first_legendary: { money: 500000, items: [{ id: 'mystery_box', qty: 5 }], difficulty: '⭐⭐⭐⭐⭐' },
-                heaviest:        { money: 350000, items: [{ id: 'mystery_box', qty: 3 }], difficulty: '⭐⭐⭐⭐' },
-                most_fish:       { money: 250000, items: [{ id: 'mystery_box', qty: 3 }], difficulty: '⭐⭐⭐' },
-                first_rare:      { money: 150000, items: [{ id: 'mystery_box', qty: 2 }], difficulty: '⭐⭐' },
-                first_trash:     { money: 75000,  items: [],                               difficulty: '⭐' },
-            };
-            const tr = TOURNEY_REWARDS[chosen];
-            const reward = tr.money;
-            eventData.reward = reward;
-            eventData.bonusItems = tr.items;
-            const itemDesc = tr.items.length > 0 ? `\n> 🎁 **Bonus:** ${tr.items.map(i => `${i.qty}× ${i.id.replace(/_/g, ' ')}`).join(', ')}` : '';
-            const embed = new EmbedBuilder().setColor('#1ABC9C').setTitle('🎣🏆 FISHING TOURNAMENT!').setDescription(`**Kompetisi memancing dimulai!**\n\n> 🎯 **Tantangan:** ${eventDesc}\n> 💰 **Hadiah:** 🪙 **${reward.toLocaleString('id-ID')} Money**${itemDesc}\n> 🏅 **Difficulty:** ${tr.difficulty}\n> ⏱️ **Durasi:** 5 menit\n\n*Gunakan \`/fish\` untuk ikut!*`).setTimestamp();
-            message.channel.send({ embeds: [embed] }).then(() => {
-                state.activeFishEvents.set(guildId, eventData);
-                setTimeout(() => {
-                    if (state.activeFishEvents.has(guildId)) {
-                        const ev = state.activeFishEvents.get(guildId); state.activeFishEvents.delete(guildId);
-                        let winner = null, winnerValue = 0;
-                        if (ev.type === 'heaviest') { for (const [uid, data] of Object.entries(ev.participants)) { if (data.heaviest > winnerValue) { winner = uid; winnerValue = data.heaviest; } } }
-                        else if (ev.type === 'most_fish') { for (const [uid, data] of Object.entries(ev.participants)) { if (data.count > winnerValue) { winner = uid; winnerValue = data.count; } } }
-                        if (winner) { const winnerData = getOrCreateUser(guildId, winner); winnerData.balance += ev.reward; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(winnerData.balance, guildId, winner); if (ev.bonusItems) { for (const bi of ev.bonusItems) { try { addItem(guildId, winner, bi.id, bi.qty); } catch(_){} } } const resultText = ev.type === 'heaviest' ? `ikan terberat: **${winnerValue} kg**` : `total tangkapan: **${winnerValue} ikan**`; const itemText = ev.bonusItems && ev.bonusItems.length > 0 ? `\n> 🎁 **Bonus:** ${ev.bonusItems.map(i => `${i.qty}× ${i.id.replace(/_/g, ' ')}`).join(', ')}` : ''; const ch = message.guild.channels.cache.get(ev.channelId); if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setTitle('🏆 TOURNAMENT SELESAI!').setDescription(`Pemenang: <@${winner}>\n> ${resultText}\n\n💰 Hadiah: 🪙 **${ev.reward.toLocaleString('id-ID')} Money**${itemText}`)] }); }
-                        else { const ch = message.guild.channels.cache.get(ev.channelId); if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle('🏆 TOURNAMENT SELESAI').setDescription('Tidak ada pemenang.')] }); }
-                    }
-                }, 300000);
-            });
-        } else state.guildFishEventCounters.set(guildId, fishCount);
-    }
-
     // === AFK SYSTEM (check mentions + remove on chat) ===
     try {
         const { handleAfkMessage } = require('../systems/afk');
@@ -234,65 +185,12 @@ module.exports = async function handleMessageCreate(message) {
         incrementUserStat(guildId, message.author.id, 'total_chats');
         await checkAchievements(message.guild, message.author.id, { type: 'chat' });
 
-        // Pet passive EXP
-        const petExpKey = `pet_exp_${guildId}_${message.author.id}`;
-        if (!state.fishCooldowns.has(petExpKey) || Date.now() > state.fishCooldowns.get(petExpKey)) {
-            state.fishCooldowns.set(petExpKey, Date.now() + 120000);
-            addPetExp(guildId, message.author.id, 2);
-        }
-
         // Chat XP/Money cooldown
         const cdKey = `${guildId}_${message.author.id}`;
         if (!state.chatCooldowns.has(cdKey)) {
             await addXpAndMoney(message.member, 'chat');
             state.chatCooldowns.add(cdKey);
             setTimeout(() => state.chatCooldowns.delete(cdKey), getConf(guildId, 'chat_cooldown', 60) * 1000);
-        }
-    }
-
-    // Pet hunger/happy decay
-    const petDecayKey = `pet_decay_${guildId}_${message.author.id}`;
-    if (!state.fishCooldowns.has(petDecayKey) || Date.now() > state.fishCooldowns.get(petDecayKey)) {
-        state.fishCooldowns.set(petDecayKey, Date.now() + 600000);
-        const activePet = db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(guildId, message.author.id);
-        if (activePet && activePet.status !== 'dead') {
-            const newHunger = Math.max(0, activePet.hunger - 3);
-            const newHappy = Math.max(0, activePet.happiness - 2);
-            let newStatus = activePet.status;
-            if (newHunger <= 0 && activePet.status !== 'sick') newStatus = 'sick';
-            db.prepare('UPDATE pets SET hunger = ?, happiness = ?, status = ? WHERE id = ?').run(newHunger, newHappy, newStatus, activePet.id);
-            if (newHunger <= 20 && newHunger > 0) message.reply({ content: `🐾 Pet kamu **${activePet.name}** lapar! (🍖 ${newHunger}%) Kasih makan lewat \`/pet\` → 🍖 Feed!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 10000); }).catch(() => {});
-            else if (newStatus === 'sick' && activePet.status !== 'sick') message.reply({ content: `🐾⚠️ Pet kamu **${activePet.name}** SAKIT! 🤒 Segera kasih makan!` }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
-        }
-    }
-
-    // Farm notification
-    const farmNotifKey = `farm_notif_${guildId}_${message.author.id}`;
-    if (!state.fishCooldowns.has(farmNotifKey) || Date.now() > state.fishCooldowns.get(farmNotifKey)) {
-        state.fishCooldowns.set(farmNotifKey, Date.now() + 300000);
-        const farmPlots = db.prepare('SELECT * FROM farm_plots WHERE guildId = ? AND userId = ?').all(guildId, message.author.id);
-        if (farmPlots.length > 0) {
-            let readyCount = 0, needWaterCount = 0, deadCount = 0;
-            for (const plot of farmPlots) {
-                const crop = FARM_CROPS.find(c => c.id === plot.cropId); if (!crop) continue;
-                const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer) || FARM_FERTILIZERS[0];
-                const growTime = crop.time * (1 - fert.speedBonus) * 60000;
-                const elapsed = Date.now() - plot.plantedAt;
-                const dryTime = Date.now() - plot.wateredAt;
-                const deadThreshold = growTime * 2.5;
-                if (plot.status === 'dead' || dryTime > deadThreshold) { deadCount++; if (plot.status !== 'dead') db.prepare('UPDATE farm_plots SET status = ? WHERE id = ?').run('dead', plot.id); }
-                else if (elapsed >= growTime) readyCount++;
-                else if (dryTime > growTime * 1.2) needWaterCount++;
-            }
-            let notifParts = [];
-            if (readyCount > 0) notifParts.push(`✅ **${readyCount} tanaman** siap dipanen! (\`/farm\` → 🌾 Harvest)`);
-            if (needWaterCount > 0) notifParts.push(`💧 **${needWaterCount} tanaman** butuh disiram! (\`/farm\` → 💧 Water)`);
-            if (deadCount > 0) notifParts.push(`☠️ **${deadCount} tanaman** mati karena tidak disiram`);
-            if (notifParts.length > 0) {
-                // In-chat reminder for active players only. The Auto-Harvest Pass DM is sent
-                // automatically (independent of chat) by the scheduler in systems/autoHarvest.js.
-                message.reply({ content: `🌾 **Farm Reminder:**\n${notifParts.join('\n')}`, allowedMentions: { users: [message.author.id] } }).then(msg => { setTimeout(() => msg.delete().catch(() => {}), 15000); }).catch(() => {});
-            }
         }
     }
 };

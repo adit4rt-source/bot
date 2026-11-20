@@ -133,32 +133,6 @@ function start(client) {
     // ===== REMINDERS (from systems/reminders.js) =====
     const reminders = require('./reminders');
 
-    // Startup cleanup (synchronous, runs once)
-    try {
-        const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
-        const { db } = require('../database');
-        const now = Date.now();
-        const orphanedPlots = db.prepare("SELECT * FROM farm_plots WHERE status = 'growing' AND notified = 0").all();
-        for (const plot of orphanedPlots) {
-            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-            if (!crop) { db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plot.id); continue; }
-            const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer);
-            const speedBonus = fert ? (fert.speedBonus || 0) : 0;
-            const growTimeMs = crop.time * (1 - speedBonus) * 60 * 1000;
-            const dryTime = now - (plot.wateredAt || plot.plantedAt);
-            const deadThreshold = growTimeMs * 2.5;
-            if (dryTime > deadThreshold) {
-                db.prepare("UPDATE farm_plots SET notified = 1, status = 'dead' WHERE id = ?").run(plot.id);
-            }
-        }
-        console.log('🌾 Farm plots cleanup done on startup');
-    } catch (_) { /* non-critical */ }
-
-    registerJob('ability-tick',        reminders.ABILITY_TICK_INTERVAL_MS,    () => reminders.runAbilityTickAll(client));
-    registerJob('pest-tick',           1800000,                               () => reminders.runPestTick());
-
-    console.log('⏰ Gameplay timers started (ability-tick & pest-tick via scheduler; DM reminders disabled)');
-
     // ===== PANEL REFRESH (from systems/panelRefresh.js) =====
     try {
         const panelRefresh = require('./panelRefresh');
@@ -190,13 +164,6 @@ function start(client) {
         startLotteryScheduler(client);
         console.log('🎟️ Lottery scheduler: undian togel otomatis tiap 1 jam');
     } catch (e) { console.error('Lottery scheduler error:', e.message); }
-
-    // ===== LIVESTOCK (from systems/livestock.js) =====
-    try {
-        const { startLivestockDailySchedule } = require('./livestock');
-        startLivestockDailySchedule();
-        console.log('🐔 Livestock daily tick: cek pergantian hari WIB tiap 30 menit');
-    } catch (e) { console.error('Livestock scheduler error:', e.message); }
 
     // ===== BACKUP (from systems/backup.js) =====
     // backup.startBackupSchedule has its own internal setInterval

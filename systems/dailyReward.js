@@ -94,7 +94,6 @@ function computeDailyReward(streak, opts = {}) {
     const hasDoubler = !!opts.hasDoubler;
 
     let money = baseMoneyFor(streak);
-    const petExp = 10 + Math.min(Math.floor(streak / 7) * 5, 40);
     const items = [];
     let milestoneLabel = null;
 
@@ -121,10 +120,10 @@ function computeDailyReward(streak, opts = {}) {
     if (next % 7 === 0) nextMoney += WEEKLY_BONUS;
     if (MILESTONES[next]) nextMoney += MILESTONES[next].money;
 
-    return { money, baseMoney: baseMoneyFor(streak), petExp, items, milestoneLabel, isWeeklyBonus, nextMoney };
+    return { money, baseMoney: baseMoneyFor(streak), items, milestoneLabel, isWeeklyBonus, nextMoney };
 }
 
-// ==================== DB: FULL CLAIM ====================
+// ============ DB: FULL CLAIM ============
 /**
  * Perform a full /daily claim. The reward escalates off the user's CHAT streak 🔥
  * (the `streaks` table), so there is no separate login streak. Caller should already
@@ -147,24 +146,17 @@ async function claimDaily(guildId, userId, opts = {}) {
     const reward = computeDailyReward(streak, { hasDoubler });
     if (hasDoubler) incrementUserStat(guildId, userId, 'daily_doubler_active', -1);
 
-    // Random surprise bonus (kept from the original handler).
-    let randomMoney = 0, randomItem = null, randomPetExp = 0;
+    // Random surprise bonus
+    let randomMoney = 0, randomItem = null;
     const roll = Math.random();
-    if (roll < 0.15) {
+    if (roll < 0.20) {
         const pool = ['mystery_box', 'lucky_charm', 'xp_booster_2x'];
         randomItem = pool[Math.floor(Math.random() * pool.length)];
-    } else if (roll < 0.35) {
-        randomMoney = Math.floor(Math.random() * 401) + 100; // 100..500
     } else if (roll < 0.50) {
-        randomPetExp = 15;
+        randomMoney = Math.floor(Math.random() * 401) + 100; // 100..500
     }
 
-    let totalMoney = reward.money + randomMoney;
-    const totalPetExp = reward.petExp + randomPetExp;
-    try {
-        const { getTotalPetBonus, applyBonusPercent } = require('./pets');
-        totalMoney = applyBonusPercent(totalMoney, getTotalPetBonus(guildId, userId, 'daily_bonus'));
-    } catch (_) { }
+    const totalMoney = reward.money + randomMoney;
 
     // ----- Persist -----
     db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(totalMoney, today, guildId, userId);
@@ -179,20 +171,15 @@ async function claimDaily(guildId, userId, opts = {}) {
     // Bonus XP (matches old +15).
     try { db.prepare('UPDATE users SET xp = xp + 15 WHERE guildId = ? AND userId = ?').run(guildId, userId); } catch (_) { }
 
-    // Pet exp via pets module (best-effort).
-    try { require('./pets').addPetExp(guildId, userId, totalPetExp); } catch (_) { }
-
     return {
         alreadyClaimed: false,
         streak,
         money: totalMoney,
         baseMoney: reward.baseMoney,
-        petExp: totalPetExp,
         xp: 15,
         items: reward.items,
         randomItem,
         randomMoney,
-        randomPetExp,
         milestoneLabel: reward.milestoneLabel,
         isWeeklyBonus: reward.isWeeklyBonus,
         hasDoubler,

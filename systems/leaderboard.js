@@ -82,57 +82,6 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
             });
             break;
         }
-        case 'fish': {
-            title = `${scopePrefix}🎣 Top 10 — Master Angler`;
-            color = '#1ABC9C';
-            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_fish_caught'";
-            if (!isGlobal) query += ' AND guildId = ?';
-            query += ' ORDER BY stat_value DESC LIMIT 10';
-            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
-            const maxFish = data[0]?.stat_value || 1;
-            
-            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
-            data.forEach((u, i) => {
-                const bar = progressBar(u.stat_value, maxFish);
-                desc += `${medal(i)} <@${u.userId}>\n`;
-                desc += `> 🐟 **${u.stat_value}** ikan tertangkap \`${bar}\`\n\n`;
-            });
-            break;
-        }
-        case 'farm': {
-            title = `${scopePrefix}🌾 Top 10 — Master Farmer`;
-            color = '#27AE60';
-            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_harvests'";
-            if (!isGlobal) query += ' AND guildId = ?';
-            query += ' ORDER BY stat_value DESC LIMIT 10';
-            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
-            const maxFarm = data[0]?.stat_value || 1;
-            
-            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
-            data.forEach((u, i) => {
-                const bar = progressBar(u.stat_value, maxFarm);
-                desc += `${medal(i)} <@${u.userId}>\n`;
-                desc += `> 🌾 **${u.stat_value}** panen \`${bar}\`\n\n`;
-            });
-            break;
-        }
-        case 'pet': {
-            title = `${scopePrefix}🐾 Top 10 — Pet Master`;
-            color = '#E91E63';
-            let query = 'SELECT * FROM pets WHERE active = 1';
-            if (!isGlobal) query += ' AND guildId = ?';
-            query += ' ORDER BY level DESC, exp DESC LIMIT 10';
-            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
-            
-            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
-            data.forEach((u, i) => {
-                const pd = PET_DATA.find(p => p.id === u.petId);
-                const tierColor = { Common: '⚪', Uncommon: '🟢', Rare: '🔵', Epic: '🟣', Legendary: '🟡', Mythic: '🔴', Secret: '🟪', God: '👑' }[pd?.tier] || '⚪';
-                desc += `${medal(i)} <@${u.userId}>\n`;
-                desc += `> ${pd ? pd.emoji : '🐾'} **${u.name}** ${tierColor} Lv.**${u.level}** | ⚔️${u.atk} 🛡️${u.def}\n\n`;
-            });
-            break;
-        }
         case 'streak': {
             title = `${scopePrefix}🔥 Top 10 — Streak Warriors`;
             color = '#E74C3C';
@@ -148,40 +97,6 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
                 const bar = progressBar(u.count, maxStreak);
                 desc += `${medal(i)} <@${u.userId}>\n`;
                 desc += `> ${fire} **${u.count}** hari berturut-turut \`${bar}\`\n\n`;
-            });
-            break;
-        }
-        case 'battle': {
-            title = `${scopePrefix}⚔️ Top 10 — Battle Champions`;
-            color = '#9B59B6';
-            let pvpQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'pvp_wins'";
-            if (!isGlobal) pvpQuery += ' AND guildId = ?';
-            pvpQuery += ' ORDER BY stat_value DESC LIMIT 20';
-            const pvp = isGlobal ? db.prepare(pvpQuery).all() : db.prepare(pvpQuery).all(guildId);
-
-            let dungeonQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'dungeon_clears'";
-            if (!isGlobal) dungeonQuery += ' AND guildId = ?';
-            dungeonQuery += ' ORDER BY stat_value DESC LIMIT 20';
-            const dungeon = isGlobal ? db.prepare(dungeonQuery).all() : db.prepare(dungeonQuery).all(guildId);
-
-            let bossQuery = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'boss_kills'";
-            if (!isGlobal) bossQuery += ' AND guildId = ?';
-            bossQuery += ' ORDER BY stat_value DESC LIMIT 20';
-            const boss = isGlobal ? db.prepare(bossQuery).all() : db.prepare(bossQuery).all(guildId);
-
-            const scoreMap = {};
-            for (const r of pvp) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value * 2;
-            for (const r of dungeon) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value;
-            for (const r of boss) scoreMap[r.userId] = (scoreMap[r.userId] || 0) + r.stat_value * 3;
-            const sorted = Object.entries(scoreMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            
-            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
-            sorted.forEach(([uid, score], i) => {
-                const pW = pvp.find(r => r.userId === uid)?.stat_value || 0;
-                const dC = dungeon.find(r => r.userId === uid)?.stat_value || 0;
-                const bK = boss.find(r => r.userId === uid)?.stat_value || 0;
-                desc += `${medal(i)} <@${uid}> — ⚔️ **${score}** pts\n`;
-                desc += `> 🗡️ PvP: ${pW} | 🏰 Dungeon: ${dC} | 👹 Boss: ${bK}\n\n`;
             });
             break;
         }
@@ -342,31 +257,18 @@ function renderLeaderboard(content, kategori, userId, isGlobal = false) {
         btn(`${modePrefix}_overall_${userId}`, '⭐ Overall', kategori === 'overall'),
         btn(`${modePrefix}_level_${userId}`, '📈 Level', kategori === 'level'),
         btn(`${modePrefix}_money_${userId}`, '💰 Money', kategori === 'money'),
-        btn(`${modePrefix}_fish_${userId}`, '🎣 Fish', kategori === 'fish'),
-        btn(`${modePrefix}_farm_${userId}`, '🌾 Farm', kategori === 'farm'),
-    );
-    // Di mode Global, streak dihilangkan karena bisa dimanipulasi admin server
-    const row2Buttons = [
-        btn(`${modePrefix}_pet_${userId}`, '🐾 Pet', kategori === 'pet'),
-    ];
-    if (!isGlobal) {
-        row2Buttons.push(btn(`${modePrefix}_streak_${userId}`, '🔥 Streak', kategori === 'streak'));
-    }
-    row2Buttons.push(
-        btn(`${modePrefix}_battle_${userId}`, '⚔️ Battle', kategori === 'battle'),
-        btn(`${modePrefix}_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
+        btn(`${modePrefix}_streak_${userId}`, '🔥 Streak', kategori === 'streak'),
         btn(`${modePrefix}_achievement_${userId}`, '🏆 Badge', kategori === 'achievement'),
     );
-    const row2 = new ActionRowBuilder().addComponents(...row2Buttons);
-    
-    // Toggle button between Server and Global, plus Seasonal mode
-    const row3 = new ActionRowBuilder().addComponents(
+
+    const row2 = new ActionRowBuilder().addComponents(
+        btn(`${modePrefix}_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
+        btn(`lb_season_${userId}`, '🗓️ Seasonal', kategori === 'season'),
         btn(`lb_server_${userId}`, '📍 Server', !isGlobal && kategori !== 'season'),
         btn(`lbg_global_${userId}`, '🌍 Global', isGlobal && kategori !== 'season'),
-        btn(`lb_season_${userId}`, '🗓️ Seasonal', kategori === 'season'),
     );
 
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 function btn(customId, label, active) {

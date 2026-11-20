@@ -261,11 +261,8 @@ async function routeInteraction(interaction) {
             if (itemLines) itemLines = '\n' + itemLines;
 
             let randomReward = '';
-            if (r.randomCards && r.randomCards.length > 0) {
-                randomReward = `\n\n🃏 **Surprise Drop (10%): 3 Kartu Pokemon!**\n` + r.randomCards.map(c => `> • **${c.name}** [${c.rarity}]`).join('\n');
-            } else if (r.randomItem) randomReward = `\n> 🎁 **Bonus Item:** ${ITEM_LABEL(r.randomItem, 1)}!`;
+            if (r.randomItem) randomReward = `\n> 🎁 **Bonus Item:** ${ITEM_LABEL(r.randomItem, 1)}!`;
             else if (r.randomMoney) randomReward = `\n> 💰 **Bonus Money:** +${r.randomMoney} extra!`;
-            else if (r.randomPetExp) randomReward = `\n> 🐾 **Bonus Pet EXP:** +${r.randomPetExp} extra!`;
 
             const dayInCycle = ((r.streak - 1) % 7);
             const progressBar = '▰'.repeat(dayInCycle + 1) + '▱'.repeat(Math.max(0, 6 - dayInCycle));
@@ -276,7 +273,6 @@ async function routeInteraction(interaction) {
                 .setTitle(r.milestoneLabel ? `🎉 Daily Reward — ${r.milestoneLabel}` : '🎁 Daily Reward!')
                 .setDescription(
                     `${bonusDesc}> 🪙 **Money:** +${r.money.toLocaleString('id-ID')}\n` +
-                    `> 🐾 **Pet EXP:** +${r.petExp}\n` +
                     `> ✨ **XP Bonus:** +${r.xp}${itemLines}${randomReward}\n\n` +
                     `> 🔥 **Streak:** ${r.streak} hari *(ikut streak chat)*\n` +
                     `> **Minggu ini:** \`${progressBar}\` (${dayInCycle + 1}/7)\n` +

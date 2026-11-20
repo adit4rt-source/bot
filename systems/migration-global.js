@@ -480,17 +480,77 @@ function runGlobalMigration(db) {
         }
     }
 
-    const rpgResetDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'rpg_disable_and_balance_reset_2026_11'").get();
-    if (!rpgResetDone) {
-        console.log('⚡ Running RPG disable & balance reset migration...');
+    const rpgPurgeDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'rpg_deep_purge_v2'").get();
+    if (!rpgPurgeDone) {
+        console.log('⚡ Running deep RPG purge migration (tables & historical stats)...');
         try {
+            // 1. Wipe balances
             db.exec(`UPDATE users SET balance = 0;`);
+            
+            // 2. Wipe RPG tables (keep schemas so unit tests & db proxy won't throw)
+            const tablesToClear = [
+                'pets', 'relics', 'pet_food_inventory', 'seed_inventory',
+                'fertilizer_inventory', 'fish_inventory', 'fish_collection',
+                'fish_equipment', 'farm_plots', 'farm_storage', 'farm_data',
+                'farm_decorations', 'auto_harvest', 'trades'
+            ];
+            for (const tbl of tablesToClear) {
+                try { db.exec(`DELETE FROM ${tbl};`); } catch (_) {}
+            }
+            const oldTablesToDrop = [
+                'pets_old', 'relics_old', 'pet_food_inventory_old', 'seed_inventory_old',
+                'fertilizer_inventory_old', 'fish_inventory_old', 'fish_collection_old',
+                'fish_equipment_old', 'farm_plots_old', 'farm_storage_old', 'farm_data_old',
+                'farm_decorations_old', 'auto_harvest_old', 'trades_old', 'loves'
+            ];
+            for (const tbl of oldTablesToDrop) {
+                try { db.exec(`DROP TABLE IF EXISTS ${tbl};`); } catch (_) {}
+            }
+
+            // 3. Purge RPG stats from user_stats
+            db.exec(`
+                DELETE FROM user_stats 
+                WHERE stat_key LIKE '%fish%' 
+                   OR stat_key LIKE '%farm%' 
+                   OR stat_key LIKE '%pet%' 
+                   OR stat_key LIKE '%boss%' 
+                   OR stat_key LIKE '%pvp%' 
+                   OR stat_key LIKE '%dungeon%' 
+                   OR stat_key LIKE '%arena%' 
+                   OR stat_key LIKE '%expedition%' 
+                   OR stat_key LIKE '%relic%' 
+                   OR stat_key LIKE '%harvest%' 
+                   OR stat_key LIKE '%craft%' 
+                   OR stat_key LIKE '%hunt%' 
+                   OR stat_key LIKE '%mutation%' 
+                   OR stat_key LIKE '%awakening%' 
+                   OR stat_key LIKE '%fusion%'
+                   OR stat_key LIKE 'love_%'
+                   OR stat_key = 'income_fishing'
+                   OR stat_key = 'income_farming';
+            `);
+
+            // 4. Purge RPG achievements from achievements table
+            db.exec(`
+                DELETE FROM achievements 
+                WHERE achievementId LIKE '%fish%' 
+                   OR achievementId LIKE '%farm%' 
+                   OR achievementId LIKE '%pet%' 
+                   OR achievementId LIKE '%battle%' 
+                   OR achievementId LIKE '%boss%' 
+                   OR achievementId LIKE '%dungeon%' 
+                   OR achievementId LIKE '%harvest%' 
+                   OR achievementId LIKE '%expedition%'
+                   OR achievementId LIKE '%arena%'
+                   OR achievementId LIKE '%craft%';
+            `);
+
             try { db.exec(`DELETE FROM server_settings WHERE key LIKE 'love_%';`); } catch (_) {}
-            try { db.exec(`DROP TABLE IF EXISTS loves;`); } catch (_) {}
-            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('rpg_disable_and_balance_reset_2026_11', 1);
-            console.log('✅ Balance reset to 0 & RPG/Love cleanup completed! (Streaks preserved)');
+
+            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('rpg_deep_purge_v2', 1);
+            console.log('✅ Deep RPG purge completed! (All RPG tables, stats, and achievements purged)');
         } catch (e) {
-            console.error('❌ RPG reset migration failed:', e.message);
+            console.error('❌ RPG deep purge failed:', e.message);
         }
     }
 }
