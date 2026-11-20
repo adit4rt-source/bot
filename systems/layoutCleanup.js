@@ -14,7 +14,7 @@ async function cleanServerLayout(guild) {
 
     const log = [];
     if (guild.channels?.fetch) {
-        await guild.channels.fetch().catch(() => {});
+        await guild.channels.fetch().catch(() => { });
     }
 
     const channels = guild.channels?.cache || new Map();
@@ -34,7 +34,7 @@ async function cleanServerLayout(guild) {
         try {
             await gipoweCh.setName('「🎁」giveaway');
             log.push('✅ Ganti nama typo `gipowe` ➔ `「🎁」giveaway`');
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // 2. Pindahkan & rename 'spam' ke kategori [MAIN BOT] -> '「⚡」bot-spam'
@@ -50,7 +50,7 @@ async function cleanServerLayout(guild) {
             if (mainBotCat) editPayload.parent = mainBotCat.id;
             await spamCh.edit(editPayload);
             log.push('✅ Pindah & ganti nama `spam` ➔ `「⚡」bot-spam` (kategori `[MAIN BOT]`)');
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // 3. Rapihkan format nama channel STAFF
@@ -59,7 +59,7 @@ async function cleanServerLayout(guild) {
         try {
             await testingCh.setName('「🧪」bot-testing');
             log.push('✅ Format nama channel staff `testing-bot` ➔ `「🧪」bot-testing`');
-        } catch (_) {}
+        } catch (_) { }
     }
 
     const botLogCh = findChannel(c => c.name && c.name.toLowerCase().includes('log-server-yang-pake-bot'));
@@ -67,7 +67,7 @@ async function cleanServerLayout(guild) {
         try {
             await botLogCh.setName('「📋」bot-logs');
             log.push('✅ Format nama channel staff `log-server-yang-pake-bot` ➔ `「📋」bot-logs`');
-        } catch (_) {}
+        } catch (_) { }
     }
 
     const backupCh = findChannel(c => c.name && c.name.toLowerCase().startsWith('autobackup'));
@@ -75,7 +75,7 @@ async function cleanServerLayout(guild) {
         try {
             await backupCh.setName('「💾」backup-db');
             log.push('✅ Format nama channel staff `autobackup` ➔ `「💾」backup-db`');
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // 4. Pastikan channel settings TempVoice di setiap kategori voice ADA (JANGAN DIHAPUS)
@@ -91,7 +91,7 @@ async function cleanServerLayout(guild) {
                     reason: 'Restore TempVoice settings channel'
                 });
                 log.push('✅ Buat ulang `「✨」settings` di `[VOICE PUBLIC]`');
-            } catch (_) {}
+            } catch (_) { }
         }
     }
 
@@ -107,7 +107,7 @@ async function cleanServerLayout(guild) {
                     reason: 'Restore TempVoice settings channel'
                 });
                 log.push('✅ Buat ulang `「🌸」settings` di `[GAMING VOICE]`');
-            } catch (_) {}
+            } catch (_) { }
         }
     }
 
@@ -117,7 +117,7 @@ async function cleanServerLayout(guild) {
         if (loungeRes && loungeRes.ok) {
             log.push('🏛️ Setup kategori & channel privat `🏛️ HIGH TABLE (VVIP)`');
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // 6. Urutkan hierarki 7 role streak
     try {
@@ -125,7 +125,7 @@ async function cleanServerLayout(guild) {
         if (reorderRes) {
             log.push('🎭 Urutkan hierarki role streak (Mythos ➔ Sparks)');
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // 7. Ubah menu self-role GENDER menjadi single-choice (unique) & refresh pesan publik
     try {
@@ -136,7 +136,7 @@ async function cleanServerLayout(guild) {
             if (updated) await refreshPublicMessage(guild, updated);
             log.push('🔘 Ubah menu self-role GENDER menjadi single-choice (`unique`, tidak bisa dobel)');
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // 8. Pin banner panduan hadiah invite di channel invite-logs
     const inviteLogCh = findChannel(c => c.name && c.name.toLowerCase().includes('invite-logs'));
@@ -162,18 +162,18 @@ async function cleanServerLayout(guild) {
                     .setTimestamp();
                 const sentMsg = await inviteLogCh.send({ embeds: [inviteEmbed] });
                 if (sentMsg && typeof sentMsg.pin === 'function') {
-                    await sentMsg.pin().catch(() => {});
+                    await sentMsg.pin().catch(() => { });
                     log.push('📌 Pasang pin banner reward di `「🤝」invite-logs`');
                 }
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // 9. Format nickname member (PEKO 🔥226 - ⭐100) dan bersihkan sisa badge love
     try {
         let nickCleaned = 0;
         if (guild.members?.fetch) {
-            await guild.members.fetch().catch(() => {});
+            await guild.members.fetch().catch(() => { });
         }
         const members = guild.members?.cache || [];
         for (const [, member] of members) {
@@ -184,7 +184,7 @@ async function cleanServerLayout(guild) {
         if (nickCleaned > 0) {
             log.push(`✨ Sinkronkan format nickname member (${nickCleaned} member)`);
         }
-    } catch (_) {}
+    } catch (_) { }
 
     return {
         ok: true,

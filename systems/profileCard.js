@@ -99,13 +99,24 @@ async function generateProfileCard(o = {}) {
     roundRectPath(ctx, 0, 0, W, H, CORNER);
     ctx.clip();
 
-    // ---- Background: deep gradient tinted toward the accent ----
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, `rgb(${Math.round(20 + acc.r * 0.10)},${Math.round(22 + acc.g * 0.10)},${Math.round(38 + acc.b * 0.12)})`);
-    g.addColorStop(0.55, '#16182a');
-    g.addColorStop(1, '#0c0d16');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    // ---- Background: custom banner image or deep gradient tinted toward accent ----
+    let customBg = null;
+    if (o.bgURL) {
+        try { customBg = await loadImage(o.bgURL); } catch (_) {}
+    }
+
+    if (customBg) {
+        ctx.drawImage(customBg, 0, 0, W, H);
+        ctx.fillStyle = 'rgba(12, 13, 22, 0.72)';
+        ctx.fillRect(0, 0, W, H);
+    } else {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, `rgb(${Math.round(20 + acc.r * 0.10)},${Math.round(22 + acc.g * 0.10)},${Math.round(38 + acc.b * 0.12)})`);
+        g.addColorStop(0.55, '#16182a');
+        g.addColorStop(1, '#0c0d16');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
 
     // Subtle diagonal stripe texture
     ctx.save();

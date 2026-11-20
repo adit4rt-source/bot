@@ -314,12 +314,19 @@ async function processGift(interaction, senderId, targetId, amount) {
     const tax = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
     const net = amount - tax;
 
-    // Atomic transfer: debit full amount from sender, credit net to target (tax burned).
+    // Atomic transfer: debit full amount from sender, credit net to target (tax burned / vault).
     // Prevents double-spend / lost-update from concurrent gifts & rewards.
     const tx = transferBalance(guildId, senderId, targetId, amount, net);
     if (!tx.ok) {
         const bal = getOrCreateUser(guildId, senderId).balance;
-        return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+    }
+
+    if (tax > 0) {
+        try {
+            const { collectGiftTax } = require('./vault');
+            collectGiftTax(guildId, tax);
+        } catch (_) {}
     }
 
     if (hasTaxFree) incrementUserStat(guildId, senderId, 'tax_free_voucher', -1);

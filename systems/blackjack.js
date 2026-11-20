@@ -268,6 +268,14 @@ function startBlackjack(guildId, userId, bet) {
 }
 
 // ==================== HANDLER: Button Clicks ====================
+function recordBlackjackLoss(guildId, userId, bet) {
+    incrementUserStat(guildId, userId, 'blackjack_losses');
+    try {
+        const { collectCasinoLoss } = require('./vault');
+        collectCasinoLoss(guildId, bet);
+    } catch (_) {}
+}
+
 async function handleBlackjackButton(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
@@ -359,7 +367,7 @@ async function handleBlackjackButton(interaction) {
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
         if (result.result === 'win') incrementUserStat(guildId, userId, 'blackjack_wins');
-        if (result.result === 'lose' || result.result === 'bust') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose' || result.result === 'bust') recordBlackjackLoss(guildId, userId, game.bet);
         return interaction.update({ embeds: [buildGameEmbed(game, true, result)], components: [buildGameButtons(userId, game, true)] });
     }
 
@@ -379,7 +387,7 @@ async function handleBlackjackButton(interaction) {
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            incrementUserStat(guildId, userId, 'blackjack_losses');
+            recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -405,7 +413,7 @@ async function handleBlackjackButton(interaction) {
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+            if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -436,7 +444,7 @@ async function handleBlackjackButton(interaction) {
                 incrementUserStat(guildId, userId, 'total_gambling_wins', totalPayout - game.bet);
             }
         }
-        if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
         
@@ -474,7 +482,7 @@ async function handleBlackjackButton(interaction) {
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            incrementUserStat(guildId, userId, 'blackjack_losses');
+            recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -498,7 +506,7 @@ async function handleBlackjackButton(interaction) {
                 incrementUserStat(guildId, userId, 'total_gambling_wins', totalPayout - game.bet);
             }
         }
-        if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
         incrementUserStat(guildId, userId, 'blackjack_doubles');

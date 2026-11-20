@@ -382,6 +382,10 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'coinflip_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
                 await checkAchievements(interaction.guild, userId, { type: 'coinflip' });
             }
 
@@ -475,6 +479,10 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'slot_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
             }
 
             const freshData = getOrCreateUser(guildId, userId);
@@ -555,6 +563,10 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'roulette_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
                 await checkAchievements(interaction.guild, userId, { type: 'roulette' });
             }
 

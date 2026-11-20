@@ -1516,4 +1516,71 @@ module.exports = function register() {
     await syncMemberNickname(mockMember);
     if (setNickCalled !== 'PEKO 🔥226 - ⭐100') throw new Error(`sync failed: ${setNickCalled}`);
   });
+
+  test('vault: server vault collects taxes, casino losses, supports withdrawals and wealth tax', () => {
+    const vault = botRequire('systems/vault.js');
+    const gid = 'VAULT_GUILD_TEST';
+
+    // 1. Initial balance is 0
+    if (vault.getVaultBalance(gid) !== 0) throw new Error('expected initial vault 0');
+
+    // 2. Add to vault
+    vault.addToVault(gid, 10000);
+    if (vault.getVaultBalance(gid) !== 10000) throw new Error('expected vault 10000');
+
+    // 3. Collect gift tax (50% share)
+    const giftShare = vault.collectGiftTax(gid, 2000); // 1000 into vault
+    if (giftShare !== 1000) throw new Error('expected giftShare 1000');
+    if (vault.getVaultBalance(gid) !== 11000) throw new Error('expected vault 11000');
+
+    // 4. Collect casino loss (50% share)
+    const casinoShare = vault.collectCasinoLoss(gid, 4000); // 2000 into vault
+    if (casinoShare !== 2000) throw new Error('expected casinoShare 2000');
+    if (vault.getVaultBalance(gid) !== 13000) throw new Error('expected vault 13000');
+
+    // 5. Withdraw
+    const withdrawSuccess = vault.withdrawFromVault(gid, 5000);
+    if (!withdrawSuccess) throw new Error('expected withdraw to succeed');
+    if (vault.getVaultBalance(gid) !== 8000) throw new Error('expected vault 8000');
+
+    const withdrawFail = vault.withdrawFromVault(gid, 999999);
+    if (withdrawFail) throw new Error('expected overdraft withdraw to fail');
+
+    // 6. Wealth tax (2% on users with >= 500k)
+    const richUid = 'rich_man_99';
+    db.getOrCreateUser(gid, richUid);
+    db.db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(1000000, richUid);
+
+    const taxRes = vault.runWealthTax(gid);
+    if (taxRes.affectedUsers < 1) throw new Error('expected rich user to be taxed');
+    const richUserAfter = db.getOrCreateUser(gid, richUid);
+    if (richUserAfter.balance !== 980000) throw new Error(`expected rich user balance 980000, got ${richUserAfter.balance}`);
+  });
+
+  test('shop: 12 approved community & cosmetic shop items exist with correct prices', () => {
+    const { ITEMS } = botRequire('data/items.js');
+    const buyables = ITEMS.filter(i => i.price > 0);
+    if (buyables.length !== 12) throw new Error(`expected exactly 12 buyable shop items, got ${buyables.length}`);
+
+    const expectedItems = {
+      streak_shield: 15000,
+      streak_freeze: 40000,
+      color_role: 75000,
+      custom_title: 35000,
+      custom_banner: 50000,
+      server_megaphone: 20000,
+      menfess_token: 8000,
+      xp_booster_2x: 8000,
+      money_magnet: 12000,
+      tax_free_voucher: 4000,
+      lucky_slot_charm: 10000,
+      mystery_box: 6000
+    };
+
+    for (const [id, price] of Object.entries(expectedItems)) {
+      const item = buyables.find(b => b.id === id);
+      if (!item) throw new Error(`missing approved shop item: ${id}`);
+      if (item.price !== price) throw new Error(`bad price for ${id}: expected ${price}, got ${item.price}`);
+    }
+  });
 };

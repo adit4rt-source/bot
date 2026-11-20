@@ -213,6 +213,28 @@ function start(client) {
         console.log('🔮 Daily Ramalan Oracle: cek jadwal kirim jam 07:00 WIB tiap 1 menit');
     } catch (e) { console.error('Daily ramalan scheduler error:', e.message); }
 
+    // ===== WEALTH TAX (Every Sunday 00:00 WIB) =====
+    try {
+        const { runWealthTax } = require('./vault');
+        const { getSetting, setSetting } = require('../database');
+        registerJob('weekly-wealth-tax', 60 * 60000, () => {
+            const now = new Date();
+            const jktDateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const jktDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' }).format(now);
+            if (jktDay === 'Sun') {
+                const lastRun = getSetting('GLOBAL', 'last_wealth_tax_date', '');
+                if (lastRun !== jktDateStr) {
+                    const res = runWealthTax('GLOBAL');
+                    setSetting('GLOBAL', 'last_wealth_tax_date', jktDateStr);
+                    if (res && res.affectedUsers > 0) {
+                        console.log(`🏦 [WealthTax] Dipungut: ${res.affectedUsers} user, total 🪙${res.totalTaxCollected.toLocaleString('id-ID')} masuk server vault.`);
+                    }
+                }
+            }
+        }, { startupDelay: 30000 });
+        console.log('🏦 Wealth Tax: evaluasi pajak mingguan hari Minggu (2% untuk saldo >= 500k)');
+    } catch (e) { console.error('Wealth tax scheduler error:', e.message); }
+
     // ===== PRESENCE UPDATE =====
     const { ActivityType } = require('discord.js');
     registerJob('presence-update', 10 * 60000, () => {

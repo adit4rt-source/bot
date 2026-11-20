@@ -68,10 +68,11 @@ function buildProfilePanel(guildId, userId, username, member) {
     let farmToolLevel = 0;
     try { farmToolLevel = require('./farming').getFarmToolLevel(guildId, userId); } catch (_) {}
 
-    // Get achievement title
+    // Get custom title or achievement title
+    const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
     const achievementTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'achievement_title');
-    const achievementTitle = achievementTitleRow ? achievementTitleRow.stat_value : null;
-    const titleLine = achievementTitle ? `\n🏆 **Title:** ${achievementTitle}` : '';
+    const displayTitle = customTitleRow ? customTitleRow.stat_value : (achievementTitleRow ? achievementTitleRow.stat_value : null);
+    const titleLine = displayTitle ? `\n🏆 **Title:** ${displayTitle}` : '';
 
     // Get rank title from score
     const rankTitle = getUserTitle(guildId, userId);
@@ -159,14 +160,20 @@ async function handleProfileButton(interaction) {
         try { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); streak = s ? s.count : 0; } catch (_) {}
         try { rankPos = (db.prepare('SELECT COUNT(*) AS c FROM users WHERE level > ? OR (level = ? AND xp > ?)').get(userData.level, userData.level, userData.xp)?.c || 0) + 1; } catch (_) {}
         const avatarURL = (interaction.user && interaction.user.displayAvatarURL) ? interaction.user.displayAvatarURL({ extension: 'png', size: 256 }) : null;
+
+        const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
+        const customBannerRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_banner');
+        const cardTitle = customTitleRow ? `📛 ${customTitleRow.stat_value}` : (rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '');
+
         const buffer = await generateProfileCard({
             username: interaction.user.username,
             avatarURL,
+            bgURL: customBannerRow ? customBannerRow.stat_value : null,
             level: userData.level,
             xp: userData.xp,
             xpNeeded: (userData.level + 1) * 100,
             balance: userData.balance,
-            rankName: rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '',
+            rankName: cardTitle,
             badges,
             streak,
             rankPosition: rankPos,
@@ -592,9 +599,28 @@ async function handleProfileSelectMenu(interaction) {
             resultMsg = `\ud83d\udee1\ufe0f **Streak Shield** aktif!\n> Streak kamu terlindungi jika skip 1 hari.`;
             break;
         }
+        case 'streak_freeze': {
+            const until = Date.now() + 3 * 86400000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'streak_freeze_until', until);
+            resultMsg = `🧊 **Streak Freeze** aktif!\n> Streak kamu dibekukan & aman selama **3 hari** (sampai <t:${Math.floor(until / 1000)}:D>).`;
+            break;
+        }
         case 'lucky_charm': {
             db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'lucky_charm_active', 1);
             resultMsg = `\ud83c\udf40 **Lucky Charm** aktif!\n> +15% chance menang di semua game.`;
+            break;
+        }
+        case 'lucky_slot_charm': {
+            incrementUserStat(guildId, userId, 'lucky_spin_active', 1);
+            resultMsg = `🎰 **Lucky Slot Charm** aktif!\n> Spin slot berikutnya dijamin minimal 2 simbol sama!`;
+            break;
+        }
+        case 'server_megaphone': {
+            resultMsg = `📢 **Server Megaphone** siap dipakai!\n> Gunakan dari dialog toko untuk menyiarkan pengumuman broadcast berbingkai emas!`;
+            break;
+        }
+        case 'menfess_token': {
+            resultMsg = `🤫 **Menfess Token** siap dipakai!\n> Gunakan dari dialog toko untuk mengirim pesan rahasia secara 100% anonim!`;
             break;
         }
         case 'money_magnet': {
@@ -658,17 +684,17 @@ async function handleProfileSelectMenu(interaction) {
                 return interaction.reply({ content: '\ud83d\udce6 **Mystery Box** sudah mencapai limit harian (5/5)!\n> Coba lagi besok.', ephemeral: true });
             }
 
-            // Roll: 50% → 50-200, 30% → 200-500, 15% → 500-1000, 5% → 1000-2000
+            // Roll: 50% → 1000-3000, 30% → 3000-8000, 15% → 8000-15000, 5% → 15000-30000
             const roll = Math.random() * 100;
             let money;
             if (roll < 50) {
-                money = getRandomInt(50, 200);
+                money = getRandomInt(1000, 3000);
             } else if (roll < 80) {
-                money = getRandomInt(200, 500);
+                money = getRandomInt(3000, 8000);
             } else if (roll < 95) {
-                money = getRandomInt(500, 1000);
+                money = getRandomInt(8000, 15000);
             } else {
-                money = getRandomInt(1000, 2000);
+                money = getRandomInt(15000, 30000);
             }
 
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(money, guildId, userId);

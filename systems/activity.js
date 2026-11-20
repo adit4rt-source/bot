@@ -223,6 +223,26 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     const streakBonus = getStreakChatBonus(streakCount);
     const streakMult = 1 + streakBonus;
 
+    // Anti-Bot Fatigue Chat (Jam 1–2 = 100%, Jam 3–4 = 50%, Jam 5+ = 0%)
+    let fatigueMult = 1;
+    if (type === 'message' || type === 'msg') {
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const currentHour = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', hour12: false });
+        const fatigueKey = `chat_active_hours_${today}`;
+        const activeHoursRaw = getUserStat(guildId, member.id, fatigueKey) || '';
+        const activeHours = activeHoursRaw ? String(activeHoursRaw).split(',').filter(Boolean) : [];
+        if (!activeHours.includes(currentHour)) {
+            activeHours.push(currentHour);
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, member.id, fatigueKey, activeHours.join(','));
+        }
+        const hourCount = activeHours.length;
+        if (hourCount > 4) {
+            fatigueMult = 0;
+        } else if (hourCount > 2) {
+            fatigueMult = 0.5;
+        }
+    }
+
     let boosterXpMult = 1;
     if (Date.now() < (getUserStat(guildId, member.id, 'xp_boost_3x_until') || 0)) {
         boosterXpMult = 3;
@@ -230,7 +250,7 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         boosterXpMult = 2;
     }
 
-    const baseGainedXp = Math.floor((Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin) * multiplier * xpMultiplier * streakMult);
+    const baseGainedXp = Math.floor((Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin) * multiplier * xpMultiplier * streakMult * fatigueMult);
     const gainedXp = baseGainedXp * boosterXpMult;
 
     let gainedMoney = 0;
@@ -241,10 +261,10 @@ async function addXpAndMoney(member, type, multiplier = 1) {
         const baseMoney = Math.floor((Math.floor(Math.random() * (moneyMax - moneyMin + 1)) + moneyMin) * multiplier);
 
         let moneyBoosterMult = 1;
-        if (Date.now() < (getUserStat(guildId, member.id, 'money_boost_until') || 0)) {
+        if (Date.now() < (getUserStat(guildId, member.id, 'money_boost_until') || 0) || Date.now() < (getUserStat(guildId, member.id, 'money_magnet_until') || 0)) {
             moneyBoosterMult = 1.5;
         }
-        gainedMoney = Math.floor(baseMoney * moneyBoosterMult * streakMult);
+        gainedMoney = Math.floor(baseMoney * moneyBoosterMult * streakMult * fatigueMult);
     }
 
     let currentXp = user.xp + gainedXp;

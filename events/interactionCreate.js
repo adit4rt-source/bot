@@ -584,70 +584,88 @@ async function routeInteraction(interaction) {
         if (command === 'shop') {
             const roles = db.prepare('SELECT * FROM shop_roles WHERE guildId = ?').all(guildId);
             const items = db.prepare('SELECT name, price, COUNT(*) as stock FROM shop_items WHERE guildId = ? GROUP BY name, price').all(guildId);
-            const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0'));
-            
-            let shopDesc = '';
+            const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '75000')) || 75000;
+
+            let shopDesc = '🛒 **SELAMAT DATANG DI STORE SERVER**\n';
+            shopDesc += 'Gunakan koinmu untuk utilitas komunitas, kosmetik profil, & booster!\n';
+            shopDesc += `Saldo kamu: 🪙 **${userData.balance.toLocaleString('id-ID')}**\n\n`;
+
             const componentsRows = [];
 
-            // 🎣 FISHING section (Joran + Umpan) — Row 1
-            shopDesc += '🎣 **FISHING**\n';
-            ROD_TYPES.filter(r => r.price > 0).slice(0, 3).forEach(r => { shopDesc += `> ${r.emoji} ${r.name} — 🪙 **${r.price.toLocaleString('id-ID')}** | CD: ${r.cooldown}s\n`; });
-            shopDesc += `> *...dan ${ROD_TYPES.filter(r => r.price > 0).length - 3} joran lainnya + ${BAIT_TYPES.filter(b => b.price > 0).length} umpan*\n\n`;
-            const fishingMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_fishing').setPlaceholder('🎣 Beli Joran / Umpan...').setMinValues(1).setMaxValues(1);
-            ROD_TYPES.filter(r => r.price > 0).forEach(r => { fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${r.name} (🪙 ${r.price.toLocaleString('id-ID')})`).setValue(`rod_${r.id}`).setDescription(`CD: ${r.cooldown}s | +${r.rareBonus}% Rare`)); });
-            BAIT_TYPES.filter(b => b.price > 0).slice(0, 13).forEach(b => { fishingMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${b.name} (🪙 ${b.price.toLocaleString('id-ID')})`).setValue(`bait_${b.id}`).setDescription(`+${b.rareBonus}% chance ikan langka`)); });
-            componentsRows.push(new ActionRowBuilder().addComponents(fishingMenu));
-
-            // 🌾 FARMING section (Bibit + Pupuk) — Row 2
-            const { getDynamicPrice } = require('../systems/farmSeason');
-            shopDesc += '🌾 **FARMING**\n';
-            FARM_CROPS.slice(0, 4).forEach(c => {
-                const dynamicCost = getDynamicPrice(c, 'buy');
-                shopDesc += `> ${c.emoji} ${c.name} — 🪙 **${dynamicCost}** | ${c.time}m\n`;
+            // 🛡️ KATEGORI A: PROTEKSI & KOSMETIK PROFIL
+            const protectItems = ITEMS.filter(i => ['Proteksi', 'Kosmetik'].includes(i.category) && i.price > 0);
+            shopDesc += '🛡️ **KATEGORI A: PROTEKSI & KOSMETIK PROFIL**\n';
+            protectItems.forEach(i => {
+                shopDesc += `> ${i.emoji} **${i.name}** — 🪙 **${i.price.toLocaleString('id-ID')}** | ${i.desc}\n`;
             });
-            shopDesc += `> *...dan ${FARM_CROPS.length - 4} bibit lainnya*\n`;
-            FARM_FERTILIZERS.filter(f => f.cost > 0).forEach(f => { shopDesc += `> ${f.emoji} ${f.name} — 🪙 **${f.cost}** | -${Math.round(f.speedBonus*100)}% waktu\n`; });
             shopDesc += '\n';
-            const farmMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_farming').setPlaceholder('🌾 Beli Bibit / Pupuk...').setMinValues(1).setMaxValues(1);
-            FARM_CROPS.slice(0, 20).forEach(c => {
-                const dynamicCost = getDynamicPrice(c, 'buy');
-                const dynamicSell = getDynamicPrice(c, 'sell');
-                farmMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${c.name} (🪙 ${dynamicCost})`).setValue(`crop_${c.id}`).setDescription(`${c.tier} | ${c.time}m | Jual: 🪙${dynamicSell}`));
+
+            const protectMenu = new StringSelectMenuBuilder()
+                .setCustomId('shop_buy_protect')
+                .setPlaceholder('🛡️ Beli Proteksi & Kosmetik Profil...')
+                .setMinValues(1)
+                .setMaxValues(1);
+            protectItems.forEach(i => {
+                protectMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(`${i.name} (🪙 ${i.price.toLocaleString('id-ID')})`)
+                    .setValue(i.id)
+                    .setDescription(i.desc.slice(0, 50))
+                );
             });
-            FARM_FERTILIZERS.filter(f => f.cost > 0).forEach(f => { farmMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.cost})`).setValue(`fert_${f.id}`).setDescription(`-${Math.round(f.speedBonus*100)}% waktu | +${Math.round(f.yieldBonus*100)}% hasil`)); });
-            componentsRows.push(new ActionRowBuilder().addComponents(farmMenu));
+            componentsRows.push(new ActionRowBuilder().addComponents(protectMenu));
 
-            // 🐾 PET section (Food + Eggs) — Row 3
-            shopDesc += '🐾 **PET**\n';
-            PET_FOODS.forEach(f => { shopDesc += `> ${f.emoji} ${f.name} — 🪙 **${f.price}** | +${f.hunger} Hunger +${f.happiness} Happy\n`; });
-            PET_EGGS.forEach(e => { shopDesc += `> ${e.emoji} ${e.name} — 🪙 **${e.price.toLocaleString('id-ID')}**\n`; });
+            // 💬 KATEGORI B: FITUR SOSIAL
+            const socialItems = ITEMS.filter(i => i.category === 'Sosial' && i.price > 0);
+            shopDesc += '💬 **KATEGORI B: FITUR SOSIAL**\n';
+            socialItems.forEach(i => {
+                shopDesc += `> ${i.emoji} **${i.name}** — 🪙 **${i.price.toLocaleString('id-ID')}** | ${i.desc}\n`;
+            });
             shopDesc += '\n';
-            const petShopMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_pet').setPlaceholder('🐾 Beli Pet Food / Egg...').setMinValues(1).setMaxValues(1);
-            PET_FOODS.forEach(f => { petShopMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${f.name} (🪙 ${f.price})`).setValue(`food_${f.id}`).setDescription(`Hunger +${f.hunger} | Happy +${f.happiness}`)); });
-            PET_EGGS.forEach(e => { petShopMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${e.name} (🪙 ${e.price.toLocaleString('id-ID')})`).setValue(`egg_${e.id}`).setDescription(`Gacha Pet Egg`)); });
-            componentsRows.push(new ActionRowBuilder().addComponents(petShopMenu));
 
-            // 🎒 ITEMS section (ALL game items: Battle, Booster, Special, etc) — Row 4
-            // Hanya tampilkan item yang BISA dibeli (price > 0). Item price 0 = material
-            // langka (Mythic Fragment, Awakening Crystal) yang hanya didapat dari drop.
-            const shopItems = ITEMS.filter(item => item.price > 0);
-            shopDesc += '🎒 **ITEMS & BATTLE**\n';
-            shopItems.forEach(item => { shopDesc += `> ${item.emoji} ${item.name} — 🪙 **${item.price.toLocaleString('id-ID')}** | ${item.desc}\n`; });
+            const socialMenu = new StringSelectMenuBuilder()
+                .setCustomId('shop_buy_social')
+                .setPlaceholder('💬 Beli Fitur Sosial Komunitas...')
+                .setMinValues(1)
+                .setMaxValues(1);
+            socialItems.forEach(i => {
+                socialMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(`${i.name} (🪙 ${i.price.toLocaleString('id-ID')})`)
+                    .setValue(i.id)
+                    .setDescription(i.desc.slice(0, 50))
+                );
+            });
+            componentsRows.push(new ActionRowBuilder().addComponents(socialMenu));
+
+            // ⚡ KATEGORI C: BOOSTER & HIBURAN
+            const boosterItems = ITEMS.filter(i => ['Booster', 'Economy', 'Luck', 'Special'].includes(i.category) && i.price > 0);
+            shopDesc += '⚡ **KATEGORI C: BOOSTER & HIBURAN**\n';
+            boosterItems.forEach(i => {
+                shopDesc += `> ${i.emoji} **${i.name}** — 🪙 **${i.price.toLocaleString('id-ID')}** | ${i.desc}\n`;
+            });
             shopDesc += '\n';
-            const gameItemMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_game_item').setPlaceholder('🎒 Beli Item (Battle/Booster/Special)...').setMinValues(1).setMaxValues(1);
-            shopItems.forEach(item => { gameItemMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${item.menuEmoji} ${item.name} (🪙 ${item.price.toLocaleString('id-ID')})`).setDescription(`${item.desc.substring(0, 50)}`).setValue(item.id)); });
-            componentsRows.push(new ActionRowBuilder().addComponents(gameItemMenu));
 
-            // 🎭 ROLE & LAINNYA section — Row 5 (jika ada)
-            if (roles.length > 0 || crPrice > 0 || items.length > 0) {
-                shopDesc += '🎭 **ROLE & LAINNYA**\n';
+            const boosterMenu = new StringSelectMenuBuilder()
+                .setCustomId('shop_buy_booster')
+                .setPlaceholder('⚡ Beli Booster & Hiburan...')
+                .setMinValues(1)
+                .setMaxValues(1);
+            boosterItems.forEach(i => {
+                boosterMenu.addOptions(new StringSelectMenuOptionBuilder()
+                    .setLabel(`${i.name} (🪙 ${i.price.toLocaleString('id-ID')})`)
+                    .setValue(i.id)
+                    .setDescription(i.desc.slice(0, 50))
+                );
+            });
+            componentsRows.push(new ActionRowBuilder().addComponents(boosterMenu));
+
+            // 🎭 ROLE SERVER EKSKLUSIF (jika ada)
+            if (roles.length > 0 || items.length > 0) {
+                shopDesc += '🎭 **ROLE SERVER EKSKLUSIF**\n';
                 if (roles.length > 0) roles.forEach(r => { const roleObj = interaction.guild.roles.cache.get(r.roleId); shopDesc += `> ${roleObj ? roleObj.name : '?'} — 🪙 **${r.price.toLocaleString('id-ID')}**\n`; });
-                if (crPrice > 0) shopDesc += `> 🎨 Custom Role — 🪙 **${crPrice.toLocaleString('id-ID')}**\n`;
                 if (items.length > 0) items.forEach(i => { shopDesc += `> 📦 ${i.name} — 🪙 **${i.price.toLocaleString('id-ID')}** (Stok: ${i.stock})\n`; });
                 shopDesc += '\n';
-                const roleMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_role_misc').setPlaceholder('🎭 Beli Role / Barang Virtual...').setMinValues(1).setMaxValues(1);
+                const roleMenu = new StringSelectMenuBuilder().setCustomId('shop_buy_role_misc').setPlaceholder('🎭 Beli Role Server Eksklusif...').setMinValues(1).setMaxValues(1);
                 if (roles.length > 0) roles.forEach(r => { const roleObj = interaction.guild.roles.cache.get(r.roleId); roleMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`${roleObj ? roleObj.name : '?'}`).setDescription(`🪙 ${r.price.toLocaleString('id-ID')}`).setValue(`role_${r.roleId}`)); });
-                if (crPrice > 0) roleMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel('🎨 Custom Role').setDescription(`🪙 ${crPrice.toLocaleString('id-ID')}`).setValue('init_cr'));
                 if (items.length > 0) items.forEach((i, idx) => { if (idx < 10) roleMenu.addOptions(new StringSelectMenuOptionBuilder().setLabel(`📦 ${i.name}`).setDescription(`🪙 ${i.price.toLocaleString('id-ID')} | Stok: ${i.stock}`).setValue(`item_${i.name}_${i.price}`)); });
                 componentsRows.push(new ActionRowBuilder().addComponents(roleMenu));
             }
@@ -655,7 +673,7 @@ async function routeInteraction(interaction) {
             // Truncate desc if too long
             if (shopDesc.length > 4000) shopDesc = shopDesc.substring(0, 3990) + '\n\n*...dan lainnya*';
 
-            return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`🛒 ${interaction.guild.name.toUpperCase()} STORE`).setColor('#2B2D31').setDescription(shopDesc).setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Pilih dari menu di bawah` })], components: componentsRows });
+            return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`🛒 ${interaction.guild.name.toUpperCase()} STORE`).setColor('#2B2D31').setDescription(shopDesc).setFooter({ text: `💰 Saldo: ${userData.balance.toLocaleString('id-ID')} | Pilih item dari menu dropdown di bawah` })], components: componentsRows });
         }
 
 
@@ -1015,8 +1033,86 @@ async function routeInteraction(interaction) {
         }
 
         if (interaction.customId.startsWith('ach_detail_')) { const targetUserId = interaction.customId.replace('ach_detail_', ''), selectedCat = interaction.values[0], catAchs = ACHIEVEMENTS.filter(a => a.category === selectedCat), userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, targetUserId), unlockedIds = userAchs.map(a => a.achievementId); const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length; const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️', Pet: '🐾' }[selectedCat] || '📁'; let desc = `${catIcon} **${selectedCat}** — ${catUnlocked}/${catAchs.length} unlocked\n━━━━━━━━━━━━━━━━━━━━━━\n\n`; for (const ach of catAchs) { const unlocked = unlockedIds.includes(ach.id); if (unlocked) { desc += `✅ ${ach.emoji} **${ach.name}** — ${ach.desc} · 🪙${ach.reward.toLocaleString('id-ID')} ✓\n`; } else { const prog = getAchievementProgress(guildId, targetUserId, ach.id); let ps = ''; if (prog) { const shown = Math.min(prog.raw, prog.target); const pct = Math.min(100, Math.floor((prog.raw / prog.target) * 100)); const f = Math.round(pct / 10); ps = `\n> ${'▰'.repeat(f)}${'▱'.repeat(10 - f)} ${shown.toLocaleString('id-ID')}/${prog.target.toLocaleString('id-ID')} (${pct}%)`; } desc += `🔒 ${ach.emoji} ~~${ach.name}~~ — ${ach.desc} · 🪙${ach.reward.toLocaleString('id-ID')}${ps}\n`; } } return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`${catIcon} Achievement: ${selectedCat}`).setColor(catUnlocked === catAchs.length ? '#FFD700' : '#2B2D31').setDescription(desc.slice(0, 4096)).setFooter({ text: catUnlocked === catAchs.length ? '🎉 Kategori ini sudah COMPLETE!' : `${catAchs.length - catUnlocked} badge tersisa` })], ephemeral: true }); }
-        if (interaction.customId === 'shop_buy_custom_role' || (interaction.customId === 'shop_buy_role_misc' && interaction.values[0] === 'init_cr')) { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: '❌ Uang kurang!', ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
+        if (interaction.customId === 'shop_buy_custom_role' || (interaction.customId === 'shop_buy_role_misc' && interaction.values[0] === 'init_cr')) { const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '75000')) || 75000, userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({ content: `❌ Uang kurang! Butuh 🪙 ${crPrice.toLocaleString('id-ID')}`, ephemeral: true }); const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'), new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'), new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'), new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'), new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'), new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'), new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'), new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'), new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')); return interaction.reply({ content: 'Pilih warna:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true }); }
         if (interaction.customId === 'cr_select_color') { const selectedColor = interaction.values[0], modal = new ModalBuilder().setCustomId(`submit_cr_${selectedColor}`).setTitle('Custom Role 🎨'); modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_name').setLabel('Nama Role (Max 32)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32))); if (selectedColor === 'custom') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cr_color').setLabel('Hex (#FF0000)').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(7).setMaxLength(7).setPlaceholder('#FFFFFF'))); return interaction.showModal(modal); }
+
+        // --- NEW COMMUNITY & ECONOMY SHOP HANDLERS ---
+        if (interaction.customId === 'shop_buy_protect' || interaction.customId === 'shop_buy_social' || interaction.customId === 'shop_buy_booster') {
+            const itemId = interaction.values[0];
+            const userData = getOrCreateUser(guildId, interaction.user.id);
+
+            // 1. Color Role
+            if (itemId === 'color_role') {
+                const crPrice = parseInt(getSetting(guildId, 'custom_role_price', '75000')) || 75000;
+                if (userData.balance < crPrice) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${crPrice.toLocaleString('id-ID')}** (Saldo kamu: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
+                const colorMenu = new StringSelectMenuBuilder().setCustomId('cr_select_color').setPlaceholder('🎨 Pilih Warna...').addOptions(
+                    new StringSelectMenuOptionBuilder().setLabel('🔴 Merah').setValue('FF0000'),
+                    new StringSelectMenuOptionBuilder().setLabel('🔵 Biru').setValue('0000FF'),
+                    new StringSelectMenuOptionBuilder().setLabel('🟢 Hijau').setValue('00FF00'),
+                    new StringSelectMenuOptionBuilder().setLabel('🟡 Kuning').setValue('FFFF00'),
+                    new StringSelectMenuOptionBuilder().setLabel('🟣 Ungu').setValue('800080'),
+                    new StringSelectMenuOptionBuilder().setLabel('🌸 Pink').setValue('FFC0CB'),
+                    new StringSelectMenuOptionBuilder().setLabel('⚫ Hitam').setValue('010101'),
+                    new StringSelectMenuOptionBuilder().setLabel('⚪ Putih').setValue('FFFFFF'),
+                    new StringSelectMenuOptionBuilder().setLabel('⚙️ Hex Sendiri').setValue('custom')
+                );
+                return interaction.reply({ content: `🎨 **Custom Color Role** (🪙 ${crPrice.toLocaleString('id-ID')}):\nPilih warna role nama kamu:`, components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true });
+            }
+
+            // 2. Custom Title Tag
+            if (itemId === 'custom_title') {
+                const itemDef = ITEMS.find(i => i.id === 'custom_title') || { price: 35000 };
+                if (userData.balance < itemDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
+                const modal = new ModalBuilder().setCustomId('modal_buy_title').setTitle('📛 Pasang Custom Title Tag');
+                modal.addComponents(new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('title_text').setLabel('Gelar Profil (Maks 30 Karakter)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(30).setPlaceholder('Contoh: Lord of Sparks')
+                ));
+                return interaction.showModal(modal);
+            }
+
+            // 3. Custom Profile Banner
+            if (itemId === 'custom_banner') {
+                const itemDef = ITEMS.find(i => i.id === 'custom_banner') || { price: 50000 };
+                if (userData.balance < itemDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.price.toLocaleString('id-ID')}**`, ephemeral: true });
+                const modal = new ModalBuilder().setCustomId('modal_buy_banner').setTitle('🖼️ Pasang Custom Profile Banner');
+                modal.addComponents(new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('banner_url').setLabel('Link Gambar (URL PNG/JPG)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('https://example.com/my-banner.png')
+                ));
+                return interaction.showModal(modal);
+            }
+
+            // 4. Standard Inventory Items
+            const itemDef = ITEMS.find(i => i.id === itemId);
+            if (!itemDef) return interaction.reply({ content: '❌ Item tidak ditemukan!', ephemeral: true });
+            if (!itemDef.price || itemDef.price <= 0) return interaction.reply({ content: '❌ Item ini tidak dijual di toko!', ephemeral: true });
+            if (userData.balance < itemDef.price) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${itemDef.price.toLocaleString('id-ID')}** (Saldo kamu: 🪙 ${userData.balance.toLocaleString('id-ID')})`, ephemeral: true });
+
+            userData.balance -= itemDef.price;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            addItem(guildId, interaction.user.id, itemId, 1);
+            addSpending(guildId, interaction.user.id, 'shop', itemDef.price);
+            incrementUserStat(guildId, interaction.user.id, 'total_buys');
+
+            const actionRow = new ActionRowBuilder();
+            let actionNote = '> Cek & gunakan item ini lewat `/profile` → 🎒 Inventory.';
+
+            if (itemId === 'server_megaphone') {
+                actionRow.addComponents(new ButtonBuilder().setCustomId(`btn_use_megaphone_${interaction.user.id}`).setLabel('📢 Siarkan Sekarang').setStyle(ButtonStyle.Success));
+                actionNote = '> Klik tombol di bawah atau gunakan lewat `/profile` → 🎒 Inventory untuk broadcast.';
+            } else if (itemId === 'menfess_token') {
+                actionRow.addComponents(new ButtonBuilder().setCustomId(`btn_use_menfess_${interaction.user.id}`).setLabel('🤫 Kirim Menfess Sekarang').setStyle(ButtonStyle.Success));
+                actionNote = '> Klik tombol di bawah atau gunakan lewat `/profile` → 🎒 Inventory untuk kirim pesan rahasia.';
+            }
+
+            const replyPayload = {
+                content: `✅ Berhasil membeli ${itemDef.emoji} **${itemDef.name}** seharga 🪙 **${itemDef.price.toLocaleString('id-ID')}**!\n${actionNote}\n> Saldo tersisa: 🪙 **${userData.balance.toLocaleString('id-ID')}**`,
+                ephemeral: true
+            };
+            if (actionRow.components.length > 0) {
+                replyPayload.components = [actionRow];
+            }
+            return interaction.reply(replyPayload);
+        }
         // --- FISHING SHOP BUY ---
         if (interaction.customId === 'fishing_buy_rod' || interaction.customId === 'fishing_buy_bait' || interaction.customId === 'shop_buy_fishing') {
             const selected = interaction.values[0], userData = getOrCreateUser(guildId, interaction.user.id);
@@ -1166,6 +1262,38 @@ async function routeInteraction(interaction) {
         if (btnFeatureKey && !isFeatureEnabled(guildId, btnFeatureKey)) {
             const fDef = getFeatureDef(btnFeatureKey);
             return interaction.reply({ content: getDisabledMessage(fDef ? fDef.label : 'ini'), ephemeral: true });
+        }
+
+        // --- MEGAPHONE & MENFESS BUTTONS ---
+        if (interaction.customId.startsWith('btn_use_megaphone_')) {
+            const targetUserId = interaction.customId.replace('btn_use_megaphone_', '');
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Tombol ini bukan untuk kamu!', ephemeral: true });
+            if (getItemCount(guildId, interaction.user.id, 'server_megaphone') < 1) {
+                return interaction.reply({ content: '❌ Kamu tidak memiliki Server Megaphone! Beli di `/shop`.', ephemeral: true });
+            }
+            const modal = new ModalBuilder().setCustomId('modal_submit_megaphone').setTitle('📢 Server Megaphone');
+            modal.addComponents(new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('megaphone_content').setLabel('Pesan Broadcast (Maks 300 Karakter)').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(300).setPlaceholder('Ketik pengumuman broadcast kamu di sini...')
+            ));
+            return interaction.showModal(modal);
+        }
+
+        if (interaction.customId.startsWith('btn_use_menfess_')) {
+            const targetUserId = interaction.customId.replace('btn_use_menfess_', '');
+            if (interaction.user.id !== targetUserId) return interaction.reply({ content: '❌ Tombol ini bukan untuk kamu!', ephemeral: true });
+            if (getItemCount(guildId, interaction.user.id, 'menfess_token') < 1) {
+                return interaction.reply({ content: '❌ Kamu tidak memiliki Menfess Token! Beli di `/shop`.', ephemeral: true });
+            }
+            const modal = new ModalBuilder().setCustomId('modal_submit_menfess').setTitle('🤫 Kirim Pesan Rahasia / Menfess');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('menfess_target').setLabel('Untuk Siapa? (Nama / Mention / General)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50).setPlaceholder('Contoh: @Seseorang atau Si Dia di Voice')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('menfess_content').setLabel('Isi Pesan Anonim (Maks 500 Karakter)').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500).setPlaceholder('Tulis perasaan atau pesan rahasiamu secara 100% anonim...')
+                )
+            );
+            return interaction.showModal(modal);
         }
 
         // --- WELCOME HELP BUTTON ---
@@ -1729,7 +1857,88 @@ async function routeInteraction(interaction) {
 
         if (interaction.customId.startsWith('tv_modal_')) { const parts = interaction.customId.split('_'), actionType = parts[2], channelId = parts.slice(3).join('_'), voiceChannel = interaction.guild.channels.cache.get(channelId); if (!voiceChannel) return interaction.reply({content: '❌ Channel hilang.', ephemeral: true}); const tempVoice = db.prepare('SELECT * FROM temp_voices WHERE channelId = ? AND guildId = ?').get(channelId, guildId); if (!tempVoice || tempVoice.ownerId !== interaction.user.id) return interaction.reply({content: '❌ Bukan owner!', ephemeral: true}); if (actionType === 'name') { await voiceChannel.setName(interaction.fields.getTextInputValue('tv_input_name')).catch(()=>{}); return interaction.reply({content: '✅ Diubah.', ephemeral: true}); } if (actionType === 'limit') { let l = parseInt(interaction.fields.getTextInputValue('tv_input_limit')); if (isNaN(l)) l = 0; await voiceChannel.setUserLimit(l).catch(()=>{}); return interaction.reply({content: `✅ Limit: ${l||'unlimited'}`, ephemeral: true}); } if (actionType === 'kick') { const tid = interaction.fields.getTextInputValue('tv_input_kick'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ Tidak ada.', ephemeral: true}); await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: `👢 Kicked.`, ephemeral: true}); } if (actionType === 'block') { const tid = interaction.fields.getTextInputValue('tv_input_block'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: false, ViewChannel: false}).catch(()=>{}); const m = voiceChannel.members.get(tid); if (m) await m.voice.disconnect().catch(()=>{}); return interaction.reply({content: '🚫 Blocked.', ephemeral: true}); } if (actionType === 'unblock') { const tid = interaction.fields.getTextInputValue('tv_input_unblock'); await voiceChannel.permissionOverwrites.edit(tid, {Connect: null, ViewChannel: null}).catch(()=>{}); return interaction.reply({content: '🟢 Unblocked.', ephemeral: true}); } if (actionType === 'transfer') { const tid = interaction.fields.getTextInputValue('tv_input_transfer'), m = voiceChannel.members.get(tid); if (!m) return interaction.reply({content: '❌ User harus di VC.', ephemeral: true}); db.prepare('UPDATE temp_voices SET ownerId = ? WHERE channelId = ?').run(tid, channelId); await voiceChannel.permissionOverwrites.edit(interaction.user.id, {ManageChannels: null, ManageRoles: null}).catch(()=>{}); await voiceChannel.permissionOverwrites.edit(tid, {ManageChannels: true, ManageRoles: true}).catch(()=>{}); return interaction.reply({content: `🔄 Transferred.`, ephemeral: true}); } }
 
-        if (interaction.customId.startsWith('submit_cr_')) { const colorData = interaction.customId.replace('submit_cr_', ''), crPrice = parseInt(getSetting(guildId, 'custom_role_price', '0')), userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({content: '❌ Saldo kurang!', ephemeral: true}); const roleName = interaction.fields.getTextInputValue('cr_name'); let roleColor = colorData === 'custom' ? interaction.fields.getTextInputValue('cr_color') : `#${colorData}`; if (!/^#[0-9A-F]{6}$/i.test(roleColor)) return interaction.reply({content: '❌ Format hex salah!', ephemeral: true}); await interaction.deferReply(); try { userData.balance -= crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); const targetRoleId = '1062034108433301515', targetRole = interaction.guild.roles.cache.get(targetRoleId); let targetPos = targetRole ? Math.max(1, targetRole.position - 1) : Math.max(1, (interaction.guild.members.me.roles.highest.position || 1) - 1); const newRole = await interaction.guild.roles.create({ name: roleName, color: roleColor, hoist: true, position: targetPos, reason: `Custom Role: ${interaction.user.username}` }); await interaction.member.roles.add(newRole); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', `Custom Role: ${roleName}`, crPrice); incrementUserStat(guildId, interaction.user.id, 'total_buys'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'custom_role' }); await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor(roleColor).setDescription(`<@${interaction.user.id}> buat **${roleName}** (🪙 ${crPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.editReply(`🎉 Custom Role <@&${newRole.id}> dibuat! 🪙 **${crPrice.toLocaleString('id-ID')}**`); } catch(e) { userData.balance += crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); console.error(e); return interaction.editReply('❌ Gagal. Uang dikembalikan.'); } }
+        if (interaction.customId.startsWith('submit_cr_')) { const colorData = interaction.customId.replace('submit_cr_', ''), crPrice = parseInt(getSetting(guildId, 'custom_role_price', '75000')) || 75000, userData = getOrCreateUser(guildId, interaction.user.id); if (userData.balance < crPrice) return interaction.reply({content: '❌ Saldo kurang!', ephemeral: true}); const roleName = interaction.fields.getTextInputValue('cr_name'); let roleColor = colorData === 'custom' ? interaction.fields.getTextInputValue('cr_color') : `#${colorData}`; if (!/^#[0-9A-F]{6}$/i.test(roleColor)) return interaction.reply({content: '❌ Format hex salah!', ephemeral: true}); await interaction.deferReply(); try { userData.balance -= crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); const targetRoleId = '1062034108433301515', targetRole = interaction.guild.roles.cache.get(targetRoleId); let targetPos = targetRole ? Math.max(1, targetRole.position - 1) : Math.max(1, (interaction.guild.members.me.roles.highest.position || 1) - 1); const newRole = await interaction.guild.roles.create({ name: roleName, color: roleColor, hoist: true, position: targetPos, reason: `Custom Role: ${interaction.user.username}` }); await interaction.member.roles.add(newRole); db.prepare('INSERT INTO logs (guildId, time, userId, action, item, price) VALUES (?, ?, ?, ?, ?, ?)').run(guildId, Date.now(), interaction.user.id, 'BUY', `Custom Role: ${roleName}`, crPrice); incrementUserStat(guildId, interaction.user.id, 'total_buys'); await checkAchievements(interaction.guild, interaction.user.id, { type: 'custom_role' }); await checkAchievements(interaction.guild, interaction.user.id, { type: 'buy' }); const ts = db.prepare('SELECT value FROM server_settings WHERE guildId = ? AND key = ?').get(guildId, 'testimoni_channel'); if (ts) { const tc = interaction.guild.channels.cache.get(ts.value); if (tc) tc.send({ embeds: [new EmbedBuilder().setColor(roleColor).setDescription(`<@${interaction.user.id}> buat **${roleName}** (🪙 ${crPrice.toLocaleString('id-ID')})`).setTimestamp()] }).catch(()=>{}); } return interaction.editReply(`🎉 Custom Role <@&${newRole.id}> dibuat! 🪙 **${crPrice.toLocaleString('id-ID')}**`); } catch(e) { userData.balance += crPrice; db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id); console.error(e); return interaction.editReply('❌ Gagal. Uang dikembalikan.'); } }
+
+        // --- CUSTOM TITLE TAG MODAL ---
+        if (interaction.customId === 'modal_buy_title') {
+            const titlePrice = 35000;
+            const userData = getOrCreateUser(guildId, interaction.user.id);
+            if (userData.balance < titlePrice) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${titlePrice.toLocaleString('id-ID')}**`, ephemeral: true });
+            const titleText = interaction.fields.getTextInputValue('title_text').trim();
+            if (!titleText) return interaction.reply({ content: '❌ Gelar tidak boleh kosong!', ephemeral: true });
+
+            userData.balance -= titlePrice;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'custom_profile_title', titleText);
+            addSpending(guildId, interaction.user.id, 'shop', titlePrice);
+            incrementUserStat(guildId, interaction.user.id, 'total_buys');
+
+            return interaction.reply({ content: `🎉 **Custom Title Tag Berhasil Dipasang!**\n> Gelar profilmu sekarang: 📛 **${titleText}**\n> Cek tampilan baru di \`/profile\`!`, ephemeral: true });
+        }
+
+        // --- CUSTOM PROFILE BANNER MODAL ---
+        if (interaction.customId === 'modal_buy_banner') {
+            const bannerPrice = 50000;
+            const userData = getOrCreateUser(guildId, interaction.user.id);
+            if (userData.balance < bannerPrice) return interaction.reply({ content: `❌ Saldo kurang! Butuh 🪙 **${bannerPrice.toLocaleString('id-ID')}**`, ephemeral: true });
+            const bannerUrl = interaction.fields.getTextInputValue('banner_url').trim();
+            if (!/^https?:\/\/.+/i.test(bannerUrl)) return interaction.reply({ content: '❌ URL gambar tidak valid! Harus diawali http:// atau https://', ephemeral: true });
+
+            userData.balance -= bannerPrice;
+            db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, interaction.user.id);
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, interaction.user.id, 'custom_profile_banner', bannerUrl);
+            addSpending(guildId, interaction.user.id, 'shop', bannerPrice);
+            incrementUserStat(guildId, interaction.user.id, 'total_buys');
+
+            return interaction.reply({ content: `🎉 **Custom Profile Banner Berhasil Dipasang!**\n> Background kartu profilmu telah diperbarui.\n> Cek tampilan barumu di \`/profile\` → 🖼️ Kartu Profil!`, ephemeral: true });
+        }
+
+        // --- SUBMIT MEGAPHONE BROADCAST MODAL ---
+        if (interaction.customId === 'modal_submit_megaphone') {
+            if (getItemCount(guildId, interaction.user.id, 'server_megaphone') < 1) {
+                return interaction.reply({ content: '❌ Kamu tidak memiliki Server Megaphone! Beli di `/shop`.', ephemeral: true });
+            }
+            const content = interaction.fields.getTextInputValue('megaphone_content').trim();
+            if (!content) return interaction.reply({ content: '❌ Pesan broadcast tidak boleh kosong!', ephemeral: true });
+
+            removeItem(guildId, interaction.user.id, 'server_megaphone', 1);
+
+            const broadcastEmbed = new EmbedBuilder()
+                .setColor('#FFD700')
+                .setTitle('📢 SERVER MEGAPHONE BROADCAST')
+                .setDescription(`>>> **"${content}"**`)
+                .setFooter({ text: `Disiarkan oleh ${interaction.user.username} • idcommunity Megaphone`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
+                .setTimestamp();
+
+            await interaction.channel.send({ embeds: [broadcastEmbed] }).catch(() => {});
+            return interaction.reply({ content: '✅ Pesan megaphone berhasil disiarkan ke chat!', ephemeral: true });
+        }
+
+        // --- SUBMIT MENFESS SECRET MESSAGE MODAL ---
+        if (interaction.customId === 'modal_submit_menfess') {
+            if (getItemCount(guildId, interaction.user.id, 'menfess_token') < 1) {
+                return interaction.reply({ content: '❌ Kamu tidak memiliki Menfess Token! Beli di `/shop`.', ephemeral: true });
+            }
+            const target = interaction.fields.getTextInputValue('menfess_target').trim();
+            const content = interaction.fields.getTextInputValue('menfess_content').trim();
+            if (!content) return interaction.reply({ content: '❌ Isi pesan tidak boleh kosong!', ephemeral: true });
+
+            removeItem(guildId, interaction.user.id, 'menfess_token', 1);
+
+            // Locate target channel: menfess channel if set, otherwise current channel
+            const menfessChannelId = getSetting(guildId, 'menfess_channel', '') || interaction.channelId;
+            const targetChannel = interaction.guild.channels.cache.get(menfessChannelId) || interaction.channel;
+
+            const menfessEmbed = new EmbedBuilder()
+                .setColor('#9B59B6')
+                .setTitle('🤫 PESAN RAHASIA / MENFESS')
+                .setDescription(`Untuk: **${target}**\n\n>>> "${content}"`)
+                .setFooter({ text: 'Identitas pengirim 100% anonim • Dikirim via Menfess Token' })
+                .setTimestamp();
+
+            await targetChannel.send({ embeds: [menfessEmbed] }).catch(() => {});
+            return interaction.reply({ content: `✅ Pesan rahasia anonim berhasil dikirim ke <#${targetChannel.id}>!`, ephemeral: true });
+        }
 
         // --- SEED QUANTITY MODAL ---
         if (interaction.customId.startsWith('seed_qty_')) {
