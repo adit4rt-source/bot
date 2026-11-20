@@ -74,7 +74,7 @@ async function checkAndUpdateStreak(message) {
         const streakMinDays = parseInt(getSetting(guildId, 'streak_min_days', '3')) || 3;
         if (streakAutoNick === '1' && streakData.count >= streakMinDays) {
             const streakEmoji = getStreakEmoji(streakData.count);
-            const cleanName = member.displayName.replace(/\s*[✨🔥⚡👑💠💎🌌].*$/, '').replace(/\s*\d+$/, '').trim();
+            const cleanName = member.displayName.replace(/\s*[✨🔥⚡👑💠💎🌌❤️💖💕💘💓💗].*$/, '').replace(/\s*\d+$/, '').trim();
             const newNick = `${cleanName} ${streakEmoji}${streakData.count}`.slice(0, 32);
             if (member.manageable && member.displayName !== newNick) {
                 await member.setNickname(newNick).catch(() => {});

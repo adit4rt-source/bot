@@ -911,14 +911,14 @@ module.exports = function register() {
     db.getOrCreateUser(g, u);
     notif.markDmAsked(g, u);
     
-    // Command that is gated (e.g. /fishing)
+    // Command that is gated (e.g. /casino)
     const itGated = mockInteraction({
       userId: u, guildId: g,
-      customId: 'fishing'
+      customId: 'casino'
     });
     itGated.isButton = () => false;
     itGated.isChatInputCommand = () => true;
-    itGated.commandName = 'fishing';
+    itGated.commandName = 'casino';
     itGated.options = { getSubcommand: () => null, getSubcommandGroup: () => null };
 
     // Initially, user has no consent, so calling /fishing should prompt with consent embeds

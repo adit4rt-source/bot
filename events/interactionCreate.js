@@ -168,22 +168,20 @@ async function routeInteraction(interaction) {
         }
 
         if (command === 'help') {
-            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor(ui.COLORS.info).setDescription('Selamat datang! 👋 Hampir semua fitur pakai **panel interaktif** — cukup jalankan command, lalu klik tombolnya. Gampang banget!\n\n💡 Baru pertama kali? Mulai dari `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
+            const helpEmbed = new EmbedBuilder().setTitle('📖 Panduan Lengkap Bot').setColor(ui.COLORS.info).setDescription('Selamat datang! 👋 Hampir semua fitur pakai **panel interaktif** — cukup jalankan command, lalu klik tombolnya.\n\n💡 Baru pertama kali? Mulai dari `/menu` untuk navigasi cepat.\n\n**Daftar Command:**').addFields(
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '💰 **EKONOMI & CASINO**', inline: false },
-                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, blackjack)\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/shop\` — 🛒 Toko lengkap\n> \`/trade\` — 🤝 Trade item antar pemain\n> \`/market\` — 🏪 Marketplace jual/beli`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎣 **FISHING** (`/fish` + `/fishing`)', inline: false },
-                { name: '\u200b', value: `> \`/fish\` — Lempar pancing (quick cast)\n> \`/fishing\` — 🎣 Fishing Panel lengkap\n> 13 Rod tier | 12 Bait | 8+ Lokasi | Giant Fish | Sea Monsters`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🌾 **FARMING & PETERNAKAN** (`/farm`)', inline: false },
-                { name: '\u200b', value: `> \`/farm\` — 🌾 Farm Hub Panel\n> 🌱 **Tanaman** — Plant, Water, Harvest (30 jenis)\n> 🐔 **Kandang Ayam** — Ternak ayam, collect telur\n> 🐄 **Peternakan** — Sapi (susu) + Domba (bulu)\n> 🧪 **Crafting** — 36 resep gabungan\n> 📦 **Storage** — Semua item terkumpul\n> 🌦️ Season & Cuaca dinamis (efek ke produksi & harga pasar)`, inline: false },
-                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🐾 **PET & BATTLE** (`/pet` + `/battle`)', inline: false },
-                { name: '\u200b', value: `> \`/pet\` — 🐾 Pet Panel (95+ pet)\n> Feed, Play, Hunt, Dungeon, Boss, Fusion, Evolve, Cook, Sockets\n> \`/battle @user\` — ⚔️ PvP auto-battle\n> \`/expedition\` — 🌊 Kirim pet ekspedisi\n> \`/worldboss\` — 🗺️ Boss global`, inline: false },
+                { name: '\u200b', value: `> \`/wallet\` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> \`/shop\` — 🛒 Toko server & Role Shop\n> \`/gift\` — 🎁 Kirim money ke member lain\n> \`/daily\` — 🎁 Klaim hadiah harian\n> \`/casino\` — 🎰 Casino Panel (coinflip, slot, roulette)\n> \`/blackjack\` — 🃏 Main kartu 21\n> \`/togel\` — 🎟️ Togel tebak angka`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🔥 **STREAK & PRESTIGE**', inline: false },
+                { name: '\u200b', value: `> \`/streak status\` — 🔥 Cek hari streak, role prestige & bonus chat\n> \`/streak leaderboard\` — 🏆 Top 10 streak terpanjang server\n> \`/streak lounge\` — 🏛️ VVIP High-Table Lounge (100+ hari)`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '📋 **PROFIL & PROGRESSION**', inline: false },
-                { name: '\u200b', value: `> \`/profile\` — 📋 Profil, Achievement, Stats\n> \`/streak\` — 🔥 Streak Prestige & VVIP Lounge (Rank & Bonus Chat)\n> \`/levelpanel\` — 🌟 Level, Rank, Rewards\n> \`/stats\` — 📊 Statistics Dashboard\n> \`/leaderboard\` — 🏆 Ranking pemain`, inline: false },
+                { name: '\u200b', value: `> \`/profile\` — 📋 Profil, Achievement, Stats\n> \`/levelpanel\` — 🌟 Level, Rank & Rewards\n> \`/stats\` — 📊 Statistics Dashboard\n> \`/leaderboard\` — 🏆 Ranking pemain`, inline: false },
+                { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🎮 **MINIGAMES & RAMALAN**', inline: false },
+                { name: '\u200b', value: `> \`/games\` — 🎮 Quiz 14 kategori (asah otak, tebak gambar, tebak kata)\n> \`/ramalan hari_ini\` — 🔮 Ramalan harian, angka & warna hoki`, inline: false },
                 { name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🔧 **SERVER TOOLS**', inline: false },
-                { name: '\u200b', value: `> \`/invite\` — 📨 Invite Tracker (statistik invite)\n> \`/welcomer\` — 👋 Welcomer Panel (Admin)\n> \`/tempvoice\` — 🎙️ Buat voice channel privat`, inline: false }
+                { name: '\u200b', value: `> \`/invite\` — 📨 Invite Tracker & reward tier\n> \`/tempvoice\` — 🎙️ Buat Private Space (voice & chat privat)\n> \`/selfrole\` — 🎭 Pilih role sendiri`, inline: false }
             );
-            if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel\n> \`/welcomer\` — 👋 Konfigurasi welcome/goodbye`, inline: false });
-            helpEmbed.setFooter({ text: '💡 /guide panduan mekanik | /menu navigasi | /leaderboard ranking | discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
+            if (isAdmin) helpEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━', value: '🛡️ **ADMIN**', inline: false }, { name: '\u200b', value: `> \`/admin\` — 🛡️ Admin Panel & konfigurasi server\n> \`/rapihkan\` — 🧹 Auto-rapihkan layout & VVIP lounge\n> \`/welcomer\` — 👋 Konfigurasi welcome/goodbye\n> \`/giveaway\` — 🎉 Panel kelola giveaway`, inline: false });
+            helpEmbed.setFooter({ text: '💡 /guide panduan | /menu navigasi utama | discord.gg/idcommunity', iconURL: interaction.client.user.displayAvatarURL() }).setTimestamp();
             return interaction.reply({ embeds: [helpEmbed] });
         }
 
@@ -201,11 +199,11 @@ async function routeInteraction(interaction) {
                 .setDescription(
                     `Halo **${interaction.user.username}**! 👋\nPilih kategori di bawah untuk akses cepat:\n\n` +
                     ui.menuList([
-                        { emoji: '💰', label: 'Economy', desc: 'Saldo, Casino, Gift, Daily' },
-                        { emoji: '🎣', label: 'Fishing', desc: 'Mancing, koleksi, jual' },
-                        { emoji: '🌾', label: 'Farming', desc: 'Tanam, panen, ternak' },
-                        { emoji: '🐾', label: 'Pet & Battle', desc: 'Pet, Dungeon, Boss, PvP' },
-                        { emoji: '📋', label: 'Profil', desc: 'Profile, Achievement, Stats' },
+                        { emoji: '💰', label: 'Economy', desc: 'Saldo, Hadiah, Dompet' },
+                        { emoji: '🔥', label: 'Streak Prestige', desc: 'Streak harian, Prestige Role, Lounge' },
+                        { emoji: '📋', label: 'Profil', desc: 'Profil, Level, Achievement, Stats' },
+                        { emoji: '🛒', label: 'Shop', desc: 'Role eksklusif & booster' },
+                        { emoji: '🎮', label: 'Games & Ramalan', desc: 'Quiz asah otak, Casino, Ramalan 365' },
                     ]) +
                     `\n\n> 💡 *Ketik \`/help\` untuk panduan lengkap.*`
                 )
@@ -214,14 +212,15 @@ async function routeInteraction(interaction) {
             
             const row1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('menu_economy').setLabel('💰 Economy').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('menu_fishing').setLabel('🎣 Fishing').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('menu_farming').setLabel('🌾 Farming').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('menu_pet').setLabel('🐾 Pet & Battle').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('menu_profile').setLabel('📋 Profil').setStyle(ButtonStyle.Secondary)
-            );
-            const row2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('menu_streak').setLabel('🔥 Streak').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('menu_profile').setLabel('📋 Profil').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('menu_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('menu_daily').setLabel('🎁 Daily').setStyle(ButtonStyle.Success)
+            );
+            const row2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('menu_games').setLabel('🎮 Games').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('menu_casino').setLabel('🎰 Casino').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('menu_ramalan').setLabel('🔮 Ramalan').setStyle(ButtonStyle.Secondary)
             );
             return interaction.reply({ embeds: [menuEmbed], components: [row1, row2] });
         }
@@ -1533,15 +1532,15 @@ async function routeInteraction(interaction) {
         if (interaction.customId.startsWith('menu_')) {
             const cat = interaction.customId.replace('menu_', '');
             let content = '';
-            if (cat === 'economy') content = '💰 **Economy & Casino:**\n\n> `/wallet` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> `/casino` — 🎰 Casino Panel (coinflip, slot, roulette)\n> `/daily` — 🎁 Klaim hadiah harian\n> `/calendar` — 📅 Kalender login & reward\n> `/levelpanel` — 🌟 Rank & leaderboard';
-            else if (cat === 'fishing') content = '🎣 **Fishing Commands:**\n\n> `/fish` — Lempar pancing (quick cast)\n> `/fishing` — 🎣 Buka Fishing Panel\n> Panel: Cast, Inventory, Shop, Stats, Collection\n> Lock/Unlock, Sell All — semua dalam 1 panel!';
-            else if (cat === 'farming') content = '🌾 **Farming Commands:**\n\n> `/farm` — 🌾 Buka Farm Panel\n> Panel: Plant, Water, Harvest, Shop\n> Storage, Craft, Upgrade, Pupuk — semua dalam 1 panel!';
-            else if (cat === 'pet') content = '🐾 **Pet & Battle:**\n\n> `/pet` — Buka Pet Panel (semua fitur ada di sini!)\n> Feed, Play, Hunt, Shop, Dungeon, Boss, Refine, Evolve\n> Semua dalam 1 panel interaktif dengan tombol!\n> `/battle @user` — PvP auto-battle';
-            else if (cat === 'profile') content = '📋 **Profil:**\n\n> `/profile` — 📋 Profile Panel\n> Profil, Achievement, Inventory, Streak, Stats\n> Semua dalam 1 panel interaktif!';
-            else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka toko lengkap\n> Kategori: 🎣 Fishing, 🌾 Farming, 🐾 Pet, 📿 Battle, 🎭 Role';
-            else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Dapat: Money + Pet EXP + Random Item\n> Bonus streak = hadiah lebih besar!';
-            else if (cat === 'quest') content = '📜 **Quest:**\n\n> `/quest` — 📜 Quest Panel\n> Misi harian (3/hari) & mingguan (3/minggu)\n> Selesaikan untuk dapat money bonus!\n> Reset setiap 00:00 WIB';
-            else if (cat === 'fun') content = '🎮 **Fun & Social:**\n\n> `/ship @a @b` — 💘 Love Calculator (canvas)\n> `/marry @user` — 💍 Lamar seseorang\n> `/divorce` — 💔 Cerai\n> `/games` — 🎮 Quiz 14 kategori (reward money)';
+            if (cat === 'economy') content = '💰 **Economy:**\n\n> `/wallet` — 💰 Economy Panel (saldo, gift, redeem voucher)\n> `/daily` — 🎁 Klaim hadiah harian\n> `/levelpanel` — 🌟 Rank & leaderboard level';
+            else if (cat === 'streak') content = '🔥 **Streak Prestige:**\n\n> `/streak status` — Cek hari streak, rank role & bonus chat\n> `/streak leaderboard` — 🏆 Hall of Fame top streak server\n> `/streak lounge` — 🏛️ Akses eksklusif VVIP Lounge (100+ hari)';
+            else if (cat === 'profile') content = '📋 **Profil:**\n\n> `/profile` — 📋 Profile Panel\n> Profil, Achievement, Level, Stats\n> Semua dalam 1 panel interaktif!';
+            else if (cat === 'shop') content = '🛒 **Shop:**\n\n> `/shop` — Buka menu toko\n> Kategori: 🎭 Role Server, ⚡ Booster XP, 🛡️ Proteksi Streak';
+            else if (cat === 'daily') content = '🎁 **Daily Reward:**\n\n> `/daily` — Klaim hadiah harian\n> Hadiah money berlipat dengan streak chat aktif!';
+            else if (cat === 'games') content = '🎮 **Quiz Games:**\n\n> `/games` — 🎮 Quiz 14 kategori (asah otak, tebak gambar, tebak kata)\n> Jawab benar dapat hadiah Money!';
+            else if (cat === 'casino') content = '🎰 **Casino & Gambling:**\n\n> `/casino` — 🎰 Casino Panel (coinflip, slot, roulette)\n> `/blackjack` — 🃏 Main kartu 21\n> `/togel` — 🎟️ Togel pasang angka';
+            else if (cat === 'ramalan') content = '🔮 **Ramalan Harian:**\n\n> `/ramalan hari_ini` — Ramalan harian, angka & warna hoki\n> Otomatis hadir setiap jam 07:00 WIB!';
+            else if (['fishing', 'farming', 'pet', 'quest', 'fun'].includes(cat)) content = '🚫 Fitur ini telah dinonaktifkan di server ini.';
             return interaction.reply({ content, ephemeral: true });
         }
 

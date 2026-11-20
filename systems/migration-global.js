@@ -479,6 +479,20 @@ function runGlobalMigration(db) {
             console.error('❌ Streak compensation migration failed:', e.message);
         }
     }
+
+    const rpgResetDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'rpg_disable_and_balance_reset_2026_11'").get();
+    if (!rpgResetDone) {
+        console.log('⚡ Running RPG disable & balance reset migration...');
+        try {
+            db.exec(`UPDATE users SET balance = 0;`);
+            try { db.exec(`DELETE FROM server_settings WHERE key LIKE 'love_%';`); } catch (_) {}
+            try { db.exec(`DROP TABLE IF EXISTS loves;`); } catch (_) {}
+            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('rpg_disable_and_balance_reset_2026_11', 1);
+            console.log('✅ Balance reset to 0 & RPG/Love cleanup completed! (Streaks preserved)');
+        } catch (e) {
+            console.error('❌ RPG reset migration failed:', e.message);
+        }
+    }
 }
 
 module.exports = { runGlobalMigration };

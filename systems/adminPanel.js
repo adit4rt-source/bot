@@ -281,7 +281,6 @@ function buildSettingSubPanel(guildId) {
             `> 📈 Level Up: ${levelCh ? `<#${levelCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 🏆 Achievement: ${achCh ? `<#${achCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> ${streakEmoji} Streak: ${streakCh ? `<#${streakCh}>` : '⚠️ *Belum diatur*'}\n` +
-            `> ❤️ Love: ${loveCh ? `<#${loveCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 📝 Log: ${logCh ? `<#${logCh}>` : '⚠️ *Belum diatur*'}\n\n` +
             `**📈 XP & Level:**\n` +
             `> ⚡ XP Multiplier: **${xpMult}x**\n` +
@@ -414,7 +413,6 @@ function buildChannelsSubPanel(guildId) {
             `> 🏆 **Achievement Channel**: ${achCh ? `<#${achCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> ${streakEmoji} **Streak Channel**: ${streakCh ? `<#${streakCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 📨 **Invite Log Channel**: ${inviteCh ? `<#${inviteCh}>` : '⚠️ *Belum diatur*'}\n` +
-            `> ❤️ **Love Channel**: ${loveCh ? `<#${loveCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 📝 **Log Channel**: ${logCh ? `<#${logCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> ⚙️ **Server Log**: ${serverlogCh ? `<#${serverlogCh}>` : '⚠️ *Belum diatur*'}\n\n` +
             `💡 Klik **✏️ Edit Channels** untuk memasukkan ID channel secara manual.\n` +
@@ -865,15 +863,6 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
-    if (customId === 'admpnl_set_love_cfg') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_love_cfg').setTitle('Love Configuration');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('emoji').setLabel('Love Emoji').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_emoji', '❤️'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('min_love').setLabel('Min love untuk tampil di nickname').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_min', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('auto_nick').setLabel('Auto Nickname (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_auto_nickname', '1')))
-        );
-        return interaction.showModal(modal);
-    }
     if (customId === 'admpnl_set_misc') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_misc').setTitle('Settings Lainnya');
         modal.addComponents(
@@ -1217,21 +1206,6 @@ async function handleAdminModal(interaction) {
             await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
         }
         return interaction.reply({ content: updated.length > 0 ? `✅ Streak config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
-    }
-
-    // === SETTING: Love Config ===
-    if (customId === 'admpnl_modal_love_cfg') {
-        const updated = [];
-        const emoji = (interaction.fields.getTextInputValue('emoji') || '').trim();
-        if (emoji) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_emoji', emoji); updated.push(`Emoji: ${emoji}`); }
-        const minLove = (interaction.fields.getTextInputValue('min_love') || '').trim();
-        if (minLove && !isNaN(parseInt(minLove))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_min', minLove); updated.push(`Min Love: ${minLove}`); }
-        const autoNick = (interaction.fields.getTextInputValue('auto_nick') || '').trim();
-        if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
-        if (interaction.message) {
-            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
-        }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Love config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
     // === SETTING: Misc ===

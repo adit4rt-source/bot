@@ -3,30 +3,17 @@ const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require('disco
 
 const commands = [
     // ================= PANEL COMMANDS (Player) =================
-    new SlashCommandBuilder().setName('pet').setDescription('🐾 Pet Panel — Kelola semua fitur pet'),
-    new SlashCommandBuilder().setName('fishing').setDescription('🎣 Fishing Panel — Kelola memancing'),
-    new SlashCommandBuilder().setName('farm').setDescription('🌾 Farm Panel — Kelola kebun'),
     new SlashCommandBuilder().setName('casino').setDescription('🎰 Casino Panel — Coinflip, Slot, Roulette'),
     new SlashCommandBuilder().setName('wallet').setDescription('💰 Economy Panel — Saldo, Gift, Redeem, Leaderboard'),
-    new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, Achievement, Inventory, Stats'),
+    new SlashCommandBuilder().setName('profile').setDescription('📋 Profile Panel — Profil, Achievement, Stats'),
     new SlashCommandBuilder().setName('levelpanel').setDescription('🌟 Level Panel — Rank, Leaderboard, Rewards'),
 
     // ================= QUICK ACTION COMMANDS =================
-    new SlashCommandBuilder().setName('fish').setDescription('🎣 Lempar pancing (quick cast)'),
     new SlashCommandBuilder().setName('daily').setDescription('🎁 Klaim hadiah harian'),
-    new SlashCommandBuilder().setName('battle').setDescription('⚔️ Battle PvP')
-        .addUserOption(opt => opt.setName('lawan').setDescription('Siapa yang mau dilawan?').setRequired(true))
-        .addIntegerOption(opt => opt.setName('taruhan').setDescription('Taruhan money (0 = tanpa)').setRequired(false)),
-    new SlashCommandBuilder().setName('arena').setDescription('⚔️ Ranked Arena — Lawan pet pemain lain, naikkan MMR & rank'),
-    new SlashCommandBuilder().setName('auction').setDescription('🏛️ Auction House — Lelang item/pet/relic, bid pakai money'),
     new SlashCommandBuilder().setName('shop').setDescription('🛒 Buka menu toko'),
     new SlashCommandBuilder().setName('gift').setDescription('🎁 Kirim money ke player lain')
         .addUserOption(opt => opt.setName('user').setDescription('Penerima gift').setRequired(true))
         .addIntegerOption(opt => opt.setName('jumlah').setDescription('Jumlah money (pajak 10%)').setRequired(true).setMinValue(1)),
-    new SlashCommandBuilder().setName('trade').setDescription('🔄 Trade Panel — Tukar item dengan player lain'),
-    new SlashCommandBuilder().setName('market').setDescription('🏪 Market — Jual beli item antar player'),
-    new SlashCommandBuilder().setName('expedition').setDescription('🌊 Expedition — Kirim pet ke ekspedisi untuk reward'),
-    new SlashCommandBuilder().setName('worldboss').setDescription('🗺️ World Boss — Serang boss global bersama semua player'),
     new SlashCommandBuilder().setName('togel').setDescription('🎟️ Togel — Pasang angka 1-100 (5.000/angka), diundi tiap 1 jam')
         .addIntegerOption(opt => opt.setName('angka').setDescription('Pasang angka 1-100 (bayar 5.000)').setRequired(false).setMinValue(1).setMaxValue(100))
         .addIntegerOption(opt => opt.setName('setpot').setDescription('[Admin] Set pot awal / seed per ronde').setRequired(false).setMinValue(0)),
@@ -39,11 +26,7 @@ const commands = [
                 { name: '⭐ Overall (Event)', value: 'overall' },
                 { name: '📈 Level', value: 'level' },
                 { name: '💰 Money', value: 'money' },
-                { name: '🎣 Fishing', value: 'fish' },
-                { name: '🌾 Farming', value: 'farm' },
-                { name: '🐾 Pet', value: 'pet' },
                 { name: '🔥 Streak', value: 'streak' },
-                { name: '⚔️ Battle', value: 'battle' },
                 { name: '🎰 Gambling', value: 'gambling' },
                 { name: '🏆 Achievement', value: 'achievement' }
             )),

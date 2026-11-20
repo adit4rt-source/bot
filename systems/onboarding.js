@@ -10,9 +10,9 @@ const { getSetting } = require('../database');
 // to get them to type ONE command, not to read a manual.
 const QUICK_START = [
     { cmd: '/daily',   emoji: '🎁', desc: 'Klaim hadiah harian — login tiap hari, reward makin gede!' },
-    { cmd: '/fish',    emoji: '🎣', desc: 'Mulai mancing, kumpulkan 86+ ikan & koin' },
-    { cmd: '/farm',    emoji: '🌾', desc: 'Tanam, siram, panen — bangun kebunmu' },
-    { cmd: '/pet',     emoji: '🐾', desc: 'Adopsi & rawat pet, lalu battle' },
+    { cmd: '/streak',  emoji: '🔥', desc: 'Mulai streak harian, raih role prestige & bonus chat' },
+    { cmd: '/games',   emoji: '🎮', desc: 'Main kuis 14 kategori & asah otak berhadiah money' },
+    { cmd: '/ramalan', emoji: '🔮', desc: 'Cek ramalan, angka & warna hoki hari ini' },
     { cmd: '/profile', emoji: '🏆', desc: 'Lihat level, badge, & kartu profil kerenmu' },
     { cmd: '/help',    emoji: '❓', desc: 'Daftar lengkap semua fitur' },
 ];
@@ -28,7 +28,7 @@ function buildOnboardingEmbed(member, guildName) {
             `Hai${member && member.user ? ` **${member.user.username}**` : ''}! Senang kamu gabung 🎉\n\n` +
             `Bingung mulai dari mana? Coba salah satu perintah ini di server:\n\n` +
             lines +
-            `\n\n💡 **Tips:** mulai dari \`/daily\` lalu \`/fish\` — paling gampang buat dapat koin pertama!`
+            `\n\n💡 **Tips:** mulai dari \`/daily\` lalu \`/streak\` — paling gampang buat aktif dan dapat koin pertama!`
         )
         .setFooter({ text: `Ketik perintah di channel mana pun di ${name}. Selamat bermain! 🚀` })
         .setTimestamp();

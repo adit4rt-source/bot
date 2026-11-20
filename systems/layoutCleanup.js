@@ -126,16 +126,14 @@ async function cleanServerLayout(guild) {
         }
     } catch (_) {}
 
-    // 7. Ubah menu self-role GENDER menjadi single-choice (unique)
+    // 7. Ubah menu self-role GENDER menjadi single-choice (unique) & refresh pesan publik
     try {
         const genderMenuRow = db.prepare("SELECT id, title, type FROM selfrole_menus WHERE guildId = ? AND UPPER(title) LIKE '%GENDER%'").get(guild.id);
         if (genderMenuRow) {
-            if (genderMenuRow.type !== 'unique') {
-                updateMenu(guild.id, genderMenuRow.id, { type: 'unique', maxRoles: 1 });
-                const updated = getMenu(guild.id, genderMenuRow.id);
-                if (updated) await refreshPublicMessage(guild, updated);
-                log.push('🔘 Ubah menu self-role GENDER menjadi single-choice (`unique`, tidak bisa dobel)');
-            }
+            updateMenu(guild.id, genderMenuRow.id, { type: 'unique', maxRoles: 1 });
+            const updated = getMenu(guild.id, genderMenuRow.id);
+            if (updated) await refreshPublicMessage(guild, updated);
+            log.push('🔘 Ubah menu self-role GENDER menjadi single-choice (`unique`, tidak bisa dobel)');
         }
     } catch (_) {}
 
@@ -150,12 +148,13 @@ async function cleanServerLayout(guild) {
                     .setTitle('🤝 PANDUAN & REWARD INVITE — ID COMMUNITY')
                     .setColor('#FFD700')
                     .setDescription(
-                        `Ajak teman bergabung ke **ID COMMUNITY** dan dapatkan reward Money + Mystery Box eksklusif!\n\n` +
+                        `Ajak teman bergabung ke **ID COMMUNITY** dan dapatkan reward Money + Booster eksklusif!\n\n` +
                         `**🏆 TIER REWARD UNDANGAN:**\n` +
                         `> 🥉 **3 Invite Valid:** 🪙 3.000 Money + 📦 2× Mystery Box\n` +
-                        `> 🥈 **5 Invite Valid:** 🪙 10.000 Money + 🥚 Rare Pet Egg\n` +
-                        `> 🥇 **10 Invite Valid:** 🪙 30.000 Money + 💎 2× Mythic Fragment\n` +
-                        `> 👑 **25 Invite Valid:** 🪙 100.000 Money + 👑 Role Exclusive Recruiter\n\n` +
+                        `> 🥈 **5 Invite Valid:** 🪙 6.000 Money + 🍀 1× Lucky Charm + 📅 1× Daily Doubler\n` +
+                        `> 🥇 **10 Invite Valid:** 🪙 15.000 Money + ⚡ 2× XP Booster 2x\n` +
+                        `> 👑 **25 Invite Valid:** 🪙 40.000 Money + 🛡️ 1× Streak Shield + 🍀 2× Lucky Charm\n` +
+                        `> 💎 **50 Invite Valid:** 🪙 100.000 Money + 🧲 2× Money Magnet + ⚡ 1× XP Booster 3x\n\n` +
                         `💡 *Gunakan command \`/invite\` untuk melihat link invite dan progres tier kamu.*`
                     )
                     .setFooter({ text: 'Anti-Abuse: Akun fake / bot otomatis didiskualifikasi' })
@@ -168,6 +167,28 @@ async function cleanServerLayout(guild) {
             }
         } catch (_) {}
     }
+
+    // 9. Bersihkan sisa badge love (❤️) dari nickname semua member
+    try {
+        let nickCleaned = 0;
+        if (guild.members?.fetch) {
+            await guild.members.fetch().catch(() => {});
+        }
+        const members = guild.members?.cache || [];
+        for (const [, member] of members) {
+            if (!member || member.user?.bot || !member.manageable) continue;
+            if (/[❤️💖💕💘💓💗]/.test(member.displayName)) {
+                const cleaned = member.displayName.replace(/\s*[❤️💖💕💘💓💗]\s*\d*/g, '').trim();
+                if (cleaned && cleaned !== member.displayName) {
+                    await member.setNickname(cleaned).catch(() => {});
+                    nickCleaned++;
+                }
+            }
+        }
+        if (nickCleaned > 0) {
+            log.push(`🧹 Bersihkan sisa badge love dari nickname (${nickCleaned} member)`);
+        }
+    } catch (_) {}
 
     return {
         ok: true,

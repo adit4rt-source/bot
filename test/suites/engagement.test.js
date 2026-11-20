@@ -122,10 +122,10 @@ module.exports = function register() {
   });
 
   // ============ ONBOARDING ============
-  test('onboarding: embed guides newcomers to /daily and /fish', () => {
+  test('onboarding: embed guides newcomers to /daily and /streak', () => {
     const embed = ob.buildOnboardingEmbed({ user: { username: 'Newbie' }, guild: { name: 'EngageGuild' } }, 'EngageGuild');
     const d = embed.data.description || '';
-    if (!d.includes('/daily') || !d.includes('/fish')) throw new Error('onboarding should mention /daily and /fish');
+    if (!d.includes('/daily') || !d.includes('/streak')) throw new Error('onboarding should mention /daily and /streak');
     if (!/Selamat datang/i.test(embed.data.title || '')) throw new Error('missing welcome title');
   });
   test('onboarding: sends a DM when enabled (default)', () => {
