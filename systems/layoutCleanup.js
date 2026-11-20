@@ -142,7 +142,8 @@ async function cleanServerLayout(guild) {
     const inviteLogCh = findChannel(c => c.name && c.name.toLowerCase().includes('invite-logs'));
     if (inviteLogCh && typeof inviteLogCh.send === 'function') {
         try {
-            const pinnedMsgs = inviteLogCh.messages?.fetchPinned ? await inviteLogCh.messages.fetchPinned().catch(() => null) : null;
+            const fetchFn = inviteLogCh.messages?.fetchPins || inviteLogCh.messages?.fetchPinned;
+            const pinnedMsgs = fetchFn ? await fetchFn.call(inviteLogCh.messages).catch(() => null) : null;
             const alreadyPinned = pinnedMsgs && pinnedMsgs.some(m => m.embeds && m.embeds.some(e => e.title && e.title.includes('HADIAH INVITE')));
             if (!alreadyPinned) {
                 const inviteEmbed = new EmbedBuilder()

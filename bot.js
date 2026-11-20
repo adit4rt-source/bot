@@ -301,13 +301,14 @@ client.once(Events.ClientReady, async () => {
     try {
         const { syncAllMemberStreakRoles } = require('./systems/streakTier');
         for (const [, guild] of client.guilds.cache) {
-            syncAllMemberStreakRoles(guild).then(r => {
+            try {
+                const r = await syncAllMemberStreakRoles(guild);
                 if (r && r.syncedCount > 0) {
                     log('INFO', `[StreakTier] Auto-synced ${r.syncedCount} veteran members in ${guild.name}`);
                 }
-            }).catch(e => {
+            } catch (e) {
                 log('WARN', `[StreakTier] Auto-sync skipped in ${guild.name}: ${e.message}`);
-            });
+            }
         }
     } catch (_) {}
 

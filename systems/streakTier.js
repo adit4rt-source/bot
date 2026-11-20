@@ -255,7 +255,7 @@ async function syncAllMemberStreakRoles(guild) {
                 details.push(`• <@${member.id}> (${r.count} hari) → ${tier.emoji} **${tier.name}**`);
             }
         }
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 350));
     }
 
     return {
