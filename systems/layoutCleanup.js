@@ -3,6 +3,7 @@ const { PermissionsBitField, ChannelType, EmbedBuilder } = require('discord.js')
 const { setupLounge, reorderStreakRoles } = require('./streakTier');
 const { db } = require('../database');
 const { getMenu, updateMenu, refreshPublicMessage } = require('./selfRoles');
+const { syncMemberNickname } = require('./activity');
 
 async function cleanServerLayout(guild) {
     if (!guild) return { ok: false, error: 'Guild tidak ditemukan' };
@@ -168,7 +169,7 @@ async function cleanServerLayout(guild) {
         } catch (_) {}
     }
 
-    // 9. Bersihkan sisa badge love (❤️) dari nickname semua member
+    // 9. Format nickname member (PEKO 🔥226 - ⭐100) dan bersihkan sisa badge love
     try {
         let nickCleaned = 0;
         if (guild.members?.fetch) {
@@ -177,16 +178,11 @@ async function cleanServerLayout(guild) {
         const members = guild.members?.cache || [];
         for (const [, member] of members) {
             if (!member || member.user?.bot || !member.manageable) continue;
-            if (/[❤️💖💕💘💓💗]/.test(member.displayName)) {
-                const cleaned = member.displayName.replace(/\s*[❤️💖💕💘💓💗]\s*\d*/g, '').trim();
-                if (cleaned && cleaned !== member.displayName) {
-                    await member.setNickname(cleaned).catch(() => {});
-                    nickCleaned++;
-                }
-            }
+            const updated = await syncMemberNickname(member);
+            if (updated) nickCleaned++;
         }
         if (nickCleaned > 0) {
-            log.push(`🧹 Bersihkan sisa badge love dari nickname (${nickCleaned} member)`);
+            log.push(`✨ Sinkronkan format nickname member (${nickCleaned} member)`);
         }
     } catch (_) {}
 

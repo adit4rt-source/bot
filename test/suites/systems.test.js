@@ -1485,4 +1485,35 @@ module.exports = function register() {
       if (!last) throw new Error('expected ramalan_last_date to be saved');
     }
   });
+
+  test('activity: formatDisplayName formats PEKO 🔥226 - ⭐100 correctly', async () => {
+    const { formatDisplayName, syncMemberNickname } = botRequire('systems/activity.js');
+    const f1 = formatDisplayName('PEKO', 226, 100);
+    if (f1 !== 'PEKO 🔥226 - ⭐100') throw new Error(`expected PEKO 🔥226 - ⭐100, got ${f1}`);
+
+    const f2 = formatDisplayName('Rzkii 🔥 224 ❤️ 9', 224, 50);
+    if (f2 !== 'Rzkii 🔥224 - ⭐50') throw new Error(`expected Rzkii 🔥224 - ⭐50, got ${f2}`);
+
+    const f3 = formatDisplayName('SuperLongUsernameExceedingLimit12345', 226, 100);
+    if (f3.length > 32) throw new Error(`nickname exceeded 32 chars: ${f3.length}`);
+    if (!f3.endsWith('🔥226 - ⭐100')) throw new Error(`suffix missing: ${f3}`);
+
+    const f4 = formatDisplayName('Newbie', 0, 5);
+    if (f4 !== 'Newbie ⭐5') throw new Error(`expected Newbie ⭐5, got ${f4}`);
+
+    let setNickCalled = null;
+    const mockMember = {
+      id: 'nick_user_1',
+      guild: { id: 'G_NICK' },
+      displayName: 'PEKO',
+      manageable: true,
+      setNickname: async (n) => { setNickCalled = n; }
+    };
+    db.getOrCreateUser('G_NICK', 'nick_user_1');
+    db.db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run('G_NICK', 'nick_user_1', 226, '2026-11-20');
+    db.db.prepare('UPDATE users SET level = ? WHERE userId = ?').run(100, 'nick_user_1');
+
+    await syncMemberNickname(mockMember);
+    if (setNickCalled !== 'PEKO 🔥226 - ⭐100') throw new Error(`sync failed: ${setNickCalled}`);
+  });
 };

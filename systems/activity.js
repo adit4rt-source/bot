@@ -8,6 +8,61 @@ function getConf(guildId, key, def) {
     return getSetting(guildId, key, def);
 }
 
+function formatDisplayName(rawName, streakCount = 0, level = 0, options = {}) {
+    const minStreak = options.minStreak !== undefined ? options.minStreak : 1;
+    const minLevel = options.minLevel !== undefined ? options.minLevel : 1;
+    const streakEmoji = options.streakEmoji || '🔥';
+
+    let clean = (rawName || '')
+        .replace(/\s*-\s*⭐\s*\d+.*$/i, '')
+        .replace(/\s*[✨🔥⚡👑💠💎🌌❤️💖💕💘💓💗⭐].*$/, '')
+        .replace(/\s*\d+$/, '')
+        .trim();
+    if (!clean) clean = (rawName || 'Member').slice(0, 10).trim();
+
+    const parts = [];
+    if (streakCount >= minStreak) {
+        parts.push(`${streakEmoji}${streakCount}`);
+    }
+    if (level >= minLevel) {
+        parts.push(`⭐${level}`);
+    }
+
+    if (!parts.length) return clean.slice(0, 32);
+
+    const suffix = ` ${parts.join(' - ')}`;
+    const maxBase = Math.max(1, 32 - suffix.length);
+    return `${clean.slice(0, maxBase).trim()}${suffix}`.slice(0, 32);
+}
+
+async function syncMemberNickname(member, streakCount = null, level = null) {
+    if (!member || !member.manageable) return false;
+    const guildId = member.guild.id;
+
+    const autoNick = getSetting(guildId, 'streak_auto_nickname', '1');
+    if (autoNick === '0' || autoNick === 'false') return false;
+
+    if (streakCount === null || streakCount === undefined) {
+        const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, member.id);
+        streakCount = streakRow ? Number(streakRow.count) || 0 : 0;
+    }
+    if (level === null || level === undefined) {
+        const user = getOrCreateUser(guildId, member.id);
+        level = user ? Number(user.level) || 0 : 0;
+    }
+
+    const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+    const minStreak = parseInt(getSetting(guildId, 'streak_min_days', '1')) || 1;
+    const minLevel = parseInt(getSetting(guildId, 'level_min_nick', '1')) || 1;
+    const newNick = formatDisplayName(member.displayName, streakCount, level, { minStreak, minLevel, streakEmoji });
+
+    if (member.displayName !== newNick) {
+        await member.setNickname(newNick).catch(() => {});
+        return true;
+    }
+    return false;
+}
+
 async function checkAndUpdateStreak(message) {
     const member = message.member;
     if (!member || member.user.bot) return false;
@@ -68,18 +123,10 @@ async function checkAndUpdateStreak(message) {
         streakActivatedToday = true;
     }
 
-    // Auto-nickname with streak emoji
+    // Auto-nickname with streak + level (format: PEKO 🔥226 - ⭐100)
     try {
-        const streakAutoNick = getSetting(guildId, 'streak_auto_nickname', '1');
-        const streakMinDays = parseInt(getSetting(guildId, 'streak_min_days', '3')) || 3;
-        if (streakAutoNick === '1' && streakData.count >= streakMinDays) {
-            const streakEmoji = getStreakEmoji(streakData.count);
-            const cleanName = member.displayName.replace(/\s*[✨🔥⚡👑💠💎🌌❤️💖💕💘💓💗].*$/, '').replace(/\s*\d+$/, '').trim();
-            const newNick = `${cleanName} ${streakEmoji}${streakData.count}`.slice(0, 32);
-            if (member.manageable && member.displayName !== newNick) {
-                await member.setNickname(newNick).catch(() => {});
-            }
-        }
+        const user = getOrCreateUser(guildId, userId);
+        await syncMemberNickname(member, streakData.count, user ? user.level : 0);
     } catch (_) {}
 
     // Auto-sync prestige streak role on ANY message if member is missing their tier role, or on daily activation
@@ -223,6 +270,24 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     }
 
     if (leveledUp) {
+        // Auto-grant level rewards (roles/money) if configured
+        try {
+            const rewardRow = db.prepare('SELECT roleId, money FROM rewards WHERE guildId = ? AND level = ?').get(guildId, currentLevel);
+            if (rewardRow) {
+                if (rewardRow.money > 0) {
+                    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(rewardRow.money, guildId, member.id);
+                }
+                if (rewardRow.roleId && member.guild.roles?.cache?.has(rewardRow.roleId)) {
+                    await member.roles.add(rewardRow.roleId, `Level ${currentLevel} reward`).catch(() => {});
+                }
+            }
+        } catch (_) {}
+
+        // Auto-update nickname with new level
+        try {
+            await syncMemberNickname(member, streakCount, currentLevel);
+        } catch (_) {}
+
         await checkAchievements(member.guild, member.id, { type: 'level', level: currentLevel });
 
         const levelUpChannelId = getSetting(guildId, 'levelup_channel', '');
@@ -239,6 +304,8 @@ async function addXpAndMoney(member, type, multiplier = 1) {
 }
 
 module.exports = {
+    formatDisplayName,
+    syncMemberNickname,
     checkAndUpdateStreak,
     addXpAndMoney,
 };
