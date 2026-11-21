@@ -74,7 +74,7 @@ parentPort.on('message', async (msg) => {
             throw new Error(`Renderer function "${fnName}" not found for type "${type}"`);
         }
         const buffer = await renderer[fnName](params);
-        parentPort.postMessage({ id, buffer, error: null }, [buffer.buffer]);
+        parentPort.postMessage({ id, buffer, error: null });
     } catch (e) {
         parentPort.postMessage({ id, buffer: null, error: e.message });
     }
