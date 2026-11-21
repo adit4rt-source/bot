@@ -33,6 +33,8 @@ class Context2D {
   lineTo() {}
   arc() {}
   arcTo() {}
+  quadraticCurveTo() {}
+  bezierCurveTo() {}
   clip() {}
   fill() {}
   stroke() {}
