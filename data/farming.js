@@ -86,6 +86,13 @@ const FARM_RECIPES = [
     { id: 'celestial_potion', name: 'Celestial Potion', emoji: '⭐', ingredients: [{id:'celestial_tree',qty:1},{id:'lotus',qty:2},{id:'madu',qty:3}], sellPrice: 60000 },
     { id: 'time_essence', name: 'Time Essence', emoji: '⌛', ingredients: [{id:'time_blossom',qty:1},{id:'mystic_herb',qty:2},{id:'dragon_fruit_crop',qty:1}], sellPrice: 100000 },
     { id: 'lotus_perfume', name: 'Golden Lotus Perfume', emoji: '🪷', ingredients: [{id:'golden_lotus',qty:1},{id:'sakura',qty:3},{id:'mawar',qty:3}], sellPrice: 30000 },
+
+    // === MYTHIC RECIPES (rare combinations of prestige crops — the top of the recipe tree) ===
+    { id: 'dragon_phoenix_feast', name: 'Dragon-Phoenix Feast', emoji: '🐲', ingredients: [{id:'dragon_fruit_crop',qty:3},{id:'phoenix_flower',qty:2},{id:'ice_berry',qty:2}], sellPrice: 120000 },
+    { id: 'genesis_nectar', name: 'Genesis Nectar', emoji: '🍯', ingredients: [{id:'golden_lotus',qty:1},{id:'celestial_tree',qty:1},{id:'madu',qty:5}], sellPrice: 140000 },
+    { id: 'eternity_brew', name: 'Eternity Brew', emoji: '🌌', ingredients: [{id:'time_blossom',qty:2},{id:'celestial_tree',qty:1},{id:'mystic_herb',qty:3}], sellPrice: 160000 },
+    { id: 'void_phoenix_elixir', name: 'Void-Phoenix Elixir', emoji: '☄️', ingredients: [{id:'void_rose',qty:1},{id:'phoenix_flower',qty:1},{id:'crystal_flower',qty:3}], sellPrice: 190000 },
+    { id: 'astral_ambrosia', name: 'Astral Ambrosia', emoji: '🌠', ingredients: [{id:'time_blossom',qty:1},{id:'void_rose',qty:1},{id:'golden_lotus',qty:1},{id:'lotus',qty:3}], sellPrice: 260000 },
 ];
 
 const FARM_FERTILIZERS = [
@@ -97,14 +104,14 @@ const FARM_FERTILIZERS = [
 ];
 
 const FARM_DECORATIONS = [
-    { id: 'scarecrow', name: 'Orang-orangan Sawah', emoji: '<:scarecrow:1514057625204162570>', price: 5000, desc: 'Melindungi tanaman dari hama' },
-    { id: 'fountain', name: 'Air Mancur', emoji: '<:fountain:1514059282490982432>', price: 10000, desc: 'Dekorasi mewah' },
-    { id: 'windmill', name: 'Kincir Angin', emoji: '<:windmill:1514059280674852874>', price: 15000, desc: 'Menambah estetika kebun' },
-    { id: 'flower_bed', name: 'Taman Bunga', emoji: '<:flower_bed:1514059278841942136>', price: 8000, desc: 'Taman bunga cantik' },
-    { id: 'bee_hive', name: 'Sarang Lebah', emoji: '<:bee_hive:1514059276811894965>', price: 12000, desc: 'Menarik lebah penyerbuk' },
-    { id: 'pond', name: 'Kolam Ikan', emoji: '<:pond:1514059274983182448>', price: 20000, desc: 'Kolam mini di kebun' },
-    { id: 'greenhouse', name: 'Rumah Kaca', emoji: '<:greenhouse:1514059633784786964>', price: 50000, desc: 'Rumah kaca premium' },
-    { id: 'golden_statue', name: 'Patung Emas', emoji: '<:golden_statue:1514059984411955242>', price: 100000, desc: 'Simbol kemewahan!' },
+    { id: 'scarecrow', name: 'Orang-orangan Sawah', emoji: '<:scarecrow:1514057625204162570>', price: 5000, desc: '−25% hama / death chance' },
+    { id: 'fountain', name: 'Air Mancur', emoji: '<:fountain:1514059282490982432>', price: 10000, desc: '+5% grow speed' },
+    { id: 'windmill', name: 'Kincir Angin', emoji: '<:windmill:1514059280674852874>', price: 15000, desc: '+3% grow speed' },
+    { id: 'flower_bed', name: 'Taman Bunga', emoji: '<:flower_bed:1514059278841942136>', price: 8000, desc: '+2% mutation chance' },
+    { id: 'bee_hive', name: 'Sarang Lebah', emoji: '<:bee_hive:1514059276811894965>', price: 12000, desc: '+5% yield (penyerbukan)' },
+    { id: 'pond', name: 'Kolam Ikan', emoji: '<:pond:1514059274983182448>', price: 20000, desc: '+3% yield' },
+    { id: 'greenhouse', name: 'Rumah Kaca', emoji: '<:greenhouse:1514059633784786964>', price: 50000, desc: '+5% grow (deco; beda dari GH plots)' },
+    { id: 'golden_statue', name: 'Patung Emas', emoji: '<:golden_statue:1514059984411955242>', price: 100000, desc: '+8% yield +2% mutasi' },
 ];
 
 // ==================== FARM TOOLS (craftable gear) ====================

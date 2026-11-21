@@ -1,6 +1,5 @@
 // systems/guidePanel.js — In-bot interactive guide (/guide)
-// Menampilkan panduan fitur langsung di Discord lewat panel + tombol navigasi.
-// Saat ini fokus ke PET. Tambah topik lain dengan menambah section baru.
+// Menampilkan panduan fitur komunitas langsung di Discord lewat panel + tombol navigasi.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const ui = require('./ui');
@@ -8,154 +7,121 @@ const ui = require('./ui');
 const DIV = '━━━━━━━━━━━━━━━━━━━━';
 
 // ==================== SECTIONS ====================
-// Tiap section punya konten ringkas-tapi-lengkap. Dibatasi < 4096 char (limit embed).
 const SECTIONS = {
     overview: {
         label: '🏠 Dasar',
-        title: '🐾 Pet — Dasar & Cara Dapat',
+        title: '🏠 Panduan Dasar & Panel Komunitas',
         body:
-            `Pet punya **2 peran**: kasih **bonus pasif** (income/XP/luck otomatis) dan bisa diajak **bertarung & beraktivitas**.\n` +
-            `Kamu bisa punya banyak pet, tapi **cuma 1 aktif** — ganti via **🔄 Swap**.\n\n` +
-            `${DIV}\n**🥚 Cara Dapat Pet**\n` +
-            `> 🛒 **Shop** — beli langsung (Common–Epic)\n` +
-            `> 🥚 **Egg/Gacha** — satu-satunya cara Legendary ke atas\n\n` +
-            `> 🥚 Common (2rb): Common 60/Uncommon 30/Rare 10\n` +
-            `> 🥚 Rare (10rb): Uncommon 35/Rare 40/Epic 20/Legendary 5\n` +
-            `> 🥚 Legendary (50rb): Rare 25/Epic 40/Legendary 25/Mythic 10\n` +
-            `> 🌟 Mythic (150rb): Epic 28/Legendary 45/Mythic 25/**Secret 2**\n` +
-            `> 🌌 Celestial (500rb): Legendary 40/Mythic 45/**Secret 14/GOD 1**\n\n` +
-            `${DIV}\n**🏆 Tier (rendah → tinggi)**\n` +
-            `> ⚪ Common · 🟢 Uncommon · 🔵 Rare · 🟣 Epic\n` +
-            `> 🟡 Legendary · 🔴 Mythic · 🟪 Secret · 👑 GOD\n` +
-            `> Makin tinggi tier = bonus pasif & stats makin besar.\n` +
-            `> Lihat semua pet di **📖 Pet Dex** (tombol di panel \`/pet\`).`
+            `Selamat datang di bot resmi **ID COMMUNITY**!\n` +
+            `Bot ini dirancang khusus untuk meningkatkan keaktifan chat, voice, dan interaksi sesama member.\n\n` +
+            `${DIV}\n**📱 Panel Navigasi Utama**\n` +
+            `> \`/menu\` — Hub navigasi utama semua fitur bot\n` +
+            `> \`/profile\` — Cek profil, EXP, badge, inventory, & kartu profil PNG\n` +
+            `> \`/wallet\` — Saldo, transfer gift, & leaderboard ekonomi\n` +
+            `> \`/levelpanel\` — Cek progress level obrolan & hadiah level\n` +
+            `> \`/stats\` — Rangkuman statistik chat, voice, & kemenangan game\n\n` +
+            `${DIV}\n**✨ Cara Cepat Naik Level & Dapet Koin**\n` +
+            `> 💬 Aktif mengobrol di channel chat (+XP & Money berkala)\n` +
+            `> 🎙️ Nongkrong di voice channel / private space (+XP voice)\n` +
+            `> 🎁 Klaim \`/daily\` setiap hari untuk bonus koin berlipat!`
     },
-    care: {
-        label: '❤️ Rawat & Bonus',
-        title: '❤️ Perawatan & Bonus Pasif',
+    streak: {
+        label: '🔥 Streak',
+        title: '🔥 Sistem Streak Prestige & VVIP Lounge',
         body:
-            `Bonus pasif **MATI total** kalau: 😢 Happiness < 30, 🍖 Hunger < 10, pet **sakit**, atau lagi **Hunting**.\n` +
-            `Jaga pet dengan **🍖 Feed** & **🎾 Play**.\n\n` +
-            `${DIV}\n**🍖 Makanan**\n` +
-            `> Snack (30) +15 hunger\n` +
-            `> Daging Premium (100) +30 hunger\n` +
-            `> Kue Spesial (200) +25 happy\n` +
-            `> Feast Mewah (500) +50 hunger +30 happy\n` +
-            `> Makanan Mitik (1.500) +100 hunger +50 happy\n\n` +
-            `${DIV}\n**📈 Bonus naik per level pet** (mentok Lv.30)\n` +
-            `> Lv.0–4 ×1.0 · Lv.5–9 ×1.2 · Lv.10–14 ×1.5\n` +
-            `> Lv.15–19 ×1.8 · Lv.20–24 ×2.0 · Lv.25–29 ×2.5 · **Lv.30+ ×3.0**\n\n` +
-            `${DIV}\n**🎁 Tipe bonus**\n` +
-            `> money/xp dari chat, money_all, xp_all, fish_luck, farm_yield/speed,\n` +
-            `> quest_reward, event_luck, dan **all_reward** (paling fleksibel).\n` +
-            `> ⚙️ Angka di panel = potensi maksimal (ada penyeimbang internal).`
+            `Jaga api keaktifanmu menyala setiap hari dengan mengetik minimal 1 pesan di server!\n\n` +
+            `${DIV}\n**👑 Hierarki Role Streak (Gaya A)**\n` +
+            `> 🕯️ **Penyala Api** (7–13 hari) — Multiplier Chat: 1.1x\n` +
+            `> 🔥 **Penjaga Api** (14–29 hari) — Multiplier Chat: 1.2x\n` +
+            `> ⚡ **Kobaran Api** (30–59 hari) — Multiplier Chat: 1.3x\n` +
+            `> ☀️ **Api Abadi** (60–99 hari) — Multiplier Chat: 1.5x\n` +
+            `> 🏛️ **VVIP Lounge Veteran** (100+ hari) — Multiplier Chat: 2.0x!\n\n` +
+            `${DIV}\n**🏛️ Akses VVIP High-Table Lounge**\n` +
+            `> Khusus member dengan streak **100 hari berturut-turut**.\n` +
+            `> Kategori & voice channel eksklusif dengan bitrate maksimal (128kbps).\n` +
+            `> Command: \`/streak status\` & \`/streak lounge\`.\n\n` +
+            `${DIV}\n**🧊 Proteksi Streak**\n` +
+            `> Streak Freeze otomatis melindungi streakmu jika berhalangan online.`
     },
-    battle: {
-        label: '⚔️ Battle & Element',
-        title: '⚔️ Battle, Skill & Element',
+    shop: {
+        label: '🛒 Shop & Vault',
+        title: '🛒 Toko Komunitas & Sirkulasi Vault',
         body:
-            `**📊 Stats:** HP, ATK, DEF, SPD, CRIT (acak sesuai tier).\n` +
-            `**🏷️ Class** (warrior/tank/dll) = **kosmetik**, tidak pengaruh battle.\n` +
-            `**🔥 Element** = sangat berpengaruh!\n\n` +
-            `${DIV}\n**🌟 Skill (1 acak per tier, otomatis dipakai)**\n` +
-            `> **Lv.10** Power Strike 2x · Shield Wall -50% dmg · Quick Heal +20% HP\n` +
-            `> **Lv.30** Critical Surge +30% crit · Elemental Blast 2.5x · Life Drain 1.5x+heal\n` +
-            `> **Lv.60** Berserk +50% ATK · Iron Fortress -80% dmg · **Resurrection** (bangkit 1x)\n` +
-            `> **Lv.100** Ultimate Strike **4x** · Divine Shield (kebal 1 turn) · Omega Heal +50%\n\n` +
-            `${DIV}\n**🔥 Element Matchup**\n` +
-            `> 🔥 Fire → 🌿 Nature → 💧 Water → 🔥 Fire\n` +
-            `> ⚡ Electric → 💧 Water · 🌑 Dark ↔ ✨ Light\n\n` +
-            `> Unggul: **+25% dmg** · Lemah: **-20%** · Elemental Blast unggul: **+50%**\n` +
-            `> Berlaku di Dungeon, Boss, PvP, World Boss.`
+            `Tukarkan koin hasil obrolanmu dengan berbagai item eksklusif di \`/shop\`!\n\n` +
+            `${DIV}\n**🛡️ Proteksi & Kosmetik Profil**\n` +
+            `> 🛡️ **Streak Shield** — Lindungi streak jika bolos chat 1 hari\n` +
+            `> 🧊 **Streak Freeze** — Bekukan streak selama 3 hari\n` +
+            `> 🎨 **Custom Color Role** — Buat role custom dengan warna HEX pilihanmu\n` +
+            `> 📛 **Custom Title Tag** — Pasang gelar kustom di profil\n` +
+            `> 🖼️ **Custom Profile Banner** — Pasang gambar background kartu profil\n\n` +
+            `${DIV}\n**💬 Utilitas Sosial & Booster**\n` +
+            `> 📢 **Server Megaphone** — Siarkan broadcast berbingkai emas ke chat\n` +
+            `> 🤫 **Menfess Token** — Kirim pesan rahasia anonim via bot\n` +
+            `> ⚡ **XP Booster 2x** — Double perolehan XP chat & voice\n` +
+            `> 🧲 **Money Magnet** — +50% perolehan koin obrolan\n` +
+            `> 📦 **Mystery Gacha Box** — Gacha berhadiah hingga 30.000 money!`
     },
-    activity: {
-        label: '🗺️ Aktivitas',
-        title: '🗺️ Hunt · Dungeon · Boss · Expedition',
+    casino: {
+        label: '🎰 Casino',
+        title: '🎰 Mini-Games Casino & Taruhan Ringan',
         body:
-            `**🏹 Hunt** — berburu 10–20 menit. 80% sukses → 100–400 money + EXP + 25% material. Buff mati selama hunt.\n\n` +
-            `${DIV}\n**🏰 Dungeon** — *aktif, cepat, COUNTER elemen*\n` +
-            `> Instan (CD beberapa menit). **Lawan** elemen musuh → +25% dmg.\n` +
-            `> Sumber utama **relic & material gear**.\n` +
-            `> ⚠️ Kalah = hilang money kecil (ada cap per tier, BUKAN % total saldo).\n\n` +
-            `${DIV}\n**👹 Boss**\n` +
-            `> Solo (CD 10 mnt): money besar + refine + relic. Boss endgame drop Mythic Fragment / Awakening Crystal.\n` +
-            `> Party Raid (1–10 player): damage tiap member di-scale elemen vs boss.\n\n` +
-            `${DIV}\n**🌊 Expedition** — *pasif AFK, SYNERGY elemen*\n` +
-            `> Kirim pet 2–8 jam (pet terkunci, tanpa risiko).\n` +
-            `> Bawa pet **se-elemen** tema zona → **+25% money, +20% EXP, +15% drop**.\n` +
-            `> Fokus **EXP massal + booster/consumable**.\n` +
-            `> Zona: 🌲nature 🏔️electric 🏛️light 🌊water 🌑dark 🗼fire\n\n` +
-            `> 🎯 **Beda kunci:** Dungeon = *lawan* elemen musuh · Expedition = *samakan* elemen zona.`
+            `Adu keberuntungan dengan mini-games santai bersama teman-teman server!\n\n` +
+            `${DIV}\n**🎲 Permainan yang Tersedia**\n` +
+            `> 🪙 **Coinflip** — Tebak Head / Tail dengan animasi seru\n` +
+            `> 🎰 **Slot Machine** — Spin 3 reel, raih Jackpot 777 payout 25x\n` +
+            `> 🎯 **Roulette** — Tebak angka merah, hitam, atau nomor spesifik\n` +
+            `> 🃏 **/blackjack** — Main kartu 21 melawan dealer bot\n` +
+            `> 🎟️ **/togel** — Pasang angka 1-100, pot akumulasi diundi tiap jam!\n\n` +
+            `${DIV}\n**💡 Tips**\n` +
+            `> Buka panel utama lewat \`/casino\` untuk navigasi instan.`
     },
-    card: {
-        label: '🃏 Card TCG',
-        title: '🃏 Pokemon Card TCG — Panduan Gacha',
+    tempvoice: {
+        label: '🎙️ TempVoice',
+        title: '🎙️ Private Space (TempVoice & Private Chat)',
         body:
-            `Kumpulkan kartu Pokemon asli dari **pokemontcg.io**! Beli pack, kumpulkan koleksi, burn duplikat jadi Stardust.\n\n` +
-            `${DIV}\n**🎴 Gacha Pack**\n` +
-            `> 🟢 **Basic** (15rb) — 3 kartu: Common/Uncommon/Rare. CD 5 mnt\n` +
-            `> 🔵 **Premium** (75rb) — 3 kartu: Rare–Holo V. CD 15 mnt\n` +
-            `> 🟣 **Ultra** (200rb) — 3 kartu: Rare Holo–Secret. CD 30 mnt\n` +
-            `> 💎 **Master** (750rb) — 10 kartu + 1 Ultra guaranteed! CD 60 mnt\n\n` +
-            `${DIV}\n**⭐ Rarity (rendah → tinggi)**\n` +
-            `> ⚪ Common · 🟢 Uncommon · 🔵 Rare · 🟣 Rare Holo\n` +
-            `> 🟡 Rare Holo EX/GX/V · 🔴 Rare Ultra · 🌈 Rare Rainbow\n` +
-            `> 👑 Rare Secret · 🎨 Illustration Rare · 💎 Special Art Rare\n\n` +
-            `${DIV}\n**✨ Stardust & Burn**\n` +
-            `> Burn duplikat → dapat ✨ Stardust sesuai rarity.\n` +
-            `> Stardust bisa dipakai untuk fitur khusus di masa depan.\n\n` +
-            `${DIV}\n**❤️ Wishlist & Fitur Lain**\n` +
-            `> \`/wishlist add [nama]\` — otomatis di-ping saat kartu muncul\n` +
-            `> 🏆 **Leaderboard** — top collector berdasar total koleksi\n` +
-            `> 🎨 **Dye** — warnai kartu favoritmu\n\n` +
-            `> -# *Fan-made • Not affiliated with Nintendo/The Pokemon Company*`
+            `Buat ruang nongkrong privat sendiri dengan kontrol penuh!\n\n` +
+            `${DIV}\n**✨ Cara Menggunakan**\n` +
+            `> Klik channel join **➕ Buat Private Space**.\n` +
+            `> Bot otomatis membuat kategori baru berisi:\n` +
+            `>  🔊 Voice Channel privat kamu\n` +
+            `>  💬 Text Chat privat khusus member di dalam voice\n\n` +
+            `${DIV}\n**🎛️ Kontrol Private Space**\n` +
+            `> Gunakan \`/tempvoice open\` atau panel kontrol untuk:\n` +
+            `> ✏️ Ganti nama channel & atur batas user limit\n` +
+            `> 🔒 Kunci / Buka akses publik\n` +
+            `> 👢 Kick / Ban member yang mengganggu\n` +
+            `> 👑 Transfer kepemilikan ruangan ke teman`
     },
-    arena: {
-        label: '🏟️ Arena',
-        title: '🏟️ Ranked Arena — Panduan PvP',
+    ramalan: {
+        label: '🔮 Ramalan',
+        title: '🔮 Ramalan Harian & Angka Hoki',
         body:
-            `Adu kekuatan pet di **Ranked Arena** dengan sistem **ELO matchmaking**!\n\n` +
-            `${DIV}\n**⚔️ Cara Main**\n` +
-            `> Ketik \`/arena\` → klik ⚔️ **Cari Lawan**.\n` +
-            `> Bot otomatis cari lawan rating serupa (ELO ±range).\n` +
-            `> Cooldown: 45 detik antar fight. Max 50 fight/hari.\n\n` +
-            `${DIV}\n**🏆 Tier System**\n` +
-            `> 🥉 Bronze (0+) · 🥈 Silver (1100+) · 🥇 Gold (1250+)\n` +
-            `> 💠 Platinum (1400+) · 💎 Diamond (1600+) · 👑 Master (1850+)\n` +
-            `> Naik tier = bonus money + AP + item!\n\n` +
-            `${DIV}\n**🔥 Win Streak Bonus**\n` +
-            `> 3 streak: ×1.5 · 5: ×2 · 7: ×2.5 · 10: ×3 reward!\n\n` +
-            `${DIV}\n**🎖️ Arena Points (AP) & Shop**\n` +
-            `> Menang → AP. AP bisa beli item eksklusif di Arena Shop:\n` +
-            `> 🗡️ Arena Relic Box · 🥚 Arena Egg (Epic-Mythic)\n` +
-            `> dan booster lainnya.\n\n` +
-            `${DIV}\n**📅 Monthly Season**\n` +
-            `> Tiap bulan, rating di soft-reset.\n` +
-            `> Top 10 dapat bonus besar + title eksklusif!`
+            `Cek aura dan keberuntungan harianmu setiap hari!\n\n` +
+            `${DIV}\n**✨ Fitur Ramalan**\n` +
+            `> \`/ramalan hari_ini\` — Lihat ramalan, pesan refleksi, & energi hari ini\n` +
+            `> 🍀 Angka & warna hoki harian\n` +
+            `> ⏰ Bot otomatis membagikan ramalan harian ke channel khusus tiap **07:00 WIB**\n\n` +
+            `${DIV}\n**🎯 Konsistensi**\n` +
+            `> Ramalan hari ini sama untuk seluruh server, tapi angka & interpretasi bisa kamu diskusikan bareng member lain!`
     },
-    progress: {
-        label: '📈 Kembang',
-        title: '📈 Evolution · Fusion · Relic · Abilities · Awakening',
+    quiz: {
+        label: '🎮 Quiz Game',
+        title: '🎮 Kuis & Tebak Kata (/games)',
         body:
-            `**⬆️ Evolution** — pet tertentu evolusi otomatis di Lv.20/50/100/150 jadi lebih kuat.\n\n` +
-            `${DIV}\n**🧬 Fusion** — gabung 2 pet tier sama (non-aktif) → tier lebih tinggi:\n` +
-            `> Common 3rb/90% · Uncommon 10rb/75% · Rare 30rb/60%\n` +
-            `> Epic 80rb/45% · Legendary 200rb/30%\n` +
-            `> ⚠️ Gagal = kehilangan 1 pet acak (biaya tetap kepotong).\n\n` +
-            `${DIV}\n**♻️ Release Pet** — lepas pet non-aktif dari 📦 Collection → dapat refund money sesuai tier (wajib konfirmasi; pet aktif/hunting/ekspedisi tidak bisa dilepas).\n\n` +
-            `${DIV}\n**📿 Relic & Refine** — relic (Weapon/Armor/Accessory) drop dari Dungeon/Boss, kasih +stats.\n` +
-            `> Upgrade pakai 🪨 Refine Stone; 🛡️ Protection Stone cegah turun level saat gagal.\n\n` +
-            `${DIV}\n**💎 Abilities** (pasif, 3 slot, swap CD 24 jam)\n` +
-            `> Lv.30: Auto-Fish, Auto-Water, Passive Income/XP, Slow Hunger\n` +
-            `> Lv.50: +15% jual, /daily +30%, -15% shop, Quest Ace, Streak Guard\n` +
-            `> Lv.100: Double Catch, Green Thumb, +15% relic, +10% crit, -25% expedition\n\n` +
-            `${DIV}\n**⚡ Awakening** (Lv.200) — reset Lv.1 tapi stats base naik permanen:\n` +
-            `> ★ +15% · ★★ +30% · ★★★ +50% · ★★★★ +75% · ★★★★★ **+100%**\n` +
-            `> Skill & ability tetap. Butuh money + material langka.`
-    },
+            `Uji wawasan dan kecepatan berpikir bersama member lain!\n\n` +
+            `${DIV}\n**📚 14 Kategori Kuis Seru**\n` +
+            `> 🤔 Siapakah Aku · 🧠 Asah Otak · 🔤 Susun Kata\n` +
+            `> 🖼️ Tebak Gambar · 🗺️ Tebak Kabupaten · 😂 Cak Lontong\n` +
+            `> 📝 Tebak Kalimat · 💬 Tebak Kata · ⚗️ Tebak Kimia\n` +
+            `> 🎵 Tebak Lagu · 🎤 Tebak Lirik · ❓ Tebak-Tebakan\n` +
+            `> 🧩 Teka-Teki · 🤫 Truth or Dare\n\n` +
+            `${DIV}\n**🎁 Hadiah**\n` +
+            `> Menjawab benar memberi koin money langsung ke akunmu!\n` +
+            `> Akses langsung via command \`/games\`.`
+    }
 };
 
-const SECTION_ORDER = ['overview', 'care', 'battle', 'activity', 'progress', 'card', 'arena'];
+const SECTION_ORDER = ['overview', 'streak', 'shop', 'casino', 'tempvoice', 'ramalan', 'quiz'];
 
 // ==================== BUILD PANEL ====================
 function buildGuidePanel(userId, section = 'overview') {
@@ -163,10 +129,10 @@ function buildGuidePanel(userId, section = 'overview') {
     const sec = SECTIONS[key];
 
     const embed = new EmbedBuilder()
-        .setColor(ui.COLORS.pet)
+        .setColor(ui.COLORS.info || '#3498DB')
         .setTitle(sec.title)
         .setDescription(sec.body)
-        .setFooter({ text: 'Panduan Bot • Klik tombol di bawah untuk pindah bagian' });
+        .setFooter({ text: 'Panduan Komunitas ID COMMUNITY • Klik tombol di bawah untuk ganti topik' });
 
     // Navigation buttons (active section highlighted) — max 5 per row
     const allButtons = SECTION_ORDER.map(s =>
@@ -175,14 +141,10 @@ function buildGuidePanel(userId, section = 'overview') {
             .setLabel(SECTIONS[s].label)
             .setStyle(s === key ? ButtonStyle.Primary : ButtonStyle.Secondary)
     );
-    const row1 = new ActionRowBuilder().addComponents(allButtons.slice(0, 5));
-    const components = [row1];
-    if (allButtons.length > 5) {
-        const row2 = new ActionRowBuilder().addComponents(allButtons.slice(5));
-        components.push(row2);
-    }
+    const row1 = new ActionRowBuilder().addComponents(allButtons.slice(0, 4));
+    const row2 = new ActionRowBuilder().addComponents(allButtons.slice(4));
 
-    return { embeds: [embed], components };
+    return { embeds: [embed], components: [row1, row2] };
 }
 
 // ==================== HANDLER ====================

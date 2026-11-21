@@ -5,7 +5,7 @@ const { FISH_DATA, FISH_TIERS, BAIT_TYPES, ROD_TYPES, FISHING_LOCATIONS, ROD_UPG
 
 function getEquipment(guildId, userId) {
     let eq = db.prepare('SELECT * FROM fish_equipment WHERE userId = ?').get(userId);
-    if (!eq) { db.prepare('INSERT INTO fish_equipment (userId) VALUES (?)').run(userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
+    if (!eq) { db.prepare('INSERT OR IGNORE INTO fish_equipment (guildId, userId) VALUES (?, ?)').run(guildId || 'global', userId); eq = { rod: 'basic', bait: 'none', bait_count: 0, location: 'river' }; }
     if (!eq.location) eq.location = 'river';
     return eq;
 }
@@ -207,9 +207,27 @@ function rollSeaMonster(guildId, userId, location, rod) {
     const rodBonus = Math.max(0, rod.tier - location.requiredRodTier);
     let effectiveChance = Math.max(5, location.monsterChance - (rodBonus * 3));
 
+    // Rod enchant monster ward
+    try {
+        if (rod && rod.id) {
+            const { getEnchantEffects } = require('./fishingExtras');
+            const fx = getEnchantEffects(userId, rod.id);
+            if (fx.monster) effectiveChance = Math.max(0, effectiveChance * (1 - fx.monster));
+        }
+    } catch (_) {}
+
     // Apply fishing weather multiplier to monster chance
     const { weather } = getFishingWeather();
     effectiveChance = Math.max(0, effectiveChance * weather.effects.monsterMult);
+
+    // Apply daily global weather multiplier
+    try {
+        const { getTodayWeather } = require('./farmWeather');
+        const dailyWeather = getTodayWeather();
+        if (dailyWeather && dailyWeather.id === 'stormy') {
+            effectiveChance *= 2.0; // 2x monster rate on stormy days
+        }
+    } catch (e) {}
 
     // Monster Repellent: -50% chance
     if (hasMonsterRepellent(guildId, userId)) {
@@ -257,8 +275,8 @@ function rollSeaMonster(guildId, userId, location, rod) {
             // Lose 1 bait
             if (eq.bait !== 'none' && eq.bait_count > 0) {
                 const newCount = eq.bait_count - 1;
-                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
                 damageResult.amount = 1;
                 damageResult.detail = 'Umpan -1';
             } else {
@@ -271,8 +289,8 @@ function rollSeaMonster(guildId, userId, location, rod) {
             if (eq.bait !== 'none' && eq.bait_count > 0) {
                 const loss = Math.min(5, eq.bait_count);
                 const newCount = eq.bait_count - loss;
-                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+                if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+                else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
                 damageResult.amount = loss;
                 damageResult.detail = `Umpan -${loss}`;
             } else {
@@ -293,7 +311,7 @@ function rollSeaMonster(guildId, userId, location, rod) {
 
         case 'money':
             // Lose money (varies by monster)
-            const moneyLossMap = { 'judgement_whale': 15000, 'reality_destroyer': 10000, 'dimensional_rift': 8000, 'phantom_angler': 7000, 'soul_eater': 5000, 'nebula_squid': 3000 };
+            const moneyLossMap = { 'judgement_whale': 15000, 'reality_destroyer': 10000, 'dimensional_rift': 8000, 'phantom_angler': 7000, 'soul_eater': 5000, 'nebula_squid': 3000, 'void_snatcher': 4000 };
             const moneyLoss = moneyLossMap[monster.id] || 5000;
             const { getOrCreateUser } = require('../database');
             const user = getOrCreateUser(guildId, userId);
@@ -333,12 +351,64 @@ function catchFish(guildId, userId) {
     // Consume bait
     if (eq.bait !== 'none' && eq.bait_count > 0) {
         const newCount = eq.bait_count - 1;
-        if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE guildId = ? AND userId = ?').run('none', guildId, userId);
-        else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE guildId = ? AND userId = ?').run(newCount, guildId, userId);
+        if (newCount <= 0) db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = 0 WHERE userId = ?').run('none', userId);
+        else db.prepare('UPDATE fish_equipment SET bait_count = ? WHERE userId = ?').run(newCount, userId);
     }
 
     // === LUCK CALCULATION ===
     let rareBonus = rod.rareBonus + bait.rareBonus + location.bonusRare;
+
+    // Rare Fish Luck Buff (+15%)
+    try {
+        const { getUserStat } = require('../database');
+        const luckBuffUntil = getUserStat(guildId, userId, 'fishing_luck_buff_until') || 0;
+        if (Date.now() < luckBuffUntil) {
+            rareBonus += 15;
+        }
+    } catch (e) {}
+
+    // Pet fish_luck passive + aquarium
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        rareBonus += getTotalPetBonus(guildId, userId, 'fish_luck') || 0;
+    } catch (e) {}
+    try {
+        const { getAquariumBonuses } = require('./fishingExtras');
+        rareBonus += getAquariumBonuses(userId).fish_luck || 0;
+    } catch (_) {}
+    // Mastery + location mastery + soft pity
+    try {
+        const { getMasteryBonuses, getLocationMastery, getPityRareBonus, getPityEpicBonus } = require('./fishingMastery');
+        rareBonus += getMasteryBonuses(userId).rareBonus || 0;
+        rareBonus += getLocationMastery(userId, location.id).rareBonus || 0;
+        rareBonus += getPityRareBonus(userId) || 0;
+        rareBonus += getPityEpicBonus(userId) || 0;
+    } catch (_) {}
+    // Rod enchants
+    let enchantFx = {};
+    try {
+        if (rod && rod.id) {
+            const { getEnchantEffects } = require('./fishingExtras');
+            enchantFx = getEnchantEffects(userId, rod.id) || {};
+            rareBonus += enchantFx.rareBonus || 0;
+        }
+    } catch (_) {}
+    // Season zone bonus
+    try {
+        const { getFishingSeason } = require('./fishingExtras');
+        const season = getFishingSeason();
+        if (season.locationId === location.id) rareBonus += 8;
+    } catch (_) {}
+    // Perfect cast temp bonus
+    try {
+        const { getUserStat, setUserStat } = require('../database');
+        const until = getUserStat(guildId, userId, 'perfect_cast_until') || 0;
+        if (Date.now() < until) {
+            rareBonus += getUserStat(guildId, userId, 'perfect_cast_bonus') || 0;
+            setUserStat(guildId, userId, 'perfect_cast_until', 0);
+            setUserStat(guildId, userId, 'perfect_cast_bonus', 0);
+        }
+    } catch (_) {}
 
     // Rod penalty
     const rodDeficit = location.requiredRodTier - rod.tier;
@@ -377,7 +447,7 @@ function catchFish(guildId, userId) {
         }
         else if (t.tier === 'Secret') {
             if (!hasBait || rod.tier < 6) adj = 0;
-            else adj = Math.min(0.8, t.chance + rareBonus * 0.05);
+            else adj = Math.min(1.8, t.chance + rareBonus * 0.08);
         }
         else if (t.tier === 'God') {
             // God tier: requires rod tier 10+ AND high-tier bait
@@ -402,16 +472,58 @@ function catchFish(guildId, userId) {
     let selectedTier = normalized[0];
     for (const t of normalized) { if (roll <= t.cumChance) { selectedTier = t; break; } }
 
+    // Season featured fish: small re-roll toward season species (before pick)
+    try {
+        const { getFishingSeason } = require('./fishingExtras');
+        const season = getFishingSeason();
+        if (season.locationId === location.id && season.fishId && Math.random() < 0.12) {
+            const sf = FISH_DATA.find(f => f.id === season.fishId);
+            if (sf && allowedTiers.includes(sf.tier)) {
+                const st = FISH_TIERS.find(t => t.tier === sf.tier);
+                if (st) selectedTier = { ...selectedTier, ...st, tier: st.tier };
+            }
+        }
+    } catch (_) {}
+
     // === FISH SELECTION (location-specific) ===
     let tierFish = FISH_DATA.filter(f => f.tier === selectedTier.tier && f.location === location.id);
+    // Season bias: prefer featured fish if same tier/location
+    try {
+        const { getFishingSeason } = require('./fishingExtras');
+        const season = getFishingSeason();
+        if (season.locationId === location.id && season.fishId && Math.random() < 0.35) {
+            const preferred = FISH_DATA.filter(f => f.id === season.fishId);
+            if (preferred.length) tierFish = preferred;
+        }
+    } catch (_) {}
     if (tierFish.length === 0) tierFish = FISH_DATA.filter(f => f.tier === selectedTier.tier);
     if (tierFish.length === 0) tierFish = FISH_DATA.filter(f => f.location === location.id);
     if (tierFish.length === 0) tierFish = [FISH_DATA[0]];
 
     const fish = tierFish[Math.floor(Math.random() * tierFish.length)];
-    const weight = parseFloat((Math.random() * (selectedTier.maxWeight - selectedTier.minWeight) + selectedTier.minWeight).toFixed(2));
+    let weight = parseFloat((Math.random() * (selectedTier.maxWeight - selectedTier.minWeight) + selectedTier.minWeight).toFixed(2));
+
+    // Trophy Chum bait + mastery/enchant trophy tilt toward heavier fish
+    let trophyTilt = 0;
+    try {
+        if (eq.bait === 'trophy_chum') trophyTilt += 0.12;
+        const { getMasteryBonuses } = require('./fishingMastery');
+        trophyTilt += (getMasteryBonuses(userId).trophyChance || 0) / 100;
+        if (enchantFx.trophy) trophyTilt += enchantFx.trophy / 100;
+    } catch (_) {}
+    if (trophyTilt > 0) {
+        const minW = selectedTier.minWeight, maxW = selectedTier.maxWeight;
+        const base = Math.random();
+        const tilted = Math.min(0.995, base + trophyTilt * (1 - base));
+        weight = parseFloat((minW + (maxW - minW) * tilted).toFixed(2));
+    }
+
     const weightRatio = (weight - selectedTier.minWeight) / (selectedTier.maxWeight - selectedTier.minWeight || 1);
     let value = Math.floor(selectedTier.minValue + weightRatio * (selectedTier.maxValue - selectedTier.minValue));
+
+    // Trophy catch: top 10% weight of tier → value boost + flag
+    const isTrophy = weightRatio >= 0.90;
+    if (isTrophy) value = Math.floor(value * 1.5);
 
     // Apply fishing weather value multiplier (only for advanced locations)
     let activeWeather = null;
@@ -421,21 +533,137 @@ function catchFish(guildId, userId) {
         value = Math.floor(value * activeWeather.effects.valueMult);
     }
 
-    // Save to DB
+    // Save to DB (store value on inventory if column exists — otherwise only use returned value)
     db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish.id, weight, Date.now());
     // Persistent pokedex: register discovery (never deleted on sell)
     db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId, caughtAt, catch_count, heaviest_weight) VALUES (?, ?, ?, ?, 0, 0)').run(guildId, userId, fish.id, Date.now());
     db.prepare('UPDATE fish_collection SET catch_count = catch_count + 1, heaviest_weight = MAX(heaviest_weight, ?) WHERE guildId = ? AND userId = ? AND fishId = ?').run(weight, guildId, userId, fish.id);
 
-    // Rod Part drop chance (8% base)
+    // Mastery / season / contracts hooks
+    try {
+        const { recordCastMastery } = require('./fishingMastery');
+        recordCastMastery(userId, location.id, selectedTier.tier);
+    } catch (_) {}
+    try {
+        const { applySeasonCatch, bumpContract } = require('./fishingExtras');
+        applySeasonCatch(userId, fish.id, weight);
+        bumpContract(userId, { type: 'catch', tier: selectedTier.tier, locationId: location.id, isTrophy });
+    } catch (_) {}
+
+    // Double Catch pet ability (20% second fish same tier/location, no bait cost) + enchant
+    let doubleCatch = null;
+    let doubleChance = 0;
+    try {
+        const { hasAbility } = require('./petAbilities');
+        if (hasAbility(guildId, userId, 'double_fish')) doubleChance += 0.20;
+    } catch (_) {}
+    if (enchantFx.doubleChance) doubleChance += enchantFx.doubleChance;
+    try {
+        if (doubleChance > 0 && Math.random() < doubleChance) {
+            const fish2 = tierFish[Math.floor(Math.random() * tierFish.length)];
+            const w2 = parseFloat((Math.random() * (selectedTier.maxWeight - selectedTier.minWeight) + selectedTier.minWeight).toFixed(2));
+            const wr2 = (w2 - selectedTier.minWeight) / (selectedTier.maxWeight - selectedTier.minWeight || 1);
+            let v2 = Math.floor(selectedTier.minValue + wr2 * (selectedTier.maxValue - selectedTier.minValue));
+            if (wr2 >= 0.9) v2 = Math.floor(v2 * 1.5);
+            if (activeWeather) v2 = Math.floor(v2 * activeWeather.effects.valueMult);
+            db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, fish2.id, w2, Date.now());
+            db.prepare('INSERT OR IGNORE INTO fish_collection (guildId, userId, fishId, caughtAt, catch_count, heaviest_weight) VALUES (?, ?, ?, ?, 0, 0)').run(guildId, userId, fish2.id, Date.now());
+            db.prepare('UPDATE fish_collection SET catch_count = catch_count + 1, heaviest_weight = MAX(heaviest_weight, ?) WHERE guildId = ? AND userId = ? AND fishId = ?').run(w2, guildId, userId, fish2.id);
+            doubleCatch = { fish: fish2, weight: w2, value: v2, isTrophy: wr2 >= 0.9 };
+        }
+    } catch (_) {}
+
+    // Rod Part drop chance (8% base + drop_luck pet)
     let droppedPart = false;
-    if (Math.random() * 100 < ROD_PART_DROP_CHANCE) {
+    let partChance = ROD_PART_DROP_CHANCE;
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        partChance += (getTotalPetBonus(guildId, userId, 'drop_luck') || 0) * 0.15;
+    } catch (_) {}
+    if (Math.random() * 100 < partChance) {
         const { addItem } = require('../database');
         addItem(guildId, userId, 'rod_part', 1);
         droppedPart = true;
     }
 
-    return { fish, tier: selectedTier, weight, value, location, luckPenalty: luckPenaltyApplied, droppedPart, activeWeather };
+    return {
+        fish, tier: selectedTier, weight, value, location,
+        luckPenalty: luckPenaltyApplied, droppedPart, activeWeather,
+        isTrophy, weightRatio, doubleCatch,
+    };
 }
 
-module.exports = { catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getOwnedRods, ownsRod, addRodToInventory, equipRod, rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER };
+/** Collection progress + milestone rewards (call after catch). */
+function checkCollectionMilestones(guildId, userId) {
+    const { getUserStat, setUserStat, addItem, addIncome, getOrCreateUser } = require('../database');
+    const totalSpecies = FISH_DATA.length;
+    let owned = 0;
+    try {
+        owned = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE userId = ?').get(userId)?.c || 0;
+    } catch (_) {
+        try { owned = db.prepare('SELECT COUNT(*) as c FROM fish_collection WHERE guildId = ? AND userId = ?').get(guildId, userId)?.c || 0; } catch (__) {}
+    }
+    const pct = totalSpecies > 0 ? Math.floor((owned / totalSpecies) * 100) : 0;
+    const milestones = [
+        { pct: 10, money: 5000, item: 'mystery_box', qty: 2, key: 'fish_col_10' },
+        { pct: 25, money: 15000, item: 'lucky_charm', qty: 1, key: 'fish_col_25' },
+        { pct: 50, money: 50000, item: 'mythic_fragment', qty: 1, key: 'fish_col_50' },
+        { pct: 75, money: 100000, item: 'void_lure', qty: 3, key: 'fish_col_75' },
+        { pct: 100, money: 500000, item: 'omega_bait', qty: 5, key: 'fish_col_100' },
+    ];
+    const rewards = [];
+    for (const m of milestones) {
+        if (pct >= m.pct && !getUserStat(guildId, userId, m.key)) {
+            setUserStat(guildId, userId, m.key, 1);
+            try {
+                const u = getOrCreateUser(guildId, userId);
+                u.balance += m.money;
+                db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(u.balance, guildId, userId);
+            } catch (_) {
+                try { db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(m.money, userId); } catch (__) {}
+            }
+            try { addIncome(guildId, userId, 'fishing', m.money); } catch (_) {}
+            if (m.item) addItem(guildId, userId, m.item, m.qty || 1);
+            rewards.push(m);
+        }
+    }
+    return { owned, totalSpecies, pct, rewards };
+}
+
+function getFishingCooldown(userId, rod) {
+    try {
+        const { getTodayWeather } = require('./farmWeather');
+        const todayWeather = getTodayWeather();
+        let cooldown = rod.cooldown;
+        try {
+            if (rod && rod.id) {
+                const { getEnchantEffects } = require('./fishingExtras');
+                const fx = getEnchantEffects(userId, rod.id);
+                if (fx.cdReduce) cooldown = Math.max(1, cooldown - fx.cdReduce);
+            }
+        } catch (_) {}
+        if (todayWeather && (todayWeather.id === 'rainy' || todayWeather.id === 'stormy')) {
+            cooldown = Math.max(1, Math.round(cooldown * 0.85)); // 15% reduction
+        }
+        // Fishing Cooldown Buff (-3s)
+        const { getUserStat, checkGlobalMode } = require('../database');
+        let guildId = null;
+        if (!checkGlobalMode()) {
+            const userRow = db.prepare('SELECT guildId FROM users WHERE userId = ? LIMIT 1').get(userId);
+            if (userRow) guildId = userRow.guildId;
+        }
+        const cdBuffUntil = getUserStat(guildId, userId, 'fishing_cd_buff_until') || 0;
+        if (Date.now() < cdBuffUntil) {
+            cooldown = Math.max(1, cooldown - 3);
+        }
+        return cooldown;
+    } catch (e) {
+        return rod.cooldown;
+    }
+}
+
+module.exports = {
+    catchFish, getEquipment, getPlayerLocation, setPlayerLocation, getOwnedRods, ownsRod, addRodToInventory, equipRod,
+    rollSeaMonster, MONSTER_LOOT, hasMonsterRepellent, getFishingWeather, FISHING_WEATHER, getFishingCooldown,
+    checkCollectionMilestones,
+};

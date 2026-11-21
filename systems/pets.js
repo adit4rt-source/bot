@@ -32,6 +32,41 @@ function generatePetStats(tier) {
 //   effective bonus = stat_value * (1 + refine_level * 0.05)
 const RELIC_SLOTS = ['weapon', 'armor', 'accessory'];
 
+const GEM_STATS = {
+    dna_shard: {
+        name: 'DNA Shard',
+        emoji: '🧬',
+        options: [
+            { id: 'hp', display: '+15 HP', stats: { hp: 15 } },
+            { id: 'atk', display: '+3 ATK', stats: { atk: 3 } }
+        ]
+    },
+    mutation_serum: {
+        name: 'Mutation Serum',
+        emoji: '🧪',
+        options: [
+            { id: 'def', display: '+4 DEF', stats: { def: 4 } },
+            { id: 'spd', display: '+3 SPD', stats: { spd: 3 } }
+        ]
+    },
+    ancient_core: {
+        name: 'Ancient Core',
+        emoji: '🔮',
+        options: [
+            { id: 'crit', display: '+3% CRIT', percentStats: { crit: 3 } },
+            { id: 'all', display: '+5% ATK/DEF/SPD', percentStats: { atk: 5, def: 5, spd: 5 } }
+        ]
+    },
+    mythic_fragment: {
+        name: 'Mythic Fragment',
+        emoji: '✨',
+        options: [
+            { id: 'hp', display: '+8% HP', percentStats: { hp: 8 } },
+            { id: 'atk', display: '+8% ATK', percentStats: { atk: 8 } }
+        ]
+    }
+};
+
 function relicEffective(relic) {
     const base = (relic.stat_value || 0) * (1 + (relic.refine_level || 0) * 0.05);
     return Math.floor(base);
@@ -56,15 +91,36 @@ function getEquippedRelics(petId) {
 
 // Sum of EQUIPPED relic bonuses for a pet (per stat type).
 function getRelicBonus(userId, petId) {
-    const bonus = { atk: 0, def: 0, spd: 0, crit: 0 };
-    const percentBonus = { atk: 0, def: 0, spd: 0, crit: 0 };
+    const bonus = { hp: 0, atk: 0, def: 0, spd: 0, crit: 0 };
+    const percentBonus = { hp: 0, atk: 0, def: 0, spd: 0, crit: 0 };
     if (!petId) return { ...bonus, percent: percentBonus };
     for (const r of getEquippedRelics(petId)) {
-        if (!(r.stat_type in bonus)) continue;
-        if (isPercentRelic(r)) {
-            percentBonus[r.stat_type] += relicEffective(r);
-        } else {
-            bonus[r.stat_type] += relicEffective(r);
+        if (r.stat_type in bonus) {
+            if (isPercentRelic(r)) {
+                percentBonus[r.stat_type] += relicEffective(r);
+            } else {
+                bonus[r.stat_type] += relicEffective(r);
+            }
+        }
+        // Parse socketed gems
+        let gems = [];
+        try { gems = JSON.parse(r.gems || '[]'); } catch(e) { gems = []; }
+        for (const gem of gems) {
+            if (!gem) continue;
+            const gemDef = GEM_STATS[gem.gemId];
+            if (!gemDef) continue;
+            const option = gemDef.options.find(o => o.id === gem.stat);
+            if (!option) continue;
+            if (option.stats) {
+                for (const [sKey, val] of Object.entries(option.stats)) {
+                    if (sKey in bonus) bonus[sKey] += val;
+                }
+            }
+            if (option.percentStats) {
+                for (const [sKey, val] of Object.entries(option.percentStats)) {
+                    if (sKey in percentBonus) percentBonus[sKey] += val;
+                }
+            }
         }
     }
     return { ...bonus, percent: percentBonus };
@@ -109,44 +165,68 @@ function meltRelic(guildId, userId, relicId) {
 // Base pet stats + EQUIPPED relic bonuses (used for display and battle).
 function getEffectiveStats(pet) {
     const b = getRelicBonus(pet && pet.userId, pet && pet.id);
-    let atk = (pet.atk || 0) + b.atk;
-    let def = (pet.def || 0) + b.def;
-    let spd = (pet.spd || 0) + b.spd;
-    let crit = (pet.crit || 0) + b.crit;
+    const lvl = pet && pet.level ? pet.level : 1;
+    const levelBonus = Math.max(0, lvl - 1);
+
+    const lvlHp = levelBonus * 5;
+    const lvlAtk = levelBonus * 2;
+    const lvlDef = levelBonus * 1;
+    const lvlSpd = Math.floor(levelBonus * 0.2);
+    const lvlCrit = Math.floor(levelBonus * 0.1);
+
+    let hp = (pet.hp || 0) + lvlHp + b.hp;
+    let atk = (pet.atk || 0) + lvlAtk + b.atk;
+    let def = (pet.def || 0) + lvlDef + b.def;
+    let spd = (pet.spd || 0) + lvlSpd + b.spd;
+    let crit = (pet.crit || 0) + lvlCrit + b.crit;
+
     if (b.percent) {
-        atk = Math.floor(atk * (1 + b.percent.atk / 100));
-        def = Math.floor(def * (1 + b.percent.def / 100));
-        spd = Math.floor(spd * (1 + b.percent.spd / 100));
-        crit = Math.floor(crit * (1 + b.percent.crit / 100));
+        hp = Math.floor(hp * (1 + (b.percent.hp || 0) / 100));
+        atk = Math.floor(atk * (1 + (b.percent.atk || 0) / 100));
+        def = Math.floor(def * (1 + (b.percent.def || 0) / 100));
+        spd = Math.floor(spd * (1 + (b.percent.spd || 0) / 100));
+        crit = Math.floor(crit * (1 + (b.percent.crit || 0) / 100));
     }
-    return { hp: pet.hp, atk, def, spd, crit, bonus: b };
+    // Apply Spicy Fish Soup +10% ATK buff if active
+    if (pet && pet.userId) {
+        try {
+            const { getUserStat } = require('../database');
+            const buffUntil = getUserStat(null, pet.userId, 'pet_atk_buff_until') || 0;
+            if (Date.now() < buffUntil) {
+                atk = Math.floor(atk * 1.10);
+            }
+            // Apply Sushi Roll ATK/DEF buff (+15%)
+            const sushiBuffUntil = getUserStat(null, pet.userId, 'pet_atk_def_buff_until') || 0;
+            if (Date.now() < sushiBuffUntil) {
+                atk = Math.floor(atk * 1.15);
+                def = Math.floor(def * 1.15);
+            }
+            // Crit Master ability (+10% crit)
+            try {
+                const { hasAbility } = require('./petAbilities');
+                if (hasAbility(pet.guildId || null, pet.userId, 'crit_master')) {
+                    crit += 10;
+                }
+            } catch (_) {}
+        } catch (_) {}
+    }
+    return { hp, atk, def, spd, crit, bonus: b };
 }
 
 // Returns a shallow copy of the pet row with relic bonuses folded into the
 // stat fields, leaving the caller's object untouched.
 function withRelics(pet) {
     if (!pet) return pet;
-    const b = getRelicBonus(pet.userId, pet.id);
-    let atk = (pet.atk || 0) + b.atk;
-    let def = (pet.def || 0) + b.def;
-    let spd = (pet.spd || 0) + b.spd;
-    let crit = (pet.crit || 0) + b.crit;
-    // Apply percentage bonuses from Mythic/God relics
-    if (b.percent) {
-        atk = Math.floor(atk * (1 + b.percent.atk / 100));
-        def = Math.floor(def * (1 + b.percent.def / 100));
-        spd = Math.floor(spd * (1 + b.percent.spd / 100));
-        crit = Math.floor(crit * (1 + b.percent.crit / 100));
-    }
-    return { ...pet, atk, def, spd, crit };
+    const eff = getEffectiveStats(pet);
+    return { ...pet, hp: eff.hp, atk: eff.atk, def: eff.def, spd: eff.spd, crit: eff.crit };
 }
 
 function simulateBattle(pet, petDef, enemies) {
-    pet = withRelics(pet); // fold equipped/owned relic bonuses into stats
-    let petHp = pet.hp + (pet.level * 3);
+    pet = withRelics(pet); // fold equipped/owned relic bonuses and level scaling into stats
+    let petHp = pet.hp;
     const maxPetHp = petHp;
-    const petAtk = pet.atk + (pet.level * 1);
-    const petDef2 = pet.def + Math.floor(pet.level * 0.5);
+    const petAtk = pet.atk;
+    const petDef2 = pet.def;
     const petCrit = pet.crit;
     const petEl = pet.element;
     let log = [], wave = 0, alive = true;
@@ -156,18 +236,25 @@ function simulateBattle(pet, petDef, enemies) {
     const skillCooldowns = {};
     petSkills.forEach(s => { skillCooldowns[s.id] = 0; });
     let hasResurrected = false;
-    let buffState = { critBonus: 0, critDuration: 0, atkBonus: 0, defPenalty: 0, buffDuration: 0, shieldReduction: 0, shieldDuration: 0, immuneDuration: 0 };
+    let buffState = {
+        critBonus: 0, critDuration: 0, atkBonus: 0, defPenalty: 0, defBonus: 0, buffDuration: 0,
+        shieldReduction: 0, shieldDuration: 0, immuneDuration: 0, absorbHp: 0, enemySkip: 0,
+    };
+    // Optional battle modifiers (nightmare): { noHeal, elementSeal, enemyAtkMult, petDefMult }
+    const mods = (typeof enemies._mods === 'object' && enemies._mods) || pet._battleMods || {};
 
     for (const enemy of enemies) {
+        if (!enemy || typeof enemy.hp !== 'number') continue;
         wave++;
         let enemyHp = enemy.hp;
         let round = 0;
-        const enemyEl = enemy.element;
-        const atkMult = elementMultiplier(petEl, enemyEl);          // pet → enemy
-        const atkMultAmp = elementMultiplier(petEl, enemyEl, true);  // elemental skill
-        const defMult = elementMultiplier(enemyEl, petEl);          // enemy → pet
-        const elIcon = enemyEl ? ` ${ELEMENT_EMOJI[enemyEl] || ''}` : '';
-        log.push(`**━━ Wave ${wave} ━━** (Monster HP: ${enemyHp})${elIcon}${elementNote(petEl, enemyEl)}`);
+        const enemyEl = mods.elementSeal ? null : enemy.element;
+        const petElEff = mods.elementSeal ? null : petEl;
+        const atkMult = elementMultiplier(petElEff, enemyEl);          // pet → enemy
+        const atkMultAmp = elementMultiplier(petElEff, enemyEl, true);  // elemental skill
+        const defMult = elementMultiplier(enemyEl, petElEff);          // enemy → pet
+        const elIcon = enemy.element ? ` ${ELEMENT_EMOJI[enemy.element] || ''}` : '';
+        log.push(`**━━ Wave ${wave} ━━** (Monster HP: ${enemyHp})${elIcon}${elementNote(petElEff, enemyEl)}`);
         while (petHp > 0 && enemyHp > 0 && round < 20) {
             round++;
             // Decrement cooldowns
@@ -176,7 +263,7 @@ function simulateBattle(pet, petDef, enemies) {
             if (buffState.critDuration > 0) buffState.critDuration--;
             else buffState.critBonus = 0;
             if (buffState.buffDuration > 0) buffState.buffDuration--;
-            else { buffState.atkBonus = 0; buffState.defPenalty = 0; }
+            else { buffState.atkBonus = 0; buffState.defPenalty = 0; buffState.defBonus = 0; }
             if (buffState.shieldDuration > 0) buffState.shieldDuration--;
             else buffState.shieldReduction = 0;
             if (buffState.immuneDuration > 0) buffState.immuneDuration--;
@@ -184,15 +271,25 @@ function simulateBattle(pet, petDef, enemies) {
             // Try to use a skill (20% chance per turn if off cooldown)
             let skillUsed = false;
             if (petSkills.length > 0 && Math.random() < 0.20) {
-                const availableSkills = petSkills.filter(s => skillCooldowns[s.id] === 0);
+                let availableSkills = petSkills.filter(s => skillCooldowns[s.id] === 0);
+                // Filter conditional skills that can't fire this turn
+                availableSkills = availableSkills.filter(s => {
+                    if (s.minHpPercent != null && (petHp / maxPetHp) >= s.minHpPercent) return false;
+                    if (s.requireAdvantage && atkMult <= 1.0) return false;
+                    if (mods.noHeal && (s.type === 'heal' || s.type === 'drain' || s.type === 'genesis')) return false;
+                    return true;
+                });
                 if (availableSkills.length > 0) {
                     const skill = availableSkills[Math.floor(Math.random() * availableSkills.length)];
                     skillCooldowns[skill.id] = skill.cooldown;
                     skillUsed = true;
+                    const curAtk = petAtk + Math.floor(petAtk * buffState.atkBonus / 100);
 
                     if (skill.type === 'attack') {
-                        const eMult = skill.id === 'elemental_blast' ? atkMultAmp : atkMult;
-                        let sDmg = Math.max(1, Math.floor(((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier * eMult)) - Math.floor(enemy.def || 0));
+                        const eMult = (skill.id === 'elemental_blast' || skill.id === 'elemental_catastrophe') ? atkMultAmp : atkMult;
+                        let enemyDef = Math.floor(enemy.def || 0);
+                        if (skill.ignoreDef) enemyDef = Math.floor(enemyDef * (1 - skill.ignoreDef));
+                        let sDmg = Math.max(1, Math.floor((curAtk * skill.multiplier * eMult) - enemyDef));
                         enemyHp -= sDmg;
                         log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → Monster: -${sDmg} HP`);
                     } else if (skill.type === 'heal') {
@@ -211,9 +308,9 @@ function simulateBattle(pet, petDef, enemies) {
                         buffState.atkBonus = skill.atkBonus;
                         buffState.defPenalty = skill.defPenalty || 0;
                         buffState.buffDuration = skill.duration;
-                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → +${skill.atkBonus}% ATK, -${skill.defPenalty}% DEF`);
+                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → +${skill.atkBonus}% ATK, -${skill.defPenalty || 0}% DEF`);
                     } else if (skill.type === 'drain') {
-                        let sDmg = Math.max(1, Math.floor(((petAtk + Math.floor(petAtk * buffState.atkBonus / 100)) * skill.multiplier * atkMult)) - Math.floor(enemy.def || 0));
+                        let sDmg = Math.max(1, Math.floor((curAtk * skill.multiplier * atkMult) - Math.floor(enemy.def || 0)));
                         enemyHp -= sDmg;
                         const healAmt = Math.floor(sDmg * skill.healRatio);
                         petHp = Math.min(maxPetHp, petHp + healAmt);
@@ -221,8 +318,28 @@ function simulateBattle(pet, petDef, enemies) {
                     } else if (skill.type === 'immune') {
                         buffState.immuneDuration = skill.duration;
                         log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → Immune for ${skill.duration} turn!`);
+                    } else if (skill.type === 'control') {
+                        buffState.enemySkip = Math.max(buffState.enemySkip, skill.skipTurns || 1);
+                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → Monster SKIP ${skill.skipTurns || 1} turn!`);
+                    } else if (skill.type === 'blood_pact') {
+                        const cost = Math.floor(maxPetHp * (skill.selfHpCost || 0.2));
+                        petHp = Math.max(1, petHp - cost);
+                        buffState.atkBonus = Math.max(buffState.atkBonus, skill.atkBonus || 80);
+                        buffState.buffDuration = skill.duration || 2;
+                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → −${cost} HP, +${skill.atkBonus || 80}% ATK`);
+                    } else if (skill.type === 'absorb') {
+                        buffState.absorbHp = Math.floor(maxPetHp * (skill.amount || 0.4));
+                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → Shield ${buffState.absorbHp} HP`);
+                    } else if (skill.type === 'genesis') {
+                        const healAmt = Math.floor(maxPetHp * (skill.heal || 0.35));
+                        petHp = Math.min(maxPetHp, petHp + healAmt);
+                        buffState.atkBonus = Math.max(buffState.atkBonus, skill.atkBonus || 15);
+                        buffState.defBonus = Math.max(buffState.defBonus, skill.defBonus || 15);
+                        buffState.buffDuration = skill.duration || 2;
+                        log.push(`> 🐾 ${pet.name} uses **${skill.name}**! ${skill.emoji} → +${healAmt} HP, +${skill.atkBonus || 15}% ATK/DEF`);
                     } else {
                         skillUsed = false;
+                        skillCooldowns[skill.id] = 0; // refund CD if skill type unknown
                     }
                 }
             }
@@ -238,14 +355,29 @@ function simulateBattle(pet, petDef, enemies) {
 
             if (enemyHp <= 0) { log.push(`> ✅ Monster defeated!`); break; }
 
-            // Enemy attacks
-            if (buffState.immuneDuration > 0) {
+            // Enemy attacks (may be skipped by Time Stop)
+            if (buffState.enemySkip > 0) {
+                buffState.enemySkip--;
+                log.push(`> 👹 Monster is frozen (Time Stop)!`);
+            } else if (buffState.immuneDuration > 0) {
                 log.push(`> 👹 Monster ATK → ✝️ IMMUNE! (0 damage)`);
             } else {
-                let eDmg = Math.max(1, Math.floor((enemy.atk - (petDef2 - Math.floor(petDef2 * buffState.defPenalty / 100))) * defMult));
+                let petDefEff = petDef2 - Math.floor(petDef2 * buffState.defPenalty / 100) + Math.floor(petDef2 * (buffState.defBonus || 0) / 100);
+                if (mods.petDefMult) petDefEff = Math.floor(petDefEff * mods.petDefMult);
+                let enemyAtk = enemy.atk;
+                if (mods.enemyAtkMult) enemyAtk = Math.floor(enemyAtk * mods.enemyAtkMult);
+                let eDmg = Math.max(1, Math.floor((enemyAtk - petDefEff) * defMult));
                 if (buffState.shieldReduction > 0) eDmg = Math.max(1, Math.floor(eDmg * (1 - buffState.shieldReduction)));
-                petHp -= eDmg;
-                log.push(`> 👹 Monster ATK → ${pet.name}: -${eDmg} HP (${Math.max(0,petHp)} left)`);
+                if (buffState.absorbHp > 0) {
+                    const absorbed = Math.min(buffState.absorbHp, eDmg);
+                    buffState.absorbHp -= absorbed;
+                    eDmg -= absorbed;
+                    if (absorbed > 0) log.push(`> 🛡️ Aegis menyerap ${absorbed} dmg (sisa shield: ${buffState.absorbHp})`);
+                }
+                if (eDmg > 0) {
+                    petHp -= eDmg;
+                    log.push(`> 👹 Monster ATK → ${pet.name}: -${eDmg} HP (${Math.max(0, petHp)} left)`);
+                }
             }
 
             // Check resurrection
@@ -260,15 +392,15 @@ function simulateBattle(pet, petDef, enemies) {
         }
         if (petHp <= 0) { alive = false; log.push(`> 💀 **${pet.name} kalah!**`); break; }
     }
-    return { alive, remainingHp: Math.max(0, petHp), log: log.slice(-15) };
+    return { alive, remainingHp: Math.max(0, petHp), log: log.slice(-18) };
 }
 
 function simulatePvP(pet1, pet1Def, pet2, pet2Def) {
-    pet1 = withRelics(pet1); pet2 = withRelics(pet2); // fold relic bonuses into both
-    let hp1 = pet1.hp + (pet1.level * 3), hp2 = pet2.hp + (pet2.level * 3);
+    pet1 = withRelics(pet1); pet2 = withRelics(pet2); // fold relic bonuses and level scaling into both
+    let hp1 = pet1.hp, hp2 = pet2.hp;
     const maxHp1 = hp1, maxHp2 = hp2;
-    const atk1 = pet1.atk + pet1.level, atk2 = pet2.atk + pet2.level;
-    const def1 = pet1.def + Math.floor(pet1.level*0.5), def2 = pet2.def + Math.floor(pet2.level*0.5);
+    const atk1 = pet1.atk, atk2 = pet2.atk;
+    const def1 = pet1.def, def2 = pet2.def;
     let log = [], round = 0;
     const first = pet1.spd >= pet2.spd ? 1 : 2;
     const el1 = pet1.element, el2 = pet2.element;
@@ -369,6 +501,22 @@ function addPetExp(guildId, userId, amount) {
     const pet = getPetData(guildId, userId);
     if (!pet) return null;
     if (pet.level >= 200) return { leveledUp: false, newLevel: 200, newExp: 0, newSkill: null, petName: pet.name };
+
+    // Apply Pet XP Booster (2x)
+    try {
+        const { getUserStat } = require('../database');
+        const petXpBoostUntil = getUserStat(guildId, userId, 'pet_xp_boost_2x_until') || 0;
+        if (Date.now() < petXpBoostUntil) {
+            amount *= 2;
+        }
+    } catch (_) {}
+
+    // Passive pet_exp bonus (from other active pet bonuses — use raw def of THIS pet)
+    try {
+        const pct = getTotalPetBonus(guildId, userId, 'pet_exp');
+        if (pct > 0) amount = Math.floor(amount * (1 + pct / 100));
+    } catch (_) {}
+
     let newExp = pet.exp + amount;
     let newLevel = pet.level;
     let leveledUp = false;
@@ -387,19 +535,24 @@ function addPetExp(guildId, userId, amount) {
             if (newLevel >= ms.level && pet.level < ms.level) { newSkill = ms; break; }
         }
         // Check pet skill tier thresholds and assign active battle skills
-        const skillThresholds = [10, 30, 60, 100];
+        const skillThresholds = [10, 30, 60, 100, 150];
         for (const threshold of skillThresholds) {
             if (newLevel >= threshold && pet.level < threshold) {
                 assignPetSkillForTier(pet.id, threshold);
             }
         }
+        // Catch-up for pets that crossed tiers offline / before T5 existed
+        ensurePetBattleSkills(pet.id, newLevel);
     }
     return { leveledUp, newLevel, newExp, newSkill, petName: pet.name };
 }
 
+const SKILL_LEVEL_TO_TIER = { 10: 1, 30: 2, 60: 3, 100: 4, 150: 5 };
+const SKILL_TIER_TO_LEVEL = { 1: 10, 2: 30, 3: 60, 4: 100, 5: 150 };
+const MAX_BATTLE_SKILLS = 5;
+
 function assignPetSkillForTier(petId, threshold) {
-    const tierMap = { 10: 1, 30: 2, 60: 3, 100: 4 };
-    const tier = tierMap[threshold];
+    const tier = SKILL_LEVEL_TO_TIER[threshold];
     if (!tier) return null;
 
     const pet = db.prepare('SELECT * FROM pets WHERE id = ?').get(petId);
@@ -407,10 +560,11 @@ function assignPetSkillForTier(petId, threshold) {
 
     // Parse existing skills
     let currentSkills = [];
-    try { currentSkills = JSON.parse(pet.skills || '[]'); } catch(e) { currentSkills = []; }
+    try { currentSkills = JSON.parse(pet.skills || '[]'); } catch (e) { currentSkills = []; }
 
     // Check if already has a skill for this tier
     const tierSkills = PET_SKILLS.filter(s => s.tier === tier);
+    if (tierSkills.length === 0) return null;
     const hasSkillForTier = currentSkills.some(sId => {
         const skillDef = PET_SKILLS.find(s => s.id === sId);
         return skillDef && skillDef.tier === tier;
@@ -421,40 +575,198 @@ function assignPetSkillForTier(petId, threshold) {
     const randomSkill = tierSkills[Math.floor(Math.random() * tierSkills.length)];
     currentSkills.push(randomSkill.id);
 
-    // Max 4 skills (1 per tier)
-    if (currentSkills.length > 4) currentSkills = currentSkills.slice(0, 4);
+    // Max 5 skills (1 per tier including Ascendant T5)
+    if (currentSkills.length > MAX_BATTLE_SKILLS) currentSkills = currentSkills.slice(0, MAX_BATTLE_SKILLS);
 
     db.prepare('UPDATE pets SET skills = ? WHERE id = ?').run(JSON.stringify(currentSkills), petId);
     return randomSkill;
 }
 
+/** Backfill missing battle skills for pets already past unlock levels. */
+function ensurePetBattleSkills(petId, level) {
+    if (!petId || !level) return [];
+    const unlocked = [];
+    for (const [lvl, tier] of Object.entries(SKILL_LEVEL_TO_TIER)) {
+        if (level >= Number(lvl)) {
+            const got = assignPetSkillForTier(petId, Number(lvl));
+            if (got) unlocked.push(got);
+        }
+    }
+    return unlocked;
+}
+
+/**
+ * Reroll one battle skill of a given tier using a Skill Tome.
+ * @returns {{ success, skill?, oldSkill?, error? }}
+ */
+function rerollPetSkill(petId, tier) {
+    const pet = db.prepare('SELECT * FROM pets WHERE id = ?').get(petId);
+    if (!pet) return { success: false, error: 'Pet tidak ditemukan.' };
+    const unlockLevel = SKILL_TIER_TO_LEVEL[tier];
+    if (!unlockLevel || pet.level < unlockLevel) {
+        return { success: false, error: `Pet butuh Lv.${unlockLevel}+ untuk skill Tier ${tier}.` };
+    }
+
+    let currentSkills = [];
+    try { currentSkills = JSON.parse(pet.skills || '[]'); } catch (e) { currentSkills = []; }
+
+    const tierSkillDefs = PET_SKILLS.filter(s => s.tier === tier);
+    if (tierSkillDefs.length < 2) return { success: false, error: 'Tidak ada skill alternatif di tier ini.' };
+
+    const idx = currentSkills.findIndex(sId => {
+        const def = PET_SKILLS.find(s => s.id === sId);
+        return def && def.tier === tier;
+    });
+    if (idx === -1) {
+        // No skill for this tier yet — assign fresh
+        const pick = tierSkillDefs[Math.floor(Math.random() * tierSkillDefs.length)];
+        currentSkills.push(pick.id);
+        if (currentSkills.length > MAX_BATTLE_SKILLS) currentSkills = currentSkills.slice(0, MAX_BATTLE_SKILLS);
+        db.prepare('UPDATE pets SET skills = ? WHERE id = ?').run(JSON.stringify(currentSkills), petId);
+        return { success: true, skill: pick, oldSkill: null };
+    }
+
+    const oldId = currentSkills[idx];
+    const oldSkill = PET_SKILLS.find(s => s.id === oldId);
+    const alternatives = tierSkillDefs.filter(s => s.id !== oldId);
+    const pick = alternatives[Math.floor(Math.random() * alternatives.length)];
+    currentSkills[idx] = pick.id;
+    db.prepare('UPDATE pets SET skills = ? WHERE id = ?').run(JSON.stringify(currentSkills), petId);
+    return { success: true, skill: pick, oldSkill };
+}
+
 function getPetSkills(pet) {
     if (!pet) return [];
     let skillIds = [];
-    try { skillIds = JSON.parse(pet.skills || '[]'); } catch(e) { skillIds = []; }
+    try { skillIds = JSON.parse(pet.skills || '[]'); } catch (e) { skillIds = []; }
     return skillIds.map(id => PET_SKILLS.find(s => s.id === id)).filter(Boolean);
 }
 
+// Labels for UI / Pet Dex
+const PET_BONUS_LABELS = {
+    money_chat: 'Money Chat',
+    xp_chat: 'XP Chat',
+    money_all: 'Money (All)',
+    xp_all: 'XP (All)',
+    money_xp: 'Money + XP',
+    all_reward: 'All Reward',
+    fish_luck: 'Fish Luck',
+    farm_yield: 'Farm Yield',
+    farm_speed: 'Farm Speed',
+    quest_reward: 'Quest Reward',
+    event_luck: 'Event Luck',
+    battle_reward: 'Battle Reward',
+    hunt_reward: 'Hunt Reward',
+    expedition_reward: 'Expedition Reward',
+    gamble_luck: 'Gamble Luck',
+    daily_bonus: 'Daily Bonus',
+    sell_bonus: 'Sell Bonus',
+    voice_xp: 'Voice XP',
+    pet_exp: 'Pet EXP',
+    drop_luck: 'Drop Luck',
+    dungeon_luck: 'Dungeon/Relic Luck',
+    shop_discount: 'Shop Discount',
+    livestock_yield: 'Livestock Yield',
+    card_luck: 'Card Luck',
+    boss_damage: 'Boss Damage',
+};
+
+// When code asks for bonusType, which entry types contribute (and at what ratio).
+const BONUS_CONTRIB = {
+    money_chat:       { money_chat: 1, money_all: 1, all_reward: 0.75, money_xp: 0.85 },
+    xp_chat:          { xp_chat: 1, xp_all: 1, all_reward: 0.75, money_xp: 0.85 },
+    money_all:        { money_all: 1, all_reward: 1, money_xp: 1, money_chat: 0.35 },
+    xp_all:           { xp_all: 1, all_reward: 1, money_xp: 1, xp_chat: 0.35, voice_xp: 0.5 },
+    money_xp:         { money_xp: 1, all_reward: 0.9 },
+    all_reward:       { all_reward: 1 },
+    fish_luck:        { fish_luck: 1, all_reward: 0.45, drop_luck: 0.4 },
+    farm_yield:       { farm_yield: 1, all_reward: 0.45, livestock_yield: 0.4 },
+    farm_speed:       { farm_speed: 1 },
+    quest_reward:     { quest_reward: 1, all_reward: 0.55 },
+    event_luck:       { event_luck: 1, all_reward: 0.35, drop_luck: 0.4, gamble_luck: 0.25 },
+    battle_reward:    { battle_reward: 1, all_reward: 0.65, money_all: 0.4 },
+    hunt_reward:      { hunt_reward: 1, battle_reward: 0.5, all_reward: 0.45 },
+    expedition_reward:{ expedition_reward: 1, all_reward: 0.5, money_all: 0.3 },
+    gamble_luck:      { gamble_luck: 1, event_luck: 0.4 },
+    daily_bonus:      { daily_bonus: 1, all_reward: 0.5, money_all: 0.35 },
+    sell_bonus:       { sell_bonus: 1, money_all: 0.35, all_reward: 0.3 },
+    voice_xp:         { voice_xp: 1, xp_all: 0.85, all_reward: 0.55 },
+    pet_exp:          { pet_exp: 1, all_reward: 0.25 },
+    drop_luck:        { drop_luck: 1, event_luck: 0.4, all_reward: 0.3, dungeon_luck: 0.5 },
+    dungeon_luck:     { dungeon_luck: 1, drop_luck: 0.6, all_reward: 0.25 },
+    shop_discount:    { shop_discount: 1 },
+    livestock_yield:  { livestock_yield: 1, farm_yield: 0.5, all_reward: 0.3 },
+    card_luck:        { card_luck: 1, event_luck: 0.35, drop_luck: 0.3 },
+    boss_damage:      { boss_damage: 1, battle_reward: 0.3 },
+};
+
+/** Collect bonus entries from pet def (supports `bonus` + `bonuses[]`). */
+function getPetBonusEntries(petDef) {
+    if (!petDef) return [];
+    // Prefer multi-bonus list when present (avoid double-counting with legacy `bonus`)
+    if (Array.isArray(petDef.bonuses) && petDef.bonuses.length > 0) {
+        return petDef.bonuses
+            .filter(b => b && b.type && typeof b.value === 'number')
+            .map(b => ({ type: b.type, value: b.value }));
+    }
+    if (petDef.bonus && petDef.bonus.type && typeof petDef.bonus.value === 'number') {
+        return [{ type: petDef.bonus.type, value: petDef.bonus.value }];
+    }
+    return [];
+}
+
+function isPetBonusActive(pet) {
+    if (!pet) return false;
+    if (pet.hunting_until && pet.hunting_until > Date.now()) return false;
+    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return false;
+    return true;
+}
+
+/**
+ * Effective % bonus for a category (already level-scaled + dampened).
+ * Dampening 0.55 keeps display numbers exciting while keeping economy sane.
+ * Caps per-request at 80% (shop_discount hard-cap 25%).
+ */
 function getPetBonus(guildId, userId, bonusType) {
     const pet = getPetData(guildId, userId);
-    if (!pet) return 0;
-    if (pet.hunting_until && pet.hunting_until > Date.now()) return 0;
+    if (!isPetBonusActive(pet)) return 0;
     const petDef = PET_DATA.find(p => p.id === pet.petId);
     if (!petDef) return 0;
-    if (pet.happiness < 30 || pet.hunger < 10 || pet.status === 'sick') return 0;
-    if (petDef.bonus.type !== bonusType && petDef.bonus.type !== 'all_reward' && petDef.bonus.type !== 'money_xp') return 0;
+
+    const contrib = BONUS_CONTRIB[bonusType] || { [bonusType]: 1 };
     const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(pet.level, 30)] || 1.0;
-    let baseValue = petDef.bonus.value;
-    if (petDef.bonus.type === 'all_reward' || petDef.bonus.type === 'money_xp') {
-        if (bonusType === petDef.bonus.type || bonusType === 'money_all' || bonusType === 'xp_all') baseValue = petDef.bonus.value;
-        else baseValue = Math.floor(petDef.bonus.value * 0.7);
+    const DAMPEN = 0.55;
+    let total = 0;
+
+    for (const entry of getPetBonusEntries(petDef)) {
+        const ratio = contrib[entry.type];
+        if (!ratio) continue;
+        total += entry.value * ratio * lvlMult * DAMPEN;
     }
-    return Math.floor(baseValue * lvlMult * 0.4);
+
+    // Awakening permanent all_reward (if any tier grants it) — small stack
+    try {
+        const { getAwakeningData, AWAKENING_TIERS } = require('./awakening');
+        const awak = getAwakeningData(pet.id);
+        if (awak && awak.awakeningLevel > 0) {
+            const tier = AWAKENING_TIERS.find(t => t.level === awak.awakeningLevel);
+            if (tier && tier.reward && tier.reward.permanentBonus) {
+                const pb = tier.reward.permanentBonus;
+                const ratio = contrib[pb.type] || (pb.type === 'all_reward' ? (contrib.all_reward || 0.5) : 0);
+                if (ratio) total += pb.value * ratio * DAMPEN; // no level mult — already permanent
+            }
+        }
+    } catch (_) {}
+
+    if (bonusType === 'shop_discount') total = Math.min(25, total);
+    else total = Math.min(80, total);
+
+    return Math.floor(total);
 }
 
 function getPetSkillBonus(guildId, userId, bonusType) {
     const pet = getPetData(guildId, userId);
-    if (!pet || pet.hunting_until > Date.now()) return 0;
+    if (!pet || (pet.hunting_until && pet.hunting_until > Date.now())) return 0;
     let total = 0;
     for (const ms of PET_SKILL_MILESTONES) {
         if (pet.level >= ms.level && (ms.skill.type === bonusType || ms.skill.type === 'all_reward')) {
@@ -462,6 +774,29 @@ function getPetSkillBonus(guildId, userId, bonusType) {
         }
     }
     return total;
+}
+
+/** Total effective bonus for type = pet passive + skill milestones. */
+function getTotalPetBonus(guildId, userId, bonusType) {
+    return getPetBonus(guildId, userId, bonusType) + getPetSkillBonus(guildId, userId, bonusType);
+}
+
+/** Apply percent bonus to a money/xp amount. */
+function applyBonusPercent(amount, percent) {
+    if (!amount || !percent) return Math.floor(amount || 0);
+    return Math.floor(amount * (1 + percent / 100));
+}
+
+/** Display list of raw bonuses for a pet def (UI — full potential with level mult, no dampen). */
+function formatPetBonuses(petDef, level = 1) {
+    const entries = getPetBonusEntries(petDef);
+    if (!entries.length) return '> *Tidak ada bonus*';
+    const lvlMult = PET_LEVEL_MULTIPLIERS[Math.min(level || 1, 30)] || 1.0;
+    return entries.map(b => {
+        const label = PET_BONUS_LABELS[b.type] || b.type.replace(/_/g, ' ');
+        const shown = Math.floor(b.value * lvlMult);
+        return `> 🎁 +**${shown}%** ${label}`;
+    }).join('\n');
 }
 
 function checkPetEvolution(guildId, userId) {
@@ -484,4 +819,11 @@ function evolvePet(guildId, userId) {
     return { evo, newPetDef, newStats };
 }
 
-module.exports = { generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus, getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective, getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic, isPercentRelic };
+module.exports = {
+    generatePetStats, simulateBattle, simulatePvP, getPetData, getAllPets, addPetExp, getPetBonus, getPetSkillBonus,
+    getTotalPetBonus, applyBonusPercent, getPetBonusEntries, formatPetBonuses, isPetBonusActive, PET_BONUS_LABELS,
+    getExpNeeded, checkPetEvolution, evolvePet, getPetSkills, assignPetSkillForTier, ensurePetBattleSkills, rerollPetSkill,
+    SKILL_TIER_TO_LEVEL, MAX_BATTLE_SKILLS,
+    elementMultiplier, elementNote, ELEMENT_EMOJI, getRelicBonus, getEffectiveStats, RELIC_SLOTS, relicEffective,
+    getUserRelics, getEquippedRelics, equipRelic, unequipRelic, unequipAll, meltRelic, isPercentRelic, GEM_STATS,
+};

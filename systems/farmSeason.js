@@ -105,6 +105,34 @@ function getSeasonFarmEffects() {
     };
 }
 
+function getDynamicPrice(crop, type) {
+    if (!crop) return 0;
+    const season = module.exports.getTodaySeason();
+    if (type === 'buy' || type === 'cost') {
+        let cost = crop.cost;
+        if (season.id === 'winter') {
+            cost = Math.round(cost * 1.2);
+        } else if (season.id === 'spring') {
+            cost = Math.round(cost * 0.8);
+        }
+        return Math.max(1, cost);
+    } else if (type === 'sell') {
+        const farmWeatherModule = require('./farmWeather');
+        const weather = farmWeatherModule.getTodayWeather();
+        let multiplier = 1.0;
+        if (season.id === 'winter') {
+            multiplier *= 1.3;
+        }
+        if (weather && (weather.id === 'sunny' || weather.id === 'rainbow')) {
+            multiplier *= 0.9;
+        } else if (weather && (weather.id === 'stormy' || weather.id === 'drought')) {
+            multiplier *= 1.2;
+        }
+        return Math.max(1, Math.round(crop.sellPrice * multiplier));
+    }
+    return type === 'sell' ? crop.sellPrice : crop.cost;
+}
+
 module.exports = {
     getTodaySeason,
     getSeasonDisplay,
@@ -116,4 +144,5 @@ module.exports = {
     getSeasonFarmEffects,
     SEASON_CROP_EFFECTS,
     getCropSeasonEffect,
+    getDynamicPrice,
 };

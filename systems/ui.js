@@ -39,6 +39,24 @@ const COLORS = {
     neutral:     '#95A5A6',
 };
 
+// ==================== TIER COLORS ====================
+// Rarity-based accent colors for pet and item panels.
+const TIER_COLORS = {
+    Common:    '#95A5A6',
+    Uncommon:  '#2ECC71',
+    Rare:      '#3498DB',
+    Epic:      '#9B59B6',
+    Legendary: '#F1C40F',
+    Mythic:    '#E74C3C',
+    Secret:    '#E91E63',
+    God:       '#FFD700',
+};
+
+// ==================== CLASS / ELEMENT EMOJI ====================
+const CLASS_EMOJI = {
+    warrior: '⚔️', tank: '🛡️', mage: '🔮', ranger: '🏹', healer: '💚',
+};
+
 // ==================== DIVIDERS ====================
 // One canonical divider length used everywhere (was inconsistent: 18-24 chars).
 const DIVIDER = '━━━━━━━━━━━━━━━━━━━━';        // heavy, for embed bodies
@@ -83,17 +101,30 @@ function menuList(items) {
 
 // ==================== PROGRESS BAR ====================
 // Consistent 10-segment bar. style: 'block' (█/░) or 'arrow' (▰/▱).
+function progressRatio(value, max) {
+    value = Number(value);
+    max = Number(max);
+    return Number.isFinite(value) && Number.isFinite(max) && max > 0
+        ? Math.min(1, Math.max(0, value / max)) : 0;
+}
+
 function progressBar(value, max, length = 10, style = 'block') {
-    const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
-    const filled = Math.round(ratio * length);
+    length = Number.isFinite(Number(length)) ? Math.min(100, Math.max(0, Math.floor(Number(length)))) : 10;
+    const filled = Math.round(progressRatio(value, max) * length);
     const chars = style === 'arrow' ? ['▰', '▱'] : ['█', '░'];
-    return chars[0].repeat(filled) + chars[1].repeat(Math.max(0, length - filled));
+    return chars[0].repeat(filled) + chars[1].repeat(length - filled);
 }
 
 // Percentage helper paired with a bar: "`██████░░░░` 60%"
 function progressLine(value, max, length = 10, style = 'block') {
-    const pct = max > 0 ? Math.min(100, Math.floor((value / max) * 100)) : 0;
+    const pct = Math.floor(progressRatio(value, max) * 100);
     return `\`${progressBar(value, max, length, style)}\` **${pct}%**`;
+}
+
+// ==================== SECTION HEADER ====================
+// Styled section header: "╭──── ⚔️ COMBAT STATS ────╮"
+function sectionHeader(emoji, label) {
+    return `╭──── ${emoji} **${label}** ────╮`;
 }
 
 // ==================== MEDAL ====================
@@ -147,6 +178,8 @@ function shortNum(n) {
 
 module.exports = {
     COLORS,
+    TIER_COLORS,
+    CLASS_EMOJI,
     DIVIDER,
     DIVIDER_THIN,
     title,
@@ -155,6 +188,7 @@ module.exports = {
     menuList,
     progressBar,
     progressLine,
+    sectionHeader,
     medal,
     backButton,
     backRow,

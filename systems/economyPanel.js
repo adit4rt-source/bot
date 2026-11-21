@@ -1,9 +1,9 @@
 // systems/economyPanel.js - Economy Panel UI System (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, checkGlobalMode } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, checkGlobalMode, transferBalance } = require('../database');
 const { checkAchievements } = require('./achievements');
 const { GIFT_TAX_RATE, GIFT_MAX_PER_TRANSACTION, GIFT_RECEIVE_LIMIT_PER_DAY, getGiftReceivedToday, addGiftReceivedToday } = require('./slots');
-const { updateQuestProgress } = require('./quests');
+
 // Voucher scope harus konsisten dengan adminPanel: GLOBAL saat ekonomi global.
 function voucherScope(guildId) { return checkGlobalMode() ? 'GLOBAL' : guildId; }
 // Redeem voucher HANYA boleh di server utama (anti-exploit multi-akun: bikin akun
@@ -264,8 +264,8 @@ async function handleEconomyModal(interaction) {
         db.prepare('UPDATE vouchers SET current_uses = current_uses + 1 WHERE guildId = ? AND code = ?').run(vScope, code);
         db.prepare('INSERT INTO voucher_claims (guildId, code, userId) VALUES (?, ?, ?)').run(vScope, code, userId);
         const userData = getOrCreateUser(guildId, userId);
+        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(voucher.reward, guildId, userId);
         userData.balance += voucher.reward;
-        db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, userId);
         try { const { checkAchievements } = require("./achievements"); await checkAchievements(interaction.guild, userId, { type: "redeem" }); } catch (_) {}
         return interaction.reply({ content: `\u2705 Voucher **${code}** berhasil! Dapat \ud83e\ude99 **${voucher.reward.toLocaleString('id-ID')}**\n> Saldo: \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**` });
     }
@@ -302,40 +302,47 @@ async function processGift(interaction, senderId, targetId, amount) {
     if (!targetMember) return interaction.reply({ content: '\u274c User tidak ditemukan di server ini!', ephemeral: true });
     if (targetMember.user.bot) return interaction.reply({ content: '\u274c Tidak bisa kirim ke bot!', ephemeral: true });
 
-    const userData = getOrCreateUser(guildId, senderId);
-    if (userData.balance < amount) return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
-
-    // Daily receive limit for the recipient
+    // Daily receive limit for the recipient (check before debit)
     const receivedToday = getGiftReceivedToday(guildId, targetId);
     if (receivedToday + amount > GIFT_RECEIVE_LIMIT_PER_DAY) {
         const sisa = Math.max(0, GIFT_RECEIVE_LIMIT_PER_DAY - receivedToday);
         return interaction.reply({ content: `\u274c <@${targetId}> sudah mencapai batas terima harian (\ud83e\ude99 ${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}/hari). Sisa kuota: \ud83e\ude99 ${sisa.toLocaleString('id-ID')}`, allowedMentions: { users: [] }, ephemeral: true });
     }
 
-    // Tax-free voucher (consumes 1 if active)
+    // Tax-free voucher (consumes 1 only after successful transfer)
     const hasTaxFree = getUserStat(guildId, senderId, 'tax_free_voucher') > 0;
     const tax = hasTaxFree ? 0 : Math.floor(amount * GIFT_TAX_RATE);
     const net = amount - tax;
-    if (hasTaxFree) incrementUserStat(guildId, senderId, 'tax_free_voucher', -1);
 
+    // Atomic transfer: debit full amount from sender, credit net to target (tax burned / vault).
+    // Prevents double-spend / lost-update from concurrent gifts & rewards.
+    const tx = transferBalance(guildId, senderId, targetId, amount, net);
+    if (!tx.ok) {
+        const bal = getOrCreateUser(guildId, senderId).balance;
+        return interaction.reply({ content: `❌ Saldo kurang! Kamu punya 🪙 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+    }
+
+    if (tax > 0) {
+        try {
+            const { collectGiftTax } = require('./vault');
+            collectGiftTax(guildId, tax);
+        } catch (_) {}
+    }
+
+    if (hasTaxFree) incrementUserStat(guildId, senderId, 'tax_free_voucher', -1);
     giftCooldowns.set(cdKey, Date.now() + 10000);
 
-    // Transfer
-    userData.balance -= amount;
-    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, senderId);
-    const tData = getOrCreateUser(guildId, targetId);
-    tData.balance += net;
-    db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(tData.balance, guildId, targetId);
     addGiftReceivedToday(guildId, targetId, net);
     incrementUserStat(guildId, senderId, 'total_gifts_sent');
     incrementUserStat(guildId, senderId, 'total_gift_amount', amount);
-    updateQuestProgress(guildId, senderId, 'gift', 1);
+    
     await checkAchievements(interaction.guild, senderId, { type: 'gift_send' });
     await checkAchievements(interaction.guild, targetId, { type: 'gift_receive' });
 
+    const freshBalance = getOrCreateUser(guildId, senderId).balance;
     const embed = new EmbedBuilder().setColor('#FF69B4').setTitle('\ud83c\udf81 Gift Terkirim!')
         .setDescription(`<@${senderId}> \u279c <@${targetId}>\n\n> \ud83d\udcb0 **Jumlah:** \ud83e\ude99 ${amount.toLocaleString('id-ID')}\n> \ud83d\udcca **Pajak (${hasTaxFree ? 'FREE!' : '10%'}):** \ud83e\ude99 ${tax.toLocaleString('id-ID')}${hasTaxFree ? ' *(Tax-Free Voucher)*' : ''}\n> \u2705 **Diterima:** \ud83e\ude99 ${net.toLocaleString('id-ID')}`)
-        .setFooter({ text: `Saldo kamu: ${userData.balance.toLocaleString('id-ID')} | Limit harian penerima: ${(receivedToday + net).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
+        .setFooter({ text: `Saldo kamu: ${freshBalance.toLocaleString('id-ID')} | Limit harian penerima: ${(receivedToday + net).toLocaleString('id-ID')}/${GIFT_RECEIVE_LIMIT_PER_DAY.toLocaleString('id-ID')}` })
         .setTimestamp();
     return interaction.reply({ embeds: [embed], allowedMentions: { users: [] } });
 }

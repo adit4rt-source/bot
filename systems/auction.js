@@ -3,8 +3,35 @@
 // refunded when outbid). On settle: winner gets the asset, seller gets the gold.
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { db, getOrCreateUser, addUserBalance, subtractUserBalance, addIncome, addItem } = require('../database');
-const { getOfferableItems } = require('./globalTrade');
 const { PET_DATA } = require('../data/pets');
+const { ITEMS } = require('../data/items');
+const { FISH_DATA } = require('../data/fish');
+
+function getOfferableItems(guildId, userId) {
+    const out = [];
+    const relics = db.prepare('SELECT * FROM relics WHERE userId = ?').all(userId);
+    for (const r of relics) {
+        if (r.equipped_pet_id > 0) continue;
+        out.push({ type: 'relic', id: String(r.id), label: `💎 ${r.name} [${r.rarity}] +${r.refine_level}`, desc: `+${r.stat_value} ${r.stat_type}`, details: `${r.rarity} | +${r.stat_value} ${r.stat_type}` });
+    }
+    const pets = db.prepare('SELECT * FROM pets WHERE userId = ? AND active = 0').all(userId);
+    for (const p of pets) {
+        const pd = PET_DATA.find(x => x.id === p.petId);
+        out.push({ type: 'pet', id: String(p.id), label: `${pd ? pd.emoji : '🐾'} ${p.name} (Lv.${p.level})`, desc: `${pd ? pd.tier : '?'} | ATK:${p.atk}`, details: `${pd ? pd.tier : '?'} | Lv.${p.level} | ATK:${p.atk} DEF:${p.def} HP:${p.hp}` });
+    }
+    const inv = db.prepare('SELECT * FROM item_inventory WHERE userId = ? AND quantity > 0').all(userId);
+    for (const it of inv) {
+        const def = ITEMS.find(x => x.id === it.itemId);
+        if (def) out.push({ type: 'item', id: it.itemId, label: `${def.emoji} ${def.name} (x${it.quantity})`, desc: (def.desc || '').substring(0, 50), details: def.desc || '' });
+    }
+    const fish = db.prepare("SELECT * FROM fish_inventory WHERE userId = ? AND locked = 0 ORDER BY weight DESC LIMIT 20").all(userId);
+    for (const f of fish) {
+        const fd = FISH_DATA.find(x => x.id === f.fishId);
+        if (!fd) continue;
+        out.push({ type: 'fish', id: String(f.id), label: `${fd.emoji} ${fd.name} (${f.weight}kg)`, desc: `${fd.tier} • ${fd.rarity}`, details: `${fd.name} (${f.weight}kg) [${fd.tier}]` });
+    }
+    return out;
+}
 
 const AUCTION_ESCROW = 'AUCTION_ESCROW';
 const MAX_ACTIVE_PER_USER = 5;
@@ -87,49 +114,85 @@ function createAuction(guildId, sellerId, sellerName, offerType, offerId, minBid
 // Place a bid. Refunds the previous bidder. Escrows the new bidder's money.
 function placeBid(guildId, auctionId, bidderId, amount) {
     amount = Math.floor(Number(amount) || 0);
-    const a = getAuction(auctionId);
-    if (!a || a.status !== 'active') return { ok: false, error: '❌ Lelang tidak aktif.' };
-    if (Date.now() >= a.endsAt) return { ok: false, error: '❌ Lelang sudah berakhir.' };
-    if (a.sellerId === bidderId) return { ok: false, error: '❌ Tidak bisa bid lelang sendiri.' };
-    const floor = a.currentBid > 0 ? a.currentBid + 1 : a.minBid;
-    if (amount < floor) return { ok: false, error: `❌ Bid minimal 🪙 **${floor.toLocaleString('id-ID')}**.` };
-    const u = getOrCreateUser(guildId, bidderId);
-    if (u.balance < amount) return { ok: false, error: `❌ Saldo kurang! Butuh 🪙 ${amount.toLocaleString('id-ID')}.` };
+    try {
+        let a, endsAt;
+        const runTx = db.transaction(() => {
+            a = getAuction(auctionId);
+            if (!a || a.status !== 'active') throw new Error('NOT_ACTIVE');
+            if (Date.now() >= a.endsAt) throw new Error('EXPIRED');
+            if (a.sellerId === bidderId) throw new Error('SELF_BID');
+            const floor = a.currentBid > 0 ? a.currentBid + 1 : a.minBid;
+            if (amount < floor) throw new Error('BID_TOO_LOW');
 
-    if (a.bidderId) addUserBalance(guildId, a.bidderId, a.currentBid); // refund previous bidder
-    subtractUserBalance(guildId, bidderId, amount);                    // escrow new bid
-    let endsAt = a.endsAt;
-    if (endsAt - Date.now() < ANTISNIPE_MS) endsAt = Date.now() + ANTISNIPE_MS; // anti-snipe extend
-    db.prepare('UPDATE auctions SET currentBid = ?, bidderId = ?, endsAt = ? WHERE id = ?').run(amount, bidderId, endsAt, auctionId);
-    return { ok: true, amount, offerName: a.offerName, extended: endsAt !== a.endsAt };
+            if (!subtractUserBalance(guildId, bidderId, amount)) {
+                throw new Error('INSUFFICIENT_BALANCE');
+            }
+            if (a.bidderId) addUserBalance(guildId, a.bidderId, a.currentBid); // refund previous bidder
+            endsAt = a.endsAt;
+            if (endsAt - Date.now() < ANTISNIPE_MS) endsAt = Date.now() + ANTISNIPE_MS; // anti-snipe extend
+            db.prepare('UPDATE auctions SET currentBid = ?, bidderId = ?, endsAt = ? WHERE id = ?').run(amount, bidderId, endsAt, auctionId);
+        });
+        runTx();
+        return { ok: true, amount, offerName: a.offerName, extended: endsAt !== a.endsAt };
+    } catch (e) {
+        if (e.message === 'NOT_ACTIVE') return { ok: false, error: '❌ Lelang tidak aktif.' };
+        if (e.message === 'EXPIRED') return { ok: false, error: '❌ Lelang sudah berakhir.' };
+        if (e.message === 'SELF_BID') return { ok: false, error: '❌ Tidak bisa bid lelang sendiri.' };
+        if (e.message === 'BID_TOO_LOW') {
+            const a = getAuction(auctionId);
+            const floor = a.currentBid > 0 ? a.currentBid + 1 : a.minBid;
+            return { ok: false, error: "❌ Bid minimal 🪙 **" + floor.toLocaleString('id-ID') + "**." };
+        }
+        if (e.message === 'INSUFFICIENT_BALANCE') return { ok: false, error: "❌ Saldo kurang! Butuh 🪙 " + amount.toLocaleString('id-ID') + "." };
+        throw e;
+    }
 }
 
 
 // Finalize an auction: winner gets the asset, seller gets the gold; or return to seller.
 function settleAuction(auctionId) {
-    const a = getAuction(auctionId);
-    if (!a || a.status !== 'active') return { ok: false };
-    if (a.bidderId) {
-        transferItem(a.offerType, a.offerId, a.bidderId, a.guildId); // give asset to winner
-        addUserBalance(a.guildId, a.sellerId, a.currentBid);          // pay seller (bid was escrowed)
-        addIncome(a.guildId, a.sellerId, 'auction', a.currentBid);
-        db.prepare("UPDATE auctions SET status = 'sold' WHERE id = ?").run(auctionId);
-        return { ok: true, sold: true, auction: a };
+    try {
+        let a;
+        const runTx = db.transaction(() => {
+            a = getAuction(auctionId);
+            if (!a || a.status !== 'active') throw new Error('NOT_ACTIVE');
+            if (a.bidderId) {
+                transferItem(a.offerType, a.offerId, a.bidderId, a.guildId); // give asset to winner
+                addUserBalance(a.guildId, a.sellerId, a.currentBid);          // pay seller (bid was escrowed)
+                addIncome(a.guildId, a.sellerId, 'auction', a.currentBid);
+                db.prepare("UPDATE auctions SET status = 'sold' WHERE id = ?").run(auctionId);
+            } else {
+                transferItem(a.offerType, a.offerId, a.sellerId, a.guildId);      // no bids → return to seller
+                db.prepare("UPDATE auctions SET status = 'expired' WHERE id = ?").run(auctionId);
+            }
+        });
+        runTx();
+        return { ok: true, sold: !!a.bidderId, auction: a };
+    } catch (e) {
+        return { ok: false };
     }
-    transferItem(a.offerType, a.offerId, a.sellerId, a.guildId);      // no bids → return to seller
-    db.prepare("UPDATE auctions SET status = 'expired' WHERE id = ?").run(auctionId);
-    return { ok: true, sold: false, auction: a };
 }
 
 // Seller cancels an auction (only allowed when there are no bids).
 function cancelAuction(auctionId, sellerId) {
-    const a = getAuction(auctionId);
-    if (!a || a.status !== 'active') return { ok: false, error: '❌ Lelang tidak aktif.' };
-    if (a.sellerId !== sellerId) return { ok: false, error: '❌ Bukan lelang kamu.' };
-    if (a.bidderId) return { ok: false, error: '❌ Sudah ada bid — tidak bisa dibatalkan.' };
-    transferItem(a.offerType, a.offerId, a.sellerId, a.guildId);
-    db.prepare("UPDATE auctions SET status = 'cancelled' WHERE id = ?").run(auctionId);
-    return { ok: true, offerName: a.offerName };
+    try {
+        let a;
+        const runTx = db.transaction(() => {
+            a = getAuction(auctionId);
+            if (!a || a.status !== 'active') throw new Error('NOT_ACTIVE');
+            if (a.sellerId !== sellerId) throw new Error('NOT_OWNER');
+            if (a.bidderId) throw new Error('HAS_BIDS');
+            transferItem(a.offerType, a.offerId, a.sellerId, a.guildId);
+            db.prepare("UPDATE auctions SET status = 'cancelled' WHERE id = ?").run(auctionId);
+        });
+        runTx();
+        return { ok: true, offerName: a.offerName };
+    } catch (e) {
+        if (e.message === 'NOT_ACTIVE') return { ok: false, error: '❌ Lelang tidak aktif.' };
+        if (e.message === 'NOT_OWNER') return { ok: false, error: '❌ Bukan lelang kamu.' };
+        if (e.message === 'HAS_BIDS') return { ok: false, error: '❌ Sudah ada bid — tidak bisa dibatalkan.' };
+        throw e;
+    }
 }
 
 // Sweep & settle all expired active auctions. Returns the settled results.

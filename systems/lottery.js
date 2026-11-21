@@ -12,7 +12,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getSetting, addUserBalance, subtractUserBalance, addIncome, addSpending, incrementUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
-const { updateQuestProgress } = require('./quests');
+
 let log;
 try { ({ log } = require('./logger')); } catch (_) { log = (lvl, msg) => console.log(`[${lvl}] ${msg}`); }
 
@@ -141,14 +141,17 @@ function placeBet(guildId, userId, username, number) {
         return { success: false, error: `❌ Saldo kurang! Pasang angka butuh 🪙 **${BET_PRICE.toLocaleString('id-ID')}**, saldomu 🪙 **${user.balance.toLocaleString('id-ID')}**.` };
     }
 
-    subtractUserBalance(guildId, userId, BET_PRICE);
+    if (!subtractUserBalance(guildId, userId, BET_PRICE)) {
+        const bal = getOrCreateUser(guildId, userId).balance;
+        return { success: false, error: `❌ Saldo kurang! Pasang angka butuh 🪙 **${BET_PRICE.toLocaleString('id-ID')}**, saldomu 🪙 **${bal.toLocaleString('id-ID')}**.` };
+    }
     addSpending(guildId, userId, 'lottery', BET_PRICE);
     db.prepare('UPDATE lottery_rounds SET pot = pot + ?, totalBets = totalBets + 1 WHERE guildId = ? AND roundId = ?')
         .run(BET_PRICE, guildId, round.roundId);
     db.prepare('INSERT INTO lottery_bets (guildId, roundId, userId, username, number, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
         .run(guildId, round.roundId, userId, username, number, Date.now());
     incrementUserStat(guildId, userId, 'togel_bets');
-    updateQuestProgress(guildId, userId, 'togel', 1);
+    
 
     const updated = getRoundRow(guildId, round.roundId);
     return {
@@ -442,12 +445,6 @@ async function announceDraw(client, guildId, result) {
         allowedMentions: { users: result.winners.map(w => w.userId) },
     }).catch(() => {});
 
-    for (const w of result.winners) {
-        try {
-            const { dmUser } = require('./notifications');
-            await dmUser(client, guildId, w.userId, `🎉 Selamat! Angka **${result.drawnNumber}** tembus — kamu dapat 🪙 **${result.payoutEach.toLocaleString('id-ID')}** dari Togel!`).catch(() => {});
-        } catch (_) { /* DMs closed */ }
-    }
 }
 
 let _schedulerStarted = false;

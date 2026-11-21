@@ -9,12 +9,12 @@ const { getRandomInt } = require('../utils');
 const COMBO_TIMEOUT = 2 * 60 * 1000; // 2 menit — break combo jika lebih dari ini
 const COMBO_TIERS = [
     { min: 1, mult: 1.0, label: '' },
-    { min: 3, mult: 1.2, label: '🔥 x3 (+20%)' },
-    { min: 5, mult: 1.5, label: '🔥🔥 x5 (+50%)' },
-    { min: 8, mult: 1.8, label: '🔥🔥🔥 x8 (+80%)' },
-    { min: 10, mult: 2.0, label: '💥 x10 (2x!)' },
-    { min: 15, mult: 2.5, label: '💥💥 x15 (2.5x!!)' },
-    { min: 20, mult: 3.0, label: '⚡ x20 (3x!!!)' },
+    { min: 3, mult: 1.2, label: '🔥 Combo Chain: x3 (+20%)' },
+    { min: 5, mult: 1.5, label: '🔥 Combo Chain: x5 (+50%)' },
+    { min: 8, mult: 1.8, label: '🔥 Combo Chain: x8 (+80%)' },
+    { min: 10, mult: 2.0, label: '✧ COMBO MULTIPLIER: x10 (2x!) ✧' },
+    { min: 15, mult: 2.5, label: '✧ COMBO MULTIPLIER: x15 (2.5x!!) ✧' },
+    { min: 20, mult: 3.0, label: '👑 ✧ MAX COMBO CHAIN: x20 (3x!!!) ✧ 👑' },
 ];
 
 // ==================== TREASURE DROPS ====================
@@ -28,13 +28,16 @@ const TREASURE_DROPS = [
     { id: 'xp_booster_2x', name: 'XP Booster 2x', emoji: '⚡', chance: 7, category: 'uncommon' },
     { id: 'money_magnet', name: 'Money Magnet', emoji: '🧲', chance: 5, category: 'uncommon' },
     { id: 'streak_shield', name: 'Streak Shield', emoji: '🛡️', chance: 5, category: 'uncommon' },
+    { id: 'trophy_chum', name: 'Trophy Chum x1', emoji: '🏆', chance: 4, category: 'uncommon' },
     // Rare drops (total ~12%)
     { id: 'xp_booster_3x', name: 'XP Booster 3x', emoji: '⚡⚡', chance: 5, category: 'rare' },
     { id: 'protection_stone', name: 'Protection Stone', emoji: '🛡️', chance: 4, category: 'rare' },
     { id: 'pesticide_shield', name: 'Pestisida Shield', emoji: '🌿', chance: 3, category: 'rare' },
+    { id: 'prism_lure', name: 'Prism Lure', emoji: '💎', chance: 2, category: 'rare' },
     // Ultra rare drops (total ~3%)
     { id: 'mythic_fragment', name: 'Mythic Fragment', emoji: '🌟', chance: 2, category: 'legendary' },
     { id: 'awakening_crystal', name: 'Awakening Crystal', emoji: '💫', chance: 0.5, category: 'mythic' },
+    { id: 'omega_bait', name: 'Omega Bait', emoji: '🔱', chance: 0.3, category: 'mythic' },
 ];
 
 const BASE_TREASURE_CHANCE = 0.05; // 5% base chance per cast
@@ -88,10 +91,29 @@ function getComboFishMultiplier(combo) {
 }
 
 // ==================== ROLL TREASURE ====================
-function rollTreasure(combo) {
+function rollTreasure(combo, guildId, userId) {
     // Higher combo = higher treasure chance (5% base + 1% per 5 combo)
     const bonusChance = Math.floor(combo / 5) * 0.01;
-    const totalChance = BASE_TREASURE_CHANCE + bonusChance;
+    let totalChance = BASE_TREASURE_CHANCE + bonusChance;
+    // Pet drop_luck: +0.05% chance per effective point (soft)
+    try {
+        const { getTotalPetBonus } = require('./pets');
+        const dl = getTotalPetBonus(guildId, userId, 'drop_luck') || 0;
+        totalChance += dl * 0.0005;
+    } catch (_) {}
+    try {
+        const { getMasteryBonuses } = require('./fishingMastery');
+        totalChance += getMasteryBonuses(userId).treasureBonus || 0;
+    } catch (_) {}
+    try {
+        const { getEnchantEffects, getAquariumBonuses } = require('./fishingExtras');
+        const { getEquipment } = require('./fishing');
+        const eq = getEquipment(guildId, userId);
+        const fx = getEnchantEffects(userId, eq.rod);
+        totalChance += fx.treasure || 0;
+        totalChance += (getAquariumBonuses(userId).drop_luck || 0) * 0.001;
+    } catch (_) {}
+    totalChance = Math.min(0.18, totalChance); // hard cap 18%
 
     if (Math.random() > totalChance) return null; // No treasure
 

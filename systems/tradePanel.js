@@ -1,28 +1,19 @@
 // systems/tradePanel.js - Trade Panel UI System (Button + Select-menu based)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { db, getOrCreateUser, incrementUserStat } = require('../database');
-const { updateQuestProgress } = require('./quests');
+
 const { notifyTradeReceived, notifyTradeAccepted } = require('./notifications');
 const { PET_DATA } = require('../data/pets');
 const { FISH_DATA } = require('../data/fish');
 const { pendingTradeGive } = require('../state');
 const ui = require('./ui');
 
-// ============ DB: Card Trade Sessions (2-way) ============
-db.exec(`CREATE TABLE IF NOT EXISTS card_trade_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guildId TEXT, senderId TEXT, receiverId TEXT,
-    senderCardId INTEGER, receiverCardId INTEGER DEFAULT 0,
-    senderAgreed INTEGER DEFAULT 0, receiverAgreed INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'waiting', createdAt INTEGER
-)`);
-
 // ============ HELPER: Parse trade item string ============
 function parseTradeItem(str) {
     const parts = str.split(':');
     if (parts.length !== 2) return null;
     const [type, id] = parts;
-    if (!['fish', 'relic', 'money', 'pet', 'card'].includes(type)) return null;
+    if (!['fish', 'relic', 'money', 'pet'].includes(type)) return null;
     return { type, id };
 }
 
@@ -46,13 +37,6 @@ function getItemDisplayName(type, id, guildId) {
         const petDef = PET_DATA.find(p => p.id === pet.petId);
         return petDef ? `${petDef.emoji} **${pet.name}** (Lv.${pet.level})` : `🐾 Pet #${id}`;
     }
-    if (type === 'card') {
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ?').get(parseInt(id));
-        if (!card) return `🃏 Card #${id} (tidak ditemukan)`;
-        const RARITIES = require('./cardGame').RARITIES;
-        const r = RARITIES[card.rarity] || { emoji: '⚪' };
-        return `${r.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]`;
-    }
     return `❓ Unknown`;
 }
 
@@ -70,7 +54,7 @@ function getGiveableItems(guildId, userId) {
     out.push({ type: 'money', id: '0', label: '🪙 Money (masukkan jumlah)', desc: 'Tawarkan sejumlah uang' });
 
     // Relics
-    const relics = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ?').all(guildId, userId);
+    const relics = db.prepare('SELECT * FROM relics WHERE guildId = ? AND userId = ? AND (equipped_pet_id IS NULL OR equipped_pet_id <= 0)').all(guildId, userId);
     for (const r of relics) {
         out.push({ type: 'relic', id: String(r.id), label: `💎 ${r.name} [${r.rarity}]`, desc: `+${r.stat_value} ${r.stat_type}` });
     }
@@ -86,15 +70,6 @@ function getGiveableItems(guildId, userId) {
         const fd = FISH_DATA.find(x => x.id === f.fishId);
         out.push({ type: 'fish', id: String(f.id), label: `${fd ? fd.emoji : '🐟'} ${fd ? fd.name : 'Fish'} (${f.weight}kg)`, desc: fd ? fd.tier : 'Fish' });
     }
-    // Pokemon Cards
-    try {
-        const cards = db.prepare('SELECT * FROM pokemon_cards WHERE userId = ? AND locked = 0 ORDER BY id DESC').all(userId);
-        for (const c of cards) {
-            const RARITIES = require('./cardGame').RARITIES;
-            const r = RARITIES[c.rarity] || { emoji: '⚪' };
-            out.push({ type: 'card', id: String(c.id), label: `${r.emoji} ${c.name} [${c.rarity}]`.substring(0, 100), desc: c.setName || 'Pokemon TCG' });
-        }
-    } catch (_) {}
     return out;
 }
 
@@ -114,7 +89,6 @@ function buildTradePanel(guildId, userId, username) {
             `\n**Apa yang mau kamu lakukan?**\n` +
             ui.menuList([
                 { emoji: '📤', label: 'Offer', desc: 'Tawarkan itemmu ke pemain lain' },
-                { emoji: '🃏', label: 'Kartu', desc: 'Trade kartu Pokemon TCG (masukkan ID)' },
                 { emoji: '📋', label: 'List', desc: 'Lihat semua tawaran yang masih berjalan' },
                 { emoji: '✅', label: 'Accept', desc: 'Setujui tawaran yang masuk ke kamu' },
                 { emoji: '❌', label: 'Reject', desc: 'Tolak tawaran masuk / batalkan punyamu' },
@@ -125,7 +99,6 @@ function buildTradePanel(guildId, userId, username) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`trade_offer_${userId}`).setLabel('📤 Offer').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`trade_card_${userId}`).setLabel('🃏 Kartu').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`trade_list_${userId}`).setLabel('📋 List').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`trade_accept_${userId}`).setLabel('✅ Accept').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`trade_reject_${userId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
@@ -258,9 +231,7 @@ async function handleTradeButton(interaction) {
     const parts = customId.split('_');
     const userId = parts[parts.length - 1];
 
-    // Card agree/disagree/decline/respond buttons can be clicked by either trade party
-    const isCardSharedButton = ['cardagree', 'carddisagree', 'carddecline', 'cardrespond'].includes(parts[1]);
-    if (!isCardSharedButton && interaction.user.id !== userId) {
+    if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
     }
 
@@ -274,126 +245,6 @@ async function handleTradeButton(interaction) {
     // === OFFER: show giveable items select menu ===
     if (action === 'offer') {
         return interaction.update(buildGiveMenu(guildId, userId, interaction.user.username));
-    }
-
-    // === CARD TRADE: show modal asking for card ID ===
-    if (action === 'card') {
-        const modal = new ModalBuilder()
-            .setCustomId(`trade_modal_card_${userId}`)
-            .setTitle('🃏 Trade Kartu Pokemon');
-        const idInput = new TextInputBuilder()
-            .setCustomId('card_id')
-            .setLabel('Masukkan ID kartu yang ingin di-trade')
-            .setPlaceholder('Contoh: 15 (lihat ID di /card → Collection)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-        modal.addComponents(new ActionRowBuilder().addComponents(idInput));
-        return interaction.showModal(modal);
-    }
-
-    // === CARD CONFIRM: user confirmed card → pick target ===
-    if (action === 'cardconfirm') {
-        const cardId = parseInt(parts[2]);
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
-        if (!card) return interaction.reply({ content: '❌ Kartu tidak ditemukan atau bukan milikmu!', ephemeral: true });
-
-        pendingTradeGive.set(`${guildId}_${userId}`, { type: 'card', id: String(cardId) });
-
-        const RARITIES = require('./cardGame').RARITIES;
-        const r = RARITIES[card.rarity] || { emoji: '⚪' };
-        const embed = new EmbedBuilder()
-            .setTitle('🃏 Trade Kartu — Pilih Lawan Trade')
-            .setColor('#E74C3C')
-            .setDescription(
-                `Kamu menawarkan:\n\n` +
-                `> ${r.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]\n\n` +
-                `Pilih **siapa** yang mau kamu ajak tukar kartu 👇\n` +
-                `> Mereka akan diminta memilih kartu balasan.`
-            )
-            .setThumbnail(card.imageUrl || null);
-
-        const pickRow = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder()
-                .setCustomId(`trade_cardtarget_${userId}`)
-                .setPlaceholder('🤝 Pilih lawan trade...')
-                .setMinValues(1).setMaxValues(1)
-        );
-        const backRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`trade_cardcancel_0_${userId}`).setLabel('❌ Batal').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [pickRow, backRow] });
-    }
-
-    // === CARD CANCEL ===
-    if (action === 'cardcancel') {
-        return interaction.update(buildTradePanel(guildId, userId, interaction.user.username));
-    }
-
-    // === CARD RESPOND: target offers their card back ===
-    if (action === 'cardrespond') {
-        const sessionId = parseInt(parts[2]);
-        const session = db.prepare('SELECT * FROM card_trade_sessions WHERE id = ? AND receiverId = ? AND status = ?').get(sessionId, userId, 'waiting');
-        if (!session) return interaction.reply({ content: '❌ Trade tidak ditemukan atau expired!', ephemeral: true });
-        const modal = new ModalBuilder()
-            .setCustomId(`trade_modal_cardrespond_${sessionId}_${userId}`)
-            .setTitle('🃏 Pilih Kartu untuk Tukar');
-        const idInput = new TextInputBuilder()
-            .setCustomId('card_id')
-            .setLabel('ID kartu yang kamu tawarkan sebagai tukar')
-            .setPlaceholder('Contoh: 22 (lihat ID di /card → Collection)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(10);
-        modal.addComponents(new ActionRowBuilder().addComponents(idInput));
-        return interaction.showModal(modal);
-    }
-
-    // === CARD DECLINE: target declines ===
-    if (action === 'carddecline') {
-        const sessionId = parseInt(parts[2]);
-        db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('declined', sessionId);
-        return interaction.update({ content: '❌ Trade ditolak.', embeds: [], components: [] });
-    }
-
-    // === CARD AGREE: one party agrees ===
-    if (action === 'cardagree') {
-        const sessionId = parseInt(parts[2]);
-        const clickerId = interaction.user.id;
-        const session = db.prepare('SELECT * FROM card_trade_sessions WHERE id = ? AND status = ?').get(sessionId, 'pending');
-        if (!session) return interaction.reply({ content: '❌ Trade tidak ditemukan!', ephemeral: true });
-        if (clickerId !== session.senderId && clickerId !== session.receiverId) return interaction.reply({ content: '❌ Bukan trade kamu!', ephemeral: true });
-
-        if (clickerId === session.senderId) db.prepare('UPDATE card_trade_sessions SET senderAgreed = 1 WHERE id = ?').run(sessionId);
-        if (clickerId === session.receiverId) db.prepare('UPDATE card_trade_sessions SET receiverAgreed = 1 WHERE id = ?').run(sessionId);
-
-        const updated = db.prepare('SELECT * FROM card_trade_sessions WHERE id = ?').get(sessionId);
-        if (updated.senderAgreed && updated.receiverAgreed) {
-            const sCard = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(updated.senderCardId, updated.senderId);
-            const rCard = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(updated.receiverCardId, updated.receiverId);
-            if (!sCard || !rCard) { db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('failed', sessionId); return interaction.update({ content: '❌ Kartu sudah tidak ada! Trade gagal.', embeds: [], components: [] }); }
-            db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.receiverId, updated.senderCardId);
-            db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(updated.senderId, updated.receiverCardId);
-            db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('completed', sessionId);
-            const RARITIES = require('./cardGame').RARITIES;
-            const sr = RARITIES[sCard.rarity] || { emoji: '⚪' };
-            const rr = RARITIES[rCard.rarity] || { emoji: '⚪' };
-            const embed = new EmbedBuilder().setTitle('✅ Trade Berhasil!').setColor('#2ECC71')
-                .setDescription(`🎉 Kartu berhasil ditukar!\n\n> <@${updated.senderId}> mendapat: ${rr.emoji} **${rCard.name}**\n> <@${updated.receiverId}> mendapat: ${sr.emoji} **${sCard.name}**`);
-            return interaction.update({ embeds: [embed], components: [] });
-        }
-        return interaction.reply({ content: '✅ Kamu sudah setuju! Menunggu pihak lain...', ephemeral: true });
-    }
-
-    // === CARD DISAGREE ===
-    if (action === 'carddisagree') {
-        const sessionId = parseInt(parts[2]);
-        const clickerId = interaction.user.id;
-        const session = db.prepare('SELECT * FROM card_trade_sessions WHERE id = ?').get(sessionId);
-        if (!session) return interaction.reply({ content: '❌ Trade tidak ditemukan!', ephemeral: true });
-        if (clickerId !== session.senderId && clickerId !== session.receiverId) return interaction.reply({ content: '❌ Bukan trade kamu!', ephemeral: true });
-        db.prepare('UPDATE card_trade_sessions SET status = ? WHERE id = ?').run('rejected', sessionId);
-        return interaction.update({ content: '❌ Trade dibatalkan.', embeds: [], components: [] });
     }
 
     // === LIST: Show pending trades ===
@@ -487,9 +338,6 @@ async function handleTradeSelectMenu(interaction) {
         } else if (type === 'pet') {
             const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(id), guildId, userId);
             if (!pet) return interaction.reply({ content: '❌ Pet itu sudah tidak ada!', ephemeral: true });
-        } else if (type === 'card') {
-            const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(id), userId);
-            if (!card) return interaction.reply({ content: '❌ Kartu Pokemon itu sudah tidak ada!', ephemeral: true });
         }
 
         // Store the chosen give-item, then ask WHO to trade with via a user-picker
@@ -543,56 +391,7 @@ async function handleTradeUserSelect(interaction) {
         return interaction.reply({ content: '❌ Ini bukan panel kamu!', ephemeral: true });
     }
 
-    if (!customId.startsWith('trade_targetpick_') && !customId.startsWith('trade_cardtarget_')) return;
-
-    // === CARD TARGET: sender picked who to trade with ===
-    if (customId.startsWith('trade_cardtarget_')) {
-        const pendingKey = `${guildId}_${userId}`;
-        const pendingGive = pendingTradeGive.get(pendingKey);
-        if (!pendingGive || pendingGive.type !== 'card') return interaction.reply({ content: '❌ Sesi expired. Mulai lagi.', ephemeral: true });
-
-        const targetUserId = interaction.values[0];
-        if (targetUserId === userId) return interaction.reply({ content: '❌ Tidak bisa trade dengan diri sendiri!', ephemeral: true });
-        const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
-        if (targetMember?.user?.bot) return interaction.reply({ content: '❌ Tidak bisa trade dengan bot!', ephemeral: true });
-
-        const cardId = parseInt(pendingGive.id);
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
-        if (!card) return interaction.reply({ content: '❌ Kartu sudah tidak ada!', ephemeral: true });
-
-        // Create trade session
-        db.prepare('INSERT INTO card_trade_sessions (guildId, senderId, receiverId, senderCardId, status, createdAt) VALUES (?,?,?,?,?,?)').run(guildId, userId, targetUserId, cardId, 'waiting', Date.now());
-        const sessionId = db.prepare('SELECT last_insert_rowid() as id').get().id;
-        pendingTradeGive.delete(pendingKey);
-
-        const RARITIES = require('./cardGame').RARITIES;
-        const r = RARITIES[card.rarity] || { emoji: '⚪' };
-
-        const embed = new EmbedBuilder()
-            .setTitle('🃏 Trade Request Terkirim!')
-            .setColor('#3498DB')
-            .setDescription(
-                `<@${userId}> ingin tukar kartu dengan <@${targetUserId}>!\n\n` +
-                `**Kartu yang ditawarkan:**\n` +
-                `> ${r.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]\n\n` +
-                `<@${targetUserId}>, klik **🃏 Tawarkan Kartu** untuk memilih kartu balasanmu!\n` +
-                `Atau klik ❌ untuk menolak.`
-            )
-            .setThumbnail(card.imageUrl || null)
-            .setFooter({ text: `Trade #${sessionId} • Expires 10 min` });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`trade_cardrespond_${sessionId}_${targetUserId}`).setLabel('🃏 Tawarkan Kartu').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`trade_carddecline_${sessionId}_${targetUserId}`).setLabel('❌ Tolak').setStyle(ButtonStyle.Danger),
-        );
-
-        await interaction.update({ content: '✅ Trade request terkirim!', embeds: [], components: [] });
-        await interaction.channel.send({ embeds: [embed], components: [row] });
-
-        // Auto-expire after 10 min
-        setTimeout(() => { const s = db.prepare('SELECT * FROM card_trade_sessions WHERE id=? AND status=?').get(sessionId,'waiting'); if(s) db.prepare('UPDATE card_trade_sessions SET status=? WHERE id=?').run('expired',sessionId); }, 600000);
-        return;
-    }
+    if (!customId.startsWith('trade_targetpick_')) return;
 
     const pendingKey = `${guildId}_${userId}`;
     const pendingGive = pendingTradeGive.get(pendingKey);
@@ -679,10 +478,6 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
         const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(senderGive.id), guildId, trade.senderId);
         if (!pet) return interaction.reply({ content: '❌ Sender sudah tidak punya pet tersebut!', ephemeral: true });
     }
-    if (senderGive.type === 'card') {
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(senderGive.id), trade.senderId);
-        if (!card) return interaction.reply({ content: '❌ Sender sudah tidak punya kartu tersebut!', ephemeral: true });
-    }
 
     // Validate receiver (current user) has what sender wants
     const receiverData = getOrCreateUser(guildId, userId);
@@ -701,29 +496,45 @@ async function processTradeAccept(interaction, guildId, userId, tradeId) {
         const pet = db.prepare('SELECT * FROM pets WHERE id = ? AND guildId = ? AND userId = ?').get(parseInt(senderWant.id), guildId, userId);
         if (!pet) return interaction.reply({ content: '❌ Kamu tidak punya pet yang diminta!', ephemeral: true });
     }
-    if (senderWant.type === 'card') {
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(parseInt(senderWant.id), userId);
-        if (!card) return interaction.reply({ content: '❌ Kamu tidak punya kartu yang diminta!', ephemeral: true });
-    }
 
     // Execute trade: sender's offer -> receiver
-    if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, userId); }
-    if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
-    if (senderGive.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(userId, parseInt(senderGive.id)); }
+    try {
+        const runTx = db.transaction(() => {
+            if (senderGive.type === 'money') {
+                const senderData = getOrCreateUser(guildId, trade.senderId);
+                if (senderData.balance < parseInt(senderGive.id)) throw new Error('SENDER_INSUFFICIENT');
+            }
+            if (senderWant.type === 'money') {
+                if (getOrCreateUser(guildId, userId).balance < parseInt(senderWant.id)) throw new Error('RECEIVER_INSUFFICIENT');
+            }
 
-    // receiver's offer -> sender
-    if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'money') { db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, userId); db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId); }
-    if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
-    if (senderWant.type === 'card') { db.prepare('UPDATE pokemon_cards SET userId = ? WHERE id = ?').run(trade.senderId, parseInt(senderWant.id)); }
+            if (senderGive.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+            if (senderGive.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
+            if (senderGive.type === 'money') {
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, trade.senderId);
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderGive.id), guildId, userId);
+            }
+            if (senderGive.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(userId, parseInt(senderGive.id), guildId); }
 
-    db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
+            if (senderWant.type === 'fish') { db.prepare('UPDATE fish_inventory SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+            if (senderWant.type === 'relic') { db.prepare('UPDATE relics SET userId = ? WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
+            if (senderWant.type === 'money') {
+                db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, userId);
+                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(parseInt(senderWant.id), guildId, trade.senderId);
+            }
+            if (senderWant.type === 'pet') { db.prepare('UPDATE pets SET userId = ?, active = 0 WHERE id = ? AND guildId = ?').run(trade.senderId, parseInt(senderWant.id), guildId); }
 
-    updateQuestProgress(guildId, userId, 'trade', 1);
-    updateQuestProgress(guildId, trade.senderId, 'trade', 1);
+            db.prepare('UPDATE trades SET status = ? WHERE id = ?').run('completed', tradeId);
+        });
+        runTx();
+    } catch (e) {
+        if (e.message === 'SENDER_INSUFFICIENT') return interaction.reply({ content: '❌ Sender tidak punya cukup money!', ephemeral: true });
+        if (e.message === 'RECEIVER_INSUFFICIENT') return interaction.reply({ content: '❌ Saldo kamu kurang untuk trade ini!', ephemeral: true });
+        throw e;
+    }
+
+    
+    
     incrementUserStat(guildId, userId, 'trades_completed');
     incrementUserStat(guildId, trade.senderId, 'trades_completed');
 
@@ -790,86 +601,6 @@ async function handleTradeModal(interaction) {
 
     if (interaction.user.id !== userId) {
         return interaction.reply({ content: '❌ Ini bukan modal kamu!', ephemeral: true });
-    }
-
-    // === CARD ID SUBMISSION: show preview + confirm ===
-    if (action === 'card') {
-        const cardIdStr = interaction.fields.getTextInputValue('card_id').trim();
-        const cardId = parseInt(cardIdStr);
-        if (isNaN(cardId)) return interaction.reply({ content: '❌ ID harus berupa angka!', ephemeral: true });
-
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
-        if (!card) return interaction.reply({ content: `❌ Kartu dengan ID **${cardId}** tidak ditemukan di koleksimu!\n> Cek ID di /card → Collection.`, ephemeral: true });
-
-        const RARITIES = require('./cardGame').RARITIES;
-        const r = RARITIES[card.rarity] || { emoji: '⚪', color: '#AAA' };
-
-        const embed = new EmbedBuilder()
-            .setTitle('🃏 Konfirmasi Trade Kartu')
-            .setColor(r.color || '#E74C3C')
-            .setDescription(
-                `Apakah kamu yakin ingin **trade** kartu ini?\n\n` +
-                `> ${r.emoji} **${card.name}**\n` +
-                `> 📦 Set: *${card.setName}*\n` +
-                `> ⭐ Rarity: ${card.rarity}\n` +
-                (card.types ? `> 🔥 Type: ${card.types}\n` : '') +
-                (card.hp ? `> ❤️ HP: ${card.hp}\n` : '') +
-                `> 🆔 ID: \`${card.id}\`\n\n` +
-                `⚠️ Kartu akan **hilang** dari koleksimu setelah trade berhasil!`
-            )
-            .setImage(card.imageUrl || null)
-            .setFooter({ text: 'Klik Confirm untuk lanjut pilih lawan trade' });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`trade_cardconfirm_${cardId}_${userId}`).setLabel('✅ Confirm').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`trade_cardcancel_0_${userId}`).setLabel('❌ Batal').setStyle(ButtonStyle.Danger),
-        );
-
-        return interaction.reply({ embeds: [embed], components: [row], ephemeral: false });
-    }
-
-    // === CARD RESPOND SUBMISSION: receiver chose their card ===
-    if (action === 'cardrespond') {
-        const sessionId = parseInt(parts[3]);
-        const cardIdStr = interaction.fields.getTextInputValue('card_id').trim();
-        const cardId = parseInt(cardIdStr);
-        if (isNaN(cardId)) return interaction.reply({ content: '❌ ID harus angka!', ephemeral: true });
-
-        const card = db.prepare('SELECT * FROM pokemon_cards WHERE id = ? AND userId = ?').get(cardId, userId);
-        if (!card) return interaction.reply({ content: `❌ Kartu ID ${cardId} tidak ditemukan di koleksimu!`, ephemeral: true });
-
-        const session = db.prepare('SELECT * FROM card_trade_sessions WHERE id = ? AND receiverId = ? AND status = ?').get(sessionId, userId, 'waiting');
-        if (!session) return interaction.reply({ content: '❌ Trade session expired!', ephemeral: true });
-
-        // Update session with receiver's card, change status to pending (both need to agree)
-        db.prepare('UPDATE card_trade_sessions SET receiverCardId = ?, status = ? WHERE id = ?').run(cardId, 'pending', sessionId);
-
-        // Show both cards side by side for confirmation
-        const sCard = db.prepare('SELECT * FROM pokemon_cards WHERE id = ?').get(session.senderCardId);
-        const RARITIES = require('./cardGame').RARITIES;
-        const sr = RARITIES[sCard?.rarity] || { emoji: '⚪' };
-        const rr = RARITIES[card.rarity] || { emoji: '⚪' };
-
-        const embed = new EmbedBuilder()
-            .setTitle('🃏 Trade — Konfirmasi Kedua Pihak')
-            .setColor('#FFD700')
-            .setDescription(
-                `**Kedua pihak harus setuju untuk trade ini berhasil!**\n\n` +
-                `<@${session.senderId}> memberikan:\n` +
-                `> ${sr.emoji} **${sCard?.name || '?'}** — *${sCard?.setName || '?'}* [${sCard?.rarity || '?'}]\n\n` +
-                `<@${session.receiverId}> memberikan:\n` +
-                `> ${rr.emoji} **${card.name}** — *${card.setName}* [${card.rarity}]\n\n` +
-                `⬇️ Klik **✅ Setuju** jika deal, atau **❌ Tidak Setuju** untuk batal.`
-            )
-            .setFooter({ text: `Trade #${sessionId} • Kedua pihak harus setuju!` });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`trade_cardagree_${sessionId}_any`).setLabel('✅ Setuju').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`trade_carddisagree_${sessionId}_any`).setLabel('❌ Tidak Setuju').setStyle(ButtonStyle.Danger),
-        );
-
-        await interaction.reply({ embeds: [embed], components: [row] });
-        return;
     }
 
     // === OFFER SUBMISSION ===
@@ -987,7 +718,7 @@ function isTradePanelSelectMenu(customId) {
 }
 
 function isTradePanelUserSelect(customId) {
-    return customId.startsWith('trade_targetpick_') || customId.startsWith('trade_cardtarget_');
+    return customId.startsWith('trade_targetpick_');
 }
 
 function isTradePanelModal(customId) {

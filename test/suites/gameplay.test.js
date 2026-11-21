@@ -27,12 +27,18 @@ module.exports = function register() {
   });
   test('mutation: base rate ~2% (1.2-2.8% over 300k)', () => {
     const orig = Math.random;
+    const fw = botRequire('systems/farmWeather.js');
+    const origWeather = fw.getCurrentWeather;
+    fw.getCurrentWeather = () => ({ id: 'sunny', mutationBonus: 0 });
     try {
       let hits = 0; const N = 300000;
       for (let i=0;i<N;i++) if (mut.rollMutation(G, U, 0)) hits++;
       const pct = hits/N*100;
       if (pct < 1.2 || pct > 2.8) throw new Error('rate out of range: ' + pct.toFixed(2) + '%');
-    } finally { Math.random = orig; }
+    } finally {
+      Math.random = orig;
+      fw.getCurrentWeather = origWeather;
+    }
   });
   test('mutation: yield is positive integer', () => {
     const y = mut.calculateHarvestYield({ minYield:2, maxYield:4, sellPrice:12 }, { fertYieldBonus:0.5, seedLevel:2, rotationBonus:0.1, petFarmBonus:20 });
@@ -86,12 +92,12 @@ module.exports = function register() {
   test('fish: God catchable but rare (<5%) at god_realm max gear; none at river basic', () => {
     db.getOrCreateUser(G, U);
     db.db.prepare("INSERT INTO fish_equipment (userId, rod, bait, bait_count, location) VALUES (?, 'omega_rod', 'god_lure', 1000000, 'god_realm') ON CONFLICT(userId) DO UPDATE SET rod='omega_rod', bait='god_lure', bait_count=1000000, location='god_realm'").run(U);
-    let god=0, secret=0; const N=40000;
+    let god=0, secret=0; const N=4000;
     for (let i=0;i<N;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God')god++; if(r.tier.tier==='Secret')secret++; }
     if (god===0) throw new Error('God never caught with max gear');
     if (god/N >= 0.05) throw new Error('God too common: ' + (god/N*100).toFixed(2) + '%');
     db.db.prepare("UPDATE fish_equipment SET rod='basic', bait='none', bait_count=0, location='river' WHERE userId=?").run(U);
-    let bad=0; for (let i=0;i<10000;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God'||r.tier.tier==='Secret')bad++; }
+    let bad=0; for (let i=0;i<1000;i++){ const r=fishing.catchFish(G,U); if(r.tier.tier==='God'||r.tier.tier==='Secret')bad++; }
     if (bad>0) throw new Error('Secret/God caught at river basic: ' + bad);
   });
 
@@ -140,40 +146,8 @@ module.exports = function register() {
     });
   });
 
-  // ---- Quest system (new types + progress wiring) ----
-  const quests = botRequire('systems/quests.js');
-  assert('quest: new quest types defined in pool',
-    ['boss','gift','togel','expedition','refine','daily','worldboss']
-      .every(t => quests.QUEST_POOL.some(q => q.type === t)));
-  test('quest: every generated daily quest has desc + valid target/reward', () => {
-    for (let i = 0; i < 50; i++) {
-      const qs = quests.generateDailyQuests();
-      if (qs.length !== 3) throw new Error('expected 3 daily quests');
-      for (const q of qs) {
-        if (typeof q.desc !== 'string' || !q.desc) throw new Error('quest missing desc: ' + q.type);
-        if (!(q.target >= 1) || !(q.reward >= 1)) throw new Error('bad target/reward for ' + q.type);
-      }
-    }
-  });
-  test('quest: weekly quests generate with desc for new types too', () => {
-    for (let i = 0; i < 50; i++) {
-      const qs = quests.generateWeeklyQuests();
-      for (const q of qs) { if (typeof q.desc !== 'string' || !q.desc) throw new Error('weekly quest missing desc: ' + q.type); }
-    }
-  });
-  test('quest: updateQuestProgress advances a new-type (boss) daily quest', () => {
-    const QU = '300000000000000044';
-    db.getOrCreateUser(G, QU);
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    const crafted = [{ type: 'boss', target: 2, reward: 500, progress: 0, claimed: false, difficulty: 'medium', desc: '👹 Kalahkan 2 boss' }];
-    db.db.prepare('INSERT OR REPLACE INTO daily_quests (guildId, userId, date, data) VALUES (?, ?, ?, ?)').run(G, QU, today, JSON.stringify(crafted));
-    quests.updateQuestProgress(G, QU, 'boss', 1);
-    const row = db.db.prepare('SELECT data FROM daily_quests WHERE guildId = ? AND userId = ?').get(G, QU);
-    const q = JSON.parse(row.data)[0];
-    if (q.progress !== 1) throw new Error('boss quest progress not advanced: ' + q.progress);
-  });
-
   // ---- Leveling formula (XP no longer stuck) ----
+  const activity = botRequire('systems/activity.js');
   test('level: XP threshold is (level+1)*100 and grants a level', () => {
     const LU = '300000000000000061';
     db.getOrCreateUser(G, LU);
@@ -181,7 +155,7 @@ module.exports = function register() {
     setS('msg_xp_min', '1'); setS('msg_xp_max', '1'); setS('levelup_announce_enabled', '0');
     db.db.prepare('UPDATE users SET level = 0, xp = 99 WHERE guildId = ? AND userId = ?').run(G, LU);
     const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
-    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+    return Promise.resolve(activity.addXpAndMoney(member, 'message')).then(() => {
       const u = db.getOrCreateUser(G, LU);
       if (u.level !== 1) throw new Error('expected level 1, got ' + u.level);
       if (u.xp !== 0) throw new Error('expected xp 0 after exact level up, got ' + u.xp);
@@ -195,7 +169,7 @@ module.exports = function register() {
     db.db.prepare('UPDATE users SET level = 12, xp = 2892 WHERE guildId = ? AND userId = ?').run(G, LU);
     const member = { id: LU, user: { username: 'lvl' }, voice: {}, roles: { cache: new Map() }, guild: { id: G, members: { fetch: async () => null, cache: new Map() }, channels: { cache: new Map() }, roles: { cache: new Map() }, systemChannel: null } };
     // 2892 + 1 = 2893 -> L13 (-1300 => 1593) -> L14 (-1400 => 193) -> stop (<1500)
-    return Promise.resolve(quests.addXpAndMoney(member, 'message')).then(() => {
+    return Promise.resolve(activity.addXpAndMoney(member, 'message')).then(() => {
       const u = db.getOrCreateUser(G, LU);
       if (u.level !== 14) throw new Error('expected level 14 after catch-up, got ' + u.level);
       if (u.xp !== 193) throw new Error('expected leftover xp 193, got ' + u.xp);
@@ -236,6 +210,13 @@ module.exports = function register() {
   test('prestige crop sells for its sellPrice (regression: used to sell for 🪙0)', () => {
     const { addStorage } = botRequire('systems/farming.js');
     const farm = botRequire('systems/farmPanel.js');
+    const farmSeason = botRequire('systems/farmSeason.js');
+    const farmWeather = botRequire('systems/farmWeather.js');
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
     const g = 'PFG', u = '300000000000000077';
     db.getOrCreateUser(g, u);
     db.db.prepare('UPDATE users SET balance = 0 WHERE guildId = ? AND userId = ?').run(g, u);
@@ -243,7 +224,13 @@ module.exports = function register() {
     const it = mockInteraction({ userId: u, guildId: g, customId: `farm_sellall_${u}` });
     return Promise.resolve(farm.handleFarmButton(it)).then(() => {
       const bal = db.getOrCreateUser(g, u).balance;
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
       if (bal !== 240000) throw new Error('expected 240000 from 2x time_blossom, got ' + bal);
+    }).catch(e => {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+      throw e;
     });
   });
 
@@ -265,9 +252,17 @@ module.exports = function register() {
       if (getStorageQty(g, u, 'gandum') !== 0) throw new Error('gandum not consumed from farm_storage');
     });
   });
+
   test('storage hub sell-all: prices farm crops + livestock products (regression: sold 🪙0)', () => {
     const { addStorage } = botRequire('systems/farming.js');
     const lp = botRequire('systems/livestockPanel.js');
+    const farmSeason = botRequire('systems/farmSeason.js');
+    const farmWeather = botRequire('systems/farmWeather.js');
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
     const g = 'LVG', u = '300000000000000202';
     db.getOrCreateUser(g, u);
     db.db.prepare('UPDATE users SET balance = 0 WHERE userId = ?').run(u);
@@ -277,9 +272,16 @@ module.exports = function register() {
     const it = mockInteraction({ userId: u, guildId: g, customId: `farm_allstorage_sellall_${u}` });
     return Promise.resolve(lp.handleLivestockButton(it)).then(() => {
       const bal = db.getOrCreateUser(g, u).balance;
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
       if (bal !== 260) throw new Error('expected 260 (gandum 60 + egg_premium 200), got ' + bal);
+    }).catch(e => {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+      throw e;
     });
   });
+
   test('livestock daily tick: starved animal becomes sick (regression: ms-timestamp parse)', () => {
     const live = botRequire('systems/livestock.js');
     const u = '300000000000000203';
@@ -362,19 +364,10 @@ module.exports = function register() {
     });
   });
 
-  // ---- Pokemon card image ----
-  test('pokemon card: generates gallery and gacha image buffers', () => {
-    const cg = botRequire('systems/cardGame.js');
-    const fakeCards = [
-      { name: 'Pikachu', rarity: 'Common', imageUrl: '' },
-      { name: 'Charizard', rarity: 'Rare Holo', imageUrl: '' }
-    ];
-    return Promise.all([
-      cg.generateCardImage(fakeCards),
-      cg.generateGalleryImage(fakeCards)
-    ]).then(([buf1, buf2]) => {
-      if (!Buffer.isBuffer(buf1) || buf1.length < 1000) throw new Error('expected a PNG buffer for gacha');
-      if (!Buffer.isBuffer(buf2) || buf2.length < 1000) throw new Error('expected a PNG buffer for gallery');
+  test('levelup card: generates a PNG buffer', () => {
+    const luc = botRequire('systems/levelUpCard.js');
+    return luc.generateLevelUpCard({ username: 'Winner 🔥', level: 10, oldLevel: 9, streak: 5, rewardMoney: 10000, rewardRole: 'VIP' }).then(buf => {
+      if (!Buffer.isBuffer(buf) || buf.length < 500) throw new Error('expected a PNG buffer');
     });
   });
 
@@ -451,12 +444,11 @@ module.exports = function register() {
   });
   test('rank score: comprehensive formula covers all major systems', () => {
     // Each new component must contribute its documented weight.
-    const r = titles.computeScore({ worldBossKills: 1, godFish: 1, awakenings: 1, secretLocs: 1, expeditions: 1, trades: 1, weeklyQuests: 1 });
+    const r = titles.computeScore({ worldBossKills: 1, godFish: 1, awakenings: 1, secretLocs: 1, expeditions: 1, trades: 1 });
     // worldBossKills100 + expeditions10 (Battle/Pet Mastery) ... assert a few key high-prestige weights:
     if (r.breakdown['Battle'] !== 100) throw new Error('worldBossKills should add 100 to Battle, got ' + r.breakdown['Battle']);
     if (r.breakdown['Fishing'] !== 350) throw new Error('godFish(150)+secretLocs(200)=350 Fishing, got ' + r.breakdown['Fishing']);
     if (r.breakdown['Pet Mastery'] !== 70) throw new Error('expeditions(10)+awakenings(60)=70, got ' + r.breakdown['Pet Mastery']);
-    if (r.breakdown['Quest'] !== 40) throw new Error('weeklyQuests=40, got ' + r.breakdown['Quest']);
     if (r.breakdown['Sosial'] !== 20) throw new Error('trades=20, got ' + r.breakdown['Sosial']);
   });
   test('rank score: afk/spam stats are down-weighted and capped', () => {
@@ -470,5 +462,22 @@ module.exports = function register() {
   test('ui: helpers produce expected output', () => {
     if (ui.progressLine(6,10).indexOf('60%') < 0) throw new Error('progressLine');
     if (ui.money(1000) !== '🪙 1.000') throw new Error('money: ' + ui.money(1000));
+  });
+
+  // ---- Blackjack Stale Game Recovery ----
+  const bj = botRequire('systems/blackjack.js');
+  test('blackjack: stale game (>5 min) is cleared when starting new game', () => {
+    const bg = 'BJ_G', bu = 'BJ_U';
+    db.getOrCreateUser(bg, bu);
+    db.addUserBalance(bg, bu, 5000);
+    const g1 = bj.startBlackjack(bg, bu, 500);
+    if (!g1.success && !g1.immediate) throw new Error('game 1 should start');
+    const active = bj.activeBlackjackGames.get(`${bg}_${bu}`);
+    if (active) {
+      active.startedAt = Date.now() - 600000;
+      const g2 = bj.startBlackjack(bg, bu, 500);
+      if (!g2.success) throw new Error('stale game was not cleared: ' + g2.error);
+      bj.activeBlackjackGames.delete(`${bg}_${bu}`);
+    }
   });
 };

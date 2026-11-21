@@ -25,7 +25,7 @@ const TITLE_TIERS = [
 //
 // Philosophy ("prestige"): raw wealth is capped, and afk/spam-able stats (chat, voice,
 // reactions) are heavily down-weighted + capped, so rank reflects real mastery across
-// every system (battle, fishing, pets, quests, social), not just being rich or chatty.
+// every system (battle, fishing, pets, social), not just being rich or chatty.
 function computeScore(p = {}) {
     const n = (v) => Number(v) || 0;
     const b = {};
@@ -33,21 +33,30 @@ function computeScore(p = {}) {
     b['Kekayaan'] = Math.min(Math.floor(n(p.balance) / 500), 25000);            // capped
     b['Badge'] = n(p.badges) * 50;
     b['Streak'] = n(p.streak) * 20;
-    b['Pet'] = n(p.petLv) * 8;
-    b['Fishing'] = n(p.fish) * 2 + n(p.giantFish) * 40 + n(p.seaMonsters) * 8
-        + n(p.godFish) * 150 + n(p.secretFish) * 80 + n(p.voidFish) * 30
-        + n(p.abyssFish) * 15 + n(p.secretLocs) * 200 + n(p.treasures) * 20;
-    b['Farming'] = n(p.farm) * 3 + n(p.craft) * 6;
-    b['Battle'] = n(p.dungeon) * 8 + n(p.boss) * 20 + n(p.pvp) * 15
-        + n(p.worldBossHits) * 5 + n(p.worldBossKills) * 100;
-    b['Pet Mastery'] = n(p.expeditions) * 10 + n(p.refines) * 8 + n(p.relicMelts) * 3
-        + n(p.fusions) * 15 + n(p.awakenings) * 60;
-    b['Quest'] = n(p.quests) * 10 + n(p.weeklyQuests) * 40;
     b['Sosial'] = n(p.gifts) * 15 + n(p.trades) * 20
         + Math.min(Math.floor(n(p.chats) / 10), 2000)
         + Math.min(Math.floor(n(p.reactions) / 5), 500)
         + Math.min(Math.floor(n(p.voice) / 2), 5000);                            // afk-capped
     b['Gambling'] = n(p.gambling) * 1 + n(p.togelWins) * 5;
+    if (p.eventWins) b['Kuis & Event'] = n(p.eventWins) * 25;
+
+    // Legacy parameters (retained for backward compatibility if passed directly)
+    if (p.petLv) b['Pet'] = n(p.petLv) * 8;
+    if (p.fish || p.giantFish || p.seaMonsters || p.godFish || p.secretFish || p.voidFish || p.abyssFish || p.secretLocs || p.treasures) {
+        b['Fishing'] = n(p.fish) * 2 + n(p.giantFish) * 40 + n(p.seaMonsters) * 8
+            + n(p.godFish) * 150 + n(p.secretFish) * 80 + n(p.voidFish) * 30
+            + n(p.abyssFish) * 15 + n(p.secretLocs) * 200 + n(p.treasures) * 20;
+    }
+    if (p.farm || p.craft) b['Farming'] = n(p.farm) * 3 + n(p.craft) * 6;
+    if (p.dungeon || p.boss || p.pvp || p.worldBossHits || p.worldBossKills) {
+        b['Battle'] = n(p.dungeon) * 8 + n(p.boss) * 20 + n(p.pvp) * 15
+            + n(p.worldBossHits) * 5 + n(p.worldBossKills) * 100;
+    }
+    if (p.expeditions || p.refines || p.relicMelts || p.fusions || p.awakenings) {
+        b['Pet Mastery'] = n(p.expeditions) * 10 + n(p.refines) * 8 + n(p.relicMelts) * 3
+            + n(p.fusions) * 15 + n(p.awakenings) * 60;
+    }
+
     let score = 0;
     for (const k in b) score += b[k];
     return { score, breakdown: b };
@@ -59,23 +68,13 @@ function gatherScoreParts(guildId, userId) {
     if (!user) return null;
     const s = (k) => getUserStat(guildId, userId, k) || 0;
     const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId);
-    const petRow = db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, userId);
     const badges = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, userId).c;
     return {
         level: user.level, balance: user.balance, badges,
         streak: streakRow ? streakRow.count : 0,
-        petLv: petRow ? petRow.level : 0,
-        fish: s('total_fish_caught'), giantFish: s('giant_fish_defeated'), seaMonsters: s('sea_monster_encounters'),
-        godFish: s('fish_caught_god_tier'), secretFish: s('fish_caught_secret_tier'), voidFish: s('fish_caught_void_rift'),
-        abyssFish: s('fish_caught_abyss'), secretLocs: s('secret_locations_unlocked'), treasures: s('fishing_treasures_found'),
-        farm: s('total_harvests'), craft: s('total_crafts'),
-        dungeon: s('dungeon_clears'), boss: s('boss_kills'), pvp: s('pvp_wins'),
-        worldBossHits: s('world_boss_attacks'), worldBossKills: s('world_boss_last_hit'),
-        expeditions: s('total_expeditions'), refines: s('refine_successes'), relicMelts: s('relic_melts'),
-        fusions: s('fusion_success'), awakenings: s('total_awakenings'),
-        quests: s('total_quests_done'), weeklyQuests: s('total_weekly_quests_done'),
-        gifts: s('total_gifts_sent'), trades: s('trades_completed'),
+        gifts: s('total_gifts_sent'),
         chats: s('total_chats'), reactions: s('total_reactions'), voice: s('total_voice_mins'),
+        eventWins: s('event_wins'),
         gambling: s('slot_wins') + s('coinflip_wins') + s('roulette_wins'), togelWins: s('togel_wins'),
     };
 }

@@ -1,9 +1,23 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Events, REST, Routes } = require('discord.js');
 
+// Ensure Git identity is configured locally for Pterodactyl auto-update
+try {
+    const fs = require('fs');
+    if (fs.existsSync('.git')) {
+        const { execSync } = require('child_process');
+        execSync('git config user.name "adit4rt-source"');
+        execSync('git config user.email "adit4rt@icloud.com"');
+        execSync('git merge --abort 2>/dev/null || true');
+        execSync('git reset --hard origin/feat/achievement-system 2>/dev/null || true');
+    }
+} catch (e) {
+    // Silently ignore
+}
+
 // ================= BOT VERSION =================
-const BOT_VERSION = '3.7.0';
-const BUILD_DATE = '2026-06-11';
+const BOT_VERSION = '3.12.0';
+const BUILD_DATE = '2026-07-18';
 
 // Load logger first (so everything else can use it)
 const { log, wrapHandler } = require('./systems/logger');
@@ -82,6 +96,14 @@ const { log, wrapHandler } = require('./systems/logger');
     const DB_PATH = path.join(ROOT, 'economy.sqlite');
     const Database = require('better-sqlite3');
 
+    try {
+        const testDb = new Database(':memory:');
+        testDb.close();
+    } catch (e) {
+        log('ERROR', `[AUTO-RECOVERY] Gagal memuat driver database (better-sqlite3): ${e.message}`);
+        return;
+    }
+
     function isHealthy(file) {
         let d;
         try {
@@ -150,7 +172,7 @@ const CLIENT_ID = process.env.CLIENT_ID || '1058955900389445672';
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildMembers],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember]
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember, Partials.User]
 });
 
 // ================= GLOBAL ERROR HANDLERS =================
@@ -207,16 +229,6 @@ client.once(Events.ClientReady, async c => {
         console.log(`🗓️ Seasonal leaderboard: season ${info.seasonId} (sisa ${info.daysLeft} hari)`);
     } catch (e) { console.error('Season init error:', e); }
 
-    // Background card prefetch (downloads Pokemon cards while bot runs)
-    try {
-        const { db } = require('./database');
-        const count = db.prepare('SELECT COUNT(*) as c FROM pokemon_card_cache').get().c;
-        console.log(`🎴 TCG Cache: ${count.toLocaleString('id-ID')} cards currently cached`);
-
-        const { startBackgroundPrefetch } = require('./systems/cardPrefetch');
-        startBackgroundPrefetch();
-    } catch (e) { console.error('Card prefetch error:', e.message); }
-
     // Sync slash commands
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     try {
@@ -232,50 +244,42 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#DC143C')
-            .setTitle(`📦 Update — v${BOT_VERSION}`)
+            .setColor('#5865F2')
+            .setTitle(`🎉 COMMUNITY UPDATE — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `Update besar: fitur baru, perbaikan, & penyeimbangan! 🎉\n` +
+                `Fokus penuh ke fitur **Komunitas & Ekonomi** ID COMMUNITY!\n` +
+                `Semua fitur RPG/Pet/Fishing/Farming lama telah dibersihkan total.\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
-
-        new ChangelogEmbed()
-            .setColor('#F1C40F')
-            .setTitle('✨ Fitur Baru')
-            .setDescription(
-                `> 🎟️ **Togel** — \`/togel angka:<1-100>\` (5.000/angka), diundi **tiap 1 jam**, jackpot **carry-over** kalau belum ada yang tembus.\n` +
-                `> 🎬 **TikTok Converter** — paste link TikTok → bot kirim videonya **tanpa watermark** otomatis.\n` +
-                `> 📿 **Relic Manager** — equip/unequip relic per slot + **lebur** relic numpuk jadi Refine Stone. (Pet → More → 📿 Relic)\n` +
-                `> 📊 **Drop Rates** — lihat rate drop Dungeon/Boss/Expedition/Hunt di dalam bot. (Pet → More → 📊 Rates)\n` +
-                `> 🔔 **Notifikasi DM Opt-in** — bot **hanya** DM yang menyetujui. Atur di \`/profile\` → 🔔 Notifs.`
-            )
-            .setTimestamp(),
-
         new ChangelogEmbed()
             .setColor('#E67E22')
-            .setTitle('🛠️ Perbaikan')
+            .setTitle('🔥 STREAK PRESTIGE & VVIP LOUNGE')
             .setDescription(
-                `> 🐛 **Relic Refine** sekarang benar-benar menambah stats pet (sebelumnya tanpa efek).\n` +
-                `> 🛡️ **Protection Stone** kini berfungsi — refine gagal **tidak** turun level (stone dipakai).\n` +
-                `> 🧬 **Evolve pet** diperbaiki (tombolnya dulu tidak berfungsi).\n` +
-                `> 🏆 **Achievement** gaya Pokédex — pilih kategori untuk lihat **tugas + progress** tiap badge.\n` +
-                `> 🐛 Fix: resep **Super Bait** dulu menghasilkan umpan rusak.`
+                `> 🔥 **Streak Role Sync** otomatis tiap aktif chat\n` +
+                `> 🏛️ **VVIP Lounge** eksklusif member streak 100+ hari\n` +
+                `> 🏆 **Streak Leaderboard** & Hall of Fame`
             )
             .setTimestamp(),
-
         new ChangelogEmbed()
-            .setColor('#3498DB')
-            .setTitle('⚖️ Penyeimbangan & Crafting')
+            .setColor('#F1C40F')
+            .setTitle('💰 EKONOMI & COMMUNITY SHOP')
             .setDescription(
-                `> ⚔️ **Dungeon & Boss** dibuat lebih kuat (reward tetap gacor — biar pantas).\n` +
-                `> 💰 Reward **World Boss / Expedition / Dungeon** dinaikkan + drop item lebih kaya.\n` +
-                `> 🛒 Harga **/shop** di-rebalance. **Refine Stone, Protection Stone, Rod Parts** kini **drop-only** (dari dungeon/boss/expedition/hunt).\n` +
-                `> 🔨 **Banyak resep crafting baru** (material relic, konversi Mystery Box, anti-monster, dll).\n` +
-                `> 🔁 **Trade** kini pakai **kategori** — bisa tawarkan jauh lebih banyak item (lewati batas 25).`
+                `> 💳 \`/wallet\` — Panel saldo, gift & voucher\n` +
+                `> 🛒 \`/shop\` — Role eksklusif, color role & booster\n` +
+                `> 🎰 \`/casino\` & \`/blackjack\` — Mini-games hiburan seru`
             )
-            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG | discord.gg/idcommunity` })
+            .setTimestamp(),
+        new ChangelogEmbed()
+            .setColor('#2ECC71')
+            .setTitle('🎮 QUIZ 14 KATEGORI & RAMALAN 365')
+            .setDescription(
+                `> 🎮 \`/games\` — Quiz asah otak, tebak gambar & kata\n` +
+                `> 🔮 \`/ramalan\` — Ramalan harian, angka & warna hoki\n` +
+                `> 🎙️ \`/tempvoice\` — Private Space otomatis`
+            )
+            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Economy & Community` })
             .setTimestamp()
     ]);
 });
@@ -291,14 +295,46 @@ const { cacheAllGuildInvites, cacheGuildInvites, handleMemberJoin: handleInviteJ
 const { handleWelcome, handleGoodbye } = require('./systems/welcomer');
 
 client.once(Events.ClientReady, async () => {
+    // Single-Guild Lockdown: keluar dari semua server lain, HANYA aktif di server utama ID COMMUNITY
+    const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+    for (const [id, guild] of client.guilds.cache) {
+        const isMain = id === MAIN_GUILD_ID || (guild.name && guild.name.toUpperCase().includes('ID COMMUNITY'));
+        if (!isMain) {
+            log('WARN', `[GuildLock] Meninggalkan server selain ID COMMUNITY: ${guild.name} (${id})`);
+            await guild.leave().catch(e => log('ERROR', `Gagal keluar dari ${guild.name}: ${e.message}`));
+        }
+    }
+
     await cacheAllGuildInvites(client);
     console.log('📨 Invite cache loaded for all guilds');
+
+    // Auto-sync streak roles for veterans across all guilds on startup
+    try {
+        const { syncAllMemberStreakRoles } = require('./systems/streakTier');
+        for (const [, guild] of client.guilds.cache) {
+            try {
+                const r = await syncAllMemberStreakRoles(guild);
+                if (r && r.syncedCount > 0) {
+                    log('INFO', `[StreakTier] Auto-synced ${r.syncedCount} veteran members in ${guild.name}`);
+                }
+            } catch (e) {
+                log('WARN', `[StreakTier] Auto-sync skipped in ${guild.name}: ${e.message}`);
+            }
+        }
+    } catch (_) {}
+
+    // Auto-post changelog
+    try {
+        const { autoPostChangelog } = require('./systems/changelog');
+        autoPostChangelog(client);
+    } catch (_) {}
 });
 
 client.on(Events.GuildMemberAdd, wrapHandler('guildMemberAdd', async (member) => {
     log('INFO', `[event] GuildMemberAdd: ${member.user.tag} bergabung ke ${member.guild?.name} (${member.guild?.id})`);
     await handleInviteJoin(member);
     await handleWelcome(member);
+    try { require('./systems/serverLog').logMemberJoin(member); } catch (_) {}
     try {
         const { handleOnboarding } = require('./systems/onboarding');
         await handleOnboarding(member);
@@ -309,6 +345,19 @@ client.on(Events.GuildMemberRemove, wrapHandler('guildMemberRemove', async (memb
     const { handleMemberLeave } = require('./systems/inviteTracker');
     await handleMemberLeave(member);
     await handleGoodbye(member);
+    try { await require('./systems/tempvoicePanel').cleanupMemberSpace(member.guild, member.id); } catch (_) {}
+    try { require('./systems/serverLog').logMemberLeave(member); } catch (_) {}
+}));
+
+// Server logging: message delete/edit + role changes
+client.on(Events.MessageDelete, wrapHandler('messageDelete', async (message) => {
+    try { require('./systems/serverLog').logMessageDelete(message); } catch (_) {}
+}));
+client.on(Events.MessageUpdate, wrapHandler('messageUpdate', async (oldMessage, newMessage) => {
+    try { require('./systems/serverLog').logMessageUpdate(oldMessage, newMessage); } catch (_) {}
+}));
+client.on(Events.GuildMemberUpdate, wrapHandler('guildMemberUpdate', async (oldMember, newMember) => {
+    try { require('./systems/serverLog').logMemberUpdate(oldMember, newMember); } catch (_) {}
 }));
 
 client.on(Events.InviteCreate, async (invite) => {
@@ -319,8 +368,18 @@ client.on(Events.InviteDelete, async (invite) => {
     if (invite.guild) await cacheGuildInvites(invite.guild);
 });
 
-// Guild join/leave logging
-client.on(Events.GuildCreate, (guild) => { onGuildCreate(client, guild); cacheGuildInvites(guild); });
+// Guild join/leave logging & lock
+client.on(Events.GuildCreate, async (guild) => {
+    const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || '1056412836433240074';
+    const isMain = guild.id === MAIN_GUILD_ID || (guild.name && guild.name.toUpperCase().includes('ID COMMUNITY'));
+    if (!isMain) {
+        log('WARN', `[GuildLock] Bot diundang ke server luar: ${guild.name} (${guild.id}). Otomatis keluar.`);
+        await guild.leave().catch(() => {});
+        return;
+    }
+    onGuildCreate(client, guild);
+    cacheGuildInvites(guild);
+});
 client.on(Events.GuildDelete, (guild) => onGuildDelete(client, guild));
 
 client.login(TOKEN);

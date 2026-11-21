@@ -7,8 +7,14 @@ const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStat, getSet
 
 const app = express();
 const API_PORT = process.env.API_PORT || 25922;
-const API_KEY = process.env.API_KEY || 'change-this-secret-key';
-const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').filter(Boolean);
+// Default bind localhost so the dashboard API is not accidentally public.
+// Set API_HOST=0.0.0.0 in env if the dashboard runs on another machine.
+const API_HOST = process.env.API_HOST || '127.0.0.1';
+const DEFAULT_API_KEY = 'change-this-secret-key';
+const API_KEY = (process.env.API_KEY || '').trim();
+const API_CONFIGURED = API_KEY.length > 0 && API_KEY !== DEFAULT_API_KEY;
+const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const IS_DEFAULT_API_KEY = !API_CONFIGURED;
 
 // Discord client reference (set by bot.js)
 let discordClient = null;
@@ -49,17 +55,37 @@ app.use(express.json());
 
 // ==================== AUTH MIDDLEWARE ====================
 function authMiddleware(req, res, next) {
+    if (!API_CONFIGURED) {
+        return res.status(503).json({ error: 'Service unavailable', message: 'API authentication is not configured' });
+    }
+    // Prefer header. Query-string keys leak into access logs / browser history.
     const key = req.headers['x-api-key'] || req.query.apikey;
-    if (!key || key !== API_KEY) {
+    if (req.query.apikey && !req.headers['x-api-key']) {
+        console.warn('[api] apikey via query string is deprecated — use x-api-key header');
+    }
+    if (typeof key !== 'string' || key !== API_KEY) {
         return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing API key' });
     }
     next();
 }
 
 // Admin check (Discord user ID must be in ADMIN_IDS)
+// Refuses ALL admin mutations when API_KEY is still the insecure default.
 function adminCheck(req, res, next) {
+    if (IS_DEFAULT_API_KEY) {
+        return res.status(403).json({
+            error: 'Forbidden',
+            message: 'Admin routes disabled until API_KEY is set to a strong secret in .env',
+        });
+    }
+    if (ADMIN_IDS.length === 0) {
+        return res.status(403).json({
+            error: 'Forbidden',
+            message: 'ADMIN_IDS not configured — admin routes disabled',
+        });
+    }
     const userId = req.headers['x-user-id'];
-    if (!userId || !ADMIN_IDS.includes(userId)) {
+    if (!userId || !ADMIN_IDS.includes(String(userId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'Admin access required' });
     }
     next();
@@ -663,84 +689,6 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== AUTOMOD ====================
-app.get('/api/automod/:guildId', async (req, res) => {
-    try {
-        const { AUTOMOD_MODULES, getAllModuleStates, getAutomodSetting, getBlockedWords, getWhitelist, getIgnoredChannels } = require('./systems/automod');
-        const { guildId } = req.params;
-        res.json({
-            modules: AUTOMOD_MODULES,
-            states: getAllModuleStates(guildId),
-            settings: {
-                mod_log_channel: getAutomodSetting(guildId, 'mod_log_channel'),
-                audit_log_channel: getAutomodSetting(guildId, 'audit_log_channel'),
-            },
-            blockedWords: getBlockedWords(guildId),
-            whitelist: getWhitelist(guildId),
-            ignoredChannels: getIgnoredChannels(guildId),
-            recentLogs: db.prepare('SELECT * FROM automod_logs WHERE guildId = ? ORDER BY timestamp DESC LIMIT 20').all(guildId),
-        });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/toggle', adminCheck, (req, res) => {
-    try {
-        const { setModuleEnabled, isModuleEnabled } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { moduleId, enabled } = req.body;
-        if (!moduleId) return res.status(400).json({ error: 'Missing moduleId' });
-        setModuleEnabled(guildId, moduleId, enabled !== undefined ? enabled : !isModuleEnabled(guildId, moduleId));
-        res.json({ success: true, moduleId, enabled: isModuleEnabled(guildId, moduleId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/settings', adminCheck, (req, res) => {
-    try {
-        const { setAutomodSetting } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { key, value } = req.body;
-        if (!key) return res.status(400).json({ error: 'Missing key' });
-        setAutomodSetting(guildId, key, value || '');
-        res.json({ success: true, key, value });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/words', adminCheck, (req, res) => {
-    try {
-        const { addBlockedWord, removeBlockedWord, getBlockedWords } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, word } = req.body;
-        if (!word) return res.status(400).json({ error: 'Missing word' });
-        if (action === 'add') addBlockedWord(guildId, word);
-        else if (action === 'remove') removeBlockedWord(guildId, word);
-        res.json({ success: true, blockedWords: getBlockedWords(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/whitelist', adminCheck, (req, res) => {
-    try {
-        const { addWhitelist, removeWhitelist, getWhitelist } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, targetId, type } = req.body;
-        if (!targetId) return res.status(400).json({ error: 'Missing targetId' });
-        if (action === 'add') addWhitelist(guildId, targetId, type || 'user');
-        else if (action === 'remove') removeWhitelist(guildId, targetId);
-        res.json({ success: true, whitelist: getWhitelist(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/automod/:guildId/channels', adminCheck, (req, res) => {
-    try {
-        const { addIgnoredChannel, removeIgnoredChannel, getIgnoredChannels } = require('./systems/automod');
-        const { guildId } = req.params;
-        const { action, channelId } = req.body;
-        if (!channelId) return res.status(400).json({ error: 'Missing channelId' });
-        if (action === 'add') addIgnoredChannel(guildId, channelId);
-        else if (action === 'remove') removeIgnoredChannel(guildId, channelId);
-        res.json({ success: true, ignoredChannels: getIgnoredChannels(guildId) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ==================== STREAK SETTINGS ====================
 app.get('/api/streak/settings/:guildId', (req, res) => {
     try {
@@ -1114,28 +1062,257 @@ app.post('/api/tempvoice/settings/:guildId', adminCheck, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== QR CODE REDIRECT ROUTES ====================
-try {
-    const { registerQrRoutes } = require('./systems/qrcode');
-    registerQrRoutes(app);
-} catch (e) { console.error('⚠️ QR routes:', e.message); }
+// ==================== ACHIEVEMENTS ====================
+app.get('/api/achievements', async (req, res) => {
+    try {
+        const { ACHIEVEMENTS, ACHIEVEMENT_MILESTONES } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const totalUnlocked = db.prepare('SELECT COUNT(*) as c FROM achievements').get();
+        const usersWithAch = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM achievements').get();
+        const mostUnlockedRaw = db.prepare('SELECT achievementId, COUNT(*) as count FROM achievements GROUP BY achievementId ORDER BY count DESC LIMIT 10').all();
+        const topUsersRaw = db.prepare('SELECT userId, COUNT(*) as total FROM achievements GROUP BY userId ORDER BY total DESC LIMIT 10').all();
+        res.json({
+            totalDefined: ACHIEVEMENTS.length,
+            totalUnlocked: totalUnlocked?.c || 0,
+            usersWithAchievements: usersWithAch?.c || 0,
+            milestones: ACHIEVEMENT_MILESTONES,
+            definitions: ACHIEVEMENTS.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward })),
+            mostUnlocked: mostUnlockedRaw.map(r => ({ id: r.achievementId, count: r.count, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' })),
+            topUsers: await enrichLeaderboard(topUsersRaw),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/achievements/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { ACHIEVEMENTS, getAchievementProgress } = require('./systems/achievements');
+        const defMap = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+        const unlockedRows = db.prepare('SELECT achievementId, unlockedAt FROM achievements WHERE userId = ? ORDER BY unlockedAt DESC').all(userId);
+        const unlockedSet = new Set(unlockedRows.map(r => r.achievementId));
+        const unlocked = unlockedRows.map(r => ({ id: r.achievementId, unlockedAt: r.unlockedAt, name: defMap[r.achievementId]?.name || r.achievementId, emoji: defMap[r.achievementId]?.emoji || '🏆', category: defMap[r.achievementId]?.category || 'Other' }));
+        const locked = ACHIEVEMENTS.filter(a => !unlockedSet.has(a.id)).map(a => ({ id: a.id, name: a.name, emoji: a.emoji, desc: a.desc, category: a.category, reward: a.reward, progress: getAchievementProgress(null, userId, a.id) }));
+        res.json({ userId, unlockedCount: unlocked.length, totalDefined: ACHIEVEMENTS.length, unlocked, locked });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== GIVEAWAYS ====================
+app.get('/api/giveaways/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getGuildGiveaways, countEntries } = require('./systems/giveaway');
+        const giveaways = getGuildGiveaways(guildId).map(g => ({
+            id: g.id, prize: g.prize, channelId: g.channelId, messageId: g.messageId,
+            hostId: g.hostId, winners: g.winners, requiredRoleId: g.requiredRoleId || null,
+            endsAt: g.endsAt, ended: !!g.ended, createdAt: g.createdAt,
+            winnerIds: g.winnerIds ? String(g.winnerIds).split(',').filter(Boolean) : [],
+            entries: countEntries(g.id),
+        }));
+        res.json({
+            total: giveaways.length,
+            active: giveaways.filter(g => !g.ended).length,
+            ended: giveaways.filter(g => g.ended).length,
+            giveaways,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== SELF ROLES ====================
+app.get('/api/selfroles/:guildId', (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { getMenus, getOptions } = require('./systems/selfRoles');
+        const menus = getMenus(guildId).map(m => ({
+            id: m.id, title: m.title, description: m.description, type: m.type,
+            color: m.color, channelId: m.channelId, messageId: m.messageId, maxRoles: m.maxRoles || 0,
+            options: getOptions(m.id).map(o => ({ id: o.id, roleId: o.roleId, label: o.label, emoji: o.emoji, description: o.description })),
+        }));
+        res.json({ total: menus.length, menus });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== TITLES ====================
+app.get('/api/titles', (req, res) => {
+    try {
+        const { getAllTitles } = require('./systems/titles');
+        res.json({ titles: getAllTitles() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/titles/:userId', (req, res) => {
+    try {
+        const { userId } = req.params;
+        const guildId = req.query.guildId || null;
+        const { getUserTitle, getTitleProgress, getScoreBreakdown, calculateOverallScore } = require('./systems/titles');
+        res.json({
+            userId,
+            score: calculateOverallScore(guildId, userId),
+            title: getUserTitle(guildId, userId),
+            progress: getTitleProgress(guildId, userId),
+            breakdown: getScoreBreakdown(guildId, userId),
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== WORLD BOSS ====================
+app.get('/api/worldboss', async (req, res) => {
+    try {
+        const { WORLD_BOSSES, getWeekId } = require('./systems/worldBoss');
+        const weekId = getWeekId();
+        const boss = db.prepare('SELECT * FROM world_boss WHERE weekId = ?').get(weekId);
+        let damageLeaderboard = [];
+        let participants = 0;
+        if (boss) {
+            const dmgRows = db.prepare('SELECT userId, username, totalDamage, attacks FROM world_boss_damage WHERE weekId = ? ORDER BY totalDamage DESC LIMIT 10').all(weekId);
+            damageLeaderboard = await enrichLeaderboard(dmgRows);
+            participants = db.prepare('SELECT COUNT(DISTINCT userId) as c FROM world_boss_damage WHERE weekId = ?').get(weekId)?.c || 0;
+        }
+        res.json({
+            weekId,
+            spawned: !!boss,
+            boss: boss ? {
+                bossId: boss.bossId, name: boss.bossName, maxHp: boss.maxHp, currentHp: boss.currentHp,
+                status: boss.status, startedAt: boss.startedAt, defeatedAt: boss.defeatedAt,
+                hpPercent: boss.maxHp ? Math.round((boss.currentHp / boss.maxHp) * 100) : 0,
+            } : null,
+            participants,
+            damageLeaderboard,
+            bosses: WORLD_BOSSES,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== PETS: EVOLUTION / FUSION / AWAKENING ====================
+app.get('/api/pets/evolutions', (req, res) => {
+    try {
+        const { PET_DATA, PET_EVOLUTIONS, PET_SKILL_MILESTONES } = require('./data/pets');
+        const { AWAKENING_TIERS } = require('./systems/awakening');
+        const { FUSION_CONFIG } = require('./systems/petFusion');
+        const petMap = Object.fromEntries(PET_DATA.map(p => [p.id, p]));
+        const lite = (id) => { const p = petMap[id]; return p ? { id: p.id, name: p.name, emoji: p.emoji, tier: p.tier } : { id, name: id, emoji: '❓', tier: '?' }; };
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'God'];
+        res.json({
+            tiers: TIER_ORDER,
+            totalPets: PET_DATA.length,
+            pets: PET_DATA.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, tier: p.tier })),
+            evolutions: PET_EVOLUTIONS.map(e => ({ from: lite(e.from), to: lite(e.to), level: e.level, name: e.name })),
+            skillMilestones: PET_SKILL_MILESTONES,
+            awakeningTiers: AWAKENING_TIERS.map(t => ({ level: t.level, stars: t.stars, name: t.name, title: t.title, color: t.color, statBoost: t.statBoost, requirements: t.requirements, reward: t.reward })),
+            fusion: { fusableTiers: Object.keys(FUSION_CONFIG), config: FUSION_CONFIG },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== FARMING: RECIPE TREE ====================
+app.get('/api/farming/recipes', (req, res) => {
+    try {
+        const { FARM_RECIPES, FARM_CROPS } = require('./data/farming');
+        let PRESTIGE_CROPS = [];
+        try { PRESTIGE_CROPS = require('./systems/farmMutation').PRESTIGE_CROPS || []; } catch (_) { /* optional */ }
+        const cropMap = Object.fromEntries([...FARM_CROPS, ...PRESTIGE_CROPS].map(c => [c.id, c]));
+        const TIER_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const tierOf = (price) => {
+            if (price < 500) return 'Common';
+            if (price < 1500) return 'Uncommon';
+            if (price < 5000) return 'Rare';
+            if (price < 20000) return 'Epic';
+            if (price < 120000) return 'Legendary';
+            return 'Mythic';
+        };
+        const recipes = FARM_RECIPES.map(r => ({
+            id: r.id, name: r.name, emoji: r.emoji, sellPrice: r.sellPrice, tier: tierOf(r.sellPrice),
+            ingredients: r.ingredients.map(i => ({ id: i.id, qty: i.qty, name: cropMap[i.id]?.name || i.id, emoji: cropMap[i.id]?.emoji || '📦' })),
+        }));
+        const byTier = {};
+        for (const t of TIER_ORDER) byTier[t] = recipes.filter(r => r.tier === t);
+        res.json({ tiers: TIER_ORDER, total: recipes.length, byTier, recipes });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ANALYTICS (weekly overview) ====================
+app.get('/api/analytics', async (req, res) => {
+    try {
+        const DAY = 86400000;
+        const since = Date.now() - 7 * DAY;
+
+        // --- economy health ---
+        const totalMoney = db.prepare('SELECT SUM(balance) as s FROM users').get()?.s || 0;
+        const totalUsers = db.prepare('SELECT COUNT(*) as c FROM users').get()?.c || 0;
+        const avgBalance = totalUsers ? Math.round(totalMoney / totalUsers) : 0;
+        const top10 = db.prepare('SELECT balance FROM users ORDER BY balance DESC LIMIT 10').all();
+        const top10Sum = top10.reduce((s, u) => s + (u.balance || 0), 0);
+        const top10Share = totalMoney > 0 ? Math.round((top10Sum / totalMoney) * 1000) / 10 : 0;
+        const totalEarned = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_earned'").get()?.s || 0;
+        const totalSpent = db.prepare("SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = 'total_spent'").get()?.s || 0;
+        const sinkRatio = totalEarned > 0 ? Math.round((totalSpent / totalEarned) * 1000) / 10 : 0;
+
+        // daily money created over the last 7 days (WIB), from income_<YYYY-MM-DD> stats
+        const wibDate = (offsetDays) => new Date(Date.now() - offsetDays * DAY).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        const dailyIncome = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = wibDate(i);
+            const amount = db.prepare('SELECT SUM(stat_value) as s FROM user_stats WHERE stat_key = ?').get('income_' + date)?.s || 0;
+            dailyIncome.push({ date, amount });
+        }
+
+        // --- top players ---
+        const byBalance = db.prepare('SELECT userId, balance, level FROM users ORDER BY balance DESC LIMIT 5').all();
+        const byLevel = db.prepare('SELECT userId, level, xp, balance FROM users ORDER BY level DESC, xp DESC LIMIT 5').all();
+        const byActivity = db.prepare('SELECT userId, COUNT(*) as count FROM logs WHERE time >= ? GROUP BY userId ORDER BY count DESC LIMIT 5').all(since);
+
+        // --- activity by hour (WIB) from the transaction log over the last 7 days ---
+        const logRows = db.prepare('SELECT time FROM logs WHERE time >= ?').all(since);
+        const hours = new Array(24).fill(0);
+        for (const r of logRows) {
+            const h = Math.floor(((r.time + 7 * 3600000) / 3600000) % 24); // shift to WIB (UTC+7)
+            if (h >= 0 && h < 24) hours[h]++;
+        }
+        let peakHour = 0;
+        for (let h = 1; h < 24; h++) if (hours[h] > hours[peakHour]) peakHour = h;
+
+        // --- commands ---
+        const cmdTotal = db.prepare('SELECT SUM(count) as s FROM command_summary').get()?.s || 0;
+        const topCommands = db.prepare('SELECT command, SUM(count) as count FROM command_summary GROUP BY command ORDER BY count DESC LIMIT 10').all();
+
+        res.json({
+            generatedAt: Date.now(),
+            rangeDays: 7,
+            economy: {
+                totalMoney, totalUsers, avgBalance, top10Share,
+                totalEarned, totalSpent, sinkRatio,
+                dailyIncome,
+            },
+            topPlayers: {
+                byBalance: await enrichLeaderboard(byBalance),
+                byLevel: await enrichLeaderboard(byLevel),
+                byActivity: await enrichLeaderboard(byActivity),
+            },
+            activity: {
+                totalEvents: logRows.length,
+                peakHour,
+                byHour: hours.map((count, hour) => ({ hour, count })),
+            },
+            commands: { total: cmdTotal, top: topCommands },
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ==================== START SERVER ====================
-const DEFAULT_API_KEY = 'change-this-secret-key';
 function startApiServer() {
-    app.listen(API_PORT, '0.0.0.0', () => {
-        console.log(`🌐 API Server running on port ${API_PORT}`);
+    app.listen(API_PORT, API_HOST, () => {
+        console.log(`🌐 API Server running on ${API_HOST}:${API_PORT}`);
         console.log(`🔑 API Key: ${API_KEY.substring(0, 4)}****`);
         console.log(`👑 Admin IDs: ${ADMIN_IDS.length > 0 ? ADMIN_IDS.join(', ') : 'NONE (set ADMIN_IDS in .env)'}`);
+        if (API_HOST === '127.0.0.1' || API_HOST === 'localhost') {
+            console.log('🔒 API bound to localhost only. Set API_HOST=0.0.0.0 to expose (use firewall!).');
+        }
 
         // Loud warning if the dashboard auth key was never set (or left at default).
-        // Without a real API_KEY, every dashboard request gets 401 and pages show
-        // "Failed to load ... data". This is a DIFFERENT key from AI_API_KEY.
-        if (!process.env.API_KEY || API_KEY === DEFAULT_API_KEY) {
+        if (IS_DEFAULT_API_KEY) {
             console.warn('');
             console.warn('⚠️ ============================================================');
             console.warn('⚠️  API_KEY belum diset (pakai default "change-this-secret-key")!');
-            console.warn('⚠️  Dashboard akan kena 401 Unauthorized → "Failed to load data".');
+            console.warn('⚠️  Admin write routes are DISABLED until you set a strong API_KEY.');
             console.warn('⚠️  Set API_KEY di .env bot, dan samakan dengan BOT_API_KEY di .env dashboard.');
             console.warn('⚠️  CATATAN: API_KEY (dashboard) ≠ AI_API_KEY (AI Assistant) — dua hal berbeda!');
             console.warn('⚠️  Generate kunci: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');

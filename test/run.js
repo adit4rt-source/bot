@@ -23,15 +23,10 @@ process.chdir(tmp);
   const { DatabaseSync } = require('node:sqlite');
   const d = new DatabaseSync(path.join(tmp, 'economy.sqlite'));
   // Minimal global-schema users + the marker table checkGlobalMode/migration look for.
-  d.exec(`CREATE TABLE IF NOT EXISTS users (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT);`);
-  d.exec(`CREATE TABLE IF NOT EXISTS users_global (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT);`);
+  d.exec(`CREATE TABLE IF NOT EXISTS users (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id', game_consent INTEGER DEFAULT 0);`);
+  d.exec(`CREATE TABLE IF NOT EXISTS users_global (userId TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, lastDaily TEXT, locale TEXT DEFAULT 'id', game_consent INTEGER DEFAULT 0);`);
   d.close();
 })();
-
-
-// Silence the bot's startup console noise; keep test output clean.
-const realLog = console.log, realErr = console.error;
-console.log = () => {}; console.error = () => {};
 
 const harness = require(path.join(__dirname, 'harness'));
 
@@ -40,8 +35,8 @@ const suiteFiles = [
   'suites/economy.test.js',
   'suites/gameplay.test.js',
   'suites/systems.test.js',
-  'suites/globaltrade.test.js',
   'suites/engagement.test.js',
+  'suites/api.test.js',
 ];
 
 (async () => {
@@ -49,13 +44,15 @@ const suiteFiles = [
     const register = require(path.join(__dirname, f));
     register();
   }
-  console.log = realLog; console.error = realErr;
   const summary = await harness.finish('BOT TEST SUITE');
+  try {
+    const { shutdownPool } = require(path.join(__dirname, '../systems/imagePool.js'));
+    await shutdownPool();
+  } catch (e) { }
   // Cleanup temp dir
-  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
+  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { }
   process.exit(summary.fail ? 1 : 0);
 })().catch(e => {
-  console.log = realLog; console.error = realErr;
   console.error('Test runner crashed:', e);
   process.exit(1);
 });

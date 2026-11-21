@@ -4,8 +4,8 @@ const { EmbedBuilder } = require('discord.js');
 const { db } = require('../database');
 
 const UPDATE_CHANNEL_ID = '1510705567944151150';
-const CURRENT_VERSION = '3.7.0';
-const RELEASE_DATE = '2026-06-11';
+const CURRENT_VERSION = '3.9.0';
+const RELEASE_DATE = '2026-06-23';
 
 // Ensure table
 try { db.exec(`CREATE TABLE IF NOT EXISTS bot_updates (version TEXT PRIMARY KEY, sentAt INTEGER)`); } catch (_) {}
@@ -37,63 +37,58 @@ async function sendUpdateAnnouncement(client) {
             .setTitle(`🎉 MAJOR UPDATE — v${CURRENT_VERSION}`)
             .setDescription(
                 `**Release ${CURRENT_VERSION}** — ${RELEASE_DATE}\n\n` +
-                `Update besar! Sistem kartu Pokemon TCG & perbaikan fishing.\n` +
+                `Update besar! Pet Stats Scaling, Boss Baru, dan Awakening Tier 6! ⚡\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp();
 
         const embed2 = new EmbedBuilder()
             .setColor('#E74C3C')
-            .setTitle('🃏 Pokemon TCG Card System (BARU!)')
+            .setTitle('⚔️ Pet Level Stats Scaling (BARU!)')
             .setDescription(
-                `Koleksi kartu Pokemon asli dari database **20,359 kartu** HD!\nDari generasi pertama sampai terbaru — semua ada.\n\n` +
-                `**🎴 Gacha Packs (beli dari /card):**\n` +
-                `> 🟢 **Basic Pack** — 3 kartu (💰 15.000) ⏱️ 5m CD\n` +
-                `>    Pool: Common, Uncommon, Rare\n` +
-                `> 🔵 **Premium Pack** — 3 kartu (💰 75.000) ⏱️ 15m CD\n` +
-                `>    Pool: Rare, Rare Holo, Holo EX/GX/V\n` +
-                `> 🟣 **Ultra Pack** — 3 kartu (💰 200.000) ⏱️ 30m CD\n` +
-                `>    Pool: Rare Holo, Ultra, Rainbow, Secret\n` +
-                `> 💎 **Master Pack** — **10 kartu** (💰 750.000) ⏱️ 60m CD\n` +
-                `>    Pool: SEMUA rarity + guaranteed 1 Ultra+!\n\n` +
-                `**📊 Rarity (jumlah kartu):**\n` +
-                `> ⚪ Common (5,289) | 🟢 Uncommon (4,862)\n` +
-                `> 🔵 Rare (8,600) | 🟣 Rare Holo (2,695)\n` +
-                `> 🟡 Holo EX/GX/V (764) | 🔴 Ultra (798)\n` +
-                `> 🌈 Rainbow (324) | 👑 Secret (325) | 🎨 Illustration (697)`
+                `Pet kamu sekarang **makin kuat** setiap naik level!\n\n` +
+                `**Bonus Per Level:**\n` +
+                `> ❤️ **HP** +5 per level\n` +
+                `> ⚔️ **ATK** +2 per level\n` +
+                `> 🛡️ **DEF** +1 per level\n` +
+                `> 💨 **SPD** +0.2 per level (1 setiap 5 level)\n` +
+                `> 🎯 **CRIT** +0.1% per level (1% setiap 10 level)\n\n` +
+                `*Stats scaling terlihat di panel pet — semakin tinggi level, semakin tangguh!*`
             );
 
         const embed3 = new EmbedBuilder()
             .setColor('#FFD700')
-            .setTitle('✨ Fitur Card System')
+            .setTitle('🔱 Boss Baru: Omega Genesis + Cosmic Deity Awakening')
             .setDescription(
-                `**📖 Collection Gallery:**\n` +
-                `> Tampilan card book premium (10 kartu/page)\n` +
-                `> Background gelap + gold border + rarity glow\n` +
-                `> Pagination ◀️ ▶️ untuk browse\n\n` +
-                `**🔄 Dupe Detection:** Kartu duplikat ditandai 🔄 DUPE\n` +
-                `**❤️ Wishlist:** Max 10 Pokemon, auto-ping saat muncul\n` +
-                `**🔄 Trade:** /trade → 🃏 Kartu (2-way, kedua setuju)\n` +
-                `**📊 Leaderboard:** Most Cards / Rare / Unique\n` +
-                `**💸 Total Spent:** Track pengeluaran di panel\n` +
-                `**⏱️ Cooldown:** 5m - 60m per pack tier`
+                `**🔱 Omega Genesis** — Boss End-Game tertinggi!\n` +
+                `> 📈 Min Level: **200** | HP: **120.000** | ATK: **380**\n` +
+                `> 🎁 Reward: 🪙 150K–300K + 600 Pet EXP\n` +
+                `> 🔱 Drop: **Omega Core** (10%) — material ultra-langka!\n\n` +
+                `**★★★★★★ Cosmic Deity** — Awakening Tier 6!\n` +
+                `> ⚡ Stat Boost: **+150%** all base stats\n` +
+                `> 🎁 Bonus: **+25% All Reward** + COSMIC aura\n` +
+                `> 📦 Requirements: 🪙 10.000.000 + 🔱 Omega Core ×1 + 💫 Awakening Crystal ×3\n\n` +
+                `*Omega Core hanya drop dari Boss Omega Genesis — tantang jika berani!*`
             );
 
         const embed4 = new EmbedBuilder()
             .setColor('#3498DB')
-            .setTitle('🎣 Fishing — Rod Inventory & Equip')
+            .setTitle('📚 English Learning & Perbaikan Lainnya')
             .setDescription(
-                `**🐛 Bug Fixed:**\n` +
-                `> ❌ Beli joran 2x → uang hilang — **SOLVED!**\n` +
-                `> ❌ Joran lama hilang saat beli baru — **SOLVED!**\n\n` +
-                `**🆕 Sistem Baru:**\n` +
-                `> 🎋 **Rod Inventory** — Joran tersimpan permanen\n` +
-                `> 🔄 **Equip/Unequip** — Ganti joran via /fishing → 🎋 Equip\n` +
-                `> ✅ Shop tampilkan "Owned" per joran\n` +
-                `> 🚫 Tidak bisa beli joran yang sudah punya\n\n` +
-                `-# Joran lama otomatis masuk inventory.`
+                `**📚 Belajar Bahasa Inggris:**\n` +
+                `> 📖 **BAB 2** dibuka — topik dan soal baru!\n` +
+                `> 🛡️ **Streak Shield** — lindungi streak belajar jika skip 1 hari\n` +
+                `> 🏆 **7 Achievement** baru untuk Education\n` +
+                `> 🔊 TTS error handling — tidak crash lagi saat Google TTS gagal\n\n` +
+                `**🐟 Fishing:**\n` +
+                `> 🌟 Chance ikan **Secret** dinaikkan sedikit\n\n` +
+                `**🛠️ Perbaikan:**\n` +
+                `> 🐛 35+ bug fix dari audit komprehensif\n` +
+                `> 📊 HP kini ditampilkan dengan **(base X)** di panel pet\n` +
+                `> ⚔️ World Boss menggunakan stats scaling terbaru\n` +
+                `> 🔱 Omega Core ditambahkan ke daftar drop-only materials`
             )
-            .setFooter({ text: `Update oleh Peko • v${CURRENT_VERSION} • ${RELEASE_DATE}` })
+            .setFooter({ text: `idcommunity Bot v${CURRENT_VERSION} — ${RELEASE_DATE} | discord.gg/idcommunity` })
             .setTimestamp();
 
         await channel.send({ embeds: [embed1, embed2, embed3, embed4] });

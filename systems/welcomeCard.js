@@ -4,6 +4,7 @@
 // rounded corners, accent bar, letter-spaced headline and a subtitle line.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { getCachedImage } = require('./welcomeCardCache');
 
 // ---- Register bundled fonts once (so text renders even without system fonts) ----
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
@@ -98,6 +99,129 @@ function drawSpacedText(ctx, text, cx, y, spacing) {
 }
 
 /**
+ * Shared overlay used by the custom-image welcomer (static PNG + animated GIF):
+ * an upper-centered circular avatar with a clean BLACK aesthetic ring (+ a thin
+ * white hairline for crispness), and the username on a dark rounded "pill" so it
+ * stays readable on any background and never clashes with text baked into the
+ * source image (the avatar sits in the upper third, text right beneath it).
+ *
+ * Draws directly onto the provided 2D context. Returns nothing.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Object} opts
+ * @param {number} opts.width
+ * @param {number} opts.height
+ * @param {string} [opts.avatarURL]
+ * @param {string} [opts.username]
+ * @param {Object} [opts.avatar]   pre-loaded image (skips the fetch)
+ */
+async function drawAvatarOverlay(ctx, { width, height, avatarURL, username, subtitle, avatar = null, accent = '#5865F2' }) {
+    const RING_COLOR = '#0c0c0c';          // aesthetic black border
+    const min = Math.min(width, height);
+    const size = Math.round(min * 0.36);   // a touch smaller so it breathes
+    const radius = size / 2;
+    const ringW = Math.max(5, Math.round(size * 0.075));
+    const cx = width / 2;
+    const name = String(username || '').trim();
+    // Sit in the upper third when there's a username, so we clear any "WELCOME"
+    // text that's usually baked into the lower part of the source image.
+    const cy = name ? Math.round(height * 0.30) : Math.round(height * 0.46);
+
+    // ---- Black ring with glow halo and soft drop shadow ----
+    ctx.save();
+    ctx.shadowColor = accent || '#5865F2';
+    ctx.shadowBlur = Math.round(ringW * 3.5);
+    ctx.shadowOffsetY = Math.round(ringW * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + ringW, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = RING_COLOR;
+    ctx.fill();
+    ctx.restore();
+
+    // ---- Thin white hairline at the ring edge (crisp, aesthetic) ----
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + Math.round(ringW * 0.5), 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.lineWidth = Math.max(1, Math.round(ringW * 0.22));
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.stroke();
+    ctx.restore();
+
+    // ---- Avatar (circular) ----
+    if (avatarURL && !avatar) {
+        try { avatar = await loadImage(avatarURL); } catch (e) {
+            console.error('[welcomeCard] drawAvatarOverlay gagal load avatar:', e.message);
+        }
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (avatar) {
+        ctx.drawImage(avatar, cx - radius, cy - radius, size, size);
+    } else {
+        ctx.fillStyle = '#2b2d31';
+        ctx.fillRect(cx - radius, cy - radius, size, size);
+    }
+    ctx.restore();
+
+    // ---- Username on a dark pill (aesthetic, always legible) ----
+    if (name) {
+        const baseFontPx = Math.max(18, Math.round(height * 0.092));
+        const spacing = Math.max(1, Math.round(baseFontPx * 0.06));
+        const fit = fitText(ctx, name, HEAD_FONT, baseFontPx, width * 0.82, 14, spacing);
+        ctx.font = `${fit.px}px ${HEAD_FONT}`;
+
+        // Measure rendered width (incl. letter spacing) for the pill.
+        const chars = [...fit.text];
+        let textW = -spacing;
+        for (const ch of chars) textW += ctx.measureText(ch).width + spacing;
+
+        const padX = Math.round(fit.px * 0.55);
+        const padY = Math.round(fit.px * 0.30);
+        const pillH = fit.px + padY * 2;
+        const pillW = textW + padX * 2;
+        const pillX = cx - pillW / 2;
+        const pillY = cy + radius + ringW + Math.round(fit.px * 0.5);
+
+        ctx.save();
+        roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = Math.max(4, Math.round(fit.px * 0.16));
+        ctx.shadowOffsetY = 1;
+        drawSpacedText(ctx, fit.text, cx, pillY + pillH / 2, spacing);
+        ctx.restore();
+
+        // Subtitle line under username (e.g. WELCOME TO ID COMMUNITY • MEMBER #1074)
+        if (subtitle) {
+            const subPx = Math.max(13, Math.round(height * 0.052));
+            const subSpacing = 2;
+            ctx.save();
+            ctx.font = `${subPx}px ${SUB_FONT}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.shadowColor = 'rgba(0,0,0,0.85)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2;
+            drawSpacedText(ctx, String(subtitle).toUpperCase(), cx, pillY + pillH + Math.round(subPx * 1.3), subSpacing);
+            ctx.restore();
+        }
+    }
+}
+
+/**
  * Generate a banner PNG buffer.
  * @param {Object} opts
  * @param {string} opts.headline  e.g. "WELCOME" / "GOODBYE"
@@ -120,7 +244,8 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     let drewBg = false;
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
-            const bg = await loadImage(bgURL);
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
             ctx.save();
             try { ctx.filter = 'blur(9px)'; } catch (_) { /* filter unsupported */ }
             drawCover(ctx, bg, W, H, 1.12); // overscan hides blurred edges
@@ -162,7 +287,7 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     const size = 210;            // bigger avatar (Kythia style)
     const radius = size / 2;
     const cx = W / 2;
-    const cy = 140;
+    const cy = 155;            // vertically centered (upper portion, text below)
 
     // Glow halo behind the avatar
     ctx.save();
@@ -216,28 +341,35 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 3;
 
-    // Headline (letter-spaced)
+    // Headline (letter-spaced) — skip if empty
     const head = String(headline || '').toUpperCase();
-    const HEAD_SPACING = 8;
-    const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
-    ctx.font = `${headFit.px}px ${HEAD_FONT}`;
-    ctx.fillStyle = '#FFFFFF';
-    const headY = 312;
-    drawSpacedText(ctx, headFit.text, cx, headY, HEAD_SPACING);
+    let headY = 312;
+    let barY = headY + 16; // default fallback position
+    if (head) {
+        const HEAD_SPACING = 8;
+        const headFit = fitText(ctx, head, HEAD_FONT, 72, W - 140, 28, HEAD_SPACING);
+        ctx.font = `${headFit.px}px ${HEAD_FONT}`;
+        ctx.fillStyle = '#FFFFFF';
+        drawSpacedText(ctx, headFit.text, cx, headY, HEAD_SPACING);
 
-    // Accent bar under the headline
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-    const barW = 92;
-    const barH = 6;
-    const barY = headY + 16;
-    ctx.save();
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 14;
-    roundRectPath(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.restore();
+        // Accent bar under the headline
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        const barW = 92;
+        const barH = 6;
+        barY = headY + 16;
+        ctx.save();
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 14;
+        roundRectPath(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.restore();
+    } else {
+        // No headline — move username up
+        headY = 280;
+        barY = headY;
+    }
 
     // Username
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
@@ -264,4 +396,136 @@ async function generateCard({ headline, username, subtitle, avatarURL, bgURL, ac
     return canvas.toBuffer('image/png');
 }
 
-module.exports = { generateCard };
+/**
+ * Generate a minimal "avatar banner" PNG buffer: the provided image as a
+ * full-cover background, a circular avatar centered on top, and the username
+ * underneath. Used by the custom-image welcomer so the member avatar always
+ * shows in the middle of the chosen background.
+ *
+ * Intentionally simpler than generateCard() — no headline, no blur, no heavy
+ * effects — so it is robust on the server and unlikely to throw.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.bgURL]     background image URL (falls back to gradient)
+ * @param {string} [opts.avatarURL] PNG avatar URL (optional)
+ * @param {string} [opts.username]  text drawn under the avatar (optional)
+ * @param {string} [opts.accent]    hex accent for the ring + username (default #FFFFFF)
+ * @returns {Promise<Buffer>} PNG buffer
+ */
+async function generateAvatarBanner({ bgURL, avatarURL, username, subtitle, accent = '#5865F2' }) {
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    // ---- Rounded-corner clip for the whole card ----
+    roundRectPath(ctx, 0, 0, W, H, CORNER_RADIUS);
+    ctx.clip();
+
+    // ---- Background (full cover, no blur for reliability) ----
+    let drewBg = false;
+    if (bgURL && /^https?:\/\//i.test(bgURL)) {
+        try {
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
+            drawCover(ctx, bg, W, H, 1);
+            drewBg = true;
+        } catch (e) {
+            console.error('[welcomeCard] generateAvatarBanner gagal load background:', e.message);
+        }
+    }
+    if (!drewBg) {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, '#252a40');
+        g.addColorStop(0.55, '#1a1c2b');
+        g.addColorStop(1, '#0e0f18');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    // ---- Soft dark overlay so the avatar + text stay readable ----
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    ctx.fillRect(0, 0, W, H);
+
+    // ---- Avatar + username overlay (black aesthetic ring, upper-centered) ----
+    await drawAvatarOverlay(ctx, { width: W, height: H, avatarURL, username, subtitle, accent });
+
+    return canvas.toBuffer('image/png');
+}
+
+/**
+ * Generate an ANIMATED welcome GIF: keeps the source GIF moving and layers a
+ * static circular avatar + username on top of every frame.
+ *
+ * Uses `sharp` (libvips) to decode/recompose the GIF reliably, and the existing
+ * canvas stack to render the overlay once. Returns null (so the caller can fall
+ * back to a static banner) when:
+ *   - `sharp` is not installed,
+ *   - the buffer isn't a usable animated image, or
+ *   - the encoded result exceeds `maxBytes` (Discord upload limit safety).
+ *
+ * @param {Object} opts
+ * @param {Buffer} opts.gifBuffer  raw GIF bytes
+ * @param {string} [opts.avatarURL] PNG avatar URL (optional)
+ * @param {string} [opts.username]  text drawn under the avatar (optional)
+ * @param {string} [opts.subtitle]  small subtitle under username (optional)
+ * @param {string} [opts.accent]    hex accent for the ring + username (default #5865F2)
+ * @param {number} [opts.maxBytes]  max output size in bytes (default ~8MB)
+ * @returns {Promise<Buffer|null>} animated GIF buffer, or null to signal fallback
+ */
+async function generateAvatarBannerGif({ gifBuffer, avatarURL, username, subtitle, accent = '#5865F2', maxBytes = 8 * 1024 * 1024 }) {
+    let sharp;
+    try {
+        sharp = require('sharp');
+    } catch (e) {
+        console.error('[welcomeCard] modul "sharp" belum terpasang — jalankan `npm install sharp` untuk welcomer GIF animasi. Sementara pakai banner statis.');
+        return null;
+    }
+    if (!gifBuffer || !gifBuffer.length) return null;
+
+    try {
+        // Inspect the animated image: dimensions + number of frames (pages).
+        const meta = await sharp(gifBuffer, { animated: true }).metadata();
+        const width = meta.width;
+        const pageHeight = meta.pageHeight || meta.height;
+        let pages = meta.pages || 1;
+        if (!width || !pageHeight) return null;
+
+        // Limit frames to cap processing time & output size (60 frames ≈ 2s @ 30fps)
+        const MAX_FRAMES = 60;
+        let inputBuffer = gifBuffer;
+        if (pages > MAX_FRAMES) {
+            // Truncate: re-extract only first MAX_FRAMES pages
+            inputBuffer = await sharp(gifBuffer, { animated: true, pages: MAX_FRAMES })
+                .gif()
+                .toBuffer();
+            pages = MAX_FRAMES;
+        }
+
+        // ---- Render the static overlay once (transparent bg) ----
+        const canvas = createCanvas(width, pageHeight);
+        const ctx = canvas.getContext('2d');
+        await drawAvatarOverlay(ctx, { width, height: pageHeight, avatarURL, username, subtitle, accent });
+        const overlayPng = canvas.toBuffer('image/png');
+
+        // ---- Layer the overlay onto every frame of the filmstrip ----
+        const composites = [];
+        for (let i = 0; i < pages; i++) {
+            composites.push({ input: overlayPng, top: i * pageHeight, left: 0 });
+        }
+
+        const out = await sharp(inputBuffer, { animated: true })
+            .composite(composites)
+            .gif()
+            .toBuffer();
+
+        if (maxBytes && out.length > maxBytes) {
+            console.error(`[welcomeCard] GIF welcomer ${(out.length / 1048576).toFixed(2)}MB melebihi batas ${(maxBytes / 1048576).toFixed(0)}MB — pakai banner statis.`);
+            return null;
+        }
+        return out;
+    } catch (e) {
+        console.error('[welcomeCard] generateAvatarBannerGif gagal memproses GIF, pakai banner statis:', e.message);
+        return null;
+    }
+}
+
+module.exports = { generateCard, generateAvatarBanner, generateAvatarBannerGif };

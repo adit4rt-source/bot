@@ -21,8 +21,6 @@ module.exports = function register() {
   panel('levelPanel.buildLevelPanel', () => lvl.buildLevelPanel(G, U, NAME));
   const eco = botRequire('systems/economyPanel.js');
   panel('economyPanel.buildEconomyPanel', () => eco.buildEconomyPanel(G, U, NAME));
-  const quest = botRequire('systems/questPanel.js');
-  panel('questPanel.buildQuestPanel', () => quest.buildQuestPanel(G, U, NAME));
   const prof = botRequire('systems/profilePanel.js');
   panel('profilePanel.buildProfilePanel', () => prof.buildProfilePanel(G, U, NAME, null));
   const arena = botRequire('systems/arena.js');
@@ -46,6 +44,48 @@ module.exports = function register() {
   const live = botRequire('systems/livestockPanel.js');
   panel('livestockPanel.buildCoopPanel', () => live.buildCoopPanel(U, NAME));
   panel('livestockPanel.buildBarnPanel', () => live.buildBarnPanel(U, NAME));
+
+  // Regression: dead animals occupy slots, so they must be COUNTED and SHOWN
+  // (previously the header counted them but the list hid them → 25/25 but only 23 listed).
+  test('livestock: dead chickens are counted AND listed in the coop panel', () => {
+    const LU = '200000000000000002';
+    db.getOrCreateUser(null, LU);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(LU);
+    const now = Date.now();
+    const ins = db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 5, 0, 0, ?, ?, ?, ?, NULL, 'normal')");
+    ins.run(LU, 'healthy', String(now), now, now);
+    ins.run(LU, 'healthy', String(now), now, now);
+    ins.run(LU, 'dead', String(now), now, now);
+
+    const desc = live.buildCoopPanel(LU, 'Tester').embeds[0].data.description;
+    if (!/Ayam: \*\*3\*\*/.test(desc)) throw new Error('coop header should count all 3 (incl dead)');
+    if (!desc.includes('💀')) throw new Error('dead chicken should be shown with 💀 in the list');
+    const entries = (desc.match(/`\[\d+\]`/g) || []).length;
+    if (entries !== 3) throw new Error('expected 3 list entries (matching the count), got ' + entries);
+  });
+
+  test('livestock: coop paginates when there are many animals', () => {
+    const PU = '200000000000000003';
+    db.getOrCreateUser(null, PU);
+    db.db.prepare('DELETE FROM livestock WHERE userId = ?').run(PU);
+    const now = Date.now();
+    const ins = db.db.prepare("INSERT INTO livestock (userId, animalType, level, exp, tier, status, lastFed, lastCollect, createdAt, diesAt, rarity) VALUES (?, 'chicken', 5, 0, 0, 'healthy', ?, ?, ?, NULL, 'normal')");
+    for (let i = 0; i < 20; i++) ins.run(PU, String(now), now, now);
+
+    const p0 = live.buildCoopPanel(PU, 'Tester', 0);
+    const e0 = (p0.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e0 !== 15) throw new Error('page 0 should show 15 entries, got ' + e0);
+    if (p0.components.length !== 4) throw new Error('paginated panel should have a page-control row');
+
+    const p1 = live.buildCoopPanel(PU, 'Tester', 1);
+    const e1 = (p1.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e1 !== 5) throw new Error('page 1 should show the remaining 5, got ' + e1);
+
+    // out-of-range page clamps to last page (no crash, still 5)
+    const p9 = live.buildCoopPanel(PU, 'Tester', 99);
+    const e9 = (p9.embeds[0].data.description.match(/`\[\d+\]`/g) || []).length;
+    if (e9 !== 5) throw new Error('out-of-range page should clamp to last page');
+  });
   const trade = botRequire('systems/tradePanel.js');
   panel('tradePanel.buildTradePanel', () => trade.buildTradePanel(G, U, NAME));
   const market = botRequire('systems/marketPanel.js');
@@ -53,7 +93,7 @@ module.exports = function register() {
   const invite = botRequire('systems/invitePanel.js');
   panel('invitePanel.buildInvitePanel', () => invite.buildInvitePanel(G, U, NAME, { name: 'TestGuild' }));
   const tv = botRequire('systems/tempvoicePanel.js');
-  panel('tempvoicePanel.buildTempvoicePanel', () => tv.buildTempvoicePanel(G, U, { name: 'TestGuild' }));
+  panel('tempvoicePanel.buildTempvoicePanel', () => tv.buildTempvoicePanel({ id: G, name: 'TestGuild' }, U));
   const wel = botRequire('systems/welcomerPanel.js');
   panel('welcomerPanel.buildWelcomerPanel', () => wel.buildWelcomerPanel(G, U, { name: 'TestGuild' }));
 
@@ -69,9 +109,6 @@ module.exports = function register() {
   h('stats:activity', sp, 'handleStatsButton', `stats_activity_${U}`);
   h('stats:battle', sp, 'handleStatsButton', `stats_battle_${U}`);
   h('stats:gambling', sp, 'handleStatsButton', `stats_gambling_${U}`);
-  h('quest:daily', quest, 'handleQuestButton', `quest_daily_${U}`);
-  h('quest:weekly', quest, 'handleQuestButton', `quest_weekly_${U}`);
-  h('quest:reroll', quest, 'handleQuestButton', `quest_reroll_0_${U}`);
   h('arena:lb', arena, 'handleArenaButton', `arena_lb_${U}`);
   h('arena:fight', arena, 'handleArenaButton', `arena_fight_${U}`);
   h('auction:browse', auction, 'handleAuctionButton', `auc_browse_${U}`);
@@ -256,48 +293,79 @@ module.exports = function register() {
     });
   });
 
-  // ===== AI ASSISTANT =====
-  const aiA = botRequire('systems/aiAssistant.js');
-  const aiPanel = botRequire('systems/aiBotPanel.js');
+  // ===== Welcomer in-Discord editing =====
+  const welEdit = botRequire('systems/welcomerPanel.js');
+  const welCfg = botRequire('systems/welcomer.js');
+  const WG = 'WELG', WU = '300000000000000003';
 
-  test('ai: knowledge is built from repo docs (non-empty)', () => {
-    const k = aiA.buildKnowledge(true);
-    if (!k || k.length < 100) throw new Error('knowledge too small');
-    if (!/command|fitur|fishing|GUIDE|pet/i.test(k)) throw new Error('knowledge missing expected content');
-  });
-
-  test('ai: askAI without API key returns a friendly error', () => {
-    const savedA = process.env.AI_API_KEY, savedO = process.env.OPENAI_API_KEY;
-    delete process.env.AI_API_KEY; delete process.env.OPENAI_API_KEY;
-    return Promise.resolve(aiA.askAI('apa itu fishing?')).then((r) => {
-      if (savedA !== undefined) process.env.AI_API_KEY = savedA;
-      if (savedO !== undefined) process.env.OPENAI_API_KEY = savedO;
-      if (!r.error || !/API key/i.test(r.error)) throw new Error('expected API key error');
+  test('welcomer: edit view renders interactive components', () => {
+    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_settings_${WU}`, admin: true });
+    return Promise.resolve(welEdit.handleWelcomerButton(it)).then(() => {
+      const upd = it._cap.update;
+      if (!upd || !upd.components || upd.components.length < 4) throw new Error('edit view should have channel/role/toggle component rows');
     });
   });
 
-  panel('aiBotPanel.buildPanel', () => aiPanel.buildPanel(G, U));
-
-  test('ai: detectors match the right customIds', () => {
-    if (!aiPanel.isAiBotButton(`aibot_toggle_${U}`)) throw new Error('button detector failed');
-    if (!aiPanel.isAiBotChannelSelect(`aichan_set_${U}`)) throw new Error('channel detector failed');
-    if (aiPanel.isAiBotButton('gwadm_x')) throw new Error('false positive');
-  });
-
-  test('ai: /tanya without key replies with config notice', () => {
-    const savedA = process.env.AI_API_KEY; delete process.env.AI_API_KEY;
-    const it = mockInteraction({ userId: U, guildId: G, customId: 'tanya' });
-    it.options = { getString: () => 'gimana cara daily?' };
-    return Promise.resolve(aiPanel.handleTanyaCommand(it)).then(() => {
-      if (savedA !== undefined) process.env.AI_API_KEY = savedA;
-      if (!it._cap.reply) throw new Error('did not acknowledge');
+  test('welcomer: toggle flips welcome_enabled', () => {
+    const before = welCfg.getAllWelcomerSettings(WG).welcome_enabled;
+    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_togwelcome_${WU}`, admin: true });
+    return Promise.resolve(welEdit.handleWelcomerButton(it)).then(() => {
+      if (welCfg.getAllWelcomerSettings(WG).welcome_enabled === before) throw new Error('welcome_enabled should toggle');
     });
   });
 
-  test('ai: maybeHandleAiMessage is silent when disabled', () => {
-    const msg = { guild: { id: G }, client: { user: { id: 'bot1' } }, mentions: { has: () => false }, channel: { id: 'cX' }, content: 'halo' };
-    return Promise.resolve(aiA.maybeHandleAiMessage(msg)).then((handled) => {
-      if (handled !== false) throw new Error('should not handle when disabled');
+  test('welcomer: channel select sets welcome channel', () => {
+    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_chwelcome_${WU}`, values: ['CH_WELCOME'], admin: true });
+    return Promise.resolve(welEdit.handleWelcomerChannelSelect(it)).then(() => {
+      if (welCfg.getAllWelcomerSettings(WG).welcome_channel !== 'CH_WELCOME') throw new Error('welcome_channel not set');
+    });
+  });
+
+  test('welcomer: role select sets auto-roles', () => {
+    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_autorole_${WU}`, values: ['R1', 'R2'], admin: true });
+    return Promise.resolve(welEdit.handleWelcomerRoleSelect(it)).then(() => {
+      if (welCfg.getAllWelcomerSettings(WG).welcome_autorole !== 'R1,R2') throw new Error('autorole not set');
+    });
+  });
+
+  test('welcomer: modal saves message/color/delay (validated)', () => {
+    const it = mockInteraction({ userId: WU, guildId: WG, customId: `welpnl_textmodal_${WU}`, admin: true, fields: { message: 'Hi {user.mention}', title: 'Halo', color: '#123abc', delay: '5' } });
+    return Promise.resolve(welEdit.handleWelcomerModal(it)).then(() => {
+      const s = welCfg.getAllWelcomerSettings(WG);
+      if (s.welcome_embed_color !== '#123abc') throw new Error('color not saved');
+      if (s.welcome_autorole_delay !== '5') throw new Error('delay not saved');
+      if (s.welcome_message !== 'Hi {user.mention}') throw new Error('message not saved');
+    });
+  });
+
+  // ===== Custom Embed builder (admin panel) =====
+  const adm = botRequire('systems/adminPanel.js');
+  const AG = 'ADMG', AU = '400000000000000004';
+
+  test('customembed: opens builder with channel-select + buttons', () => {
+    const it = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_customembed', admin: true });
+    return Promise.resolve(adm.handleAdminButton(it)).then(() => {
+      const upd = it._cap.update;
+      if (!upd || !upd.components || upd.components.length < 2) throw new Error('builder should have channel-select + button rows');
+    });
+  });
+
+  test('customembed: channel-select + modal (with image) then send', () => {
+    const itCh = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_ce_channel', values: ['CH_TARGET'], admin: true });
+    return Promise.resolve(adm.handleAdminChannelSelect(itCh)).then(() => {
+      const itModal = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_modal_customembed', admin: true, fields: { title: 'Hi', description: 'Halo {server}', color: '#abcdef', footer: 'ft', image: 'https://example.com/x.png' } });
+      return Promise.resolve(adm.handleAdminModal(itModal)).then(() => {
+        const upd = itModal._cap.update;
+        if (!upd || !upd.embeds || upd.embeds.length < 2) throw new Error('builder should show a preview embed after content set');
+        const sent = [];
+        const itSend = mockInteraction({ userId: AU, guildId: AG, customId: 'admpnl_ce_send', admin: true });
+        itSend.guild.channels.cache.set('CH_TARGET', { send: async (p) => { sent.push(p); return p; } });
+        return Promise.resolve(adm.handleAdminButton(itSend)).then(() => {
+          if (sent.length !== 1) throw new Error('embed should be sent to the selected channel');
+          const e = sent[0].embeds[0];
+          if (!e || !e.data || e.data.image !== 'https://example.com/x.png') throw new Error('image link should be applied to the embed');
+        });
+      });
     });
   });
 };

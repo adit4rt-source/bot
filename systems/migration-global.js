@@ -5,21 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-function runGlobalMigration(db) {
-    console.log('\n🔄 ============ GLOBAL MIGRATION SYSTEM ============');
-    
-    // Check if migration already done
-    const migratedFlag = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_status'").get();
-    if (!migratedFlag) {
-        db.exec(`CREATE TABLE migration_status (id INTEGER PRIMARY KEY, migration TEXT UNIQUE, completed INTEGER)`);
-    }
-    
-    const migrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'global_progression_v1'").get();
-    if (migrationDone) {
-        console.log('✅ Migration already completed');
-        return;
-    }
-    
+function runMainGlobalMigration(db) {
     console.log('⚠️  Starting global progression migration...\n');
     
     try {
@@ -33,7 +19,9 @@ function runGlobalMigration(db) {
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 0,
                 balance INTEGER DEFAULT 0,
-                lastDaily TEXT
+                lastDaily TEXT,
+                locale TEXT DEFAULT 'id',
+                game_consent INTEGER DEFAULT 0
             );
             
             -- Global User Stats (no guildId)
@@ -88,7 +76,8 @@ function runGlobalMigration(db) {
                 stat_type TEXT,
                 stat_value INTEGER,
                 refine_level INTEGER DEFAULT 0,
-                equipped_pet_id INTEGER DEFAULT 0
+                equipped_pet_id INTEGER DEFAULT 0,
+                gems TEXT DEFAULT '[]'
             );
             
             -- Global Inventories (no guildId)
@@ -209,12 +198,14 @@ function runGlobalMigration(db) {
         // Migrate users - aggregate best data per user
         console.log('  → Migrating users...');
         db.exec(`
-            INSERT OR IGNORE INTO users_global (userId, xp, level, balance, lastDaily)
+            INSERT OR IGNORE INTO users_global (userId, xp, level, balance, lastDaily, locale, game_consent)
             SELECT userId, 
                    MAX(xp) as xp, 
                    MAX(level) as level, 
                    MAX(balance) as balance,
-                   lastDaily
+                   lastDaily,
+                   COALESCE(MAX(locale), 'id') as locale,
+                   COALESCE(MAX(game_consent), 0) as game_consent
             FROM users
             GROUP BY userId
         `);
@@ -256,8 +247,8 @@ function runGlobalMigration(db) {
         // Migrate relics - keep all relics, associate with best pet
         console.log('  → Migrating relics...');
         db.exec(`
-            INSERT INTO relics_global (userId, name, slot, rarity, stat_type, stat_value, refine_level, equipped_pet_id)
-            SELECT DISTINCT userId, name, slot, rarity, stat_type, MAX(stat_value), refine_level, equipped_pet_id
+            INSERT INTO relics_global (userId, name, slot, rarity, stat_type, stat_value, refine_level, equipped_pet_id, gems)
+            SELECT DISTINCT userId, name, slot, rarity, stat_type, MAX(stat_value), refine_level, equipped_pet_id, gems
             FROM relics
             GROUP BY userId, name, slot
         `);
@@ -363,6 +354,204 @@ function runGlobalMigration(db) {
     } catch (err) {
         console.error('❌ Migration failed:', err.message);
         throw err;
+    }
+}
+
+function runBelajarGlobalMigration(db) {
+    console.log('⚠️  Starting belajar global progression migration...\n');
+    try {
+        // ============ STEP 1: Create NEW global tables ============
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS belajar_progress_global (
+                userId TEXT PRIMARY KEY,
+                maxUnit INTEGER DEFAULT 0,
+                xp INTEGER DEFAULT 0,
+                streak INTEGER DEFAULT 0,
+                lastDay TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS belajar_done_global (
+                userId TEXT,
+                partKey TEXT,
+                PRIMARY KEY (userId, partKey)
+            );
+            CREATE TABLE IF NOT EXISTS belajar_weak_global (
+                userId TEXT,
+                word TEXT,
+                wrongCount INTEGER DEFAULT 1,
+                PRIMARY KEY (userId, word)
+            );
+        `);
+
+        // ============ STEP 2: Migrate data if old tables exist ============
+        const hasBelajarProgress = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_progress'").get();
+        if (hasBelajarProgress) {
+            console.log('  → Migrating belajar progress...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_progress_global (userId, maxUnit, xp, streak, lastDay)
+                SELECT userId, MAX(maxUnit) as maxUnit, MAX(xp) as xp, MAX(streak) as streak, MAX(lastDay) as lastDay
+                FROM belajar_progress
+                GROUP BY userId
+            `);
+        }
+
+        const hasBelajarDone = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_done'").get();
+        if (hasBelajarDone) {
+            console.log('  → Migrating belajar done parts...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_done_global (userId, partKey)
+                SELECT DISTINCT userId, partKey
+                FROM belajar_done
+            `);
+        }
+
+        const hasBelajarWeak = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='belajar_weak'").get();
+        if (hasBelajarWeak) {
+            console.log('  → Migrating belajar weak words...');
+            db.exec(`
+                INSERT OR IGNORE INTO belajar_weak_global (userId, word, wrongCount)
+                SELECT userId, word, MAX(wrongCount) as wrongCount
+                FROM belajar_weak
+                GROUP BY userId, word
+            `);
+        }
+
+        // ============ STEP 3: Replace old tables with global ones ============
+        const tablesToRename = ['belajar_progress', 'belajar_done', 'belajar_weak'];
+        tablesToRename.forEach(table => {
+            try {
+                db.exec(`ALTER TABLE ${table} RENAME TO ${table}_old`);
+                console.log(`  ✓ Renamed ${table} → ${table}_old`);
+            } catch (e) {
+                // Table might not exist
+            }
+        });
+
+        tablesToRename.forEach(table => {
+            try {
+                db.exec(`ALTER TABLE ${table}_global RENAME TO ${table}`);
+                console.log(`  ✓ Renamed ${table}_global → ${table}`);
+            } catch (e) {
+                // Rename might fail
+            }
+        });
+
+        // ============ STEP 4: Mark migration as done ============
+        db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('belajar_global_v1', 1);
+        console.log('🎉 ============ BELAJAR MIGRATION SUCCESS ============\n');
+
+    } catch (err) {
+        console.error('❌ Belajar migration failed:', err.message);
+        throw err;
+    }
+}
+
+function runGlobalMigration(db) {
+    console.log('\n🔄 ============ GLOBAL MIGRATION SYSTEM ============');
+    
+    // Check if migration already done
+    const migratedFlag = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_status'").get();
+    if (!migratedFlag) {
+        db.exec(`CREATE TABLE migration_status (id INTEGER PRIMARY KEY, migration TEXT UNIQUE, completed INTEGER)`);
+    }
+    
+    const migrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'global_progression_v1'").get();
+    if (!migrationDone) {
+        runMainGlobalMigration(db);
+    } else {
+        console.log('✅ Main global progression migration already completed');
+    }
+
+    const belajarMigrationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'belajar_global_v1'").get();
+    if (!belajarMigrationDone) {
+        runBelajarGlobalMigration(db);
+    } else {
+        console.log('✅ Belajar global progression migration already completed');
+    }
+    const compensationDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'streak_downtime_compensation_2026_07'").get();
+    if (!compensationDone) {
+        console.log('⚡ Running streak downtime compensation migration (adding +2 to all active streaks)...');
+        try {
+            db.exec(`UPDATE streaks SET count = count + 2 WHERE count > 0;`);
+            db.exec(`UPDATE belajar_progress SET streak = streak + 2 WHERE streak > 0;`);
+            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('streak_downtime_compensation_2026_07', 1);
+            console.log('✅ Streak compensation migration completed successfully!');
+        } catch (e) {
+            console.error('❌ Streak compensation migration failed:', e.message);
+        }
+    }
+
+    const rpgPurgeDone = db.prepare("SELECT * FROM migration_status WHERE migration = 'rpg_deep_purge_v2'").get();
+    if (!rpgPurgeDone) {
+        console.log('⚡ Running deep RPG purge migration (tables & historical stats)...');
+        try {
+            // 1. Wipe balances
+            db.exec(`UPDATE users SET balance = 0;`);
+            
+            // 2. Wipe RPG tables (keep schemas so unit tests & db proxy won't throw)
+            const tablesToClear = [
+                'pets', 'relics', 'pet_food_inventory', 'seed_inventory',
+                'fertilizer_inventory', 'fish_inventory', 'fish_collection',
+                'fish_equipment', 'farm_plots', 'farm_storage', 'farm_data',
+                'farm_decorations', 'auto_harvest', 'trades'
+            ];
+            for (const tbl of tablesToClear) {
+                try { db.exec(`DELETE FROM ${tbl};`); } catch (_) {}
+            }
+            const oldTablesToDrop = [
+                'pets_old', 'relics_old', 'pet_food_inventory_old', 'seed_inventory_old',
+                'fertilizer_inventory_old', 'fish_inventory_old', 'fish_collection_old',
+                'fish_equipment_old', 'farm_plots_old', 'farm_storage_old', 'farm_data_old',
+                'farm_decorations_old', 'auto_harvest_old', 'trades_old', 'loves'
+            ];
+            for (const tbl of oldTablesToDrop) {
+                try { db.exec(`DROP TABLE IF EXISTS ${tbl};`); } catch (_) {}
+            }
+
+            // 3. Purge RPG stats from user_stats
+            db.exec(`
+                DELETE FROM user_stats 
+                WHERE stat_key LIKE '%fish%' 
+                   OR stat_key LIKE '%farm%' 
+                   OR stat_key LIKE '%pet%' 
+                   OR stat_key LIKE '%boss%' 
+                   OR stat_key LIKE '%pvp%' 
+                   OR stat_key LIKE '%dungeon%' 
+                   OR stat_key LIKE '%arena%' 
+                   OR stat_key LIKE '%expedition%' 
+                   OR stat_key LIKE '%relic%' 
+                   OR stat_key LIKE '%harvest%' 
+                   OR stat_key LIKE '%craft%' 
+                   OR stat_key LIKE '%hunt%' 
+                   OR stat_key LIKE '%mutation%' 
+                   OR stat_key LIKE '%awakening%' 
+                   OR stat_key LIKE '%fusion%'
+                   OR stat_key LIKE 'love_%'
+                   OR stat_key = 'income_fishing'
+                   OR stat_key = 'income_farming';
+            `);
+
+            // 4. Purge RPG achievements from achievements table
+            db.exec(`
+                DELETE FROM achievements 
+                WHERE achievementId LIKE '%fish%' 
+                   OR achievementId LIKE '%farm%' 
+                   OR achievementId LIKE '%pet%' 
+                   OR achievementId LIKE '%battle%' 
+                   OR achievementId LIKE '%boss%' 
+                   OR achievementId LIKE '%dungeon%' 
+                   OR achievementId LIKE '%harvest%' 
+                   OR achievementId LIKE '%expedition%'
+                   OR achievementId LIKE '%arena%'
+                   OR achievementId LIKE '%craft%';
+            `);
+
+            try { db.exec(`DELETE FROM server_settings WHERE key LIKE 'love_%';`); } catch (_) {}
+
+            db.prepare("INSERT INTO migration_status (migration, completed) VALUES (?, ?)").run('rpg_deep_purge_v2', 1);
+            console.log('✅ Deep RPG purge completed! (All RPG tables, stats, and achievements purged)');
+        } catch (e) {
+            console.error('❌ RPG deep purge failed:', e.message);
+        }
     }
 }
 

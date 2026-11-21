@@ -8,7 +8,7 @@ const { getRandomInt } = require('../utils');
 const { getPetData, addPetExp, ELEMENT_EMOJI } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
-const { updateQuestProgress } = require('./quests');
+
 
 // ==================== EXPEDITION ZONES ====================
 const EXPEDITION_ZONES = [
@@ -457,7 +457,8 @@ function claimExpeditionRewards(guildId, userId) {
     if (!activeExp) return { success: false, message: '❌ Tidak ada ekspedisi aktif!' };
     if (activeExp.endsAt > Date.now()) return { success: false, message: '⏳ Ekspedisi belum selesai!' };
 
-    const pet = getPetData(guildId, userId);
+    // Use the pet that was sent on the expedition (by ID), not the currently active pet
+    const pet = db.prepare('SELECT * FROM pets WHERE id = ?').get(activeExp.petId);
     if (!pet) return { success: false, message: '❌ Pet tidak ditemukan!' };
 
     const zone = EXPEDITION_ZONES.find(z => z.id === activeExp.zoneId);
@@ -470,6 +471,10 @@ function claimExpeditionRewards(guildId, userId) {
     let money = getRandomInt(zone.rewards.moneyRange[0], zone.rewards.moneyRange[1]);
     money = Math.floor(money * (1 + levelBonus / 100)); // Apply pet level bonus
     if (synergy) money = Math.floor(money * (1 + SYNERGY_BONUS.money)); // Element synergy bonus
+    try {
+        const { getTotalPetBonus, applyBonusPercent } = require('./pets');
+        money = applyBonusPercent(money, getTotalPetBonus(guildId, userId, 'expedition_reward'));
+    } catch (_) {}
 
     // Calculate EXP reward
     let exp = getRandomInt(zone.rewards.expRange[0], zone.rewards.expRange[1]);
@@ -478,8 +483,10 @@ function claimExpeditionRewards(guildId, userId) {
     // Calculate item drops
     const drops = [];
     const synergyDrop = synergy ? SYNERGY_BONUS.drop : 0;
+    let dropLuck = 0;
+    try { dropLuck = require('./pets').getTotalPetBonus(guildId, userId, 'drop_luck') || 0; } catch (_) {}
     for (const drop of zone.rewards.drops) {
-        const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop);
+        const adjustedChance = Math.min(95, drop.chance + luckBonus + synergyDrop + dropLuck * 0.3);
         if (Math.random() * 100 < adjustedChance) {
             const qty = getRandomInt(drop.min || 1, drop.max || 1);
             drops.push({ ...drop, qty });
@@ -550,7 +557,7 @@ function claimExpeditionRewards(guildId, userId) {
     // Update stats
     incrementUserStat(guildId, userId, 'total_expeditions');
     incrementUserStat(guildId, userId, 'expedition_money_earned', money);
-    updateQuestProgress(guildId, userId, 'expedition', 1);
+    
 
     // Mark expedition as complete
     const rewardsData = JSON.stringify({ money, exp, drops: drops.map(d => d.id), doubleMoney, synergy, rareEvent: rareEvent ? rareEvent.type : null, coopBonus });
@@ -641,7 +648,7 @@ async function handleExpeditionButton(interaction) {
         }
 
         if (result.expResult && result.expResult.leveledUp) {
-            desc += `\n🎉 **PET LEVEL UP!** → Lv.${result.expResult.newLevel}!`;
+            desc += `\n✧ **PET LEVEL UP** ✧\n→ Lv.${result.expResult.newLevel}!`;
         }
         if (result.expResult && result.expResult.newSkill) {
             desc += `\n🌟 **SKILL UNLOCKED:** ${result.expResult.newSkill.skill.name}!`;

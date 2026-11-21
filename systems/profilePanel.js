@@ -3,10 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getUserStat, incrementUserStat, getSetting, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
 const { ACHIEVEMENTS, syncAchievements } = require('./achievements');
-const { getPetData } = require('./pets');
-const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
-const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings, buildNotifPanel } = require('./notifications');
 const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles, getScoreBreakdown } = require('./titles');
 const ui = require('./ui');
@@ -42,49 +39,26 @@ function buildProfilePanel(guildId, userId, username, member) {
     const streakCount = sData ? sData.count : 0;
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
-    // Love (❤️) — number of distinct people who reacted ❤️ to this user.
-    let loveCount = 0, loveEmoji = '❤️';
-    try { const love = require('./love'); loveCount = love.getLoveCount(guildId, userId); loveEmoji = love.getEmoji(guildId); } catch (_) {}
-
+    const activeAchs = ACHIEVEMENTS.filter(a => !['Fishing', 'Farming', 'Battle', 'Pet'].includes(a.category));
     const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
-    const totalBadges = userAchs.length;
+    const totalBadges = userAchs.filter(a => activeAchs.some(ac => ac.id === a.achievementId)).length;
 
-    const activePet = getPetData(guildId, userId);
-    const petInfo = activePet ? (() => { const pd = PET_DATA.find(p => p.id === activePet.petId); return pd ? `${pd.emoji} **${activePet.name}** (Lv.${activePet.level})` : '🐾 Pet'; })() : '*Belum punya pet*';
+    // Community activity stats
+    const chats = getUserStat(guildId, userId, 'total_chats') || 0;
+    const voiceMins = getUserStat(guildId, userId, 'total_voice_mins') || 0;
+    const voiceHours = (voiceMins / 60).toFixed(1);
+    const eventWins = getUserStat(guildId, userId, 'event_wins') || 0;
+    const giftsSent = getUserStat(guildId, userId, 'total_gifts_sent') || 0;
 
-    const fishCaught = getUserStat(guildId, userId, 'total_fish_caught') || 0;
-    const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
-    const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
-    const bossKills = getUserStat(guildId, userId, 'boss_kills') || 0;
-    const pvpWins = getUserStat(guildId, userId, 'pvp_wins') || 0;
-    const expeditions = getUserStat(guildId, userId, 'total_expeditions') || 0;
-
-    // Card collection count
-    let totalCards = 0;
-    try { totalCards = db.prepare('SELECT COUNT(*) AS c FROM pokemon_cards WHERE userId = ?').get(userId)?.c || 0; } catch (_) {}
-
-    // Ranked Arena (PvP) — MMR + tier + W/L
-    let arenaLine = '';
-    try {
-        const { getArenaStats } = require('./arena');
-        const a = getArenaStats(guildId, userId);
-        if (a && (a.wins + a.losses) > 0) arenaLine = `\n⚔️ **Arena:** ${a.tier.emoji} ${a.tier.name} \`${a.rating} MMR\` (${a.wins}W/${a.losses}L)`;
-        else if (a) arenaLine = `\n⚔️ **Arena:** ${a.tier.emoji} ${a.tier.name} \`${a.rating} MMR\` — *belum bertanding*`;
-    } catch (_) { /* arena optional */ }
-
-    // Farm tool (craftable gear) level
-    let farmToolLevel = 0;
-    try { farmToolLevel = require('./farming').getFarmToolLevel(guildId, userId); } catch (_) {}
-
-    // Get achievement title
+    // Get custom title or achievement title
+    const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
     const achievementTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'achievement_title');
-    const achievementTitle = achievementTitleRow ? achievementTitleRow.stat_value : null;
-    const titleLine = achievementTitle ? `\n🏆 **Title:** ${achievementTitle}` : '';
+    const displayTitle = customTitleRow ? customTitleRow.stat_value : (achievementTitleRow ? achievementTitleRow.stat_value : null);
+    const titleLine = displayTitle ? `\n🏆 **Title:** ${displayTitle}` : '';
 
     // Get rank title from score
     const rankTitle = getUserTitle(guildId, userId);
     const titleProgress = getTitleProgress(guildId, userId);
-    const rankLine = `\n${rankTitle.emoji} **Rank:** ${rankTitle.name}`;
     const progressLine = titleProgress.next
         ? `\n> ${formatProgressBar(titleProgress.progress)} ${titleProgress.progress}% → ${titleProgress.next.emoji} ${titleProgress.next.name} (${titleProgress.remaining.toLocaleString('id-ID')} pts lagi)`
         : `\n> ${formatProgressBar(100)} **MAX RANK!** ⭐ ${titleProgress.score.toLocaleString('id-ID')} pts`;
@@ -98,16 +72,14 @@ function buildProfilePanel(guildId, userId, username, member) {
             `✨ **EXP:** ${ui.progressLine(userData.xp, targetXp, 10, 'arrow')} (${userData.xp}/${targetXp})\n` +
             `${ui.money(userData.balance)}\n` +
             `${streakEmoji} **Streak** ${streakCount} Hari\n` +
-            `${loveEmoji} **Love** ${loveCount}\n` +
-            `🏆 **Badge:** ${totalBadges}/${ACHIEVEMENTS.length}${titleLine}\n` +
+            `🏆 **Badge:** ${totalBadges}/${activeAchs.length}${titleLine}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `${rankTitle.emoji} **Rank:** ${rankTitle.name}${progressLine}\n` +
-            `━━━━━━━━━━━━━━━━━━━━` +
-            `${arenaLine}\n` +
-            `🐾 **Pet:** ${petInfo}\n\n` +
-            `🎣 Ikan: **${fishCaught}**  •  🌾 Panen: **${harvests}**  •  📋 Quest: **${questsDone}**\n` +
-            `👹 Boss: **${bossKills}**  •  🩸 PvP: **${pvpWins}**  •  🌊 Ekspedisi: **${expeditions}**\n` +
-            `🛠️ Alat Tani: **Lv.${farmToolLevel}**  •  🃏 Kartu: **${totalCards}**`
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💬 **Total Chat:** \`${chats.toLocaleString('id-ID')}\` pesan\n` +
+            `🎙️ **Voice Time:** \`${voiceHours}\` jam\n` +
+            `🧠 **Quiz & Event Wins:** \`${eventWins}\` menang\n` +
+            `🎁 **Gift Terkirim:** \`${giftsSent.toLocaleString('id-ID')}\` kali`
         )
         .setFooter({ text: ui.footer('Klik tombol di bawah untuk Achievement, Inventory, Rank, & lainnya') })
         .setTimestamp();
@@ -116,13 +88,11 @@ function buildProfilePanel(guildId, userId, username, member) {
         new ButtonBuilder().setCustomId(`profpnl_achievement_${userId}`).setLabel('🏆 Achievement').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_inventory_${userId}`).setLabel('🎒 Inventory').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`profpnl_rank_${userId}`).setLabel('🏅 Rank').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`profpnl_notifs_${userId}`).setLabel('🔔 Notifs').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`profpnl_stats_${userId}`).setLabel('📊 Stats').setStyle(ButtonStyle.Secondary)
     );
 
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`profpnl_card_${userId}`).setLabel('🖼️ Kartu Profil').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`profpnl_cards_${userId}`).setLabel('🃏 Koleksi Kartu').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`profpnl_card_${userId}`).setLabel('🖼️ Kartu Profil').setStyle(ButtonStyle.Success)
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -157,16 +127,6 @@ async function handleProfileButton(interaction) {
         return interaction.update(buildProfilePanel(guildId, userId, interaction.user.username, member));
     }
 
-    // === CARD COLLECTION (opens card panel) ===
-    if (action === 'cards') {
-        try {
-            const { handleCardsCommand } = require('./cardGame');
-            return handleCardsCommand(interaction);
-        } catch (e) {
-            return interaction.reply({ content: '❌ Fitur kartu belum tersedia.', ephemeral: true });
-        }
-    }
-
     // === PROFILE CARD (image via @napi-rs/canvas) ===
     if (action === 'card') {
 
@@ -180,14 +140,20 @@ async function handleProfileButton(interaction) {
         try { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); streak = s ? s.count : 0; } catch (_) {}
         try { rankPos = (db.prepare('SELECT COUNT(*) AS c FROM users WHERE level > ? OR (level = ? AND xp > ?)').get(userData.level, userData.level, userData.xp)?.c || 0) + 1; } catch (_) {}
         const avatarURL = (interaction.user && interaction.user.displayAvatarURL) ? interaction.user.displayAvatarURL({ extension: 'png', size: 256 }) : null;
+
+        const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
+        const customBannerRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_banner');
+        const cardTitle = customTitleRow ? `📛 ${customTitleRow.stat_value}` : (rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '');
+
         const buffer = await generateProfileCard({
             username: interaction.user.username,
             avatarURL,
+            bgURL: customBannerRow ? customBannerRow.stat_value : null,
             level: userData.level,
             xp: userData.xp,
             xpNeeded: (userData.level + 1) * 100,
             balance: userData.balance,
-            rankName: rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '',
+            rankName: cardTitle,
             badges,
             streak,
             rankPosition: rankPos,
@@ -200,44 +166,42 @@ async function handleProfileButton(interaction) {
 
     // === ACHIEVEMENT SUMMARY ===
     if (action === 'achievement') {
-        // Self-heal any "stuck" badges before showing the summary (e.g. stats that
-        // crossed the threshold before the badge existed). Never let it break the panel.
         try { await syncAchievements(interaction.guild, userId); } catch (_) { /* ignore */ }
+        const activeAchs = ACHIEVEMENTS.filter(a => !['Fishing', 'Farming', 'Battle', 'Pet'].includes(a.category));
         const userAchs = db.prepare('SELECT * FROM achievements WHERE guildId = ? AND userId = ?').all(guildId, userId);
         const unlockedIds = userAchs.map(a => a.achievementId);
-        const categories = [...new Set(ACHIEVEMENTS.map(a => a.category))];
-        const totalUnlocked = unlockedIds.length;
-        const percentComplete = Math.floor((totalUnlocked / ACHIEVEMENTS.length) * 100);
+        const categories = [...new Set(activeAchs.map(a => a.category))];
+        const totalUnlocked = userAchs.filter(a => activeAchs.some(ac => ac.id === a.achievementId)).length;
+        const percentComplete = Math.floor((totalUnlocked / activeAchs.length) * 100);
 
-        let desc = `> \ud83c\udfc6 **${totalUnlocked}** / **${ACHIEVEMENTS.length}** badge (**${percentComplete}%**)\n\n`;
+        let desc = `> 🏆 **${totalUnlocked}** / **${activeAchs.length}** badge (**${percentComplete}%**)\n\n`;
         for (const cat of categories) {
-            const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
+            const catAchs = activeAchs.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Quest: '📜', Special: '✨', Fishing: '🎣', Farming: '🌾', Battle: '⚔️', Pet: '🐾', Card: '🃏' }[cat] || '📁';
+            const catIcon = { Social: '💬', Economy: '💰', Level: '📈', Streak: '🔥', Gambling: '🎰', Events: '🎮', Voice: '🎙️', Special: '✨' }[cat] || '📁';
             desc += `${catIcon} **${cat}** (${catUnlocked}/${catAchs.length})\n`;
         }
         if (desc.length > 4000) desc = desc.substring(0, 3990) + '\n*...dan lainnya*';
 
         const embed = new EmbedBuilder()
-            .setTitle(`\ud83c\udfc6 Achievement \u2014 ${interaction.user.username}`)
+            .setTitle(`🏆 Achievement — ${interaction.user.username}`)
             .setColor('#FFD700')
             .setDescription(desc)
             .setFooter({ text: 'Pilih kategori untuk lihat tugas & progress tiap badge' });
         const catMenu = new StringSelectMenuBuilder()
             .setCustomId(`ach_detail_${userId}`)
-            .setPlaceholder('\ud83d\udcc2 Lihat tugas per kategori...')
+            .setPlaceholder('📁 Lihat tugas per kategori...')
             .setMinValues(1).setMaxValues(1);
         for (const cat of categories) {
-            const catAchs = ACHIEVEMENTS.filter(a => a.category === cat);
+            const catAchs = activeAchs.filter(a => a.category === cat);
             const catUnlocked = catAchs.filter(a => unlockedIds.includes(a.id)).length;
-            const catIcon = { Social: '\ud83d\udcac', Economy: '\ud83d\udcb0', Level: '\ud83d\udcc8', Streak: '\ud83d\udd25', Gambling: '\ud83c\udfb0', Events: '\ud83c\udfae', Voice: '\ud83c\udf99\ufe0f', Quest: '\ud83d\udcdc', Special: '\u2728', Fishing: '\ud83c\udfa3', Farming: '\ud83c\udf3e', Battle: '\u2694\ufe0f', Pet: '\ud83d\udc3e', Card: '\ud83c\udccf' }[cat] || '\ud83d\udcc1';
             catMenu.addOptions(new StringSelectMenuOptionBuilder()
                 .setLabel(`${cat} (${catUnlocked}/${catAchs.length})`.slice(0, 100))
                 .setValue(cat)
                 .setDescription(catUnlocked === catAchs.length ? 'Selesai!' : `${catAchs.length - catUnlocked} badge tersisa`));
         }
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [new ActionRowBuilder().addComponents(catMenu), row] });
     }
@@ -248,7 +212,7 @@ async function handleProfileButton(interaction) {
         const ownedItems = db.prepare('SELECT * FROM item_inventory WHERE guildId = ? AND userId = ? AND quantity > 0').all(guildId, userId);
         let desc = '';
         if (ownedItems.length === 0) {
-            desc = '*Inventory kosong!*\n\nBeli item di `/shop` atau dapatkan dari quest & event.';
+            desc = '*Inventory kosong!*\n\nBeli item di `/shop` atau dapatkan dari reward harian.';
         } else {
             ownedItems.forEach(inv => {
                 const def = ITEMS.find(i => i.id === inv.itemId);
@@ -257,7 +221,7 @@ async function handleProfileButton(interaction) {
             });
         }
         const embed = new EmbedBuilder()
-            .setTitle(`\ud83c\udf92 Inventory \u2014 ${interaction.user.username}`)
+            .setTitle(`🎒 Inventory — ${interaction.user.username}`)
             .setColor('#3498DB')
             .setDescription(desc)
             .setFooter({ text: 'Pilih item dari menu di bawah untuk menggunakan' });
@@ -268,14 +232,13 @@ async function handleProfileButton(interaction) {
         const usableItems = ownedItems.filter(inv => {
             const def = ITEMS.find(i => i.id === inv.itemId);
             if (!def) return false;
-            if (['refine_stone', 'protection_stone'].includes(def.id)) return false;
             return true;
         });
 
         if (usableItems.length > 0) {
             const useMenu = new StringSelectMenuBuilder()
                 .setCustomId(`profpnl_useitem_${userId}`)
-                .setPlaceholder('\ud83c\udf92 Pilih item untuk digunakan...')
+                .setPlaceholder('🎒 Pilih item untuk digunakan...')
                 .setMinValues(1).setMaxValues(1);
 
             usableItems.slice(0, 25).forEach(inv => {
@@ -290,8 +253,7 @@ async function handleProfileButton(interaction) {
         }
 
         const backRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`profpnl_craft_${userId}`).setLabel('\ud83d\udd28 Craft').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         components.push(backRow);
 
@@ -381,7 +343,7 @@ async function handleProfileButton(interaction) {
             .setTitle(`🏅 Rank System — ${interaction.user.username}`)
             .setColor(titleInfo.current.color || '#FFD700')
             .setDescription(desc)
-            .setFooter({ text: 'Skor dihitung dari SEMUA aktivitas: Level, Battle, Fishing, Pet, Quest, Farming, Sosial, Badge & Kekayaan (uang di-cap).' });
+            .setFooter({ text: 'Skor dihitung dari keaktifan server: Level, Streak, Chat, Voice, Mini-Games, Badge, & Kekayaan.' });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_streak_${userId}`).setLabel('🔥 Streak').setStyle(ButtonStyle.Primary),
@@ -398,17 +360,19 @@ async function handleProfileButton(interaction) {
         const currentMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
         const restoreRow = db.prepare('SELECT count FROM streak_restores WHERE guildId = ? AND userId = ? AND month = ?').get(guildId, userId, currentMonth);
         const restoreCount = restoreRow ? restoreRow.count : 0;
-        const streakEmoji = getSetting(guildId, 'streak_emoji', '\ud83d\udd25');
+        const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+        const isFrozen = getSetting(guildId, 'streak_freeze', '1') !== '0';
 
         const embed = new EmbedBuilder()
-            .setTitle(`${streakEmoji} Streak Info \u2014 ${interaction.user.username}`)
+            .setTitle(`${streakEmoji} Streak Info — ${interaction.user.username}`)
             .setColor('#E74C3C')
             .setDescription(
                 `> ${streakEmoji} **Streak:** ${streakCount} hari\n` +
-                `> \ud83d\udcc5 **Last Active:** ${lastDate}\n` +
-                `> \u267b\ufe0f **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
-                `*Ketik pesan setiap hari untuk menjaga streak!*\n` +
-                `*Jika streak terputus, klik \u267b\ufe0f Restore (maks 3x/bulan).*`
+                `> 📅 **Last Active:** ${lastDate}\n` +
+                (isFrozen ? `> 🧊 **Status:** Freeze Aktif *(Streak aman & tidak akan mati saat skip hari)*\n` : '') +
+                `> ♻️ **Restore Used:** ${restoreCount}/3 bulan ini\n\n` +
+                `*Ketik pesan di chat setiap hari untuk menyalakan/menambah streak!*\n` +
+                (isFrozen ? `*Streak saat ini dibekukan: tidak akan pernah mati meski tidak aktif.*` : `*Jika streak terputus, klik ♻️ Restore (maks 3x/bulan).*`)
             );
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profpnl_streakrestore_${userId}`).setLabel('\u267b\ufe0f Restore Streak').setStyle(ButtonStyle.Success).setDisabled(restoreCount >= 3),
@@ -450,38 +414,37 @@ async function handleProfileButton(interaction) {
         const cfWins = getUserStat(guildId, userId, 'coinflip_wins') || 0;
         const slotWins = getUserStat(guildId, userId, 'slot_wins') || 0;
         const rouletteWins = getUserStat(guildId, userId, 'roulette_wins') || 0;
-        const fishCaught = getUserStat(guildId, userId, 'total_fish_caught') || 0;
-        const harvests = getUserStat(guildId, userId, 'total_harvests') || 0;
-        const questsDone = getUserStat(guildId, userId, 'total_quests_done') || 0;
+        const totalChats = getUserStat(guildId, userId, 'total_chats') || 0;
+        const voiceMins = getUserStat(guildId, userId, 'total_voice_mins') || 0;
+        const voiceHours = (voiceMins / 60).toFixed(1);
         const eventWins = getUserStat(guildId, userId, 'event_wins') || 0;
-        const bossKills = getUserStat(guildId, userId, 'boss_kills') || 0;
         const totalBuys = getUserStat(guildId, userId, 'total_buys') || 0;
+        const giftsSent = getUserStat(guildId, userId, 'total_gifts_sent') || 0;
 
         const embed = new EmbedBuilder()
-            .setTitle(`\ud83d\udcca Statistics \u2014 ${interaction.user.username}`)
+            .setTitle(`📊 Statistics — ${interaction.user.username}`)
             .setColor('#9B59B6')
             .setDescription(
-                `**\ud83c\udfae Game Stats:**\n` +
-                `> \ud83e\ude99 Coinflip Wins: **${cfWins}**\n` +
-                `> \ud83c\udfb0 Slot Wins: **${slotWins}**\n` +
-                `> \ud83c\udfaf Roulette Wins: **${rouletteWins}**\n\n` +
-                `**\ud83c\udf1f Activity Stats:**\n` +
-                `> \ud83c\udfa3 Ikan Ditangkap: **${fishCaught}**\n` +
-                `> \ud83c\udf3e Total Panen: **${harvests}**\n` +
-                `> \ud83d\udccb Quest Selesai: **${questsDone}**\n` +
-                `> \ud83c\udfae Event Wins: **${eventWins}**\n` +
-                `> \ud83d\udc79 Boss Kills: **${bossKills}**\n` +
-                `> \ud83d\uded2 Total Buys: **${totalBuys}**`
+                `**💬 Community & Chat:**\n` +
+                `> 💬 Total Pesan: **${totalChats.toLocaleString('id-ID')}**\n` +
+                `> 🎙️ Total Voice: **${voiceHours} Jam**\n` +
+                `> 🎁 Gift Dikirim: **${giftsSent.toLocaleString('id-ID')}**\n` +
+                `> 🛒 Barang Dibeli: **${totalBuys}**\n\n` +
+                `**🎮 Games & Hiburan:**\n` +
+                `> 🧠 Quiz & Event Wins: **${eventWins}**\n` +
+                `> 🪙 Coinflip Wins: **${cfWins}**\n` +
+                `> 🎰 Slot Wins: **${slotWins}**\n` +
+                `> 🎯 Roulette Wins: **${rouletteWins}**`
             );
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`profpnl_back_${userId}`).setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // === NOTIFICATIONS ===
+    // === NOTIFICATIONS (DISABLED) ===
     if (action === 'notifs') {
-        return interaction.update(buildNotifPanel(guildId, userId));
+        return interaction.reply({ content: '❌ Fitur notifikasi telah dinonaktifkan sepenuhnya.', ephemeral: true });
     }
 }
 
@@ -534,24 +497,6 @@ async function handleProfileSelectMenu(interaction) {
             addItem(guildId, userId, recipe.result.id, recipe.result.qty);
             const resDef = ITEMS.find(i => i.id === recipe.result.id);
             resultMsg = `${resDef ? resDef.emoji : '📦'} **${resDef ? resDef.name : recipe.result.id}** x${recipe.result.qty}`;
-        } else if (recipe.result.type === 'bait') {
-            // Add bait to fish equipment
-            const eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
-            if (eq && eq.bait === recipe.result.id) {
-                db.prepare('UPDATE fish_equipment SET bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.qty, guildId, userId);
-            } else {
-                // Store as item for now (bait tokens)
-                const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
-                resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty} (pasang di Fishing Panel)`;
-                // Add to bait count directly
-                if (!eq) {
-                    db.prepare('INSERT INTO fish_equipment (guildId, userId, bait, bait_count) VALUES (?, ?, ?, ?)').run(guildId, userId, recipe.result.id, recipe.result.qty);
-                } else {
-                    db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.id, recipe.result.qty, guildId, userId);
-                }
-            }
-            const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
-            resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty}`;
         } else if (recipe.result.type === 'money') {
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.result.amount, guildId, userId);
             resultMsg = `🪙 **${recipe.result.amount.toLocaleString('id-ID')}** money`;
@@ -560,7 +505,7 @@ async function handleProfileSelectMenu(interaction) {
         incrementUserStat(guildId, userId, 'total_crafts');
 
         const embed = new EmbedBuilder()
-            .setTitle('✅ Craft Berhasil!')
+            .setTitle('✧ ITEM CRAFTED ✧')
             .setColor('#9B59B6')
             .setDescription(`${recipe.emoji} **${recipe.name}**\n\n> Hasil: ${resultMsg}`)
             .setFooter({ text: recipe.desc });
@@ -586,11 +531,6 @@ async function handleProfileSelectMenu(interaction) {
         return interaction.reply({ content: '\u274c Kamu tidak memiliki item ini!', ephemeral: true });
     }
 
-    // Items that cannot be used directly
-    if (['refine_stone', 'protection_stone'].includes(selectedItemId)) {
-        return interaction.reply({ content: '\u26a0\ufe0f Item ini **tidak bisa digunakan langsung**.\n> Digunakan otomatis saat refine di `/pet` \u2192 Refine.', ephemeral: true });
-    }
-
     let resultMsg = '';
     const userData = getOrCreateUser(guildId, userId);
 
@@ -613,15 +553,34 @@ async function handleProfileSelectMenu(interaction) {
             resultMsg = `\ud83d\udee1\ufe0f **Streak Shield** aktif!\n> Streak kamu terlindungi jika skip 1 hari.`;
             break;
         }
+        case 'streak_freeze': {
+            const until = Date.now() + 3 * 86400000;
+            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'streak_freeze_until', until);
+            resultMsg = `🧊 **Streak Freeze** aktif!\n> Streak kamu dibekukan & aman selama **3 hari** (sampai <t:${Math.floor(until / 1000)}:D>).`;
+            break;
+        }
         case 'lucky_charm': {
             db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'lucky_charm_active', 1);
             resultMsg = `\ud83c\udf40 **Lucky Charm** aktif!\n> +15% chance menang di semua game.`;
             break;
         }
+        case 'lucky_slot_charm': {
+            incrementUserStat(guildId, userId, 'lucky_spin_active', 1);
+            resultMsg = `🎰 **Lucky Slot Charm** aktif!\n> Spin slot berikutnya dijamin minimal 2 simbol sama!`;
+            break;
+        }
+        case 'server_megaphone': {
+            resultMsg = `📢 **Server Megaphone** siap dipakai!\n> Gunakan dari dialog toko untuk menyiarkan pengumuman broadcast berbingkai emas!`;
+            break;
+        }
+        case 'menfess_token': {
+            resultMsg = `🤫 **Menfess Token** siap dipakai!\n> Gunakan dari dialog toko untuk mengirim pesan rahasia secara 100% anonim!`;
+            break;
+        }
         case 'money_magnet': {
             const until = Date.now() + 3600000;
             db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'money_magnet_until', until);
-            resultMsg = `\ud83e\uddf2 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
+            resultMsg = `🧲 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
             break;
         }
         case 'daily_doubler': {
@@ -648,29 +607,23 @@ async function handleProfileSelectMenu(interaction) {
                 return interaction.reply({ content: '\ud83d\udce6 **Mystery Box** sudah mencapai limit harian (5/5)!\n> Coba lagi besok.', ephemeral: true });
             }
 
-            // Roll: 50% → 50-200, 30% → 200-500, 15% → 500-1000, 5% → 1000-2000
+            // Roll: 50% → 1000-3000, 30% → 3000-8000, 15% → 8000-15000, 5% → 15000-30000
             const roll = Math.random() * 100;
             let money;
             if (roll < 50) {
-                money = getRandomInt(50, 200);
+                money = getRandomInt(1000, 3000);
             } else if (roll < 80) {
-                money = getRandomInt(200, 500);
+                money = getRandomInt(3000, 8000);
             } else if (roll < 95) {
-                money = getRandomInt(500, 1000);
+                money = getRandomInt(8000, 15000);
             } else {
-                money = getRandomInt(1000, 2000);
+                money = getRandomInt(15000, 30000);
             }
 
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(money, guildId, userId);
             incrementUserStat(guildId, userId, mboxKey, 1);
             const tierEmoji = money >= 1000 ? '\ud83c\udf1f' : money >= 500 ? '\u2728' : money >= 200 ? '\ud83d\udcab' : '\ud83d\udce6';
             resultMsg = `\ud83d\udce6 **Mystery Box** dibuka!\n> ${tierEmoji} Kamu mendapat \ud83e\ude99 **${money.toLocaleString('id-ID')}** money!\n> Limit hari ini: ${mboxUsed + 1}/5`;
-            break;
-        }
-        case 'auto_harvest_pass': {
-            // Set auto_harvest table
-            db.prepare('INSERT OR REPLACE INTO auto_harvest (guildId, userId, purchased, enabled) VALUES (?, ?, 1, 1)').run(guildId, userId);
-            resultMsg = `\ud83d\udd14 **Auto-Harvest Pass** diaktifkan!\n> Kamu akan mendapat notifikasi saat tanaman siap panen.`;
             break;
         }
         default:
@@ -712,7 +665,6 @@ async function handleProfileSelectMenu(interaction) {
     const usableItems = ownedItems.filter(inv => {
         const def = ITEMS.find(i => i.id === inv.itemId);
         if (!def) return false;
-        if (['refine_stone', 'protection_stone'].includes(def.id)) return false;
         return true;
     });
 

@@ -202,6 +202,13 @@ function doArenaFight(guildId, userId) {
         const moneyMult = Math.min(2.0, mult);
         reward = Math.floor(baseMoney * moneyMult);
         pointsEarned = Math.floor(basePoints * mult);
+        // Arena Veteran ability: +5% AP
+        try {
+            const { hasAbility } = require('./petAbilities');
+            if (hasAbility(guildId, userId, 'arena_veteran')) {
+                pointsEarned = Math.floor(pointsEarned * 1.05);
+            }
+        } catch (_) {}
 
         // Daily AP cap
         const apToday = getUserStat(guildId, userId, `arena_ap_${today}`) || 0;
@@ -414,10 +421,15 @@ async function handleArenaButton(interaction) {
         if (res.error === 'no_pet') return interaction.followUp({ content: '❌ Kamu belum punya pet aktif! Tetaskan/aktifkan pet dulu di `/pet`.', ephemeral: true });
         if (res.error === 'no_opponent') return interaction.followUp({ content: '❌ Belum ada lawan tersedia (belum ada pemain lain dengan pet aktif). Coba lagi nanti.', ephemeral: true });
         if (res.error === 'daily_limit') return interaction.followUp({ content: `❌ Kamu sudah mencapai limit **${MAX_FIGHTS_PER_DAY} fight/hari**! Istirahat dulu, lanjut besok.`, ephemeral: true });
-        cooldowns.setCooldown('arena', guildId, userId, FIGHT_COOLDOWN_MS);
+        let arenaCd = FIGHT_COOLDOWN_MS;
+        try {
+            const { hasAbility } = require('./petAbilities');
+            if (hasAbility(guildId, userId, 'arena_veteran')) arenaCd = Math.floor(FIGHT_COOLDOWN_MS * 0.9);
+        } catch (_) {}
+        cooldowns.setCooldown('arena', guildId, userId, arenaCd);
 
         // Quest progress + achievement check for arena fights
-        try { const { updateQuestProgress } = require('./quests'); updateQuestProgress(guildId, userId, 'arena', 1); } catch (_) {}
+        
         try { const { checkAchievements } = require('./achievements'); await checkAchievements(interaction.guild, userId, { type: 'arena' }); } catch (_) {}
 
         const tier = getTier(res.newRating);
@@ -508,7 +520,7 @@ async function handleArenaSelectMenu(interaction) {
                 const stats = generatePetStats(tier);
                 const elements = ['fire', 'water', 'nature', 'electric', 'dark', 'light'];
                 const element = elements[Math.floor(Math.random() * elements.length)];
-                db.prepare('INSERT INTO pets (userId, petId, name, level, exp, hp, atk, def, spd, crit, element, adoptedAt) VALUES (?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?, ?)').run(userId, pet.id, pet.name, stats.hp, stats.atk, stats.def, stats.spd, stats.crit, element, Date.now());
+                db.prepare('INSERT INTO pets (guildId, userId, petId, name, level, exp, hp, atk, def, spd, crit, element, adoptedAt) VALUES (?, ?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?, ?)').run(guildId, userId, pet.id, pet.name, stats.hp, stats.atk, stats.def, stats.spd, stats.crit, element, Date.now());
                 try { const { registerPetDiscovery } = require('../database'); registerPetDiscovery(userId, pet.id); } catch (_) {}
                 await interaction.reply({ content: `🥚 **Arena Egg menetas!**\n> ${pet.emoji} **${pet.name}** (${tier})\n> HP:${stats.hp} ATK:${stats.atk} DEF:${stats.def} SPD:${stats.spd}\n> -🎖️ ${shopItem.cost} AP`, ephemeral: true });
             } else {
@@ -526,7 +538,7 @@ async function handleArenaSelectMenu(interaction) {
 function processSeasonEnd(client) {
     try {
         const season = getCurrentSeason();
-        const lastProcessed = getUserStat(null, 'SYSTEM', 'arena_last_season') || '';
+        const lastProcessed = getUserStat('global', 'SYSTEM', 'arena_last_season') || '';
         if (lastProcessed === season.id) return; // Already processed this month
 
         // Get top players
@@ -538,8 +550,8 @@ function processSeasonEnd(client) {
             const player = topPlayers[i];
             const rewardDef = SEASON_REWARDS.find(r => r.rank === i + 1) || (i < 5 ? SEASON_REWARDS[3] : SEASON_REWARDS[5]);
             if (rewardDef) {
-                if (rewardDef.money > 0) addUserBalance(null, player.userId, rewardDef.money);
-                if (rewardDef.points > 0) addArenaPoints(null, player.userId, rewardDef.points);
+                if (rewardDef.money > 0) addUserBalance('global', player.userId, rewardDef.money);
+                if (rewardDef.points > 0) addArenaPoints('global', player.userId, rewardDef.points);
             }
         }
 
@@ -548,7 +560,7 @@ function processSeasonEnd(client) {
             const allRatings = db.prepare("SELECT userId, stat_value AS rating FROM user_stats WHERE stat_key = 'arena_rating' AND stat_value > 0").all();
             for (const r of allRatings) {
                 const newRating = Math.max(BASE_RATING, Math.round(BASE_RATING + (r.rating - BASE_RATING) * 0.5));
-                setUserStat(null, r.userId, 'arena_rating', newRating);
+                setUserStat('global', r.userId, 'arena_rating', newRating);
             }
         } catch (_) {}
 
@@ -556,7 +568,7 @@ function processSeasonEnd(client) {
         try { db.prepare("UPDATE user_stats SET stat_value = 0 WHERE stat_key = 'arena_win_streak'").run(); } catch (_) {}
 
         // Mark season as processed
-        setUserStat(null, 'SYSTEM', 'arena_last_season', season.id);
+        setUserStat('global', 'SYSTEM', 'arena_last_season', season.id);
 
         console.log(`[arena] Season reset completed: ${season.name}`);
     } catch (e) {

@@ -19,6 +19,49 @@ function setWelcomerSetting(guildId, key, value) {
     db.prepare('INSERT OR REPLACE INTO welcomer_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, String(value));
 }
 
+// Download a remote image into a Buffer (used to sniff GIF vs static and to
+// feed the GIF processor). Returns null on any failure so callers can fall back.
+async function fetchImageBuffer(url, { timeoutMs = 10000, maxBytes = 25 * 1024 * 1024 } = {}) {
+    if (!url || typeof fetch !== 'function') return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (maxBytes && buf.length > maxBytes) return null;
+        return buf;
+    } catch (_) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// ---- GIF background cache (avoids re-downloading the same GIF every join) ----
+// Cache keyed by URL, stores { buffer, ts }. Entries expire after 10 minutes.
+const _gifCache = new Map();
+const GIF_CACHE_TTL = 10 * 60 * 1000; // 10 min
+const GIF_CACHE_MAX = 20;              // max entries
+
+async function fetchImageBufferCached(url, opts) {
+    if (!url) return null;
+    const now = Date.now();
+    const cached = _gifCache.get(url);
+    if (cached && (now - cached.ts) < GIF_CACHE_TTL) return cached.buffer;
+
+    const buf = await fetchImageBuffer(url, opts);
+    if (buf) {
+        // Evict oldest if at capacity
+        if (_gifCache.size >= GIF_CACHE_MAX) {
+            const oldest = [..._gifCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+            if (oldest) _gifCache.delete(oldest[0]);
+        }
+        _gifCache.set(url, { buffer: buf, ts: now });
+    }
+    return buf;
+}
+
 function getAllWelcomerSettings(guildId) {
     const keys = [
         'welcome_enabled', 'welcome_channel', 'welcome_message', 'welcome_embed_color',
@@ -27,6 +70,7 @@ function getAllWelcomerSettings(guildId) {
         'welcome_autorole', 'welcome_autorole_delay',
         'welcome_banner_enabled', 'welcome_banner_bg', 'welcome_banner_text', 'welcome_banner_style',
         'goodbye_enabled', 'goodbye_channel', 'goodbye_message', 'goodbye_embed_color',
+        'goodbye_embed_image',
         'goodbye_banner_enabled', 'goodbye_banner_bg', 'goodbye_banner_text', 'goodbye_banner_style',
     ];
     const defaults = {
@@ -49,6 +93,7 @@ function getAllWelcomerSettings(guildId) {
         goodbye_channel: '',
         goodbye_message: '👋 **{user.name}** telah meninggalkan server. (Member: **{server.memberCount}**)',
         goodbye_embed_color: '#FF6B6B',
+        goodbye_embed_image: '',
         goodbye_banner_enabled: '0',
         goodbye_banner_bg: '',
         goodbye_banner_text: 'GOODBYE',
@@ -168,42 +213,99 @@ async function handleWelcome(member) {
 
     // Send welcome message to channel
     const channelId = getWelcomerSetting(guildId, 'welcome_channel', '');
-    if (channelId) {
-        const channel = member.guild.channels.cache.get(channelId);
-        if (channel) {
-            const message = replaceVariables(getWelcomerSetting(guildId, 'welcome_message', 'Welcome {user.mention}!'), member);
-            const banner = await buildBannerAttachment(member, 'welcome');
-            const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
+    if (!channelId) {
+        log('WARN', `[welcomer] welcome aktif tapi welcome_channel belum diset di guild ${guildId}.`);
+        return;
+    }
 
-            if (banner) {
-                // Kythia-style single block: greeting line as plain text, then the
-                // large card image directly below it. No embed (keeps it as one
-                // visual block and lets the card render at full media width).
-                channel.send({
-                    content: message,
-                    files: [banner],
-                    allowedMentions: { users: [member.id] },
-                }).catch(onErr);
+    const channel = member.guild.channels.cache.get(channelId);
+    if (!channel) {
+        log('WARN', `[welcomer] welcome_channel="${channelId}" tidak ditemukan di guild ${guildId} (channel dihapus / bot tidak melihatnya).`);
+        return;
+    }
+
+    const message = replaceVariables(getWelcomerSetting(guildId, 'welcome_message', 'Welcome {user.mention}!'), member);
+    const onErr = (e) => log('ERROR', `[welcomer] Gagal kirim welcome ke #${channel.name} (${channelId}): ${e.message}. Cek izin bot: View Channel, Send Messages, Embed Links, Attach Files.`);
+
+    try {
+        const banner = await buildBannerAttachment(member, 'welcome');
+        const customImage = getWelcomerSetting(guildId, 'welcome_embed_image', '');
+
+        if (customImage && customImage.startsWith('http')) {
+            // Custom image as canvas background — overlay member avatar.
+            // If it's a GIF we keep animation; otherwise render static PNG banner.
+            let wcMod;
+            try { wcMod = require('./welcomeCard'); } catch (_) { wcMod = null; }
+            const accent = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+            const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            const username = member.user.username;
+
+            const subtitle = `WELCOME TO ${member.guild.name.toUpperCase()} • MEMBER #${member.guild.memberCount}`;
+            if (wcMod) {
+                try {
+                    const srcBuffer = await fetchImageBufferCached(customImage);
+                    const isGif = !!srcBuffer && srcBuffer.length > 6 &&
+                        srcBuffer.toString('ascii', 0, 4) === 'GIF8';
+
+                    let card = null;
+                    if (isGif && wcMod.generateAvatarBannerGif) {
+                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, subtitle, accent });
+                        if (gifOut) {
+                            card = new AttachmentBuilder(gifOut, { name: 'welcome.gif' });
+                        } else {
+                            log('WARN', `[welcomer] GIF welcomer di guild ${guildId} jatuh ke banner statis.`);
+                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
+                            if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
+                        }
+                    } else if (wcMod.generateAvatarBanner) {
+                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
+                        if (png) card = new AttachmentBuilder(png, { name: 'welcome.png' });
+                    }
+
+                    if (card) {
+                        channel.send({ content: message, files: [card], allowedMentions: { users: [member.id] } }).catch(onErr);
+                    } else {
+                        const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                        channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+                    }
+                } catch (e) {
+                    log('ERROR', `[welcomer] gagal render custom image di guild ${guildId}: ${e.message}. Fallback embed.`);
+                    const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                    channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
+                }
             } else {
-                // No generated card -> fall back to a text embed.
-                const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
-                const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
-                const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
-                const image = getWelcomerSetting(guildId, 'welcome_embed_image', '');
-                const embed = new EmbedBuilder()
-                    .setColor(color)
-                    .setTitle(title)
-                    .setDescription(message)
-                    .setTimestamp();
-                if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
-                if (image && image.startsWith('http')) embed.setImage(image);
+                // welcomeCard module failed to load — send raw image embed
+                log('WARN', `[welcomer] welcomeCard module gagal load di guild ${guildId}. Kirim embed gambar mentah.`);
+                const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
                 channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
             }
+        } else if (banner) {
+            channel.send({
+                content: message,
+                files: [banner],
+                allowedMentions: { users: [member.id] },
+            }).catch(onErr);
         } else {
-            log('WARN', `[welcomer] welcome_channel="${channelId}" tidak ditemukan di guild ${guildId} (channel dihapus / bot tidak melihatnya).`);
+            const color = getWelcomerSetting(guildId, 'welcome_embed_color', '#5865F2');
+            const title = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_title', '👋 Welcome!'), member);
+            const thumbnail = replaceVariables(getWelcomerSetting(guildId, 'welcome_embed_thumbnail', '{user.avatar}'), member);
+            const image = getWelcomerSetting(guildId, 'welcome_embed_image', '');
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(title)
+                .setDescription(message)
+                .setTimestamp();
+            if (thumbnail && thumbnail.startsWith('http')) embed.setThumbnail(thumbnail);
+            if (image && image.startsWith('http')) embed.setImage(image);
+            channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(onErr);
         }
-    } else {
-        log('WARN', `[welcomer] welcome aktif tapi welcome_channel belum diset di guild ${guildId}.`);
+    } catch (e) {
+        // ULTIMATE SAFETY NET: if anything above throws, still send a basic welcome
+        log('ERROR', `[welcomer] handleWelcome FATAL di guild ${guildId}: ${e.message}. Kirim embed minimal.`);
+        try {
+            const embed = new EmbedBuilder().setColor('#5865F2').setDescription(message).setTimestamp();
+            channel.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(() => {});
+        } catch (_) { /* truly nothing we can do */ }
     }
 
     // Send DM if enabled
@@ -251,18 +353,76 @@ async function handleGoodbye(member) {
     if (!channel) return;
 
     const message = replaceVariables(getWelcomerSetting(guildId, 'goodbye_message', '👋 {user.name} left.'), member);
-    const banner = await buildBannerAttachment(member, 'goodbye');
 
-    if (banner) {
-        // Single block: goodbye line + large card image, no embed.
-        channel.send({ content: message, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
-    } else {
-        const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setDescription(message)
-            .setTimestamp();
-        channel.send({ embeds: [embed] }).catch(() => {});
+    try {
+        const customImage = getWelcomerSetting(guildId, 'goodbye_embed_image', '');
+
+        if (customImage && customImage.startsWith('http')) {
+            // Custom image goodbye — same logic as welcome: GIF stays animated,
+            // static gets avatar overlay, fallback to raw embed.
+            let wcMod;
+            try { wcMod = require('./welcomeCard'); } catch (_) { wcMod = null; }
+            const accent = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
+            const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            const username = member.user.username;
+
+            const subtitle = `FAREWELL • ${member.guild.name.toUpperCase()} (${member.guild.memberCount} MEMBERS)`;
+            if (wcMod) {
+                try {
+                    const srcBuffer = await fetchImageBufferCached(customImage);
+                    const isGif = !!srcBuffer && srcBuffer.length > 6 &&
+                        srcBuffer.toString('ascii', 0, 4) === 'GIF8';
+
+                    let card = null;
+                    if (isGif && wcMod.generateAvatarBannerGif) {
+                        const gifOut = await wcMod.generateAvatarBannerGif({ gifBuffer: srcBuffer, avatarURL, username, subtitle, accent });
+                        if (gifOut) {
+                            card = new AttachmentBuilder(gifOut, { name: 'goodbye.gif' });
+                        } else {
+                            const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
+                            if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
+                        }
+                    } else if (wcMod.generateAvatarBanner) {
+                        const png = await wcMod.generateAvatarBanner({ bgURL: customImage, avatarURL, username, subtitle, accent });
+                        if (png) card = new AttachmentBuilder(png, { name: 'goodbye.png' });
+                    }
+
+                    if (card) {
+                        channel.send({ content: message, files: [card], allowedMentions: { parse: [] } }).catch(() => {});
+                    } else {
+                        const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                        channel.send({ embeds: [embed] }).catch(() => {});
+                    }
+                } catch (e) {
+                    log('ERROR', `[welcomer] gagal render goodbye custom image di guild ${guildId}: ${e.message}. Fallback embed.`);
+                    const embed = new EmbedBuilder().setColor(accent).setDescription(message).setImage(customImage).setTimestamp();
+                    channel.send({ embeds: [embed] }).catch(() => {});
+                }
+            } else {
+                const embed = new EmbedBuilder().setColor('#FF6B6B').setDescription(message).setImage(customImage).setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
+        } else {
+            const banner = await buildBannerAttachment(member, 'goodbye');
+
+            if (banner) {
+                channel.send({ content: message, files: [banner], allowedMentions: { parse: [] } }).catch(() => {});
+            } else {
+                const color = getWelcomerSetting(guildId, 'goodbye_embed_color', '#FF6B6B');
+                const embed = new EmbedBuilder()
+                    .setColor(color)
+                    .setDescription(message)
+                    .setTimestamp();
+                channel.send({ embeds: [embed] }).catch(() => {});
+            }
+        }
+    } catch (e) {
+        // SAFETY NET: if anything throws, still send a basic goodbye
+        log('ERROR', `[welcomer] handleGoodbye FATAL di guild ${guildId}: ${e.message}. Kirim embed minimal.`);
+        try {
+            const embed = new EmbedBuilder().setColor('#FF6B6B').setDescription(message).setTimestamp();
+            channel.send({ embeds: [embed] }).catch(() => {});
+        } catch (_) { /* truly nothing we can do */ }
     }
 }
 

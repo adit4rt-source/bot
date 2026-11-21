@@ -24,12 +24,18 @@ const GIANT_FISH = [
     { id: 'giant_cosmic_behemoth', name: 'Cosmic Behemoth', emoji: '🌌', location: 'void_rift', hp: 5, minReward: 15000, maxReward: 20000, desc: 'Makhluk kosmik terbesar yang pernah ada!' },
     // Secret Location giants
     { id: 'giant_abyssal_god', name: 'Abyssal God Fish', emoji: '👁️', location: 'abyss', hp: 5, minReward: 15000, maxReward: 20000, desc: 'Dewa ikan dari kedalaman abyss yang tak terukur!' },
+    // Ascendant locations
+    { id: 'giant_astral_colossus', name: 'Astral Colossus', emoji: '🌌', location: 'astral_trench', hp: 5, minReward: 18000, maxReward: 28000, desc: 'Kolosus bintang di jurang astral!' },
+    { id: 'giant_parallax_behemoth', name: 'Parallax Behemoth', emoji: '🌟', location: 'astral_trench', hp: 5, minReward: 20000, maxReward: 32000, desc: 'Behemoth parallax yang melengkungkan cahaya!' },
+    { id: 'giant_star_titan', name: 'Star Titan', emoji: '⭐', location: 'celestial_ocean', hp: 5, minReward: 22000, maxReward: 35000, desc: 'Titan bintang dari Celestial Ocean!' },
+    { id: 'giant_bone_god', name: 'Bone God Fish', emoji: '💀', location: 'primordial_depths', hp: 5, minReward: 25000, maxReward: 40000, desc: 'Tulang dewa dari kedalaman purba!' },
+    { id: 'giant_throne_guardian', name: 'Throne Guardian Fish', emoji: '👑', location: 'god_realm', hp: 6, minReward: 30000, maxReward: 50000, desc: 'Penjaga takhta dewa — giant terkuat!' },
 ];
 
 // ==================== CONFIG ====================
 const GIANT_FISH_SPAWN_CHANCE = 0.01; // 1% per cast
 const GIANT_FISH_TIMEOUT = 60 * 1000; // 60 detik untuk menyelesaikan
-const ADVANCED_LOCATIONS = ['deep_sea', 'ice_cave', 'volcano', 'void_rift', 'abyss']; // Lokasi yang bisa spawn giant fish
+const ADVANCED_LOCATIONS = ['deep_sea', 'ice_cave', 'volcano', 'void_rift', 'abyss', 'astral_trench', 'celestial_ocean', 'primordial_depths', 'god_realm'];
 
 // ==================== DATABASE ====================
 // Migration: drop old table with 'oderId' column and recreate with correct schema
@@ -251,7 +257,7 @@ function getGiantFishStats(guildId, userId) {
 function buildGiantFishSpawnEmbed(giantFish, hitsRequired, userId) {
     const embed = new EmbedBuilder()
         .setColor('#FF0000')
-        .setTitle(`🐋💥 GIANT FISH MUNCUL! 💥🐋`)
+        .setTitle('—— GIANT FISH DETECTED ——')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** telah muncul!\n\n` +
             `> *${giantFish.desc}*\n\n` +
@@ -286,7 +292,7 @@ function buildGiantFishHitEmbed(result, userId) {
 
     const embed = new EmbedBuilder()
         .setColor(perfect ? '#FFD700' : missed ? '#95A5A6' : '#FF6B00')
-        .setTitle(`${perfect ? '⚡' : missed ? '💨' : '⚔️'} ${missed ? 'MISS!' : 'HIT!'} ${giantFish.emoji} ${giantFish.name}`)
+        .setTitle(`—— ${perfect ? 'PERFECT' : missed ? 'SLOW' : 'DIRECT'} ${missed ? 'MISS' : 'HIT'} ON ${giantFish.name.toUpperCase()} ——`)
         .setDescription(
             `${hitFeedback}\n\n` +
             `❤️ HP: ${hpBar} (${hitsLanded}/${hitsRequired})\n` +
@@ -315,7 +321,7 @@ function buildGiantFishDefeatedEmbed(result, userId) {
 
     const embed = new EmbedBuilder()
         .setColor('#FFD700')
-        .setTitle(`🐋🏆 GIANT FISH TERTANGKAP! 🏆🐋`)
+        .setTitle('—— GIANT FISH CAPTURED ——')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** berhasil ditangkap!\n\n` +
             `> *${giantFish.desc}*\n\n` +
@@ -341,7 +347,7 @@ function buildGiantFishDefeatedEmbed(result, userId) {
 function buildGiantFishEscapedEmbed(giantFish, hitsLanded, hitsRequired, userId) {
     const embed = new EmbedBuilder()
         .setColor('#95A5A6')
-        .setTitle(`💨 GIANT FISH KABUR!`)
+        .setTitle('—— GIANT FISH ESCAPED ——')
         .setDescription(
             `${giantFish.emoji} **${giantFish.name}** berhasil melarikan diri!\n\n` +
             `> ⏱️ Waktu habis!\n` +

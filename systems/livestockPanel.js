@@ -22,62 +22,82 @@ function diseaseLabel(animal) {
 }
 
 // Auto-refresh helpers: keep a coop/barn panel message live so progress bars advance.
-function trackCoop(interaction, userId) {
-    try { panelRefresh.track(interaction.message, () => buildCoopPanel(userId, interaction.user.username)); } catch (e) {}
+function trackCoop(interaction, userId, page = 0) {
+    try { panelRefresh.track(interaction.message, () => buildCoopPanel(userId, interaction.user.username, page)); } catch (e) {}
 }
-function trackBarn(interaction, userId) {
-    try { panelRefresh.track(interaction.message, () => buildBarnPanel(userId, interaction.user.username)); } catch (e) {}
+function trackBarn(interaction, userId, page = 0) {
+    try { panelRefresh.track(interaction.message, () => buildBarnPanel(userId, interaction.user.username, page)); } catch (e) {}
+}
+
+// Pagination control row (◀️ / page / ▶️) for coop & barn lists.
+function buildPageRow(kind, userId, curPage, totalPages) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`farm_${kind}_page_${curPage - 1}_${userId}`).setLabel('◀️ Prev').setStyle(ButtonStyle.Secondary).setDisabled(curPage <= 0),
+        new ButtonBuilder().setCustomId(`farm_${kind}_pageinfo_${userId}`).setLabel(`Hal ${curPage + 1}/${totalPages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`farm_${kind}_page_${curPage + 1}_${userId}`).setLabel('Next ▶️').setStyle(ButtonStyle.Secondary).setDisabled(curPage >= totalPages - 1)
+    );
 }
 
 // ============ BUILD: Coop Panel (Kandang Ayam) ============
-function buildCoopPanel(userId, username) {
+function buildCoopPanel(userId, username, page = 0) {
     const season = getSeasonDisplay();
     const userData = getOrCreateUser(null, userId);
     const coopLvl = getCoopLevel(userId);
     const coopInfo = COOP_LEVELS.find(l => l.level === coopLvl);
     const maxSlots = getCoopSlots(userId);
-    const chickens = getAnimals(userId, 'chicken').filter(a => a.status !== 'dead');
-    const deadCount = getAnimals(userId, 'chicken').filter(a => a.status === 'dead').length;
+    const chickens = getAnimals(userId, 'chicken'); // include dead so the list matches slot usage
+    const deadCount = chickens.filter(a => a.status === 'dead').length;
     const sickCount = chickens.filter(a => a.status === 'sick').length;
     const prodMult = getSeasonProductionMultiplier('chicken');
 
     // Count ready animals
     const now = Date.now();
     let totalReady = 0;
-    let animalList = '';
     const { getHungerPercent } = require('./livestock');
+    const listLines = [];
     chickens.forEach((chicken, i) => {
         const { getProduceTime } = require('../data/livestock');
+        const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
+        const rarityIcon = chicken.rarity === 'diamond' ? '💎 ' : chicken.rarity === 'golden' ? '✨ ' : '';
+        const name = chicken.name || 'Ayam';
+
+        // Dead birds still occupy a slot until buried — show them so the list matches the count.
+        if (chicken.status === 'dead') {
+            listLines.push(`\`[${i + 1}]\` 💀 ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur (kosongkan slot)\n`);
+            return;
+        }
+
         const produceTime = getProduceTime('chicken', chicken.level, chicken.tier) / prodMult;
         const elapsed = now - (chicken.lastCollect || chicken.createdAt);
         const isReady = elapsed >= produceTime;
         if (isReady) totalReady++;
 
-        const tierEmoji = chicken.tier > 0 ? ' ' + '⭐'.repeat(Math.min(chicken.tier, 5)) + (chicken.tier > 5 ? `+${chicken.tier - 5}` : '') : '';
         const hunger = getHungerPercent(chicken);
         const hungerIcon = hunger > 70 ? '' : hunger > 30 ? ' 🍗' : hunger > 0 ? ' 🍗❗' : ' ⚠️🍗';
-        const rarityIcon = chicken.rarity === 'diamond' ? '💎 ' : chicken.rarity === 'golden' ? '✨ ' : '';
 
         if (chicken.status === 'sick') {
-            const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(chicken)}${hungerIcon}\n`);
         } else if (isReady) {
-            const name = chicken.name || 'Ayam';
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ 🥚 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`);
         } else {
-            const name = chicken.name || 'Ayam';
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            animalList += `\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            listLines.push(`\`[${i + 1}]\` <:chicken:1514062471248216154> ${rarityIcon}**${name}** Lv.${chicken.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`);
         }
     });
 
+    // Paginate so the list never exceeds Discord's 4096-char description limit.
+    const PAGE_SIZE = 15;
+    const totalPages = Math.max(1, Math.ceil(listLines.length / PAGE_SIZE));
+    const curPage = Math.min(Math.max(0, page | 0), totalPages - 1);
+    let animalList = listLines.slice(curPage * PAGE_SIZE, (curPage + 1) * PAGE_SIZE).join('');
     if (chickens.length === 0) animalList = '> *Belum punya ayam. Beli di Shop!*\n';
 
-    // Calculate average hunger
-    const avgHunger = chickens.length > 0 ? Math.round(chickens.reduce((s, c) => s + getHungerPercent(c), 0) / chickens.length) : 100;
+    // Calculate average hunger (alive birds only)
+    const aliveChickens = chickens.filter(a => a.status !== 'dead');
+    const avgHunger = aliveChickens.length > 0 ? Math.round(aliveChickens.reduce((s, c) => s + getHungerPercent(c), 0) / aliveChickens.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
 
@@ -90,8 +110,9 @@ function buildCoopPanel(userId, username) {
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> 📈 Produksi: **${Math.round(prodMult * 100)}%**  •  ${ui.money(userData.balance)}\n` +
             (sickCount > 0 ? `> ⚠️ **${sickCount} ayam sakit!** Beri obat segera.\n` : '') +
+            (deadCount > 0 ? `> 💀 **${deadCount} ayam mati** — klik ⚰️ Kubur untuk kosongkan slot.\n` : '') +
             ui.DIVIDER + `\n` +
-            `📋 **Daftar Ayam:**\n` +
+            `📋 **Daftar Ayam:**${totalPages > 1 ? ` (Hal ${curPage + 1}/${totalPages})` : ''}\n` +
             animalList
         )
         .setFooter({ text: ui.footer('🥚 Ready • ⏳ Growing • 🤒 Sakit • 🍗 Lapar • 🔄 Refresh') });
@@ -117,18 +138,18 @@ function buildCoopPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2, row3, ...(totalPages > 1 ? [buildPageRow('coop', userId, curPage, totalPages)] : [])] };
 }
 
 // ============ BUILD: Barn Panel (Peternakan - Sapi & Domba) ============
-function buildBarnPanel(userId, username) {
+function buildBarnPanel(userId, username, page = 0) {
     const season = getSeasonDisplay();
     const userData = getOrCreateUser(null, userId);
     const barnLvl = getBarnLevel(userId);
     const barnInfo = BARN_LEVELS.find(l => l.level === barnLvl);
     const maxSlots = getBarnSlots(userId);
-    const cows = getAnimals(userId, 'cow').filter(a => a.status !== 'dead');
-    const sheep = getAnimals(userId, 'sheep').filter(a => a.status !== 'dead');
+    const cows = getAnimals(userId, 'cow'); // include dead so list matches slot usage
+    const sheep = getAnimals(userId, 'sheep');
     const totalAnimals = cows.length + sheep.length;
     const sickCows = cows.filter(a => a.status === 'sick').length;
     const sickSheep = sheep.filter(a => a.status === 'sick').length;
@@ -141,8 +162,14 @@ function buildBarnPanel(userId, username) {
     const now = Date.now();
     let totalMilk = 0, totalWool = 0;
 
-    let cowList = '';
+    const cowLines = [];
     cows.forEach((cow, i) => {
+        const tierEmoji0 = cow.tier > 0 ? ' ' + '⭐'.repeat(Math.min(cow.tier, 5)) + (cow.tier > 5 ? `+${cow.tier - 5}` : '') : '';
+        const rarityIcon0 = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
+        if (cow.status === 'dead') {
+            cowLines.push(`\`[${i + 1}]\` 💀 ${rarityIcon0}**Sapi** Lv.${cow.level}${tierEmoji0} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur\n`);
+            return;
+        }
         const { getProduceTime } = require('../data/livestock');
         const produceTime = getProduceTime('cow', cow.level, cow.tier) / cowProd;
         const elapsed = now - (cow.lastCollect || cow.createdAt);
@@ -154,20 +181,26 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = cow.rarity === 'diamond' ? '💎 ' : cow.rarity === 'golden' ? '✨ ' : '';
         if (cow.status === 'sick') {
-            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`;
+            cowLines.push(`\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(cow)}${hungerIcon}\n`);
         } else if (isReady) {
-            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            cowLines.push(`\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ 🥛 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`);
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            cowList += `\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            cowLines.push(`\`[${i + 1}]\` <:cow:1514062469276893356> ${rarityIcon}**Sapi** Lv.${cow.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`);
         }
     });
 
-    let sheepList = '';
+    const sheepLines = [];
     sheep.forEach((s, i) => {
+        const tierEmoji0 = s.tier > 0 ? ' ' + '⭐'.repeat(Math.min(s.tier, 5)) + (s.tier > 5 ? `+${s.tier - 5}` : '') : '';
+        const rarityIcon0 = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
+        if (s.status === 'dead') {
+            sheepLines.push(`\`[${i + 1}]\` 💀 ${rarityIcon0}**Domba** Lv.${s.level}${tierEmoji0} — *Mati*\n ┗ ⚰️ \`░░░░░░░░░░\` Perlu dikubur\n`);
+            return;
+        }
         const { getProduceTime } = require('../data/livestock');
         const produceTime = getProduceTime('sheep', s.level, s.tier) / sheepProd;
         const elapsed = now - (s.lastCollect || s.createdAt);
@@ -179,22 +212,35 @@ function buildBarnPanel(userId, username) {
 
         const rarityIcon = s.rarity === 'diamond' ? '💎 ' : s.rarity === 'golden' ? '✨ ' : '';
         if (s.status === 'sick') {
-            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`;
+            sheepLines.push(`\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji} 🤒\n ┗ ❌ \`░░░░░░░░░░\` ${diseaseLabel(s)}${hungerIcon}\n`);
         } else if (isReady) {
-            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`;
+            sheepLines.push(`\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ 🧶 \`▰▰▰▰▰▰▰▰▰▰\` Ready!${hungerIcon}\n`);
         } else {
             const percent = Math.min(99, Math.floor((elapsed / produceTime) * 100));
             const filled = Math.floor(percent / 10);
             const bar = '▰'.repeat(filled) + '░'.repeat(10 - filled);
             const remainMin = Math.max(1, Math.ceil((produceTime - elapsed) / 60000));
-            sheepList += `\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`;
+            sheepLines.push(`\`[${i + 1}]\` <:sheep:1514062467393781792> ${rarityIcon}**Domba** Lv.${s.level}${tierEmoji}\n ┗ ⏳ \`${bar}\` ${percent}% (${remainMin}m)${hungerIcon}\n`);
         }
     });
 
-    if (cows.length === 0) cowList = '*Belum punya sapi*\n';
-    if (sheep.length === 0) sheepList = '*Belum punya domba*\n';
+    // Paginate the combined cow+sheep list (with section headers) so it never exceeds 4096 chars.
+    const BARN_PAGE_SIZE = 14;
+    const barnItems = [
+        ...cowLines.map(line => ({ sect: '📋 **Sapi:**', line })),
+        ...sheepLines.map(line => ({ sect: '📋 **Domba:**', line })),
+    ];
+    const totalPages = Math.max(1, Math.ceil(barnItems.length / BARN_PAGE_SIZE));
+    const curPage = Math.min(Math.max(0, page | 0), totalPages - 1);
+    let barnList = '';
+    let lastSect = null;
+    for (const it of barnItems.slice(curPage * BARN_PAGE_SIZE, (curPage + 1) * BARN_PAGE_SIZE)) {
+        if (it.sect !== lastSect) { barnList += `${it.sect}\n`; lastSect = it.sect; }
+        barnList += it.line;
+    }
+    if (barnItems.length === 0) barnList = '*Belum punya hewan ternak. Beli di Shop!*\n';
 
-    const allBarn = [...cows, ...sheep];
+    const allBarn = [...cows, ...sheep].filter(a => a.status !== 'dead');
     const avgHunger = allBarn.length > 0 ? Math.round(allBarn.reduce((s, a) => s + getHungerPercent(a), 0) / allBarn.length) : 100;
     const hungerBar = '▰'.repeat(Math.floor(avgHunger / 10)) + '░'.repeat(10 - Math.floor(avgHunger / 10));
     const hungerStatus = avgHunger > 70 ? '😊' : avgHunger > 30 ? '😐' : avgHunger > 0 ? '😫' : '😵';
@@ -209,9 +255,10 @@ function buildBarnPanel(userId, username) {
             `> 🍗 Pakan: \`${hungerBar}\` **${avgHunger}%** ${hungerStatus}\n` +
             `> ${ui.money(userData.balance)}\n` +
             (totalSick > 0 ? `> ⚠️ **${totalSick} hewan sakit!**\n` : '') +
+            (deadBarnCount > 0 ? `> 💀 **${deadBarnCount} hewan mati** — klik ⚰️ Kubur untuk kosongkan slot.\n` : '') +
             ui.DIVIDER + `\n` +
-            `📋 **Sapi:**\n${cowList}\n` +
-            `📋 **Domba:**\n${sheepList}`
+            (totalPages > 1 ? `*(Hal ${curPage + 1}/${totalPages})*\n` : '') +
+            barnList
         )
         .setFooter({ text: ui.footer('🥛🧶 Ready • ⏳ Growing • 🤒 Sakit • 🍗 Lapar • 🎾 Play boost') });
 
@@ -235,7 +282,7 @@ function buildBarnPanel(userId, username) {
         new ButtonBuilder().setCustomId(`farm_hub_${userId}`).setLabel('🔙 Hub').setStyle(ButtonStyle.Secondary)
     );
 
-    return { embeds: [embed], components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2, row3, ...(totalPages > 1 ? [buildPageRow('barn', userId, curPage, totalPages)] : [])] };
 }
 
 // ============ BUILD: Crafting Panel (simple — just route to farm craft) ============
@@ -339,6 +386,12 @@ async function handleLivestockButton(interaction) {
     if (customId === `farm_coop_${userId}` || customId === `farm_coop_refresh_${userId}`) {
         await interaction.update(buildCoopPanel(userId, interaction.user.username));
         trackCoop(interaction, userId);
+        return;
+    }
+    if (customId.startsWith('farm_coop_page_') && customId.endsWith(`_${userId}`)) {
+        const pageNum = parseInt(customId.split('_')[3], 10) || 0;
+        await interaction.update(buildCoopPanel(userId, interaction.user.username, pageNum));
+        trackCoop(interaction, userId, pageNum);
         return;
     }
     if (customId === `farm_coop_collect_${userId}`) {
@@ -581,6 +634,12 @@ async function handleLivestockButton(interaction) {
         trackBarn(interaction, userId);
         return;
     }
+    if (customId.startsWith('farm_barn_page_') && customId.endsWith(`_${userId}`)) {
+        const pageNum = parseInt(customId.split('_')[3], 10) || 0;
+        await interaction.update(buildBarnPanel(userId, interaction.user.username, pageNum));
+        trackBarn(interaction, userId, pageNum);
+        return;
+    }
     if (customId === `farm_barn_milk_${userId}`) {
         const result = collectProducts(userId, 'cow');
         if (result.error) return interaction.reply({ content: `❌ ${result.error}`, ephemeral: true });
@@ -707,7 +766,7 @@ async function handleLivestockButton(interaction) {
             const info = allBarn.map((a, i) => {
                 const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
                 const req = nextTier ? `Lv.${nextTier.levelReq}` : 'MAX';
-                const icon = a.type === 'cow' ? '<:cow:1514062469276893356>' : '<:sheep:1514062467393781792>';
+                const icon = a.animalType === 'cow' ? '<:cow:1514062469276893356>' : '<:sheep:1514062467393781792>';
                 return `\`[${i + 1}]\` ${icon} Lv.${a.level} Tier ${a.tier} → butuh ${req}`;
             }).join('\n');
             return interaction.reply({ content: `❌ Tidak ada hewan yang siap evolve!\n\n${info}`, ephemeral: true });
@@ -715,8 +774,8 @@ async function handleLivestockButton(interaction) {
         const { StringSelectMenuBuilder } = require('discord.js');
         const options = eligible.map(a => {
             const nextTier = EVOLUTION_TIERS.find(t => t.tier === a.tier + 1);
-            const icon = a.type === 'cow' ? '<:cow:1514062469276893356> Sapi' : '<:sheep:1514062467393781792> Domba';
-            return { label: `${icon} ${a.name || a.type} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
+            const icon = a.animalType === 'cow' ? '<:cow:1514062469276893356> Sapi' : '<:sheep:1514062467393781792> Domba';
+            return { label: `${icon} ${a.name || a.animalType} Lv.${a.level} → ${nextTier.name}`, description: `🪙 ${nextTier.cost.toLocaleString('id-ID')} + ⭐ Premium Feed x${nextTier.feedPremiumReq}`, value: String(a.id) };
         }).slice(0, 25);
         const select = new StringSelectMenuBuilder().setCustomId(`farm_barn_evolveselect_${userId}`).setPlaceholder('Pilih hewan untuk evolve...').addOptions(options);
         const row = new ActionRowBuilder().addComponents(select);
@@ -883,7 +942,8 @@ async function handleLivestockButton(interaction) {
         for (const s of storage) {
             const crop = ALL_CROPS.find(c => c.id === s.itemId);
             if (crop) {
-                totalMoney += crop.sellPrice * s.quantity;
+                const { getDynamicPrice } = require('./farmSeason');
+                totalMoney += getDynamicPrice(crop, 'sell') * s.quantity;
             } else {
                 // Livestock product: itemId like 'egg_premium' -> price via PRODUCT_QUALITY.
                 const lastU = s.itemId.lastIndexOf('_');

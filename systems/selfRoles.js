@@ -116,28 +116,32 @@ function buildPublicMessage(menu, options, guild) {
     const limit = (!isUnique && menu.maxRoles > 0) ? Math.min(menu.maxRoles, options.length || 1) : null;
     const lines = options.map(o => {
         const role = guild?.roles?.cache?.get(o.roleId);
-        const name = o.label || (role ? role.name : `role ${o.roleId}`);
-        const em = o.emoji ? `${o.emoji} ` : '';
-        const desc = o.description ? ` — ${o.description}` : '';
-        return `> ${em}<@&${o.roleId}> ${desc ? `*${o.description}*` : ''}`.trimEnd();
+        const em = o.emoji ? `${o.emoji}` : '🔹';
+        const desc = o.description ? ` — *${o.description}*` : '';
+        const count = (role && role.members && role.members.size > 0) ? ` \`👥 ${role.members.size}\`` : '';
+        return `${em} ➜ <@&${o.roleId}>${desc}${count}`;
     });
+
+    const frameTop = '┏━━━━━━━━━ ✦ ━━━━━━━━━┓';
+    const frameBot = '┗━━━━━━━━━ ✦ ━━━━━━━━━┛';
 
     let howto;
     if (!options.length) howto = '*Belum ada role di menu ini.*';
-    else if (isUnique) howto = '🔘 *Pilih **1 role** dari menu di bawah. Mau ganti? Tinggal pilih yang lain.*';
-    else if (limit) howto = `✅ *Pilih sampai **${limit} role** dari menu di bawah. Mau lepas role? Pilih lagi role yang sama.*`;
-    else howto = '✅ *Pilih role yang kamu mau di menu di bawah. Mau lepas role? Pilih lagi role yang sama.*';
+    else if (isUnique) howto = '🔘 Pilih **1 role** dari menu di bawah. Mau ganti? Tinggal pilih yang lain.';
+    else if (limit) howto = `✅ Pilih sampai **${limit} role** dari menu di bawah. Mau lepas? Pilih lagi role yang sama.`;
+    else howto = '✅ Pilih role sebanyak yang kamu mau. Mau lepas? Pilih lagi role yang sama.';
 
     const embed = new EmbedBuilder()
         .setColor(menu.color || ui.COLORS.info)
         .setTitle(menu.title || '🎭 Self Roles')
+        .setThumbnail(guild?.iconURL?.({ size: 128 }) || null)
         .setDescription(
             (menu.description ? `${menu.description}\n\n` : '') +
             (options.length
-                ? `${ui.DIVIDER}\n${lines.join('\n')}\n${ui.DIVIDER}\n${howto}`
+                ? `${frameTop}\n${lines.join('\n')}\n${frameBot}\n\n${howto}`
                 : howto)
         )
-        .setFooter({ text: ui.footer('Pilih dari menu di bawah untuk mengatur role kamu') });
+        .setFooter({ text: ui.footer(options.length ? `🎭 ${options.length} role tersedia • pilih di menu bawah` : 'Self Roles') });
 
     const components = [];
     if (options.length) {
@@ -201,15 +205,20 @@ async function handleSelfRolePick(interaction) {
             }
         }
     } else {
-        // Multi: toggle each selected role; leave unselected roles untouched.
+        // Multi: Discord sends ALL currently selected values as the desired set.
+        // Remove menu roles NOT in values, add roles that ARE in values but not held.
         // Respect the optional per-menu cap (maxRoles, 0 = unlimited).
         const limit = menu.maxRoles && menu.maxRoles > 0 ? menu.maxRoles : null;
-        let owned = menuRoleIds.filter(r => member.roles.cache.has(r)).length;
-        for (const rid of selected) {
-            if (member.roles.cache.has(rid)) {
+        let owned = selected.filter(r => member.roles.cache.has(r)).length;
+        // Remove roles that are in the menu but NOT in the selected values
+        for (const rid of menuRoleIds) {
+            if (!selected.includes(rid)) {
                 await tryRemove(rid);
-                owned--;
-            } else {
+            }
+        }
+        // Add roles that ARE in selected values but not currently held
+        for (const rid of selected) {
+            if (!member.roles.cache.has(rid)) {
                 if (limit && owned >= limit) { limitHit = true; continue; }
                 await tryAdd(rid);
                 owned++;

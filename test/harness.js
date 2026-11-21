@@ -18,6 +18,8 @@ Module._resolveFilename = function (request, parent, isMain, options) {
   if (request === 'discord.js') return path.join(MOCKS, 'discord.js');
   if (request === 'better-sqlite3') return path.join(MOCKS, 'better-sqlite3.js');
   if (request === '@napi-rs/canvas') return path.join(MOCKS, 'napi-canvas.js');
+  if (request === 'express') return path.join(MOCKS, 'express.js');
+  if (request === 'cors') return path.join(MOCKS, 'cors.js');
   return origResolve.call(this, request, parent, isMain, options);
 };
 
@@ -68,7 +70,7 @@ function mockInteraction(opts = {}) {
     displayAvatarURL: () => '',
     voice: { channel: null },
   };
-  return {
+  const it = {
     customId: opts.customId,
     values: opts.values,
     user: member.user,
@@ -80,22 +82,31 @@ function mockInteraction(opts = {}) {
       channels: { cache: new Map() },
       roles: { cache: new Map(), create: async () => ({ id: 'role1' }) },
     },
+    client: {
+      user: {
+        displayAvatarURL: () => ''
+      }
+    },
     channelId: 'chan1',
+    channel: {
+      send: async (p) => { cap.channelSend = p; return p; }
+    },
     message: { edit: async (p) => { cap.messageEdit = p; return p; }, delete: async () => {} },
     fields: { getTextInputValue: (k) => (opts.fields && opts.fields[k]) || '' },
     replied: false, deferred: false,
     showModal: async (m) => { cap.modal = m; return m; },
-    update: async (p) => { cap.update = p; return p; },
-    reply: async (p) => { cap.reply = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
+    update: async (p) => { it.replied = true; cap.update = p; return p; },
+    reply: async (p) => { it.replied = true; cap.reply = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
     followUp: async (p) => { cap.followUp = p; return Object.assign({ delete: async () => {}, edit: async () => {} }, p && typeof p === 'object' ? p : {}); },
-    deferReply: async () => { cap.deferred = true; },
-    deferUpdate: async () => { cap.deferred = true; },
+    deferReply: async () => { it.deferred = true; cap.deferred = true; },
+    deferUpdate: async () => { it.deferred = true; cap.deferred = true; },
     editReply: async (p) => { cap.editReply = p; return p; },
     isButton: () => true, isAnySelectMenu: () => false, isUserSelectMenu: () => false,
     isStringSelectMenu: () => false, isModalSubmit: () => false,
     isChatInputCommand: () => false, isAutocomplete: () => false,
     _cap: cap,
   };
+  return it;
 }
 
 module.exports = { botRequire, test, assert, finish, mockInteraction, _state };

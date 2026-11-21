@@ -1,13 +1,11 @@
 // systems/casinoPanel.js - Casino Panel UI System (Button-based gambling)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStatMax, addIncome } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, setUserStatMax, addIncome, subtractUserBalance, addUserBalance } = require('../database');
 const { getRandomInt } = require('../utils');
 const { spinSlot, getSlotResult } = require('./slots');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
-const state = require('../state');
-const { fishCooldowns, activeCoinflips } = state;
+
 const ui = require('./ui');
 
 // Roulette constants
@@ -326,35 +324,54 @@ async function handleCasinoButton(interaction) {
     if (action === 'cf' && (parts[2] === 'head' || parts[2] === 'tail')) {
         const choice = parts[2];
         const bet = parseInt(parts[3]);
+
+        // Cooldown check
+        const cdKey = `coinflip_${guildId}_${userId}`;
+        if (state.fishCooldowns.has(cdKey) && Date.now() < state.fishCooldowns.get(cdKey)) {
+            return interaction.reply({ content: '⏳ Tunggu 5 detik sebelum flip lagi!', ephemeral: true });
+        }
+        state.fishCooldowns.set(cdKey, Date.now() + 5000);
+
         const userData = getOrCreateUser(guildId, userId);
-        if (userData.balance < bet) {
+        if (userData.balance < bet || !Number.isFinite(bet) || bet <= 0) {
             return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${userData.balance.toLocaleString('id-ID')}**`, ephemeral: true });
         }
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        // Atomic debit — never go negative even under double-click
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_coinflips');
         incrementUserStat(guildId, userId, 'total_bets', bet);
-        updateQuestProgress(guildId, userId, 'coinflip', 1);
+        
 
         // Show animation
         const animEmbed = new EmbedBuilder()
             .setColor('#F1C40F')
-            .setTitle('\ud83e\ude99 Coinflip \u2014 Melempar...')
-            .setDescription(`> \ud83e\ude99 *Koin melayang...*\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 **${bet.toLocaleString('id-ID')}**\n> \ud83c\udfaf Pilihan: **${choice === 'head' ? '\ud83e\ude99 Head' : '\ud83e\udda5 Tail'}**`);
+            .setTitle('✧ COINFLIP ✧')
+            .setDescription(`> 🪙 *Koin melayang...*\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**\n> 🎯 Pilihan: **${choice === 'head' ? '🪙 Head' : '🦅 Tail'}**`);
         await interaction.update({ embeds: [animEmbed], components: [] });
 
 
         // Result after delay
         setTimeout(async () => {
-            const coinResult = Math.random() < 0.5 ? 'head' : 'tail';
-            const won = choice === coinResult;
+            let winChance = 0.5;
+            try {
+                const { getItemCount } = require('../database');
+                if (getItemCount(guildId, userId, 'lucky_charm') > 0) {
+                    winChance = 0.53; // +3% luck boost from Lucky Charm
+                }
+            } catch (_) {}
+            const won = Math.random() < winChance;
+            // Align coin face with outcome for consistent UI
+            const coinResult = won ? choice : (choice === 'head' ? 'tail' : 'head');
             const resultEmoji = coinResult === 'head' ? '\ud83e\ude99' : '\ud83e\udda5';
             const resultName = coinResult === 'head' ? 'HEAD' : 'TAIL';
 
             if (won) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(bet * 2, guildId, userId);
+                addUserBalance(guildId, userId, bet * 2);
                 incrementUserStat(guildId, userId, 'coinflip_wins');
                 incrementUserStat(guildId, userId, 'total_gambling_wins', bet);
                 addIncome(guildId, userId, 'gambling', bet);
@@ -363,13 +380,17 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'coinflip_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
                 await checkAchievements(interaction.guild, userId, { type: 'coinflip' });
             }
 
             const freshData = getOrCreateUser(guildId, userId);
             const embed = new EmbedBuilder()
                 .setColor(won ? '#2ECC71' : '#E74C3C')
-                .setTitle(`${resultEmoji} ${resultName} \u2014 ${won ? 'MENANG! \ud83c\udf89' : 'KALAH! \ud83d\udc80'}`)
+                .setTitle(won ? '✧ VICTORY ✧' : '✧ DEFEAT ✧')
                 .setDescription(
                     `> Koin mendarat: ${resultEmoji} **${resultName}**\n` +
                     `> Pilihan kamu: **${choice === 'head' ? '\ud83e\ude99 Head' : '\ud83e\udda5 Tail'}** ${won ? '\u2705' : '\u274c'}\n\n` +
@@ -404,18 +425,20 @@ async function handleCasinoButton(interaction) {
         }
         fishCooldowns.set(slotCdKey, Date.now() + 5000);
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_slot_spins');
         incrementUserStat(guildId, userId, 'total_bets', bet);
-        updateQuestProgress(guildId, userId, 'slot', 1);
+        
 
         // Show spinning
         const spinEmbed = new EmbedBuilder()
             .setColor('#F1C40F')
-            .setTitle('\ud83c\udfb0 Slot Machine \u2014 Spinning...')
-            .setDescription(`> \ud83c\udfb0 **SLOT MACHINE**\n>\n> \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n> \u2551   \u2753  \u2503  \u2753  \u2503  \u2753   \u2551\n> \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n>\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 **${bet.toLocaleString('id-ID')}**`);
+            .setTitle('✧ SLOT MACHINE ✧')
+            .setDescription(`> 🎰 **SLOT MACHINE**\n>\n> ╔═══════════════════╗\n> ║   ❓  ┃  ❓  ┃  ❓   ║\n> ╚═══════════════════╝\n>\n> 💰 Taruhan: 🪙 **${bet.toLocaleString('id-ID')}**`);
         await interaction.update({ embeds: [spinEmbed], components: [] });
 
 
@@ -432,18 +455,18 @@ async function handleCasinoButton(interaction) {
 
             let embed;
             if (result.jackpot && reels[0].id === 'seven') {
-                embed = new EmbedBuilder().setColor('#FFD700').setTitle('\ud83c\udfb0\ud83d\udcb0 MEGA JACKPOT!!! \ud83d\udcb0\ud83c\udfb0').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 ${bet.toLocaleString('id-ID')}\n> \ud83c\udf89 Menang: \ud83e\ude99 **+${result.payout.toLocaleString('id-ID')}** \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
+                embed = new EmbedBuilder().setColor('#FFD700').setTitle('✧ MEGA JACKPOT ✧').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉🎉🎉`);
                 incrementUserStat(guildId, userId, 'slot_jackpot_7_count');
             } else if (result.jackpot) {
-                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('\ud83c\udfb0\u2728 JACKPOT! \u2728\ud83c\udfb0').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 ${bet.toLocaleString('id-ID')}\n> \ud83c\udf89 Menang: \ud83e\ude99 **+${result.payout.toLocaleString('id-ID')}** \ud83c\udf89`);
+                embed = new EmbedBuilder().setColor('#FF6B00').setTitle('✧ JACKPOT ✧').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> 🎉 Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}** 🎉`);
             } else if (result.win) {
-                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('\ud83c\udfb0 MENANG!').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 ${bet.toLocaleString('id-ID')}\n> \u2705 Menang: \ud83e\ude99 **+${result.payout.toLocaleString('id-ID')}**`);
+                embed = new EmbedBuilder().setColor('#2ECC71').setTitle('✧ VICTORY ✧').setDescription(`${slotDisplay}\n\n> ${result.desc}\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ✅ Menang: 🪙 **+${result.payout.toLocaleString('id-ID')}**`);
             } else {
-                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('\ud83c\udfb0 Slot Machine').setDescription(`${slotDisplay}\n\n> \ud83d\ude14 Tidak ada yang cocok...\n\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 ${bet.toLocaleString('id-ID')}\n> \u274c Kalah: \ud83e\ude99 **-${bet.toLocaleString('id-ID')}**`);
+                embed = new EmbedBuilder().setColor('#E74C3C').setTitle('✧ DEFEAT ✧').setDescription(`${slotDisplay}\n\n> 😞 Tidak ada yang cocok...\n\n> 💰 Taruhan: 🪙 ${bet.toLocaleString('id-ID')}\n> ❌ Kalah: 🪙 **-${bet.toLocaleString('id-ID')}**`);
             }
 
             if (result.win) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(result.payout, guildId, userId);
+                addUserBalance(guildId, userId, result.payout);
                 incrementUserStat(guildId, userId, 'slot_wins');
                 incrementUserStat(guildId, userId, 'slot_total_winnings', result.payout);
                 const slotProfit = Math.max(0, result.payout - bet);
@@ -454,6 +477,10 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'slot_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
             }
 
             const freshData = getOrCreateUser(guildId, userId);
@@ -486,8 +513,10 @@ async function handleCasinoButton(interaction) {
         }
         fishCooldowns.set(rlCdKey, Date.now() + 5000);
 
-        // Deduct balance
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+        if (!subtractUserBalance(guildId, userId, bet)) {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return interaction.reply({ content: `\u274c Saldo kurang! Kamu punya \ud83e\ude99 **${bal.toLocaleString('id-ID')}**`, ephemeral: true });
+        }
         addComboFeature(guildId, userId, 'gambling');
         incrementUserStat(guildId, userId, 'total_roulette_spins');
         incrementUserStat(guildId, userId, 'total_bets', bet);
@@ -495,7 +524,7 @@ async function handleCasinoButton(interaction) {
         // Show spinning
         const spinEmbed = new EmbedBuilder()
             .setColor('#8B0000')
-            .setTitle('\ud83c\udfaf Roulette \u2014 Spinning...')
+            .setTitle('✧ ROULETTE ✧')
             .setDescription(`> \ud83c\udfa1 *Bola berputar...*\n>\n> \ud83d\udcb0 Taruhan: \ud83e\ude99 **${bet.toLocaleString('id-ID')}**\n> \ud83c\udfaf Pilihan: **${choice.charAt(0).toUpperCase() + choice.slice(1)}**`);
         await interaction.update({ embeds: [spinEmbed], components: [] });
 
@@ -521,7 +550,7 @@ async function handleCasinoButton(interaction) {
             const payout = won ? bet * multiplier : 0;
 
             if (won) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(payout, guildId, userId);
+                addUserBalance(guildId, userId, payout);
                 incrementUserStat(guildId, userId, 'roulette_wins');
                 incrementUserStat(guildId, userId, 'roulette_total_winnings', payout);
                 const rlProfit = Math.max(0, payout - bet);
@@ -532,6 +561,10 @@ async function handleCasinoButton(interaction) {
             } else {
                 incrementUserStat(guildId, userId, 'roulette_losses');
                 incrementUserStat(guildId, userId, 'total_gambling_lost', bet);
+                try {
+                    const { collectCasinoLoss } = require('./vault');
+                    collectCasinoLoss(guildId, bet);
+                } catch (_) {}
                 await checkAchievements(interaction.guild, userId, { type: 'roulette' });
             }
 
@@ -539,7 +572,7 @@ async function handleCasinoButton(interaction) {
             const choiceDisplay = choice.charAt(0).toUpperCase() + choice.slice(1);
             const embed = new EmbedBuilder()
                 .setColor(won ? '#2ECC71' : '#E74C3C')
-                .setTitle(`\ud83c\udfaf Roulette \u2014 ${won ? 'MENANG! \ud83c\udf89' : 'Kalah!'}`)
+                .setTitle(won ? '✧ VICTORY ✧' : '✧ DEFEAT ✧')
                 .setDescription(
                     `> \ud83c\udfa1 **ROULETTE TABLE**\n>\n> \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n> \u2502  ${colorEmoji} **${resultNumber}**  \u2502\n> \u2502  ${colorName}  \u2502\n> \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n\n` +
                     `> \ud83c\udfaf Pilihan: **${choiceDisplay}** ${won ? '\u2705' : '\u274c'}\n` +

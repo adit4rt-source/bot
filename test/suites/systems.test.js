@@ -70,6 +70,49 @@ module.exports = function register() {
     });
   });
 
+  // ---- Mutation Lab + Co-op Dungeon ----
+  const mut = botRequire('systems/mutationLab.js');
+  const coop = botRequire('systems/dungeonCoop.js');
+  const petsData = botRequire('data/pets.js');
+  function seedActivePet(g, u, level = 30) {
+    db.getOrCreateUser(g, u);
+    db.db.prepare('DELETE FROM pets WHERE guildId = ? AND userId = ?').run(g, u);
+    const petDef = petsData.PET_DATA.find(p => p.tier === 'Rare') || petsData.PET_DATA[0];
+    db.db.prepare(`INSERT INTO pets (guildId, userId, petId, name, level, active, adoptedAt, class, element, hp, atk, def, spd, crit)
+      VALUES (?, ?, ?, ?, ?, 1, ?, 'warrior', 'fire', 300, 80, 45, 35, 10)`).run(g, u, petDef.id, petDef.name, level, Date.now());
+  }
+  test('mutationLab: active pet can gain a trait with materials', () => {
+    const g = 'MUTLAB', u = 'MUTU';
+    seedActivePet(g, u, 35);
+    db.updateUserBalance(g, u, 1_000_000);
+    db.addItem(g, u, 'dna_shard', 20);
+    db.addItem(g, u, 'mutation_serum', 5);
+    db.addItem(g, u, 'ancient_core', 2);
+    const oldRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      const res = mut.executeMutation(g, u);
+      if (!res.ok || !res.success) throw new Error('mutation did not succeed');
+      const pet = db.db.prepare('SELECT * FROM pets WHERE guildId = ? AND userId = ? AND active = 1').get(g, u);
+      if (!pet.mutation_trait || pet.mutation_power < 1) throw new Error('trait not saved');
+      if (pet.atk < 80) throw new Error('stats regressed');
+    } finally {
+      Math.random = oldRandom;
+    }
+  });
+  test('dungeonCoop: run resolves and awards mutation materials', () => {
+    const g = 'COOPDNG', u = 'COOPU';
+    seedActivePet(g, u, 50);
+    const created = coop.createRun(g, u, 'crypt');
+    if (!created.ok) throw new Error(created.error);
+    const run = created.run;
+    while (!run.finished) coop.resolveNextRoom(run);
+    const before = db.getItemCount(g, u, 'dna_shard');
+    const award = coop.awardRun(run);
+    if (award.perMemberItems.dna_shard < 1) throw new Error('no DNA reward');
+    if (db.getItemCount(g, u, 'dna_shard') <= before) throw new Error('DNA not credited');
+  });
+
   // ---- Secret Location ----
   const sl = botRequire('systems/secretLocation.js');
   test('secretLocation: progress embed builds before unlock', () => {
@@ -91,61 +134,6 @@ module.exports = function register() {
   test('secretLocation: unlock embed builds without crash', () => {
     const r = sl.buildSecretLocationUnlockEmbed('secret_tier_5', U);
     if (!r.embeds || !r.embeds[0].data.title) throw new Error('no unlock embed');
-  });
-
-  // ---- AI Assistant: channel token-saving filter ----
-  const ai = botRequire('systems/aiAssistant.js');
-  assert('aiAssistant: exports shouldAnswerInChannel', typeof ai.shouldAnswerInChannel === 'function');
-  test('aiAssistant: answers bot-related questions in channel', () => {
-    const yes = [
-      'gimana cara fishing?',
-      'apa itu daily reward',
-      'cara pakai pet gimana',
-      'tolong jelasin command casino',
-      '/menu',
-      'help dong',
-      'berapa harga di shop?',
-    ];
-    for (const q of yes) {
-      if (!ai.shouldAnswerInChannel(q)) throw new Error('expected TRUE for: ' + q);
-    }
-  });
-  test('aiAssistant: ignores casual/off-topic chatter in channel', () => {
-    const no = [
-      'wkwkwk',
-      'halo semua apa kabar',
-      'ok sip',
-      'gg',
-      'lagi ngapain nih',
-      '',
-      '   ',
-      'mantap banget tadi',
-    ];
-    for (const q of no) {
-      if (ai.shouldAnswerInChannel(q)) throw new Error('expected FALSE for: ' + q);
-    }
-  });
-
-  // ---- TikTok auto-convert: URL detection ----
-  const tk = botRequire('systems/tiktok.js');
-  assert('tiktok: exports extractTikTokUrl', typeof tk.extractTikTokUrl === 'function');
-  test('tiktok: detects tiktok links in a message', () => {
-    const cases = [
-      'check this https://www.tiktok.com/@user/video/7647407680209964296 lol',
-      'https://vm.tiktok.com/ZMabc123/',
-      'eh lihat vt.tiktok.com style? no — https://vt.tiktok.com/ZSabcd/',
-      'https://m.tiktok.com/v/123456.html',
-    ];
-    for (const c of cases) {
-      const u = tk.extractTikTokUrl(c);
-      if (!u || !/tiktok\.com/i.test(u)) throw new Error('failed to extract from: ' + c);
-    }
-  });
-  test('tiktok: ignores messages without a tiktok link', () => {
-    const none = ['hello world', 'https://youtube.com/watch?v=abc', 'just chatting', ''];
-    for (const c of none) {
-      if (tk.extractTikTokUrl(c)) throw new Error('false positive for: ' + c);
-    }
   });
 
   // ---- Lottery / Togel (number betting 1-100) ----
@@ -243,97 +231,6 @@ module.exports = function register() {
     if (round.pot < 500000) throw new Error('current round not topped up');
   });
 
-  // ---- Togel ambient promo (eye-catching one-click bet card) ----
-  // These guard the engagement-driver added in feat/togel-ambient-promo:
-  //   1) the promo card must surface the lottery_quickbet button (not just a slash hint),
-  //   2) submitting lottery_betmodal must actually deduct balance + grow the pot
-  //      (i.e. the modal really places a bet, not just shows a confirmation), and
-  //   3) the message-driven drop must be gated by spam / threshold / cooldown / disabled
-  //      so a busy server never gets spammed and an off switch actually turns it off.
-  const togelPromo = botRequire('systems/togelPromo.js');
-  const stateMod  = botRequire('state.js');
-  const dbMod     = botRequire('database.js');
-
-  test('togelPromo: promo card exposes a one-click lottery_quickbet button', () => {
-    const g = 'TPROMO_CARD';
-    const payload = lot.buildTogelPromo(g);
-    if (!payload || !Array.isArray(payload.components) || !payload.components[0]) {
-      throw new Error('promo card has no components row');
-    }
-    const buttons = payload.components[0].components || [];
-    const ids = buttons.map(b => b && (b.data ? b.data.custom_id : b.custom_id)).filter(Boolean);
-    if (!ids.includes('lottery_quickbet')) {
-      throw new Error('promo card must offer lottery_quickbet button, got: ' + ids.join(','));
-    }
-  });
-
-  test('togelPromo: lottery_betmodal places a bet (deducts balance + grows pot)', () => {
-    const g = 'TPROMO_MODAL', u = 'TPROMOU_MODAL';
-    dbMod.getOrCreateUser(g, u);
-    dbMod.updateUserBalance(g, u, 100000);
-    const balBefore = dbMod.getOrCreateUser(g, u).balance;
-    const potBefore = lot.getCurrentRound(g).pot;
-    const it = mockInteraction({
-      guildId: g, userId: u, username: 'PromoBetter',
-      customId: 'lottery_betmodal', fields: { number: '37' },
-    });
-    return Promise.resolve(lot.handleLotteryModal(it)).then(() => {
-      if (!it._cap.reply) throw new Error('modal handler did not reply');
-      const balAfter = dbMod.getOrCreateUser(g, u).balance;
-      // Modal must charge the user. (Side-effects like the togel_first achievement
-      // can credit a small reward back, so we don't require the full BP delta —
-      // we just require a real deduction. The pot/bet checks below cover the rest.)
-      if (balAfter >= balBefore) throw new Error(`balance not deducted: ${balBefore} -> ${balAfter}`);
-      const potAfter = lot.getCurrentRound(g).pot;
-      if (potAfter !== potBefore + BP) throw new Error(`pot did not grow: ${potBefore} -> ${potAfter}`);
-      const mine = lot.getUserBets(g, lot.getCurrentRound(g).roundId, u).map(b => b.number);
-      if (!mine.includes(37)) throw new Error('bet 37 was not recorded for user');
-    });
-  });
-
-  test('togelPromo: drop gating — spam never counts; threshold drops once; cooldown & disabled block', async () => {
-    const N = togelPromo.MESSAGES_PER_PROMO;
-    const g = 'TPROMO_GATE';
-    // Reset per-guild state so other suites don't leak in.
-    stateMod.togelPromoCounters.delete(g);
-    stateMod.togelPromoCooldown.delete(g);
-    stateMod.activeMiniEvents.delete(g);
-
-    let sent = 0;
-    const channel = { send: async () => { sent++; return { delete: async () => {} }; } };
-    const mkMsg = () => ({
-      author: { id: 'TPROMOU_GATE', bot: false },
-      guild: { id: g },
-      channel,
-    });
-
-    // (a) Spam messages must NOT increment the counter or trigger a drop, even past the threshold.
-    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), /*spam*/ true);
-    if (sent !== 0) throw new Error('spam messages must not drop a promo');
-    if ((stateMod.togelPromoCounters.get(g) || 0) !== 0) throw new Error('spam should not bump the counter');
-
-    // (b) Non-spam messages: counter accrues silently; only the Nth drops exactly one card.
-    for (let i = 0; i < N - 1; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-    if (sent !== 0) throw new Error('must not drop before reaching threshold');
-    await togelPromo.maybeDropTogelPromo(mkMsg(), false);     // Nth message → drop
-    if (sent !== 1) throw new Error('expected exactly 1 drop at threshold, got ' + sent);
-
-    // (c) Cooldown is now armed: subsequent messages (even past N) must NOT drop again.
-    for (let i = 0; i < N + 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-    if (sent !== 1) throw new Error('cooldown should block further drops, got sent=' + sent);
-
-    // (d) Admin disable switch: even with cooldown cleared and counter primed, no drop.
-    stateMod.togelPromoCooldown.delete(g);
-    stateMod.togelPromoCounters.set(g, N - 1);
-    dbMod.setSetting(g, 'togel_promo_enabled', '0');
-    try {
-      for (let i = 0; i < 5; i++) await togelPromo.maybeDropTogelPromo(mkMsg(), false);
-      if (sent !== 1) throw new Error('disabled guild must not drop, got sent=' + sent);
-    } finally {
-      dbMod.setSetting(g, 'togel_promo_enabled', '1');
-    }
-  });
-
   // ---- Shop balance: Refine Stone is drop-only, no free buyables ----
   const { ITEMS } = botRequire('data/items.js');
   test('shop: refine_stone is not buyable (drop-only)', () => {
@@ -343,7 +240,7 @@ module.exports = function register() {
   });
   test('shop: buyable list excludes drop-only materials', () => {
     const buyable = ITEMS.filter(i => i.price > 0).map(i => i.id);
-    for (const dropOnly of ['refine_stone', 'protection_stone', 'rod_part', 'mythic_fragment', 'awakening_crystal']) {
+    for (const dropOnly of ['refine_stone', 'protection_stone', 'rod_part', 'mythic_fragment', 'awakening_crystal', 'omega_core']) {
       if (buyable.includes(dropOnly)) throw new Error(dropOnly + ' must not be buyable');
     }
     for (const it of ITEMS.filter(i => i.price > 0)) {
@@ -426,6 +323,355 @@ module.exports = function register() {
     if (!tank.alive) throw new Error('tank with equipped +5000 DEF relic should survive');
     if (plain.alive) throw new Error('plain pet should die — equipped relic bonus not applied in battle!');
   });
+  test('relic: gem socketing verification and stats/combat integration', () => {
+    const uid = 'RELIC_GEM_USER', PID = 99110;
+    // 1. Create a relic (Legendary -> 2 sockets)
+    const ins = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id,gems) VALUES (?,?,?,?,?,?,?,?,?,?)');
+    const relicId = ins.run('g', uid, 'Aegis', 'armor', 'Legendary', 'def', 10, 0, PID, '[]').lastInsertRowid;
+
+    // 2. Check getRelicBonus initially
+    let bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 0 || bonus.atk !== 0 || bonus.def !== 10) throw new Error('def should be 10, got ' + bonus.def);
+
+    // 3. Socket a gem: dna_shard (+15 HP option)
+    let gems = [ { gemId: 'dna_shard', stat: 'hp' }, null ];
+    db.db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relicId);
+
+    // 4. Verify bonus includes gem flat hp (+15 HP)
+    bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 15) throw new Error('hp should be 15, got ' + bonus.hp);
+
+    // 5. Socket another gem: ancient_core (+5% ATK/DEF/SPD option)
+    gems = [ { gemId: 'dna_shard', stat: 'hp' }, { gemId: 'ancient_core', stat: 'all' } ];
+    db.db.prepare('UPDATE relics SET gems = ? WHERE id = ?').run(JSON.stringify(gems), relicId);
+
+    // 6. Verify bonus includes percent stats (+5% ATK/DEF/SPD)
+    bonus = pets.getRelicBonus(uid, PID);
+    if (bonus.hp !== 15) throw new Error('hp should be 15');
+    if (bonus.percent.atk !== 5 || bonus.percent.def !== 5 || bonus.percent.spd !== 5) throw new Error('percent bonus not applied correctly');
+
+    // 7. Verify getEffectiveStats applies flat then percentage
+    const basePet = { userId: uid, id: PID, hp: 100, atk: 100, def: 100, spd: 100, crit: 0 };
+    const eff = pets.getEffectiveStats(basePet);
+    // hp: (100 + 15) * 1.0 = 115 (no percent hp bonus)
+    // def: (100 + 10) * 1.05 = 115
+    // atk: (100 + 0) * 1.05 = 105
+    // spd: (100 + 0) * 1.05 = 105
+    if (eff.hp !== 115) throw new Error('effective hp should be 115, got ' + eff.hp);
+    if (eff.def !== 115) throw new Error('effective def should be 115, got ' + eff.def);
+    if (eff.atk !== 105) throw new Error('effective atk should be 105, got ' + eff.atk);
+    if (eff.spd !== 105) throw new Error('effective spd should be 105, got ' + eff.spd);
+
+    // 8. Verify combat simulation integrates the socketed gems
+    const petDef = { emoji: '🐾' };
+    const mk = (hp, atk, def, spd) => ({ userId: uid, id: PID, petId: 'x', hp, atk, def, spd, crit: 0, level: 1, element: null, skills: '[]' });
+    
+    // Enemy that can kill a pet with 100 HP + 10 DEF, but dies to a pet with 115 HP + 115 DEF
+    const enemy = [{ hp: 10, atk: 110, def: 0, element: null }];
+    
+    // Simulate battle with equipped gemmed relic
+    const outcome = pets.simulateBattle(mk(100, 100, 100, 100), petDef, enemy);
+    if (!outcome.alive) throw new Error('gemmed relic pet should survive battle! log: ' + outcome.log.join('\n'));
+  });
+  test('relic: gem socketing interactive select menu flow', async () => {
+    const pPanel = botRequire('systems/petPanel.js');
+    const u = '99112', g = 'RELIC_INT_GUILD';
+    
+    // 1. Create user and active pet
+    db.getOrCreateUser(g, u);
+    db.db.prepare('INSERT INTO pets (guildId,userId,petId,name,active,level,hp,atk,def,spd,crit) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, '90001', 'TestPet', 1, 10, 100, 20, 10, 10, 5);
+    const pet = pets.getPetData(g, u);
+
+    // 2. Give the user a Legendary relic and some gems
+    const relicId = db.db.prepare('INSERT INTO relics (guildId,userId,name,slot,rarity,stat_type,stat_value,refine_level,equipped_pet_id,gems) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, 'Aegis', 'armor', 'Legendary', 'def', 10, 0, pet.id, '[]').lastInsertRowid;
+
+    db.addItem(g, u, 'dna_shard', 2);
+
+    // 3. Click "Socket Gem" button: customId = pet_relicsocket_U
+    const itButton = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_${u}` });
+    let updateResult = await pPanel.handlePetButton(itButton);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Relic Gem Socketing')) {
+      throw new Error('Expected socket relics panel');
+    }
+
+    // 4. Select relic: customId = pet_relicsocket_select_U, values = [relicId]
+    const itRelicSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_select_${u}`, values: [String(relicId)] });
+    updateResult = await pPanel.handlePetSelectMenu(itRelicSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Kelola Socket Relic')) {
+      throw new Error('Expected slot management panel');
+    }
+
+    // 5. Select socket slot index 0: customId = pet_relicsocket_slot_select_relicId-U, values = ['0']
+    const itSlotSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] });
+    updateResult = await pPanel.handlePetSelectMenu(itSlotSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Pilih Gem')) {
+      throw new Error('Expected gem selection panel');
+    }
+
+    // 6. Select dna_shard gem: customId = pet_relicsocket_gem_select_relicId-0-U, values = ['dna_shard']
+    const itGemSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['dna_shard'] });
+    updateResult = await pPanel.handlePetSelectMenu(itGemSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Pilih Peningkatan Stat')) {
+      throw new Error('Expected stat option selection panel');
+    }
+
+    // 7. Select hp stat: customId = pet_relicsocket_stat_select_relicId-0-dna_shard-U, values = ['hp']
+    const itStatSelect = mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_stat_select_${relicId}-0-dna_shard-${u}`, values: ['hp'] });
+    updateResult = await pPanel.handlePetSelectMenu(itStatSelect);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Kelola Socket Relic')) {
+      throw new Error('Expected back to slot panel');
+    }
+    // Verify item is deducted
+    if (db.getItemCount(g, u, 'dna_shard') !== 1) throw new Error('Expected dna_shard count to be 1');
+    // Verify relic gems inside DB
+    const relicAfter = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    let currentGems = JSON.parse(relicAfter.gems || '[]');
+    if (currentGems[0].gemId !== 'dna_shard' || currentGems[0].stat !== 'hp') {
+      throw new Error('relic gems not set correctly in database');
+    }
+
+    // 8. Go to gem select again to test replacement/refunding
+    // Select socket slot 0
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] }));
+    // User has 1 dna_shard left. They choose to socket dna_shard again but choose atk option this time.
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['dna_shard'] }));
+    // Select atk stat
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_stat_select_${relicId}-0-dna_shard-${u}`, values: ['atk'] }));
+    // Verify old gem is refunded, new gem is deducted. Total count of dna_shard should still be 1 (deducted 1, returned 1)
+    if (db.getItemCount(g, u, 'dna_shard') !== 1) throw new Error('Expected dna_shard count to be 1 after replacement refund');
+    // Verify slot 0 stat is now atk
+    const relicAfter2 = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    currentGems = JSON.parse(relicAfter2.gems || '[]');
+    if (currentGems[0].stat !== 'atk') throw new Error('Expected socket 0 stat to be atk');
+
+    // 9. Go to gem select again to test removal (cabut)
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_slot_select_${relicId}-${u}`, values: ['0'] }));
+    // Select cabut option
+    updateResult = await pPanel.handlePetSelectMenu(mockInteraction({ userId: u, guildId: g, customId: `pet_relicsocket_gem_select_${relicId}-0-${u}`, values: ['cabut'] }));
+    // Verify gem is refunded to inventory (1 + 1 = 2)
+    if (db.getItemCount(g, u, 'dna_shard') !== 2) throw new Error('Expected dna_shard count to be 2 after cabut');
+    // Verify slot 0 is now null
+    const relicAfter3 = db.db.prepare('SELECT * FROM relics WHERE id = ?').get(relicId);
+    currentGems = JSON.parse(relicAfter3.gems || '[]');
+    if (currentGems[0] !== null) throw new Error('Expected socket 0 to be empty');
+  });
+  test('cooking: recipes and interactive panels validation', async () => {
+    const pPanel = botRequire('systems/petPanel.js');
+    const u = '88223', g = 'COOK_GUILD';
+
+    // 1. Create user and active pet with depleted hunger/happiness
+    db.getOrCreateUser(g, u);
+    db.db.prepare('INSERT INTO pets (guildId,userId,petId,name,active,level,hp,atk,def,spd,crit,hunger,happiness) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(g, u, '90001', 'ChefPet', 1, 10, 100, 20, 10, 10, 5, 20, 30);
+    const pet = pets.getPetData(g, u);
+
+    // 2. Set up initial items: Gandum (2) and Susu Normal (1) in farm_storage, but missing Telur Normal (egg_normal)
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'gandum', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'milk_normal', 1);
+
+    // Click "Cook" button
+    const itCookBtn = mockInteraction({ userId: u, guildId: g, customId: `pet_cook_${u}` });
+    let updateResult = await pPanel.handlePetButton(itCookBtn);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Cooking Hub')) {
+      throw new Error('Expected cooking hub panel');
+    }
+
+    // Try to cook pancake (ingredients incomplete: missing egg)
+    const itCookPancakeFail = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_cooked_pancake-${u}` });
+    let replyResult = await pPanel.handlePetButton(itCookPancakeFail);
+    if (!replyResult || !replyResult.content || !replyResult.content.includes('Bahan kurang')) {
+      throw new Error('Expected failure due to missing egg');
+    }
+
+    // Add missing egg_normal to storage
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'egg_normal', 1);
+
+    // Try cooking pancake again (should succeed)
+    updateResult = await pPanel.handlePetButton(itCookPancakeFail);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected cooking success for cooked_pancake');
+    }
+
+    // Verify ingredients consumed
+    const { getStorageQty } = botRequire('systems/farming.js');
+    if (getStorageQty(g, u, 'gandum') !== 0) throw new Error('Expected gandum to be consumed');
+    if (getStorageQty(g, u, 'egg_normal') !== 0) throw new Error('Expected egg_normal to be consumed');
+    if (getStorageQty(g, u, 'milk_normal') !== 0) throw new Error('Expected milk_normal to be consumed');
+
+    // Verify pancake added to inventory
+    if (db.getItemCount(g, u, 'cooked_pancake') !== 1) throw new Error('Expected 1 cooked_pancake in inventory');
+
+    // Open Bag/Consumables Panel
+    const itBagBtn = mockInteraction({ userId: u, guildId: g, customId: `pet_bag_${u}` });
+    updateResult = await pPanel.handlePetButton(itBagBtn);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.title.includes('Tas Consumables')) {
+      throw new Error('Expected bag consumables panel');
+    }
+
+    // Consume pancake
+    const itUsePancake = mockInteraction({ userId: u, guildId: g, customId: `pet_use_cooked_pancake-${u}` });
+    updateResult = await pPanel.handlePetButton(itUsePancake);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('memakan Pancake')) {
+      throw new Error('Expected pancake consumption success message');
+    }
+
+    // Verify pet stats fully restored
+    const petAfter = pets.getPetData(g, u);
+    if (petAfter.hunger !== 100 || petAfter.happiness !== 100) {
+      throw new Error(`Expected hunger & happiness to be 100, got hunger=${petAfter.hunger}, happy=${petAfter.happiness}`);
+    }
+    if (db.getItemCount(g, u, 'cooked_pancake') !== 0) throw new Error('Expected pancake consumed from inventory');
+
+    // 3. Test Spicy Fish Soup: Rare Fish + 2 Cabai + 2 Bawang Putih -> +10% ATK buff
+    // Add ingredients
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt) VALUES (?,?,?,?,?)')
+      .run(g, u, 'arwana_silver', 2.5, Date.now()); // arwana_silver is Rare fish
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_putih', 2);
+
+    // Cook spicy fish soup
+    const itCookSoup = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_spicy_fish_soup-${u}` });
+    updateResult = await pPanel.handlePetButton(itCookSoup);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected soup cooking success');
+    }
+
+    // Verify ingredients deducted
+    const fishCount = db.db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(u).c;
+    if (fishCount !== 0) throw new Error('Expected rare fish to be consumed');
+    const cabaiCount = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'cabai')?.quantity || 0;
+    const bawangPutihCount = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'bawang_putih')?.quantity || 0;
+    if (cabaiCount !== 0) throw new Error('Expected cabai to be consumed');
+    if (bawangPutihCount !== 0) throw new Error('Expected bawang_putih to be consumed');
+
+    // Verify soup added
+    if (db.getItemCount(g, u, 'spicy_fish_soup') !== 1) throw new Error('Expected 1 spicy_fish_soup in inventory');
+
+    // Consume soup
+    const itUseSoup = mockInteraction({ userId: u, guildId: g, customId: `pet_use_spicy_fish_soup-${u}` });
+    updateResult = await pPanel.handlePetButton(itUseSoup);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('meminum Spicy Fish Soup')) {
+      throw new Error('Expected soup consumption success');
+    }
+
+    // Verify ATK buff active (combat integration)
+    const baseStats = pets.getEffectiveStats(petAfter);
+    // Base ATK is 20, level 10 adds +18 (9*2) = 38, then 10% buff = Math.floor(38*1.10) = 41
+    if (baseStats.atk !== 41) throw new Error('Expected effective ATK to be 41 (+10% buff on level-scaled 38), got ' + baseStats.atk);
+
+    // 4. Test Veggie Salad: 3 Wortel + 2 Kentang -> 6 hours pest shield
+    // Add ingredients
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'wortel', 3);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'kentang', 2);
+
+    // Cook veggie salad
+    const itCookSalad = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_veggie_salad-${u}` });
+    updateResult = await pPanel.handlePetButton(itCookSalad);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected salad cooking success');
+    }
+
+    // Verify salad added
+    if (db.getItemCount(g, u, 'veggie_salad') !== 1) throw new Error('Expected veggie_salad in inventory');
+
+    // Consume salad
+    const itUseSalad = mockInteraction({ userId: u, guildId: g, customId: `pet_use_veggie_salad-${u}` });
+    updateResult = await pPanel.handlePetButton(itUseSalad);
+    if (!updateResult || !updateResult.embeds || !updateResult.embeds[0].data.description.includes('memakan Veggie Salad')) {
+      throw new Error('Expected salad consumption success');
+    }
+
+    // Verify pest shield set in user stats
+    const shieldUntil = db.getUserStat(g, u, 'pest_shield_until');
+    if (shieldUntil < Date.now() + 5.9 * 3600 * 1000) {
+      throw new Error('Expected pest shield to be set to ~6 hours');
+    }
+
+    // 5. Test Locked Fish catches: a locked Rare fish cannot be cooked
+    db.db.prepare('DELETE FROM fish_inventory WHERE userId = ?').run(u);
+    // Insert a locked Rare fish (locked = 1)
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,1)')
+      .run(g, u, 'arwana_silver', 2.5, Date.now());
+    // Give cabai and bawang putih
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 2);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_putih', 2);
+
+    // Try cooking spicy fish soup (should fail because rare fish is locked)
+    const itCookSoupLocked = mockInteraction({ userId: u, guildId: g, customId: `pet_docook_spicy_fish_soup-${u}` });
+    const replyResult2 = await pPanel.handlePetButton(itCookSoupLocked);
+    if (!replyResult2 || !replyResult2.content || !replyResult2.content.includes('Bahan kurang')) {
+      throw new Error('Expected failure due to locked Rare Fish');
+    }
+
+    // 6. Test select menu and modal multi-quantity cooking flow
+    // Clean up
+    db.db.prepare('DELETE FROM fish_inventory WHERE userId = ?').run(u);
+    db.db.prepare('DELETE FROM farm_storage WHERE userId = ?').run(u);
+    
+    // Seed ingredients for 2 grilled fish (Common Fish x4, Cabai x4, Bawang Merah x2)
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'nila', 1.0, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'nila', 1.1, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'mujair', 1.2, Date.now());
+    db.db.prepare('INSERT INTO fish_inventory (guildId, userId, fishId, weight, caughtAt, locked) VALUES (?,?,?,?,?,0)')
+      .run(g, u, 'mujair', 1.3, Date.now());
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'cabai', 4);
+    db.db.prepare('INSERT INTO farm_storage (guildId, userId, itemId, quantity) VALUES (?,?,?,?)').run(g, u, 'bawang_merah', 2);
+
+    // Select menu choice
+    const itSelectCook = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_cook_select_${u}`,
+      values: ['grilled_fish']
+    });
+    const selectResult = await pPanel.handlePetSelectMenu(itSelectCook);
+    if (!selectResult || selectResult.data?.custom_id !== `pet_cookqty_modal_grilled_fish_${u}`) {
+      throw new Error('Expected select menu to prompt quantity modal');
+    }
+
+    // Modal submit: cook 2 grilled fish
+    const itSubmitModal = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_cookqty_modal_grilled_fish_${u}`,
+      fields: { pet_cook_qty: '2' }
+    });
+    const modalResult = await pPanel.handlePetModal(itSubmitModal);
+    if (!modalResult || !modalResult.embeds || !modalResult.embeds[0].data.description.includes('Berhasil memasak')) {
+      throw new Error('Expected modal submit to successfully cook 2 grilled_fish');
+    }
+
+    // Verify ingredients consumed
+    const remainingCommon = db.db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(u).c;
+    if (remainingCommon !== 0) throw new Error('Expected all 4 common fish to be consumed');
+    const remainingCabai = db.db.prepare('SELECT quantity FROM farm_storage WHERE userId = ? AND itemId = ?').get(u, 'cabai')?.quantity || 0;
+    if (remainingCabai !== 0) throw new Error('Expected all 4 cabai to be consumed');
+
+    // Verify 2 grilled_fish added
+    if (db.getItemCount(g, u, 'grilled_fish') !== 2) throw new Error('Expected 2 grilled_fish in inventory');
+
+    // 7. Test using grilled_fish through select menu in Bag
+    const itUseSelect = mockInteraction({
+      userId: u, guildId: g,
+      customId: `pet_bag_use_select_${u}`,
+      values: ['grilled_fish']
+    });
+    const bagResult = await pPanel.handlePetSelectMenu(itUseSelect);
+    if (!bagResult || !bagResult.embeds || !bagResult.embeds[0].data.description.includes('memakan Grilled Fish')) {
+      throw new Error('Expected bag select use of grilled_fish to succeed');
+    }
+
+    // Verify 1 grilled_fish consumed and buff active
+    if (db.getItemCount(g, u, 'grilled_fish') !== 1) throw new Error('Expected 1 grilled_fish consumed');
+    const luckBuffUntil = db.getUserStat(g, u, 'fishing_luck_buff_until');
+    if (luckBuffUntil < Date.now() + 0.9 * 3600 * 1000) {
+      throw new Error('Expected luck buff until to be set');
+    }
+  });
 
   // ---- Achievement pokedex progress ----
   const ach = botRequire('systems/achievements.js');
@@ -485,48 +731,40 @@ module.exports = function register() {
     if (mc.isSpamMessage(g, mk('pesan yang berbeda lagi'))) throw new Error('different message should NOT be spam');
   });
 
-  // ---- DM notification consent (opt-in) ----
+  // ---- DM notifications (COMPLETELY DISABLED) ----
   const notif = botRequire('systems/notifications.js');
-  test('notif: consent defaults OFF and gates canDM', () => {
+  test('notif: notifications are completely disabled', () => {
     const g = 'NOTIF_G', u = 'NOTIFU1';
-    if (notif.canDM(g, u)) throw new Error('should default to NO consent');
+    if (notif.canDM(g, u)) throw new Error('canDM must return false');
     notif.setDmConsent(g, u, true);
-    if (!notif.canDM(g, u)) throw new Error('should be allowed after opt-in');
-    notif.setDmConsent(g, u, false);
-    if (notif.canDM(g, u)) throw new Error('should be off after opt-out');
+    if (notif.canDM(g, u)) throw new Error('canDM must stay false even after setDmConsent');
+    if (notif.getDmConsent(g, u) !== 0) throw new Error('dm consent must be 0');
   });
-  test('notif: sendNotification only sends with consent', () => {
+  test('notif: sendNotification always returns false', () => {
     const g = 'NOTIF_G2', u = 'NOTIFU2';
     let sent = 0;
     const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
     return Promise.resolve(notif.sendNotification(client, g, u, 'daily', 'hi')).then(r1 => {
-      if (r1 !== false || sent !== 0) throw new Error('must not DM without consent');
-      notif.setDmConsent(g, u, true);
-      return notif.sendNotification(client, g, u, 'daily', 'hi');
-    }).then(r2 => {
-      if (r2 !== true || sent !== 1) throw new Error('should DM once with consent');
+      if (r1 !== false || sent !== 0) throw new Error('must not DM');
     });
   });
-  test('notif: dmUser respects consent', () => {
+  test('notif: dmUser respects consent and is disabled', () => {
     const g = 'NOTIF_G4', u = 'NOTIFU4';
     let sent = 0;
     const client = { users: { fetch: async () => ({ send: async () => { sent++; } }) } };
     return Promise.resolve(notif.dmUser(client, g, u, 'win')).then(r => {
-      if (r !== false || sent !== 0) throw new Error('dmUser must respect consent');
+      if (r !== false || sent !== 0) throw new Error('dmUser must return false');
     });
   });
-  test('notif: dm_asked flips after marking', () => {
+  test('notif: wasDmAsked returns true to prevent prompting', () => {
     const g = 'NOTIF_G5', u = 'NOTIFU5';
-    if (notif.wasDmAsked(g, u)) throw new Error('should not be asked initially');
-    notif.markDmAsked(g, u);
-    if (!notif.wasDmAsked(g, u)) throw new Error('should be asked after mark');
+    if (!notif.wasDmAsked(g, u)) throw new Error('should return true to prevent prompt');
   });
-  test('notif: consent prompt + panel build correctly', () => {
+  test('notif: consent prompt + panel build with disabled info', () => {
     const p = notif.buildConsentPrompt('123');
-    const ids = p.components[0].components.map(c => c.data.custom_id);
-    if (!ids.includes('dmconsent_yes_123') || !ids.includes('dmconsent_no_123')) throw new Error('consent buttons missing');
+    if (!p.embeds || p.embeds.length === 0) throw new Error('consent prompt embed missing');
     const panel = notif.buildNotifPanel('NOTIF_G3', '123');
-    if (!String(panel.components[0].components[0].data.custom_id).startsWith('notif_toggle_master_')) throw new Error('master toggle missing');
+    if (!panel.embeds || panel.embeds.length === 0) throw new Error('panel embed missing');
   });
 
   // ---- Crafting recipes integrity ----
@@ -565,5 +803,784 @@ module.exports = function register() {
     if (void_.reward[0] !== 15000 || void_.reward[1] !== 32000) throw new Error('void reward changed!');
     const ancient = BOSS_LIST.find(b => b.id === 'ancient');
     if (ancient.reward[0] !== 70000 || ancient.reward[1] !== 150000) throw new Error('ancient reward changed!');
+  });
+
+  // ---- Localization & i18n System ----
+  const i18n = botRequire('systems/i18n.js');
+  test('i18n: defaults to id and translates correctly', () => {
+    const g = 'I18N_G', u = 'I18NU1';
+    db.getOrCreateUser(g, u);
+    // Unset locale defaults to 'id'
+    const locale = i18n.getLocale(g, u);
+    if (locale !== 'id') throw new Error('Expected default locale to be id, got ' + locale);
+    
+    // Test simple translation in Indonesian
+    const msg = i18n.t(g, u, 'language.success');
+    if (!msg.includes('Bahasa berhasil diubah ke')) throw new Error('Expected Indonesian language.success string');
+  });
+
+  test('i18n: sets locale and translates with parameters', () => {
+    const g = 'I18N_G', u = 'I18NU2';
+    db.getOrCreateUser(g, u);
+    
+    // Set to english
+    i18n.setLocale(g, u, 'en');
+    const locale = i18n.getLocale(g, u);
+    if (locale !== 'en') throw new Error('Expected locale to be en');
+    
+    // Test simple translation in English
+    const msg = i18n.t(g, u, 'language.success');
+    if (!msg.includes('Language successfully changed to')) throw new Error('Expected English language.success string');
+    
+    // Test parameterized translation
+    const cookMsg = i18n.t(g, u, 'cooking.success', { qty: 3, item: 'Sushi' });
+    if (cookMsg !== 'Successfully cooked 3x **Sushi**! 🍳') {
+      throw new Error('Expected parsed English cooking success string, got: ' + cookMsg);
+    }
+  });
+
+  test('i18n: fallback to default id locale when key is missing in en', () => {
+    const g = 'I18N_G', u = 'I18NU3';
+    db.getOrCreateUser(g, u);
+    i18n.setLocale(g, u, 'en');
+    
+    // Insert a dummy key to locales.id but not locales.en
+    i18n.locales.id.test_fallback = 'Ini fallback';
+    // Remove if present in en
+    if (i18n.locales.en) delete i18n.locales.en.test_fallback;
+    
+    const msg = i18n.t(g, u, 'test_fallback');
+    if (msg !== 'Ini fallback') throw new Error('Expected fallback to Indonesian, got ' + msg);
+  });
+
+  // ---- Game Terms Consent Gating ----
+  const consent = botRequire('systems/consent.js');
+  test('consent: hasGameConsent defaults false and is updated by setGameConsent', () => {
+    const g = 'CONSENT_G1', u = 'CONSENT_U1';
+    db.getOrCreateUser(g, u);
+    // 1. Initial consent must be false
+    if (consent.hasGameConsent(g, u)) throw new Error('consent should default to false');
+
+    // 2. Set to true
+    consent.setGameConsent(g, u, true);
+    if (!consent.hasGameConsent(g, u)) throw new Error('consent should be true after set');
+
+    // 3. Set to false
+    consent.setGameConsent(g, u, false);
+    if (consent.hasGameConsent(g, u)) throw new Error('consent should be false after setting back');
+  });
+
+  test('consent: handles consent button interactions correctly', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G2', u = 'CONSENT_U2';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Test yes button
+    const itYes = mockInteraction({
+      userId: u, guildId: g,
+      customId: `gameconsent_yes_${u}`
+    });
+    itYes.isButton = () => true;
+    itYes.isChatInputCommand = () => false;
+    
+    await handleInteractionCreate(itYes);
+    if (!consent.hasGameConsent(g, u)) throw new Error('yes button should grant consent');
+    if (!itYes._cap.update || !itYes._cap.update.content.includes('Selamat bermain') && !itYes._cap.update.content.includes('Have fun')) {
+      throw new Error('yes button should update with success message, got: ' + JSON.stringify(itYes._cap.update));
+    }
+
+    // Test no button
+    const itNo = mockInteraction({
+      userId: u, guildId: g,
+      customId: `gameconsent_no_${u}`
+    });
+    itNo.isButton = () => true;
+    itNo.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itNo);
+    if (consent.hasGameConsent(g, u)) throw new Error('no button should revoke consent');
+    if (!itNo._cap.update || !itNo._cap.update.content.includes('terkunci') && !itNo._cap.update.content.includes('locked')) {
+      throw new Error('no button should update with declined message');
+    }
+  });
+
+  test('consent: command gating blocks gated commands and allows economy commands', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G3', u = 'CONSENT_U3';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Command that is gated (e.g. /casino)
+    const itGated = mockInteraction({
+      userId: u, guildId: g,
+      customId: 'casino'
+    });
+    itGated.isButton = () => false;
+    itGated.isChatInputCommand = () => true;
+    itGated.commandName = 'casino';
+    itGated.options = { getSubcommand: () => null, getSubcommandGroup: () => null };
+
+    // Initially, user has no consent, so calling /fishing should prompt with consent embeds
+    await handleInteractionCreate(itGated);
+    if (!itGated._cap.reply || !itGated._cap.reply.embeds || !itGated._cap.reply.embeds[0].data.title.includes('Persetujuan') && !itGated._cap.reply.embeds[0].data.title.includes('Agreement')) {
+      throw new Error('gated command should reply with consent prompt');
+    }
+
+    // Command that is NOT gated (e.g. /wallet)
+    const itNonGated = mockInteraction({
+      userId: u, guildId: g,
+      customId: 'wallet'
+    });
+    itNonGated.isButton = () => false;
+    itNonGated.isChatInputCommand = () => true;
+    itNonGated.commandName = 'wallet';
+    itNonGated.options = { getSubcommand: () => null, getSubcommandGroup: () => null };
+
+    await handleInteractionCreate(itNonGated);
+    // Should bypass gate and not reply with consent prompt
+    if (itNonGated._cap.reply && itNonGated._cap.reply.embeds && itNonGated._cap.reply.embeds[0].data.title && (itNonGated._cap.reply.embeds[0].data.title.includes('Persetujuan') || itNonGated._cap.reply.embeds[0].data.title.includes('Agreement'))) {
+      throw new Error('non-gated command should not be blocked');
+    }
+  });
+
+  test('consent: interactive components are gated by consent', async () => {
+    const handleInteractionCreate = botRequire('events/interactionCreate.js');
+    const g = 'CONSENT_G4', u = 'CONSENT_U4';
+    db.getOrCreateUser(g, u);
+    notif.markDmAsked(g, u);
+    
+    // Interaction that is gated (e.g. clicking /fish_cast_ button)
+    const itGatedBtn = mockInteraction({
+      userId: u, guildId: g,
+      customId: `fish_cast_${u}`
+    });
+    itGatedBtn.isButton = () => true;
+    itGatedBtn.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itGatedBtn);
+    if (!itGatedBtn._cap.reply || !itGatedBtn._cap.reply.embeds || !itGatedBtn._cap.reply.embeds[0].data.title.includes('Persetujuan') && !itGatedBtn._cap.reply.embeds[0].data.title.includes('Agreement')) {
+      throw new Error('gated interaction should reply with consent prompt');
+    }
+
+    // Grant consent
+    consent.setGameConsent(g, u, true);
+
+    // Call gated interaction again
+    const itGatedBtnAfter = mockInteraction({
+      userId: u, guildId: g,
+      customId: `fish_cast_${u}`
+    });
+    itGatedBtnAfter.isButton = () => true;
+    itGatedBtnAfter.isChatInputCommand = () => false;
+
+    await handleInteractionCreate(itGatedBtnAfter);
+    // Should bypass and be handled by normal fishing (e.g. cooldown/fail or cast success, but NOT consent prompt)
+    if (itGatedBtnAfter._cap.reply && itGatedBtnAfter._cap.reply.embeds && itGatedBtnAfter._cap.reply.embeds[0].data.title && (itGatedBtnAfter._cap.reply.embeds[0].data.title.includes('Persetujuan') || itGatedBtnAfter._cap.reply.embeds[0].data.title.includes('Agreement'))) {
+      throw new Error('gated interaction should proceed normally when consent is granted');
+    }
+  });
+
+  test('achievement: single unlock is announced after delay as single embed', () => {
+    const ach = botRequire('systems/achievements.js');
+    const g = 'ACH_COAL_G1', u = 'ACH_COAL_U1', chId = '12345';
+    db.getOrCreateUser(g, u);
+    db.db.prepare("INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, 'achievement_channel', ?)").run(g, chId);
+    db.db.prepare('DELETE FROM achievements WHERE guildId = ? AND userId = ?').run(g, u);
+
+    let sentPayload = null;
+    const mockChannel = {
+      send: async (p) => { sentPayload = p; return p; }
+    };
+    const mockGuild = {
+      id: g,
+      channels: { cache: new Map([[chId, mockChannel]]) }
+    };
+
+    return ach.grantAchievement(mockGuild, u, 'first_chat').then(() => {
+      // Should not send immediately
+      if (sentPayload !== null) throw new Error('should not send immediately');
+
+      // Wait 30ms (test timeout is 10ms)
+      return new Promise(resolve => setTimeout(resolve, 30));
+    }).then(() => {
+      if (!sentPayload || !sentPayload.embeds || sentPayload.embeds[0].data.title !== '🏆 ACHIEVEMENT UNLOCKED!') {
+        throw new Error('should send single achievement embed after delay');
+      }
+    });
+  });
+
+  test('achievement: multiple unlocks are coalesced into a single combined embed', () => {
+    const ach = botRequire('systems/achievements.js');
+    const g = 'ACH_COAL_G2', u = 'ACH_COAL_U2', chId = '12345';
+    db.getOrCreateUser(g, u);
+    db.db.prepare("INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, 'achievement_channel', ?)").run(g, chId);
+    db.db.prepare('DELETE FROM achievements WHERE guildId = ? AND userId = ?').run(g, u);
+
+    let sentPayloads = [];
+    const mockChannel = {
+      send: async (p) => { sentPayloads.push(p); return p; }
+    };
+    const mockGuild = {
+      id: g,
+      channels: { cache: new Map([[chId, mockChannel]]) }
+    };
+
+    // Trigger multiple achievements
+    return Promise.all([
+      ach.grantAchievement(mockGuild, u, 'first_chat'),
+      ach.grantAchievement(mockGuild, u, 'first_buy')
+    ]).then(() => {
+      if (sentPayloads.length > 0) throw new Error('should not send immediately');
+      
+      // Wait for delay
+      return new Promise(resolve => setTimeout(resolve, 30));
+    }).then(() => {
+      if (sentPayloads.length !== 1) {
+        throw new Error('should only send ONE coalesced message: got ' + sentPayloads.length);
+      }
+      const p = sentPayloads[0];
+      if (!p.embeds || p.embeds[0].data.title !== '🏆 MULTIPLE ACHIEVEMENTS UNLOCKED!') {
+        throw new Error('should send multiple achievements coalesced title');
+      }
+      const desc = p.embeds[0].data.description;
+      if (!desc.includes('Newbie') || !desc.includes('Shopaholic Pemula')) {
+        throw new Error('description should list all unlocked achievements');
+      }
+    });
+  });
+
+  // ---- Welcome Card Cache ----
+  test('welcomeCardCache: caching and validation flow', async () => {
+    const { getCachedImage, failedUrls } = botRequire('systems/welcomeCardCache');
+    const originalFetch = globalThis.fetch;
+
+    // 1. Invalid input validation
+    try {
+      await getCachedImage('');
+      throw new Error('Expected validation error for empty URL');
+    } catch (e) {
+      if (e.message !== 'Invalid URL') throw e;
+    }
+
+    // 2. Successful download and local cache test
+    const testUrlSuccess = 'https://example.com/test-bg-image-success.png';
+    const fs = require('fs');
+    const hash = require('crypto').createHash('md5').update(testUrlSuccess).digest('hex');
+    const cachePath = require('path').join(__dirname, '..', '..', 'assets', 'cache', `${hash}.png`);
+    try { fs.unlinkSync(cachePath); } catch (_) {}
+
+    let successFetchCount = 0;
+    globalThis.fetch = async (url, init) => {
+      if (typeof url === 'string' && url.includes('test-bg-image-success.png')) {
+        successFetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => {
+            return new Uint8Array([1, 2, 3, 4]).buffer;
+          }
+        };
+      }
+      return originalFetch(url, init);
+    };
+
+    try {
+      const cachedPath = await getCachedImage(testUrlSuccess);
+      if (!cachedPath.includes('cache')) throw new Error(`Expected path to include cache, got: ${cachedPath}`);
+      
+      const fs = require('fs');
+      const content = fs.readFileSync(cachedPath);
+      if (content.length !== 4) throw new Error(`Expected length of 4, got: ${content.length}`);
+      if (successFetchCount !== 1) throw new Error(`Expected 1 fetch, got: ${successFetchCount}`);
+
+      // Request again, should hit the disk cache and NOT fetch again
+      const cachedPath2 = await getCachedImage(testUrlSuccess);
+      if (cachedPath2 !== cachedPath) throw new Error('Expected identical cache path');
+      if (successFetchCount !== 1) throw new Error(`Expected still 1 fetch (disk cache hit), got: ${successFetchCount}`);
+    } finally {
+      // Cleanup file if exists
+      try {
+        const fs = require('fs');
+        const hash = require('crypto').createHash('md5').update(testUrlSuccess).digest('hex');
+        const cachePath = require('path').join(__dirname, '..', '..', 'assets', 'cache', `${hash}.png`);
+        fs.unlinkSync(cachePath);
+      } catch (_) {}
+    }
+
+    // 3. Failure caching test
+    const testUrlFail = 'https://example.com/failed-image-404.png';
+    failedUrls.delete(testUrlFail);
+
+    let failFetchCount = 0;
+    globalThis.fetch = async (url, init) => {
+      if (typeof url === 'string' && url.includes('failed-image-404.png')) {
+        failFetchCount++;
+        return {
+          ok: false,
+          status: 404,
+          arrayBuffer: async () => new ArrayBuffer(0)
+        };
+      }
+      return originalFetch(url, init);
+    };
+
+    try {
+      try {
+        await getCachedImage(testUrlFail);
+        throw new Error('Expected 404 error');
+      } catch (e) {
+        if (!e.message.includes('status code 404')) throw e;
+      }
+
+      // Second attempt should be rejected instantly from memory cache without fetch
+      try {
+        await getCachedImage(testUrlFail);
+        throw new Error('Expected memory cache rejection');
+      } catch (e) {
+        if (!e.message.includes('temporary failure cache')) throw e;
+      }
+
+      if (failFetchCount !== 1) {
+        throw new Error(`Expected exactly 1 fetch attempt, got: ${failFetchCount}`);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+      failedUrls.delete(testUrlFail);
+    }
+  });
+
+  // ---- InviteTracker upgrades (anti-abuse & bonus in leaderboard) ----
+  const itrack = botRequire('systems/inviteTracker.js');
+  test('inviteTracker: leaderboard includes bonus invites and orders accurately', () => {
+    const g = 'IT_GUILD';
+    itrack.resetInvites(g);
+    db.db.prepare('DELETE FROM invite_bonus WHERE guildId = ?').run(g);
+
+    // Seed inviter A: 2 real invites
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_A', 'sub_1', 'codeA', Date.now());
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_A', 'sub_2', 'codeA', Date.now());
+
+    // Seed inviter B: 1 real invite + 3 bonus invites = 4 total
+    db.db.prepare('INSERT INTO invites (guildId, inviterId, invitedId, code, joinedAt, fake) VALUES (?, ?, ?, ?, ?, 0)').run(g, 'u_inv_B', 'sub_3', 'codeB', Date.now());
+    itrack.addBonusInvites(g, 'u_inv_B', 3);
+
+    const lb = itrack.getInviteLeaderboard(g, 10);
+    if (lb.length < 2) throw new Error('expected at least 2 in leaderboard, got ' + lb.length);
+    if (lb[0].userId !== 'u_inv_B' || lb[0].total !== 4) throw new Error(`expected u_inv_B top with 4, got ${lb[0].userId} with ${lb[0].total}`);
+    if (lb[1].userId !== 'u_inv_A' || lb[1].total !== 2) throw new Error(`expected u_inv_A second with 2, got ${lb[1].userId} with ${lb[1].total}`);
+  });
+
+  test('inviteTracker: self-invite and bot invites marked as fake', async () => {
+    const g = 'IT_GUILD_2';
+    itrack.resetInvites(g);
+
+    // Mock guild and members
+    const fakeGuild = {
+      id: g,
+      memberCount: 50,
+      invites: {
+        fetch: async () => new Map([['c_self', { code: 'c_self', uses: 1, inviterId: 'self_user' }]])
+      },
+      channels: { cache: new Map() }
+    };
+    itrack.inviteCache.set(g, new Map([['c_self', 0]]));
+
+    const selfMember = {
+      id: 'self_user',
+      guild: fakeGuild,
+      user: { id: 'self_user', bot: false, createdTimestamp: Date.now() - 30 * 86400000 }
+    };
+
+    await itrack.handleMemberJoin(selfMember);
+    const rec = itrack.getInvitedBy(g, 'self_user');
+    if (!rec || rec.fake !== 1) throw new Error('self-invite should be recorded as fake (1)');
+  });
+
+  // ---- TempvoicePanel upgrades (controls & cleanup) ----
+  const tvp = botRequire('systems/tempvoicePanel.js');
+  test('tempvoicePanel: buildManagePanel renders status and cleanupMemberSpace removes record', async () => {
+    const g = 'TV_GUILD', owner = 'u_tv_owner';
+    db.db.prepare('DELETE FROM private_spaces WHERE guildId = ? AND ownerId = ?').run(g, owner);
+    db.db.prepare('INSERT INTO private_spaces (guildId, ownerId, categoryId, textChannelId, voiceChannelId, hidden) VALUES (?, ?, ?, ?, ?, 0)')
+      .run(g, owner, 'cat_1', 'txt_1', 'vc_1');
+
+    const fakeGuild = {
+      id: g,
+      name: 'TV Guild',
+      roles: { everyone: { id: 'role_everyone' } },
+      channels: {
+        cache: new Map([
+          ['cat_1', { id: 'cat_1', delete: async () => {} }],
+          ['txt_1', { id: 'txt_1', delete: async () => {} }],
+          ['vc_1', { id: 'vc_1', userLimit: 5, permissionOverwrites: { cache: new Map() }, delete: async () => {} }]
+        ])
+      }
+    };
+
+    const pnl = tvp.buildManagePanel(fakeGuild, owner);
+    if (!pnl.embeds || !pnl.embeds[0].data.description.includes('Voice Limit')) throw new Error('manage panel should show Voice Limit');
+
+    await tvp.cleanupMemberSpace(fakeGuild, owner);
+    const after = db.db.prepare('SELECT * FROM private_spaces WHERE guildId = ? AND ownerId = ?').get(g, owner);
+    if (after) throw new Error('cleanupMemberSpace should remove record from database');
+  });
+
+  // ---- Streak Prestige & VVIP Lounge (Gaya A) ----
+  const streakTier = botRequire('systems/streakTier.js');
+  const dr = botRequire('systems/dailyReward.js');
+
+  test('streakTier: tiers define aesthetic ranks, bonuses and lounge unlocks', () => {
+    const t7 = streakTier.getStreakTier(7);
+    if (t7.name !== '✦ Sparks' || t7.chatBonus !== 0.10) throw new Error('t7 wrong');
+
+    const t100 = streakTier.getStreakTier(100);
+    if (t100.name !== '✦ Sovereign' || !t100.lounge) throw new Error('t100 should unlock lounge');
+
+    const t200 = streakTier.getStreakTier(215);
+    if (t200.name !== '✦ Eternal' || t200.chatBonus !== 1.50) throw new Error('t200 should be Eternal with 1.50 bonus');
+
+    const t365 = streakTier.getStreakTier(400);
+    if (t365.name !== '✦ Mythos' || t365.chatBonus !== 2.00) throw new Error('t365 should be Mythos');
+  });
+
+  test('streakTier: claimLoungeCrate checks streak threshold and awards rewards', () => {
+    const g = 'ST_G', u = 'ST_U';
+    db.getOrCreateUser(g, u);
+    // User with streak 50 should be rejected
+    const rLow = streakTier.claimLoungeCrate(g, u, 50);
+    if (rLow.ok) throw new Error('streak 50 should not claim lounge crate');
+
+    // User with streak 200 should receive crate
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    db.db.prepare('DELETE FROM user_stats WHERE userId = ? AND stat_key = ?').run(u, `lounge_crate_${today}`);
+    const rHigh = streakTier.claimLoungeCrate(g, u, 200);
+    if (!rHigh.ok || rHigh.money < 100000) throw new Error('streak 200 crate failed');
+
+    // Second claim same day blocked
+    const rDup = streakTier.claimLoungeCrate(g, u, 200);
+    if (rDup.ok) throw new Error('duplicate crate claim should be blocked');
+  });
+
+    test('streakTier: ensureAllStreakRoles and syncAllMemberStreakRoles work properly', async () => {
+    const rolesCreated = [];
+    const membersMap = new Map();
+
+    const mockRole = (name, color) => ({ id: `role_${name}`, name, color });
+
+    const fakeGuild = {
+      id: 'ST_SYNC_GUILD',
+      members: {
+        me: { permissions: { has: () => true } },
+        fetch: async () => membersMap,
+        fetchMe: async () => fakeGuild.members.me,
+        cache: membersMap
+      },
+      roles: {
+        cache: new Map(),
+        fetch: async () => fakeGuild.roles.cache,
+        create: async (data) => {
+          const r = mockRole(data.name, data.color);
+          fakeGuild.roles.cache.set(r.id, r);
+          rolesCreated.push(r);
+          return r;
+        }
+      }
+    };
+
+    // 1. ensureAllStreakRoles creates 7 roles
+    const createdMap = await streakTier.ensureAllStreakRoles(fakeGuild);
+    if (Object.keys(createdMap).length !== 7) throw new Error('expected 7 streak roles created');
+
+    // 2. Setup mock member with streak 224
+    const addedRoles = [];
+    const mockMember = {
+      id: 'u_veteran_224',
+      guild: fakeGuild,
+      roles: {
+        cache: new Map(),
+        add: async (r) => { addedRoles.push(r.name); mockMember.roles.cache.set(r.id, r); },
+        remove: async (r) => { mockMember.roles.cache.delete(r.id); }
+      }
+    };
+    membersMap.set('u_veteran_224', mockMember);
+
+    // Seed database streak
+    db.db.prepare('DELETE FROM streaks WHERE userId = ?').run('u_veteran_224');
+    db.db.prepare('INSERT INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 224, ?)').run('ST_SYNC_GUILD', 'u_veteran_224', '2026-11-20');
+
+    // 3. syncAllMemberStreakRoles should sync u_veteran_224 to ✦ Eternal
+    const res = await streakTier.syncAllMemberStreakRoles(fakeGuild);
+    if (!res.ok) throw new Error('syncAllMemberStreakRoles failed: ' + res.error);
+    if (res.syncedCount < 1) throw new Error('expected at least 1 member synced');
+    if (!addedRoles.includes('✦ Eternal')) throw new Error('member 224 days should be granted ✦ Eternal');
+  });
+
+  test('dailyReward: milestones extended to 200 and 365 days', () => {
+    const r200 = dr.computeDailyReward(200);
+    if (!r200.milestoneLabel || !r200.milestoneLabel.includes('200 HARI')) throw new Error('missing 200-day milestone');
+    if (r200.money < 2500000) throw new Error('200-day money reward too low');
+
+    const r365 = dr.computeDailyReward(365);
+    if (!r365.milestoneLabel || !r365.milestoneLabel.includes('365 HARI')) throw new Error('missing 365-day milestone');
+  });
+
+  test('layoutCleanup: cleanServerLayout fixes typo, moves spam, fixes staff, preserves/restores voice settings', async () => {
+    const { cleanServerLayout } = botRequire('systems/layoutCleanup.js');
+    const channelsMap = new Map();
+    let gipoweRenamed = null;
+    let spamEdited = null;
+    let testingRenamed = null;
+    let createdChannels = [];
+
+    const mockGuild = {
+      id: 'CLEAN_LAYOUT_GUILD',
+      members: {
+        me: {
+          permissions: { has: () => true }
+        }
+      },
+      roles: {
+        cache: new Map(),
+        create: async () => ({ id: 'r_mock' }),
+        setPositions: async () => true,
+        everyone: { id: 'r_everyone' }
+      },
+      channels: {
+        cache: channelsMap,
+        fetch: async () => channelsMap,
+        create: async (data) => {
+          createdChannels.push(data.name);
+          const ch = { id: 'c_new_' + data.name, ...data, lockPermissions: async () => {}, send: async () => {} };
+          channelsMap.set(ch.id, ch);
+          return ch;
+        }
+      }
+    };
+
+    // Add gipowe channel
+    channelsMap.set('c_gipowe', {
+      id: 'c_gipowe',
+      name: '「🎁」gipowe',
+      setName: async (n) => { gipoweRenamed = n; }
+    });
+
+    // Add main bot category
+    channelsMap.set('cat_mainbot', {
+      id: 'cat_mainbot',
+      type: 4, // GuildCategory
+      name: '🤖 ll ----- [MAIN BOT]'
+    });
+
+    // Add spam channel
+    channelsMap.set('c_spam', {
+      id: 'c_spam',
+      name: '「❗」spam',
+      edit: async (data) => { spamEdited = data; }
+    });
+
+    // Add staff testing-bot channel
+    channelsMap.set('c_testing', {
+      id: 'c_testing',
+      name: 'testing-bot',
+      setName: async (n) => { testingRenamed = n; }
+    });
+
+    // Add voice public category WITHOUT settings (should be restored)
+    channelsMap.set('cat_voicepub', {
+      id: 'cat_voicepub',
+      type: 4,
+      name: '🌐 ll ----- [VOICE PUBLIC]'
+    });
+
+    // Add gaming voice category WITHOUT settings (should be restored)
+    channelsMap.set('cat_gamingvoice', {
+      id: 'cat_gamingvoice',
+      type: 4,
+      name: '🎮 ll ---- [GAMING VOICE]'
+    });
+
+    // Seed GENDER menu in multi mode
+    const sr = botRequire('systems/selfRoles.js');
+    const mid = sr.createMenu('CLEAN_LAYOUT_GUILD', { title: 'GENDER', type: 'multi' });
+
+    // Add invite-logs channel
+    let invitePinned = false;
+    channelsMap.set('c_invitelogs', {
+      id: 'c_invitelogs',
+      name: '「🤝」invite-logs',
+      send: async () => ({ pin: async () => { invitePinned = true; } })
+    });
+
+    const res = await cleanServerLayout(mockGuild);
+    if (!res.ok) throw new Error('cleanServerLayout failed: ' + res.error);
+    if (gipoweRenamed !== '「🎁」giveaway') throw new Error('gipowe not renamed to giveaway');
+    if (!spamEdited || spamEdited.name !== '「⚡」bot-spam' || spamEdited.parent !== 'cat_mainbot') throw new Error('spam not properly moved and renamed');
+    if (testingRenamed !== '「🧪」bot-testing') throw new Error('testing-bot not formatted');
+    if (!createdChannels.includes('「✨」settings')) throw new Error('missing voice public settings not restored');
+    if (!createdChannels.includes('「🌸」settings')) throw new Error('missing gaming voice settings not restored');
+
+    const gMenuAfter = sr.getMenu('CLEAN_LAYOUT_GUILD', mid);
+    if (!gMenuAfter || gMenuAfter.type !== 'unique') throw new Error('gender menu not updated to unique');
+    if (!invitePinned) throw new Error('invite milestone banner not pinned');
+  });
+
+  test('dailyRamalan: 365 dataset, getTodayRamalan, embed builder & auto-send check', async () => {
+    const ramalan = botRequire('systems/dailyRamalan.js');
+    const { RAMALAN_DATA } = botRequire('data/ramalan.js');
+
+    if (RAMALAN_DATA.length !== 365) throw new Error(`expected 365 ramalan entries, got ${RAMALAN_DATA.length}`);
+
+    // Check entry structure
+    const sample = RAMALAN_DATA[0];
+    if (!sample.id || !sample.title || !sample.forecast || !sample.advice || !sample.luckyNumber || !sample.luckyColor) {
+      throw new Error('invalid ramalan entry structure');
+    }
+
+    const doy = ramalan.getDayOfYear(new Date());
+    if (doy < 1 || doy > 365) throw new Error(`invalid day of year: ${doy}`);
+
+    const todayR = ramalan.getTodayRamalan(new Date());
+    if (!todayR || !todayR.title) throw new Error('failed to get today ramalan');
+
+    const embed = ramalan.buildRamalanEmbed(todayR);
+    if (!embed || !embed.data.title.includes('RAMALAN HARI INI')) {
+      throw new Error('invalid ramalan embed generated');
+    }
+
+    // Mock client to test auto-send logic
+    let sentMessage = null;
+    const fakeClient = {
+      guilds: {
+        cache: new Map([
+          ['G_RAMALAN', {
+            id: 'G_RAMALAN',
+            name: 'Ramalan Guild',
+            members: { me: { permissions: { has: () => true } } },
+            channels: {
+              cache: new Map([
+                ['C_CHAT', {
+                  id: 'C_CHAT',
+                  name: 'chat',
+                  type: 0, // GuildText
+                  permissionsFor: () => ({ has: () => true }),
+                  send: async (payload) => { sentMessage = payload; return payload; }
+                }]
+              ])
+            }
+          }]
+        ])
+      }
+    };
+
+    // Clean previous date if any
+    db.db.prepare("DELETE FROM server_settings WHERE guildId = 'G_RAMALAN' AND key LIKE 'ramalan_%'").run();
+
+    await ramalan.checkAndSendDailyRamalan(fakeClient);
+    // If running at >= 7 WIB, sentMessage will be populated
+    const nowWib = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    if (nowWib.getHours() >= 7) {
+      if (!sentMessage) throw new Error('expected daily ramalan to be sent during >= 7 WIB');
+      const last = db.getSetting('G_RAMALAN', 'ramalan_last_date', null);
+      if (!last) throw new Error('expected ramalan_last_date to be saved');
+    }
+  });
+
+  test('activity: formatDisplayName formats PEKO 🔥226 - ⭐100 correctly', async () => {
+    const { formatDisplayName, syncMemberNickname } = botRequire('systems/activity.js');
+    const f1 = formatDisplayName('PEKO', 226, 100);
+    if (f1 !== 'PEKO 🔥226 - ⭐100') throw new Error(`expected PEKO 🔥226 - ⭐100, got ${f1}`);
+
+    const f2 = formatDisplayName('Rzkii 🔥 224 ❤️ 9', 224, 50);
+    if (f2 !== 'Rzkii 🔥224 - ⭐50') throw new Error(`expected Rzkii 🔥224 - ⭐50, got ${f2}`);
+
+    const f3 = formatDisplayName('SuperLongUsernameExceedingLimit12345', 226, 100);
+    if (f3.length > 32) throw new Error(`nickname exceeded 32 chars: ${f3.length}`);
+    if (!f3.endsWith('🔥226 - ⭐100')) throw new Error(`suffix missing: ${f3}`);
+
+    const f4 = formatDisplayName('Newbie', 0, 5);
+    if (f4 !== 'Newbie ⭐5') throw new Error(`expected Newbie ⭐5, got ${f4}`);
+
+    let setNickCalled = null;
+    const mockMember = {
+      id: 'nick_user_1',
+      guild: { id: 'G_NICK' },
+      displayName: 'PEKO',
+      manageable: true,
+      setNickname: async (n) => { setNickCalled = n; }
+    };
+    db.getOrCreateUser('G_NICK', 'nick_user_1');
+    db.db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, ?, ?)').run('G_NICK', 'nick_user_1', 226, '2026-11-20');
+    db.db.prepare('UPDATE users SET level = ? WHERE userId = ?').run(100, 'nick_user_1');
+
+    await syncMemberNickname(mockMember);
+    if (setNickCalled !== 'PEKO 🔥226 - ⭐100') throw new Error(`sync failed: ${setNickCalled}`);
+  });
+
+  test('vault: server vault collects taxes, casino losses, supports withdrawals and wealth tax', () => {
+    const vault = botRequire('systems/vault.js');
+    const gid = 'VAULT_GUILD_TEST';
+
+    // 1. Initial balance is 0
+    if (vault.getVaultBalance(gid) !== 0) throw new Error('expected initial vault 0');
+
+    // 2. Add to vault
+    vault.addToVault(gid, 10000);
+    if (vault.getVaultBalance(gid) !== 10000) throw new Error('expected vault 10000');
+
+    // 3. Collect gift tax (50% share)
+    const giftShare = vault.collectGiftTax(gid, 2000); // 1000 into vault
+    if (giftShare !== 1000) throw new Error('expected giftShare 1000');
+    if (vault.getVaultBalance(gid) !== 11000) throw new Error('expected vault 11000');
+
+    // 4. Collect casino loss (50% share)
+    const casinoShare = vault.collectCasinoLoss(gid, 4000); // 2000 into vault
+    if (casinoShare !== 2000) throw new Error('expected casinoShare 2000');
+    if (vault.getVaultBalance(gid) !== 13000) throw new Error('expected vault 13000');
+
+    // 5. Withdraw
+    const withdrawSuccess = vault.withdrawFromVault(gid, 5000);
+    if (!withdrawSuccess) throw new Error('expected withdraw to succeed');
+    if (vault.getVaultBalance(gid) !== 8000) throw new Error('expected vault 8000');
+
+    const withdrawFail = vault.withdrawFromVault(gid, 999999);
+    if (withdrawFail) throw new Error('expected overdraft withdraw to fail');
+
+    // 6. Wealth tax (2% on users with >= 500k)
+    const richUid = 'rich_man_99';
+    db.getOrCreateUser(gid, richUid);
+    db.db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(1000000, richUid);
+
+    const taxRes = vault.runWealthTax(gid);
+    if (taxRes.affectedUsers < 1) throw new Error('expected rich user to be taxed');
+    const richUserAfter = db.getOrCreateUser(gid, richUid);
+    if (richUserAfter.balance !== 980000) throw new Error(`expected rich user balance 980000, got ${richUserAfter.balance}`);
+  });
+
+  test('shop: 12 approved community & cosmetic shop items exist with correct prices', () => {
+    const { ITEMS } = botRequire('data/items.js');
+    const buyables = ITEMS.filter(i => i.price > 0);
+    if (buyables.length !== 12) throw new Error(`expected exactly 12 buyable shop items, got ${buyables.length}`);
+
+    const expectedItems = {
+      streak_shield: 15000,
+      streak_freeze: 40000,
+      color_role: 75000,
+      custom_title: 35000,
+      custom_banner: 50000,
+      server_megaphone: 20000,
+      menfess_token: 8000,
+      xp_booster_2x: 8000,
+      money_magnet: 12000,
+      tax_free_voucher: 4000,
+      lucky_slot_charm: 10000,
+      mystery_box: 6000
+    };
+
+    for (const [id, price] of Object.entries(expectedItems)) {
+      const item = buyables.find(b => b.id === id);
+      if (!item) throw new Error(`missing approved shop item: ${id}`);
+      if (item.price !== price) throw new Error(`bad price for ${id}: expected ${price}, got ${item.price}`);
+    }
   });
 };

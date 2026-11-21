@@ -1,7 +1,8 @@
 // systems/adminPanel.js - Admin Panel UI System (Button-based admin controls)
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
-const { db, getOrCreateUser, getSetting, checkGlobalMode } = require('../database');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType, ChannelSelectMenuBuilder } = require('discord.js');
+const { db, getOrCreateUser, getSetting, setSetting, checkGlobalMode } = require('../database');
 const fs = require('fs');
+const { FEATURES, PAGE_SIZE, isFeatureEnabled, toggleFeature } = require('./featureGate');
 const path = require('path');
 
 // Voucher scope: bot berjalan GLOBAL (ekonomi lintas server), jadi voucher juga
@@ -63,11 +64,62 @@ async function resolveTargetId(interaction, raw) {
 }
 
 // ============ BUILD: Main Admin Panel (restructured for clarity) ============
+// ==================== CUSTOM EMBED BUILDER ====================
+// In-memory draft store (transient — fine for a builder). Key: `${guildId}:${userId}`.
+const embedDrafts = new Map();
+function ceKey(guildId, userId) { return `${guildId}:${userId}`; }
+function getEmbedDraft(guildId, userId) {
+    const k = ceKey(guildId, userId);
+    if (!embedDrafts.has(k)) embedDrafts.set(k, { channelId: '', title: '', description: '', color: '#2B2D31', footer: '', image: '' });
+    return embedDrafts.get(k);
+}
+
+function buildCustomEmbedPanel(guildId, userId, guild) {
+    const d = getEmbedDraft(guildId, userId);
+    const ready = Boolean(d.channelId && d.description);
+
+    const status = new EmbedBuilder()
+        .setTitle('🏷️ Custom Embed Builder')
+        .setColor('#5865F2')
+        .setDescription(
+            `**1.** 📍 Channel: ${d.channelId ? `<#${d.channelId}>` : '*belum dipilih*'}\n` +
+            `**2.** ✏️ Konten: ${d.description ? '✅ sudah diisi' : '*belum diisi*'}\n` +
+            `**3.** 🖼️ Gambar: ${d.image ? '✅ terpasang' : '*tidak ada*'}\n\n` +
+            (ready ? '✅ **Siap dikirim!** Klik **📤 Kirim**.' : '⚠️ Pilih channel & isi konten dulu, lalu Kirim.') +
+            `\n\n💡 Variabel: \`{server}\` = nama server, \`\\n\` = baris baru (di konten).`
+        );
+
+    const embeds = [status];
+    if (d.description) {
+        const preview = new EmbedBuilder().setColor(d.color && /^#?[0-9a-fA-F]{6}$/.test(d.color) ? (d.color.startsWith('#') ? d.color : `#${d.color}`) : '#2B2D31');
+        const desc = d.description.replace(/\\n/g, '\n').replace(/{server}/g, guild?.name || 'Server');
+        preview.setDescription(desc);
+        if (d.title) preview.setTitle(d.title.replace(/{server}/g, guild?.name || 'Server'));
+        if (d.footer) preview.setFooter({ text: d.footer });
+        if (d.image) preview.setImage(d.image);
+        embeds.push(preview);
+    }
+
+    const channelRow = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId('admpnl_ce_channel').setPlaceholder('📍 Pilih channel tujuan...').setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setMinValues(1).setMaxValues(1)
+    );
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('admpnl_ce_edit').setLabel('✏️ Edit Konten').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_ce_send').setLabel('📤 Kirim').setStyle(ButtonStyle.Success).setDisabled(!ready),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds, components: [channelRow, btnRow] };
+}
+
 function buildAdminPanel(guildId) {
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
     const levelingOn = getSetting(guildId, 'leveling_enabled', '1') !== '0';
     const streakOn = getSetting(guildId, 'streak_enabled', '1') !== '0';
-    const loveOn = getSetting(guildId, 'love_enabled', '1') !== '0';
+
+    // Feature toggle summary
+    const enabledCount = FEATURES.filter(f => isFeatureEnabled(guildId, f.key)).length;
+    const featureSummary = `🎛️ Features: **${enabledCount}/${FEATURES.length}** aktif`;
 
     const embed = new EmbedBuilder()
         .setTitle('🛡️ ADMIN PANEL')
@@ -75,15 +127,12 @@ function buildAdminPanel(guildId) {
         .setDescription(
             `Selamat datang di panel admin! Pilih kategori:\n\n` +
             `**🚀 QUICK SETUP** *(baru pakai bot? mulai di sini!)*\n` +
-            `> ⚙️ Setting — Channel, toggle fitur, streak\n` +
-            `> 📢 Notif — Auto-buat channel notifikasi\n` +
-            `> 🎙️ TempVoice — Setup voice privat\n` +
-            `> 🎫 Ticket — Setup support ticket\n\n` +
+            `> ⚙️ Setting — Channel, blocked channels, streak\n` +
+            `> 🎛️ Features — ON/OFF fitur bot per server (Leveling, Game, dll)\n\n` +
             `**💰 EKONOMI & GAME**\n` +
             `> 🛒 Shop — Tambah role/item/voucher\n` +
             `> 💰 Money — Kelola saldo user\n` +
             `> ${streakEmoji} Streak — Set/reset streak\n` +
-            `> 🏆 Contest — Fishing tournament\n` +
             `> 🎁 Giveaway — Mulai/akhiri giveaway\n\n` +
             `**🔧 SERVER TOOLS**\n` +
             `> 📢 Announce — Kirim embed ke channel\n` +
@@ -91,7 +140,7 @@ function buildAdminPanel(guildId) {
             `> 📊 Analytics — Stats pemakaian\n` +
             `> 🚫 Blacklist — Block user\n` +
             `> 🔧 DB Tools — Restore data\n\n` +
-            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${loveOn ? '❤️ Love ✅' : '❤️ Love ❌'}`
+            `**Status:** ${levelingOn ? '📊 Level ✅' : '📊 Level ❌'} | ${streakOn ? `${streakEmoji} Streak ✅` : `${streakEmoji} Streak ❌`} | ${featureSummary}`
         )
         .setFooter({ text: '💡 Baru pertama? Klik ⚙️ Setting untuk setup awal' })
         .setTimestamp();
@@ -99,16 +148,14 @@ function buildAdminPanel(guildId) {
     // Row 1: Quick Setup (paling penting untuk admin baru)
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_setting').setLabel('⚙️ Setting').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_notifications').setLabel('📢 Notif Setup').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_tempvoice').setLabel('🎙️ TempVoice').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_ticket').setLabel('🎫 Ticket').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_cleanlayout').setLabel('🧹 Rapihkan Server').setStyle(ButtonStyle.Primary)
     );
-    // Row 2: Economy & Game
+    // Row 2: Economy & Community
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_money').setLabel('💰 Money').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_streak').setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('🏆 Contest').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_giveaway').setLabel('🎁 Giveaway').setStyle(ButtonStyle.Primary)
     );
     // Row 3: Server Tools
@@ -215,14 +262,11 @@ function buildSettingSubPanel(guildId) {
     const levelCh = getSetting(guildId, 'level_channel', null);
     const achCh = getSetting(guildId, 'achievement_channel', null);
     const streakCh = getSetting(guildId, 'streak_channel', null);
-    const loveCh = getSetting(guildId, 'love_announce_channel', null);
-    const logCh = getSetting(guildId, 'log_channel', null);
+        const logCh = getSetting(guildId, 'log_channel', null);
 
     const streakEnabled = getSetting(guildId, 'streak_enabled', '1');
-    const loveEnabled = getSetting(guildId, 'love_enabled', '1');
-    const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
+        const levelingEnabled = getSetting(guildId, 'leveling_enabled', '1');
     const onboardingEnabled = getSetting(guildId, 'onboarding_enabled', '1');
-    const tiktokEnabled = getSetting(guildId, 'tiktok_convert', '1');
     const xpMult = getSetting(guildId, 'xp_multiplier', '1');
     const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
 
@@ -235,31 +279,22 @@ function buildSettingSubPanel(guildId) {
             `> 📈 Level Up: ${levelCh ? `<#${levelCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 🏆 Achievement: ${achCh ? `<#${achCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> ${streakEmoji} Streak: ${streakCh ? `<#${streakCh}>` : '⚠️ *Belum diatur*'}\n` +
-            `> ❤️ Love: ${loveCh ? `<#${loveCh}>` : '⚠️ *Belum diatur*'}\n` +
             `> 📝 Log: ${logCh ? `<#${logCh}>` : '⚠️ *Belum diatur*'}\n\n` +
-            `**🎛️ Fitur Toggle:**\n` +
-            `> 📊 Leveling: ${levelingEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
-            `> ${streakEmoji} Streak: ${streakEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
-            `> ❤️ Love: ${loveEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
-            `> 👋 Onboarding: ${onboardingEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n` +
-            `> 🎵 TikTok Convert: ${tiktokEnabled !== '0' ? '✅ ON' : '❌ OFF'}\n\n` +
             `**📈 XP & Level:**\n` +
             `> ⚡ XP Multiplier: **${xpMult}x**\n` +
             `> 🎯 Max Level: **${getSetting(guildId, 'max_level', '200')}**\n\n` +
-            `-# 💡 Klik "📡 Channels" untuk set channel notifikasi.\n` +
-            `-# 💡 Klik "🎛️ Toggle" untuk ON/OFF fitur (isi 1 atau 0).`
+            `-# 💡 Klik "📡 Channels" untuk mengatur channel notifikasi & auto-setup.\n` +
+            `-# 💡 Klik "🎛️ Features" di panel utama untuk menyalakan/mematikan semua fitur bot.\n` +
+            `-# 💡 Klik "🔧 Lainnya" untuk set blocked channels.`
         );
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_set_channels').setLabel('📡 Channels').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_toggles').setLabel('🎛️ Toggle Fitur').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_xp').setLabel('📈 XP & Level').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_set_streak_cfg').setLabel(`${streakEmoji} Streak Config`).setStyle(ButtonStyle.Primary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_set_love_cfg').setLabel('❤️ Love Config').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admpnl_customembed').setLabel('🏷️ Custom Embed').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('admpnl_set_misc').setLabel('🔧 Lainnya').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
@@ -316,8 +351,8 @@ function buildBlacklistSubPanel(guildId) {
         .setDescription(
             `User yang di-blacklist tidak bisa di **semua server**:\n` +
             `> ❌ Earn XP & Money dari chat\n` +
-            `> ❌ Claim /daily, /fish, /farm\n` +
-            `> ❌ Ikut giveaway & tournament\n\n` +
+            `> ❌ Claim /daily\n` +
+            `> ❌ Ikut giveaway & mini-event\n\n` +
             `**Daftar Blacklist (${list.length}):**\n${listText}`
         );
 
@@ -352,27 +387,92 @@ function buildContestSubPanel(guildId) {
     return { embeds: [embed], components: [row] };
 }
 
-// ============ BUILD: Notifications sub-panel ============
-function buildNotificationsSubPanel() {
+// ============ BUILD: Channels sub-panel ============
+function buildChannelsSubPanel(guildId) {
+    const questCh = getSetting(guildId, 'quest_channel', null);
+    const levelCh = getSetting(guildId, 'level_channel', null);
+    const achCh = getSetting(guildId, 'achievement_channel', null);
+    const streakCh = getSetting(guildId, 'streak_channel', null);
+        const logCh = getSetting(guildId, 'log_channel', null);
+    const serverlogCh = getSetting(guildId, 'serverlog_channel', null);
+
+    const { getInviteSetting } = require('./inviteTracker');
+    const inviteCh = getInviteSetting(guildId, 'invite_channel', '');
+
+    const streakEmoji = getSetting(guildId, 'streak_emoji', '🔥');
+
     const embed = new EmbedBuilder()
-        .setTitle('\ud83d\udce2 NOTIFICATIONS SETUP')
-        .setColor('#2ECC71')
+        .setTitle('📡 CONFIG NOTIFICATION CHANNELS')
+        .setColor('#95A5A6')
         .setDescription(
-            `Auto-create kategori & channel notifikasi:\n\n` +
-            `Akan membuat:\n` +
-            `> \ud83d\udcc1 **NOTIFICATIONS** (kategori)\n` +
-            `> \u2514 \ud83c\udfc6 #achievement\n` +
-            `> \u2514 \ud83d\udcc8 #level-up\n` +
-            `> \u2514 \ud83d\udd25 #streak\n\n` +
-            `\u26a0\ufe0f Ini akan membuat channel baru!`
+            `Atur channel notifikasi sistem untuk server ini:\n\n` +
+            `> 📋 **Quest Channel**: ${questCh ? `<#${questCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 📈 **Level Up Channel**: ${levelCh ? `<#${levelCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 🏆 **Achievement Channel**: ${achCh ? `<#${achCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> ${streakEmoji} **Streak Channel**: ${streakCh ? `<#${streakCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 📨 **Invite Log Channel**: ${inviteCh ? `<#${inviteCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> 📝 **Log Channel**: ${logCh ? `<#${logCh}>` : '⚠️ *Belum diatur*'}\n` +
+            `> ⚙️ **Server Log**: ${serverlogCh ? `<#${serverlogCh}>` : '⚠️ *Belum diatur*'}\n\n` +
+            `💡 Klik **✏️ Edit Channels** untuk memasukkan ID channel secara manual.\n` +
+            `💡 Klik **🚀 Auto-Setup** untuk otomatis membuat kategori **NOTIFICATIONS** beserta channel **#achievement**, **#level-up**, dan **#streak**.`
         );
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_notif_create').setLabel('\ud83d\udce2 Create Channels').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admpnl_back').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('admpnl_set_channels_modal').setLabel('✏️ Edit Channels').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('admpnl_notif_create').setLabel('🚀 Auto-Setup').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('admpnl_setting').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
+}
+
+// ============ BUILD: Feature Toggle sub-panel ============
+function buildFeatureTogglePanel(guildId, page = 0) {
+    const totalPages = Math.ceil(FEATURES.length / PAGE_SIZE);
+    if (page < 0) page = 0;
+    if (page >= totalPages) page = totalPages - 1;
+    const start = page * PAGE_SIZE;
+    const pageFeatures = FEATURES.slice(start, start + PAGE_SIZE);
+
+    let desc = `Klik tombol untuk **ON/OFF** fitur di server ini.\nFitur yang di-OFF tidak bisa dipakai oleh semua member.\n\n`;
+    for (const f of pageFeatures) {
+        const on = isFeatureEnabled(guildId, f.key);
+        desc += `> ${f.emoji} **${f.label}** — ${on ? '✅ ON' : '❌ OFF'}\n>  ┗ *${f.desc}*\n`;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle(`🎛️ FEATURE TOGGLE — Page ${page + 1}/${totalPages}`)
+        .setColor('#5865F2')
+        .setDescription(desc)
+        .setFooter({ text: `${FEATURES.filter(f => isFeatureEnabled(guildId, f.key)).length}/${FEATURES.length} fitur aktif • Klik tombol untuk toggle` });
+
+    // Build toggle buttons (max 5 per row, up to 2 rows = 10 buttons, but we use 8)
+    const rows = [];
+    const btnRow1 = new ActionRowBuilder();
+    const btnRow2 = new ActionRowBuilder();
+    pageFeatures.forEach((f, i) => {
+        const on = isFeatureEnabled(guildId, f.key);
+        const btn = new ButtonBuilder()
+            .setCustomId(`admpnl_ftoggle_${f.key}_${page}`)
+            .setLabel(`${f.emoji} ${f.label}`)
+            .setStyle(on ? ButtonStyle.Success : ButtonStyle.Danger);
+        if (i < 4) btnRow1.addComponents(btn);
+        else btnRow2.addComponents(btn);
+    });
+    if (btnRow1.components.length > 0) rows.push(btnRow1);
+    if (btnRow2.components.length > 0) rows.push(btnRow2);
+
+    // Navigation row
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_prev_${page}`).setLabel('◀️ Prev').setStyle(ButtonStyle.Secondary).setDisabled(page <= 0),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_next_${page}`).setLabel('Next ▶️').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_allon`).setLabel('✅ All ON').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`admpnl_ftoggle_alloff`).setLabel('❌ All OFF').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
+    );
+    rows.push(navRow);
+
+    return { embeds: [embed], components: rows };
 }
 
 // ============ BUILD: TempVoice sub-panel ============
@@ -422,29 +522,34 @@ async function handleAdminButton(interaction) {
     }
 
     // === SUB-PANEL NAVIGATION ===
+    if (customId === 'admpnl_cleanlayout') {
+        await interaction.deferReply({ ephemeral: true });
+        const { cleanServerLayout } = require('./layoutCleanup');
+        const res = await cleanServerLayout(interaction.guild);
+        if (!res.ok) {
+            return interaction.editReply({ content: `❌ Gagal merapikan layout: ${res.error}` });
+        }
+        const logText = res.log.length > 0 ? res.log.join('\n') : '• Semua channel & role sudah rapi.';
+        const cleanEmbed = new EmbedBuilder()
+            .setTitle('🧹 Server Layout Cleaned Up!')
+            .setColor('#2ECC71')
+            .setDescription(
+                `Berhasil merapikan layout server Discord:\n\n` +
+                `${logText}\n\n` +
+                `> 💡 *Catatan: Pastikan posisi role bot (\`ID BOT\`) di Server Settings ditaruh di atas role member.*`
+            )
+            .setTimestamp();
+        return interaction.editReply({ embeds: [cleanEmbed] });
+    }
     if (customId === 'admpnl_shop') return interaction.update(buildShopSubPanel());
     // Pass userId so Money panel can show/disable banker buttons accordingly
     if (customId === 'admpnl_money') return interaction.update(buildMoneySubPanel(interaction.user.id));
     if (customId === 'admpnl_streak') return interaction.update(buildStreakSubPanel());
     if (customId === 'admpnl_setting') return interaction.update(buildSettingSubPanel(guildId));
-    if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
-    if (customId === 'admpnl_notifications') return interaction.update(buildNotificationsSubPanel());
+    if (customId === 'admpnl_contest') return interaction.reply({ content: '❌ Fitur contest telah dinonaktifkan.', ephemeral: true });
+    if (customId === 'admpnl_set_channels') return interaction.update(buildChannelsSubPanel(guildId));
+    if (customId === 'admpnl_features') return interaction.update(buildFeatureTogglePanel(guildId, 0));
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
-
-    // === TICKET SUB-PANEL ===
-    if (customId === 'admpnl_ticket') {
-        const embed = new EmbedBuilder().setTitle('🎫 TICKET SETUP').setColor('#5865F2')
-            .setDescription('Setup sistem tiket support:\n\nAkan membuat:\n> 📁 **TICKETS** (kategori)\n> ├ 🎫 #open-ticket (panel)\n> └ 📋 #ticket-logs (transcript)\n\n⚠️ Ini akan membuat channel baru!');
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('admpnl_ticket_setup').setLabel('🎫 Setup Ticket').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
-        );
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-    if (customId === 'admpnl_ticket_setup') {
-        const { setupTicketSystem } = require('./ticket');
-        return setupTicketSystem(interaction);
-    }
 
     // === NEW PANELS ===
     if (customId === 'admpnl_giveaway') return interaction.update(buildGiveawaySubPanel(guildId));
@@ -456,27 +561,72 @@ async function handleAdminButton(interaction) {
         return interaction.showModal(modal);
     }
     if (customId === 'admpnl_announce') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_announce').setTitle('📢 Kirim Announcement');
+        return interaction.update(buildCustomEmbedPanel(guildId, interaction.user.id, interaction.guild));
+    }
+    // === FEATURE TOGGLE BUTTONS ===
+    if (customId.startsWith('admpnl_ftoggle_')) {
+        const parts = customId.replace('admpnl_ftoggle_', '').split('_');
+        // Navigation: prev/next
+        if (parts[0] === 'prev') {
+            const curPage = parseInt(parts[1]) || 0;
+            return interaction.update(buildFeatureTogglePanel(guildId, curPage - 1));
+        }
+        if (parts[0] === 'next') {
+            const curPage = parseInt(parts[1]) || 0;
+            return interaction.update(buildFeatureTogglePanel(guildId, curPage + 1));
+        }
+        // All ON / All OFF
+        if (parts[0] === 'allon') {
+            for (const f of FEATURES) setSetting(guildId, f.key, '1');
+            return interaction.update(buildFeatureTogglePanel(guildId, 0));
+        }
+        if (parts[0] === 'alloff') {
+            for (const f of FEATURES) setSetting(guildId, f.key, '0');
+            return interaction.update(buildFeatureTogglePanel(guildId, 0));
+        }
+        // Individual toggle: admpnl_ftoggle_feature_KEY_PAGE
+        const page = parseInt(parts[parts.length - 1]) || 0;
+        const featureKey = parts.slice(0, -1).join('_'); // rejoin in case key has underscores
+        const newState = toggleFeature(guildId, featureKey);
+        const fDef = FEATURES.find(f => f.key === featureKey);
+        // Update panel in-place
+        return interaction.update(buildFeatureTogglePanel(guildId, page));
+    }
+
+    if (customId === 'admpnl_blacklist') return interaction.update(buildBlacklistSubPanel(guildId));
+    if (customId === 'admpnl_customembed') {
+        return interaction.update(buildCustomEmbedPanel(guildId, interaction.user.id, interaction.guild));
+    }
+    if (customId === 'admpnl_ce_edit') {
+        const d = getEmbedDraft(guildId, interaction.user.id);
+        const modal = new ModalBuilder().setCustomId('admpnl_modal_customembed').setTitle('🏷️ Custom Embed');
         modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID tujuan').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Klik kanan channel > Copy ID')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul embed').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Contoh: 🎉 Event Baru!')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi pesan (support \\n untuk newline)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Tulis pesan pengumuman...')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex (kosong = biru)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#FF5733')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image_url').setLabel('Image URL (kosong = tanpa gambar)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('https://i.imgur.com/xxx.png'))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Judul embed').setValue(d.title || '')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi (\\n untuk newline, {server} untuk nama)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Konten embed...').setValue(d.description || '')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#2B2D31').setValue(d.color || '')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer text (kosong = tanpa footer)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Footer teks').setValue(d.footer || '')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image').setLabel('Link gambar (URL, kosong = tanpa gambar)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('https://...png/jpg/gif').setValue(d.image || ''))
         );
         return interaction.showModal(modal);
     }
-    if (customId === 'admpnl_blacklist') return interaction.update(buildBlacklistSubPanel(guildId));
-    if (customId === 'admpnl_customembed') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_customembed').setTitle('🏷️ Custom Embed');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('channel_id').setLabel('Channel ID (kirim embed ke sini)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Channel ID')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Judul').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Judul embed')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel('Isi (\\n untuk newline, {server} untuk nama)').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Konten embed...')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Warna hex').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('#2B2D31')),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer text (kosong = tanpa footer)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Footer teks'))
-        );
-        return interaction.showModal(modal);
+    if (customId === 'admpnl_ce_send') {
+        const d = getEmbedDraft(guildId, interaction.user.id);
+        if (!d.channelId || !d.description) return interaction.reply({ content: '❌ Pilih channel & isi konten dulu!', flags: 1 << 6 });
+        const channel = interaction.guild.channels.cache.get(d.channelId);
+        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', flags: 1 << 6 });
+        const embed = new EmbedBuilder()
+            .setColor(d.color && /^#?[0-9a-fA-F]{6}$/.test(d.color) ? (d.color.startsWith('#') ? d.color : `#${d.color}`) : '#2B2D31')
+            .setDescription(d.description.replace(/\\n/g, '\n').replace(/{server}/g, interaction.guild.name));
+        if (d.title) embed.setTitle(d.title.replace(/{server}/g, interaction.guild.name));
+        if (d.footer) embed.setFooter({ text: d.footer });
+        if (d.image) embed.setImage(d.image);
+        try {
+            await channel.send({ embeds: [embed] });
+        } catch (e) {
+            return interaction.reply({ content: `❌ Gagal kirim: ${e.message}`, flags: 1 << 6 });
+        }
+        embedDrafts.delete(ceKey(guildId, interaction.user.id)); // reset draft after send
+        return interaction.update({ content: `✅ Custom embed terkirim ke <#${d.channelId}>!`, embeds: [], components: [] });
     }
 
     // === DB TOOLS (Owner Only) ===
@@ -679,7 +829,7 @@ async function handleAdminButton(interaction) {
 
 
     // === SETTING: Sub-section buttons ===
-    if (customId === 'admpnl_set_channels') {
+    if (customId === 'admpnl_set_channels_modal') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_channels').setTitle('Set Notification Channels');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('quest_ch').setLabel('Quest Channel ID (kosong = off)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_channel', '') || 'Channel ID')),
@@ -687,17 +837,6 @@ async function handleAdminButton(interaction) {
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ach_ch').setLabel('Achievement Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'achievement_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('streak_ch').setLabel('Streak Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'streak_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('invite_ch').setLabel('Invite Log Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('Channel ID untuk log invite'))
-        );
-        return interaction.showModal(modal);
-    }
-    if (customId === 'admpnl_set_toggles') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_toggles').setTitle('Toggle Fitur (1=ON, 0=OFF)');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('leveling').setLabel('Leveling (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'leveling_enabled', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('streak').setLabel('Streak (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'streak_enabled', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('love').setLabel('Love (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_enabled', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('onboarding').setLabel('Onboarding DM (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'onboarding_enabled', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tiktok').setLabel('TikTok Convert (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'tiktok_convert', '1')))
         );
         return interaction.showModal(modal);
     }
@@ -722,21 +861,14 @@ async function handleAdminButton(interaction) {
         );
         return interaction.showModal(modal);
     }
-    if (customId === 'admpnl_set_love_cfg') {
-        const modal = new ModalBuilder().setCustomId('admpnl_modal_love_cfg').setTitle('Love Configuration');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('emoji').setLabel('Love Emoji').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_emoji', '❤️'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('min_love').setLabel('Min love untuk tampil di nickname').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_min', '1'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('auto_nick').setLabel('Auto Nickname (1/0)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'love_auto_nickname', '1')))
-        );
-        return interaction.showModal(modal);
-    }
     if (customId === 'admpnl_set_misc') {
         const modal = new ModalBuilder().setCustomId('admpnl_modal_misc').setTitle('Settings Lainnya');
         modal.addComponents(
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('log_ch').setLabel('Log Channel ID').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'log_channel', '') || 'Channel ID')),
             new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('quest_reroll').setLabel('Quest Reroll Max/Hari').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_max', '3'))),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reroll_cost').setLabel('Quest Reroll Cost').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_cost', '500')))
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reroll_cost').setLabel('Quest Reroll Cost').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'quest_reroll_cost', '500'))),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('blocked_channels').setLabel('🚫 Blocked Channels (ID, pisah koma)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(getSetting(guildId, 'blocked_channels', '') || '123456789,987654321')),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('serverlog_ch').setLabel('📝 Server Log Channel (kosong=OFF)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder(getSetting(guildId, 'serverlog_channel', '') || 'Channel ID untuk log'))
         );
         return interaction.showModal(modal);
     }
@@ -806,47 +938,9 @@ async function handleAdminButton(interaction) {
     }
 
 
-    // === CONTEST: Start/End ===
-    if (customId === 'admpnl_contest_start') {
-        const { getContestState, startFishContest } = require('./contest');
-        const state = getContestState(guildId);
-        if (state && state.active) {
-            return interaction.reply({ content: '\u274c Sudah ada kontes aktif! Akhiri dulu.', flags: 1 << 6 });
-        }
-        startFishContest(guildId, interaction.channelId, 60);
-        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Started!').setColor('#FFD700')
-            .setDescription('\u2705 Fishing contest dimulai! Durasi: **60 menit**\n\nPlayer ikut dengan memancing & cek ranking via `/fishing` → 🏆 Contest.');
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    if (customId === 'admpnl_contest_end') {
-        const { getContestState } = require('./contest');
-        const state = getContestState(guildId);
-        if (!state || !state.active) {
-            return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', flags: 1 << 6 });
-        }
-        const { getContestLeaderboard } = require('./contest');
-        const { FISH_DATA } = require('../data/fish');
-        const { addIncome } = require('../database');
-        db.prepare('UPDATE fish_contest_state SET active = 0 WHERE guildId = ? AND active = 1').run(guildId);
-        const top = getContestLeaderboard(guildId, 3);
-        const prizes = [3000, 1500, 800];
-        let desc = '\u2705 **Kontes diakhiri!** Hadiah dibagikan ke Top 3:\n\n';
-        top.forEach((e, i) => {
-            const fishDef = FISH_DATA.find(f => f.id === e.fishId);
-            const prize = prizes[i] || 0;
-            desc += `${['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'][i]} <@${e.oderId}> \u2014 ${fishDef ? fishDef.emoji : '\ud83d\udc1f'} **${e.weight} kg** \u2192 \ud83e\ude99 +${prize.toLocaleString('id-ID')}\n`;
-            if (prize > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.oderId);
-                addIncome(guildId, e.oderId, 'event', prize);
-            }
-        });
-        if (top.length === 0) desc += '*Tidak ada peserta.*';
-        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Ended!').setColor('#FFD700')
-            .setDescription(desc).setFooter({ text: 'Hadiah sudah dibagikan otomatis!' });
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row] });
+    // === CONTEST: Start/End (Disabled) ===
+    if (customId === 'admpnl_contest_start' || customId === 'admpnl_contest_end') {
+        return interaction.reply({ content: '❌ Fitur contest telah dinonaktifkan.', ephemeral: true });
     }
 }
 
@@ -1015,18 +1109,10 @@ async function handleAdminModal(interaction) {
                 }
             }
         }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Channel updated: ${updated.join(', ')}` : '⚠️ Tidak ada perubahan (semua kosong).', ephemeral: true });
-    }
-
-    // === SETTING: Toggles ===
-    if (customId === 'admpnl_modal_toggles') {
-        const map = { leveling: 'leveling_enabled', streak: 'streak_enabled', love: 'love_enabled', onboarding: 'onboarding_enabled', tiktok: 'tiktok_convert' };
-        const updated = [];
-        for (const [field, key] of Object.entries(map)) {
-            const val = (interaction.fields.getTextInputValue(field) || '').trim();
-            if (val === '0' || val === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, key, val); updated.push(`${field}=${val}`); }
+        if (interaction.message) {
+            await interaction.message.edit(buildChannelsSubPanel(guildId)).catch(() => {});
         }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Toggled: ${updated.join(', ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+        return interaction.reply({ content: updated.length > 0 ? `✅ Channel updated: ${updated.join(', ')}` : '⚠️ Tidak ada perubahan (semua kosong).', ephemeral: true });
     }
 
     // === SETTING: XP & Level ===
@@ -1042,6 +1128,9 @@ async function handleAdminModal(interaction) {
         if (voiceXp && voiceXp.includes('-')) { const [min, max] = voiceXp.split('-'); if (!isNaN(min) && !isNaN(max)) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'voice_xp_min', min.trim()); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'voice_xp_max', max.trim()); updated.push(`Voice XP: ${min}-${max}`); } }
         const noXpCh = (interaction.fields.getTextInputValue('no_xp_ch') || '').trim();
         if (noXpCh) { const arr = noXpCh.split(',').map(s => s.trim()).filter(Boolean); db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'no_xp_channels', JSON.stringify(arr)); updated.push(`No-XP Channels: ${arr.length}`); }
+        if (interaction.message) {
+            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
+        }
         return interaction.reply({ content: updated.length > 0 ? `✅ Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
@@ -1056,19 +1145,27 @@ async function handleAdminModal(interaction) {
         if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
         const tz = (interaction.fields.getTextInputValue('timezone') || '').trim();
         if (tz) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_timezone', tz); updated.push(`Timezone: ${tz}`); }
+        if (interaction.message) {
+            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
+        }
         return interaction.reply({ content: updated.length > 0 ? `✅ Streak config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
     // === SETTING: Love Config ===
-    if (customId === 'admpnl_modal_love_cfg') {
+    if (customId === 'admpnl_modal_streak_cfg') {
         const updated = [];
         const emoji = (interaction.fields.getTextInputValue('emoji') || '').trim();
-        if (emoji) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_emoji', emoji); updated.push(`Emoji: ${emoji}`); }
-        const minLove = (interaction.fields.getTextInputValue('min_love') || '').trim();
-        if (minLove && !isNaN(parseInt(minLove))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_min', minLove); updated.push(`Min Love: ${minLove}`); }
+        if (emoji) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_emoji', emoji); updated.push(`Emoji: ${emoji}`); }
+        const minDays = (interaction.fields.getTextInputValue('min_days') || '').trim();
+        if (minDays && !isNaN(parseInt(minDays))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_min_days', minDays); updated.push(`Min Days: ${minDays}`); }
         const autoNick = (interaction.fields.getTextInputValue('auto_nick') || '').trim();
-        if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'love_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
-        return interaction.reply({ content: updated.length > 0 ? `✅ Love config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
+        if (autoNick === '0' || autoNick === '1') { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_auto_nickname', autoNick); updated.push(`Auto Nickname: ${autoNick === '1' ? 'ON' : 'OFF'}`); }
+        const tz = (interaction.fields.getTextInputValue('timezone') || '').trim();
+        if (tz) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'streak_timezone', tz); updated.push(`Timezone: ${tz}`); }
+        if (interaction.message) {
+            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
+        }
+        return interaction.reply({ content: updated.length > 0 ? `✅ Streak config updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
     // === SETTING: Misc ===
@@ -1080,6 +1177,26 @@ async function handleAdminModal(interaction) {
         if (rerollMax && !isNaN(parseInt(rerollMax))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_reroll_max', rerollMax); updated.push(`Quest Reroll Max: ${rerollMax}/hari`); }
         const rerollCost = (interaction.fields.getTextInputValue('reroll_cost') || '').trim();
         if (rerollCost && !isNaN(parseInt(rerollCost))) { db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'quest_reroll_cost', rerollCost); updated.push(`Reroll Cost: 🪙 ${rerollCost}`); }
+        const blockedCh = (interaction.fields.getTextInputValue('blocked_channels') || '').trim();
+        if (blockedCh !== null && blockedCh !== undefined) {
+            // Clean: only keep numeric IDs separated by commas
+            const cleaned = blockedCh.split(/[,\s]+/).filter(id => /^\d+$/.test(id)).join(',');
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'blocked_channels', cleaned);
+            if (cleaned) updated.push(`🚫 Blocked Channels: ${cleaned.split(',').map(id => `<#${id}>`).join(', ')}`);
+            else updated.push('🚫 Blocked Channels: *dihapus (semua channel bisa)*');
+        }
+        const serverlogCh = (interaction.fields.getTextInputValue('serverlog_ch') || '').trim();
+        if (serverlogCh && /^\d+$/.test(serverlogCh)) {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_channel', serverlogCh);
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_enabled', '1');
+            updated.push(`📝 Server Log: ON → <#${serverlogCh}>`);
+        } else if (serverlogCh === '') {
+            db.prepare('INSERT OR REPLACE INTO server_settings (guildId, key, value) VALUES (?, ?, ?)').run(guildId, 'serverlog_enabled', '0');
+            updated.push('📝 Server Log: OFF');
+        }
+        if (interaction.message) {
+            await interaction.message.edit(buildSettingSubPanel(guildId)).catch(() => {});
+        }
         return interaction.reply({ content: updated.length > 0 ? `✅ Updated:\n> ${updated.join('\n> ')}` : '⚠️ Tidak ada perubahan.', ephemeral: true });
     }
 
@@ -1093,9 +1210,7 @@ async function handleAdminModal(interaction) {
         const totalDailies = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_dailies'").get(guildId, targetId)?.stat_value || 0;
         const totalEarned = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_earned'").get(guildId, targetId)?.stat_value || 0;
         const totalSpent = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_spent'").get(guildId, targetId)?.stat_value || 0;
-        const petCount = db.prepare('SELECT COUNT(*) as c FROM pets WHERE userId = ?').get(targetId)?.c || 0;
         const achCount = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(targetId)?.c || 0;
-        const fishCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(targetId)?.c || 0;
         // Check blacklist
         let blacklisted = false;
         try { blacklisted = !!db.prepare('SELECT 1 FROM blacklist WHERE userId = ?').get(targetId); } catch (_) {}
@@ -1112,11 +1227,8 @@ async function handleAdminModal(interaction) {
                 `**📊 Progress:**\n` +
                 `> Level: **${user.level || 0}** (XP: ${user.xp || 0})\n` +
                 `> 🔥 Streak: **${streakRow.count}** hari (last: ${streakRow.last_date})\n` +
-                `> 📅 Daily Claims: **${totalDailies}**\n\n` +
-                `**🎮 Collection:**\n` +
-                `> 🐾 Pets: **${petCount}**\n` +
-                `> 🏆 Achievements: **${achCount}**\n` +
-                `> 🐟 Fish: **${fishCount}**\n\n` +
+                `> 📅 Daily Claims: **${totalDailies}**\n` +
+                `> 🏆 Achievements: **${achCount}**\n\n` +
                 `> Last Daily: ${user.lastDaily || 'Never'}`
             )
             .setFooter({ text: `ID: ${targetId}` })
@@ -1128,48 +1240,19 @@ async function handleAdminModal(interaction) {
         return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
-    // === ANNOUNCEMENT ===
-    if (customId === 'admpnl_modal_announce') {
-        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
-        const title = interaction.fields.getTextInputValue('title').trim();
-        const description = interaction.fields.getTextInputValue('description').replace(/\\n/g, '\n');
-        const color = interaction.fields.getTextInputValue('color')?.trim() || '#3498DB';
-        const imageUrl = interaction.fields.getTextInputValue('image_url')?.trim() || '';
 
-        const channel = interaction.guild.channels.cache.get(channelId);
-        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
-
-        const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(description)
-            .setColor(color.startsWith('#') ? color : `#${color}`)
-            .setTimestamp()
-            .setFooter({ text: `Oleh ${interaction.user.username}` });
-        if (imageUrl) embed.setImage(imageUrl);
-
-        await channel.send({ embeds: [embed] });
-        return interaction.reply({ content: `✅ Announcement terkirim ke <#${channelId}>!`, ephemeral: true });
-    }
 
     // === CUSTOM EMBED ===
     if (customId === 'admpnl_modal_customembed') {
-        const channelId = interaction.fields.getTextInputValue('channel_id').trim();
-        const title = interaction.fields.getTextInputValue('title')?.trim() || '';
-        const description = interaction.fields.getTextInputValue('description').replace(/\\n/g, '\n').replace(/{server}/g, interaction.guild.name);
-        const color = interaction.fields.getTextInputValue('color')?.trim() || '#2B2D31';
-        const footer = interaction.fields.getTextInputValue('footer')?.trim() || '';
-
-        const channel = interaction.guild.channels.cache.get(channelId);
-        if (!channel) return interaction.reply({ content: '❌ Channel tidak ditemukan!', ephemeral: true });
-
-        const embed = new EmbedBuilder()
-            .setDescription(description)
-            .setColor(color.startsWith('#') ? color : `#${color}`);
-        if (title) embed.setTitle(title);
-        if (footer) embed.setFooter({ text: footer });
-
-        await channel.send({ embeds: [embed] });
-        return interaction.reply({ content: `✅ Custom embed terkirim ke <#${channelId}>!`, ephemeral: true });
+        const d = getEmbedDraft(interaction.guild.id, interaction.user.id);
+        d.title = (interaction.fields.getTextInputValue('title') || '').trim();
+        d.description = (interaction.fields.getTextInputValue('description') || '').trim();
+        const color = (interaction.fields.getTextInputValue('color') || '').trim();
+        if (color) d.color = color.startsWith('#') ? color : `#${color}`;
+        d.footer = (interaction.fields.getTextInputValue('footer') || '').trim();
+        const image = (interaction.fields.getTextInputValue('image') || '').trim();
+        d.image = /^https?:\/\/.+/i.test(image) ? image : '';
+        return interaction.update(buildCustomEmbedPanel(interaction.guild.id, interaction.user.id, interaction.guild));
     }
 
     // === BLACKLIST: Add ===
@@ -1309,6 +1392,18 @@ function isAdminPanelButton(customId) {
     return customId.startsWith('admpnl_');
 }
 
+async function handleAdminChannelSelect(interaction) {
+    if (!isAdminUser(interaction)) return interaction.reply({ content: '❌ Hanya Admin!', flags: 1 << 6 });
+    if (interaction.customId === 'admpnl_ce_channel') {
+        const d = getEmbedDraft(interaction.guild.id, interaction.user.id);
+        d.channelId = interaction.values[0];
+        return interaction.update(buildCustomEmbedPanel(interaction.guild.id, interaction.user.id, interaction.guild));
+    }
+}
+function isAdminPanelChannelSelect(customId) {
+    return typeof customId === 'string' && customId.startsWith('admpnl_ce_channel');
+}
+
 function isAdminPanelModal(customId) {
     return customId.startsWith('admpnl_modal_');
 }
@@ -1325,8 +1420,6 @@ function buildDbToolsPanel(userId) {
         .setDescription(
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             (!isOwner ? `> ⛔ *Hanya pemilik bot yang bisa menggunakan fitur ini.*\n` :
-            `> 🔍 **Pet Lookup** — Cek semua pet milik user\n` +
-            `> 🔄 **Restore Pet** — Restore pet dari backup ke akun user\n` +
             `> 💾 **List Backup** — Lihat daftar backup tersedia\n` +
             `> 🛠️ **Force Backup** — Buat backup manual sekarang\n`) +
             `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1342,10 +1435,7 @@ function buildDbToolsPanel(userId) {
         .setFooter({ text: '⚠️ Fitur ini hanya untuk Bot Owner' });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_dbtools_petlookup').setLabel('🔍 Pet Lookup').setStyle(ButtonStyle.Primary).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_restorepet').setLabel('🔄 Restore Pet').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_restoreall').setLabel('🔄 Restore ALL Pets').setStyle(ButtonStyle.Danger).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Secondary).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 
@@ -1523,9 +1613,6 @@ async function handleDbToolsModal(interaction) {
         // Query pets dari database utama (semua userId matching, termasuk GLOBAL_MARKET)
         const allPets = db.prepare('SELECT * FROM pets WHERE userId = ? ORDER BY active DESC, level DESC').all(targetId);
         const activePet = allPets.find(p => p.active === 1);
-
-        // Cek apakah ada pet di Global Market
-        const marketPets = db.prepare("SELECT * FROM pets WHERE userId = 'GLOBAL_MARKET'").all();
         const { PET_DATA } = require('../data/pets');
 
         let desc = `**User ID:** \`${targetId}\`\n`;
@@ -1541,16 +1628,6 @@ async function handleDbToolsModal(interaction) {
                 desc += `> ${status} **#${p.id}** ${pd ? pd.emoji : '🐾'} **${p.name}** (Lv.${p.level}) — ${pd ? pd.tier : '?'}\n`;
                 desc += `>   ATK:${p.atk} DEF:${p.def} HP:${p.hp} | status: \`${p.status}\`\n`;
             });
-        }
-
-        // Cek pet yang mungkin terjebak di Global Market (sellerId = targetId)
-        const listedInMarket = db.prepare("SELECT * FROM global_market WHERE sellerId = ? AND status = 'active' AND itemType = 'pet'").all(targetId);
-        if (listedInMarket.length > 0) {
-            desc += `\n**🌍 Pet di Global Market (listing aktif):**\n`;
-            listedInMarket.forEach(l => {
-                desc += `> 🏷️ **${l.itemName}** — 🪙 ${l.price.toLocaleString('id-ID')} | ID listing: #${l.id}\n`;
-            });
-            desc += `> ⚠️ Pet ini bisa di-cancel di Global Market untuk kembali ke owner.\n`;
         }
 
         const embed = new EmbedBuilder()
@@ -1682,6 +1759,8 @@ module.exports = {
     buildAdminPanel,
     handleAdminCommand,
     handleAdminButton,
+    handleAdminChannelSelect,
+    isAdminPanelChannelSelect,
     handleAdminModal,
     handleDbToolsButton,
     handleDbToolsModal,

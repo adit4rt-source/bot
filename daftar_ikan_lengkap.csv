@@ -1,0 +1,153 @@
+﻿No,ID Ikan,Emoji,Nama Ikan,Rarity / Tier,Lokasi,Base Chance (%),Min Bobot (kg),Max Bobot (kg),Min Harga (Money),Max Harga (Money)
+1,tire,⭕,Ban Bekas,Trash,🏞️ Sungai,25,0.01,0.5,1,5
+2,lumpur,💩,Gumpalan Lumpur,Trash,🌿 Rawa,25,0.01,0.5,1,5
+3,can,🥫,Kaleng Bekas,Trash,🏞️ Sungai,25,0.01,0.5,1,5
+4,plastic,🛍️,Plastik,Trash,🏞️ Sungai,25,0.01,0.5,1,5
+5,boot,👢,Sepatu Bekas,Trash,🏞️ Sungai,25,0.01,0.5,1,5
+6,tulang,🦴,Tulang Misterius,Trash,🌿 Rawa,25,0.01,0.5,1,5
+7,bass,🐟,Bass,Common,🌊 Danau,35,0.1,5,3,15
+8,belut,🐍,Belut,Common,🌿 Rawa,35,0.1,5,3,15
+9,betok,🐸,Betok,Common,🌿 Rawa,35,0.1,5,3,15
+10,coral_clown,🤡,Coral Clown,Common,🏖️ Laut Pesisir,35,0.1,5,3,15
+11,gabus_rawa,🐊,Gabus Rawa,Common,🌿 Rawa,35,0.1,5,3,15
+12,gurami,🐡,Gurami,Common,🏞️ Sungai,35,0.1,5,3,15
+13,kakap,🐟,Kakap Merah,Common,🏖️ Laut Pesisir,35,0.1,5,3,15
+14,karper,🐡,Karper,Common,🌊 Danau,35,0.1,5,3,15
+15,river_crab,🦀,Kepiting Sungai,Common,🏞️ Sungai,35,0.1,5,3,15
+16,lele,🐱,Lele,Common,🏞️ Sungai,35,0.1,5,3,15
+17,mujair,🐠,Mujair,Common,🏞️ Sungai,35,0.1,5,3,15
+18,nila,🐟,Nila,Common,🏞️ Sungai,35,0.1,5,3,15
+19,tongkol,🐠,Tongkol,Common,🏖️ Laut Pesisir,35,0.1,5,3,15
+20,trout,🐠,Trout,Common,🌊 Danau,35,0.1,5,3,15
+21,ubur,🪼,Ubur-ubur,Common,🏖️ Laut Pesisir,35,0.1,5,3,15
+22,barakuda,⚡,Barakuda,Uncommon,🏖️ Laut Pesisir,22,0.5,15,8,35
+23,cakalang,🏃,Cakalang,Uncommon,🏖️ Laut Pesisir,22,0.5,15,8,35
+24,catfish_giant,🐱,Catfish Raksasa,Uncommon,🌊 Danau,22,0.5,15,8,35
+25,gabus_river,🐍,Gabus,Uncommon,🏞️ Sungai,22,0.5,15,8,35
+26,glass_goby,🫧,Glass Goby,Uncommon,🏞️ Sungai,22,0.5,15,8,35
+27,mas,✨,Ikan Mas,Uncommon,🏞️ Sungai,22,0.5,15,8,35
+28,kerapu,🐡,Kerapu,Uncommon,🏖️ Laut Pesisir,22,0.5,15,8,35
+29,mirror_carp,🪞,Mirror Carp,Uncommon,🌊 Danau,22,0.5,15,8,35
+30,patin_lake,🐟,Patin Danau,Uncommon,🌊 Danau,22,0.5,15,8,35
+31,patin_river,🐟,Patin Sungai,Uncommon,🏞️ Sungai,22,0.5,15,8,35
+32,pike,🗡️,Pike,Uncommon,🌊 Danau,22,0.5,15,8,35
+33,piranha,😈,Piranha,Uncommon,🌿 Rawa,22,0.5,15,8,35
+34,swordfish,⚔️,Swordfish,Uncommon,🌊 Laut Dalam,22,0.5,15,8,35
+35,toman,🐲,Toman,Uncommon,🌿 Rawa,22,0.5,15,8,35
+36,tuna,🐟,Tuna Sirip Biru,Uncommon,🌊 Laut Dalam,22,0.5,15,8,35
+37,anaconda_muda,🐍,Anaconda Muda,Rare,🌿 Rawa,12,1,50,25,80
+38,arwana_gold,🥇,Arwana Emas,Rare,🌊 Danau,12,1,50,25,80
+39,arwana_silver,🥈,Arwana Silver,Rare,🏞️ Sungai,12,1,50,25,80
+40,bawal_river,💎,Bawal Air Tawar,Rare,🏞️ Sungai,12,1,50,25,80
+41,buaya_kecil,🐊,Buaya Kecil,Rare,🌿 Rawa,12,1,50,25,80
+42,crystal_smelt,💎,Crystal Smelt,Rare,❄️ Gua Es,12,1,50,25,80
+43,hiu_karang,🦈,Hiu Karang,Rare,🏖️ Laut Pesisir,12,1,50,25,80
+44,hiu_putih,🦈,Hiu Putih,Rare,🌊 Laut Dalam,12,1,50,25,80
+45,lava_crab,🦀,Lava Crab,Rare,🌋 Lahar,12,1,50,25,80
+46,magma_eel,🔥,Magma Eel,Rare,🌋 Lahar,12,1,50,25,80
+47,marlin_kecil,🗡️,Marlin Kecil,Rare,🏖️ Laut Pesisir,12,1,50,25,80
+48,marlin_besar,🏆,Marlin Raksasa,Rare,🌊 Laut Dalam,12,1,50,25,80
+49,narwhal,🦄,Narwhal,Rare,❄️ Gua Es,12,1,50,25,80
+50,oarfish,🐍,Oarfish,Rare,🌊 Laut Dalam,12,1,50,25,80
+51,sturgeon_lake,🐋,Sturgeon Danau,Rare,🌊 Danau,12,1,50,25,80
+52,sturgeon_purba,🧊,Sturgeon Purba,Rare,❄️ Gua Es,12,1,50,25,80
+53,sunset_perch,🌇,Sunset Perch,Rare,🌊 Danau,12,1,50,25,80
+54,tide_snapper,🌊,Tide Snapper,Rare,🏖️ Laut Pesisir,12,1,50,25,80
+55,trout_es,❄️,Trout Es,Rare,❄️ Gua Es,12,1,50,25,80
+56,volcanic_catfish,🌋,Volcanic Catfish,Rare,🌋 Lahar,12,1,50,25,80
+57,abyss_angler,🔦,Abyssal Angler,Epic,👁️ The Abyss,4,5,200,60,200
+58,arapaima,🦕,Arapaima,Epic,🌊 Danau,4,5,200,60,200
+59,comet_marlin,☄️,Comet Marlin,Epic,🌟 Celestial Ocean,4,5,200,60,200
+60,deep_lantern,🏮,Deep Lantern Fish,Epic,🌊 Laut Dalam,4,5,200,60,200
+61,depth_crawler,🕷️,Depth Crawler,Epic,👁️ The Abyss,4,5,200,60,200
+62,eldritch_eel,🐙,Eldritch Eel,Epic,🕳️ Void Rift,4,5,200,60,200
+63,ember_trout,🔥,Ember Trout,Epic,🌋 Lahar,4,5,200,60,200
+64,fire_serpent,🐍,Fire Serpent,Epic,🌋 Lahar,4,5,200,60,200
+65,frost_whale,🐳,Frost Whale,Epic,❄️ Gua Es,4,5,200,60,200
+66,giant_squid,🦑,Giant Squid,Epic,🌊 Laut Dalam,4,5,200,60,200
+67,ice_dragon_fish,🐲,Ice Dragon Fish,Epic,❄️ Gua Es,4,5,200,60,200
+68,napoleon,👑,Napoleon Wrasse,Epic,🏖️ Laut Pesisir,4,5,200,60,200
+69,nessie,🦎,Nessie Jr.,Epic,🌊 Danau,4,5,200,60,200
+70,paus_orca,🐋,Orca,Epic,🌊 Laut Dalam,4,5,200,60,200
+71,pari_manta,🦅,Pari Manta,Epic,🏖️ Laut Pesisir,4,5,200,60,200
+72,phoenix_fish,🔥,Phoenix Fish,Epic,🌋 Lahar,4,5,200,60,200
+73,rift_minnow,🕳️,Rift Minnow,Epic,🕳️ Void Rift,4,5,200,60,200
+74,shadow_leviathan,🐲,Shadow Leviathan,Epic,👁️ The Abyss,4,5,200,60,200
+75,shadow_ray,🦇,Shadow Ray,Epic,🕳️ Void Rift,4,5,200,60,200
+76,star_shard_fish,✨,Star Shard Fish,Epic,🌌 Astral Trench,4,5,200,60,200
+77,stardust_tuna,🌟,Stardust Tuna,Epic,🌟 Celestial Ocean,4,5,200,60,200
+78,tar_serpent,🛢️,Tar Serpent,Epic,💀 Primordial Depths,4,5,200,60,200
+79,void_jelly,👾,Void Jellyfish,Epic,🕳️ Void Rift,4,5,200,60,200
+80,voidglass_eel,🐍,Voidglass Eel,Epic,🌌 Astral Trench,4,5,200,60,200
+81,abyss_pearl_fish,🦪,Abyss Pearl Fish,Legendary,👁️ The Abyss,1.5,50,1000,150,600
+82,abyssal_kraken,🦑,Abyssal Kraken,Legendary,🕳️ Void Rift,1.5,50,1000,150,600
+83,abyssal_whale_king,🐋,Abyssal Whale King,Legendary,👁️ The Abyss,1.5,50,1000,150,600
+84,ancient_coelacanth,🦴,Ancient Coelacanth,Legendary,❄️ Gua Es,1.5,50,1000,150,600
+85,aurora_serpent,🌈,Aurora Serpent,Legendary,🌟 Celestial Ocean,1.5,50,1000,150,600
+86,constellation_fish,✨,Constellation Fish,Legendary,🌟 Celestial Ocean,1.5,50,1000,150,600
+87,crystal_koi,💎,Crystal Koi,Legendary,❄️ Gua Es,1.5,50,1000,150,600
+88,dimensional_whale,🐋,Dimensional Whale,Legendary,🕳️ Void Rift,1.5,50,1000,150,600
+89,echo_ray,📡,Echo Ray,Legendary,🕳️ Void Rift,1.5,50,1000,150,600
+90,eternal_jellyfish,🪼,Eternal Jellyfish,Legendary,👁️ The Abyss,1.5,50,1000,150,600
+91,fossil_ray,🦴,Fossil Ray,Legendary,💀 Primordial Depths,1.5,50,1000,150,600
+92,inferno_dragon,🐉,Inferno Dragon,Legendary,🌋 Lahar,1.5,50,1000,150,600
+93,leviathan,🐉,Leviathan Jr.,Legendary,🌊 Laut Dalam,1.5,50,1000,150,600
+94,magma_fossil_fish,🌋,Magma Fossil Fish,Legendary,💀 Primordial Depths,1.5,50,1000,150,600
+95,megalodon,🦷,Megalodon,Legendary,🌊 Laut Dalam,1.5,50,1000,150,600
+96,molten_leviathan,🌋,Molten Leviathan,Legendary,🌋 Lahar,1.5,50,1000,150,600
+97,nebula_trout,🌌,Nebula Trout,Legendary,🌌 Astral Trench,1.5,50,1000,150,600
+98,nebula_whale,🐋,Nebula Whale,Legendary,🌟 Celestial Ocean,1.5,50,1000,150,600
+99,orbit_shark,🦈,Orbit Shark,Legendary,🌌 Astral Trench,1.5,50,1000,150,600
+100,pulsar_bass,📶,Pulsar Bass,Legendary,🌟 Celestial Ocean,1.5,50,1000,150,600
+101,seraph_eel,😇,Seraph Eel,Legendary,👑 God Realm,1.5,50,1000,150,600
+102,starlight_ray,⭐,Starlight Ray,Legendary,🌟 Celestial Ocean,1.5,50,1000,150,600
+103,void_emperor,👑,Void Emperor,Legendary,👁️ The Abyss,1.5,50,1000,150,600
+104,void_serpent,🐍,Void Serpent,Legendary,🕳️ Void Rift,1.5,50,1000,150,600
+105,abyss_guardian,🛡️,Abyss Guardian,Mythic,👁️ The Abyss,0.4,100,5000,400,1500
+106,ancient_titan_fish,🦕,Ancient Titan Fish,Mythic,💀 Primordial Depths,0.4,100,5000,400,1500
+107,astral_crown_fish,👑,Astral Crown Fish,Mythic,🌌 Astral Trench,0.4,100,5000,400,1500
+108,bone_leviathan,💀,Bone Leviathan,Mythic,💀 Primordial Depths,0.4,100,5000,400,1500
+109,chaos_eel,⚡,Chaos Eel,Mythic,💀 Primordial Depths,0.4,100,5000,400,1500
+110,cherub_koi,👼,Cherub Koi,Mythic,👑 God Realm,0.4,100,5000,400,1500
+111,cosmic_dragon,🌌,Cosmic Dragon,Mythic,🕳️ Void Rift,0.4,100,5000,400,1500
+112,galaxy_jellyfish,🪼,Galaxy Jellyfish,Mythic,🌟 Celestial Ocean,0.4,100,5000,400,1500
+113,halo_tuna,😇,Halo Tuna,Mythic,👑 God Realm,0.4,100,5000,400,1500
+114,moonlight_koi,🌙,Moonlight Koi,Mythic,🌟 Celestial Ocean,0.4,100,5000,400,1500
+115,nightfall_carp,🌃,Nightfall Carp,Mythic,👁️ The Abyss,0.4,100,5000,400,1500
+116,orbit_koi,🪐,Orbit Koi,Mythic,🌟 Celestial Ocean,0.4,100,5000,400,1500
+117,primal_ifrit,👹,Primal Ifrit,Mythic,🌋 Lahar,0.4,100,5000,400,1500
+118,primeval_shark,🦈,Primeval Shark,Mythic,💀 Primordial Depths,0.4,100,5000,400,1500
+119,primordial_serpent,🐍,Primordial Serpent,Mythic,👁️ The Abyss,0.4,100,5000,400,1500
+120,singularity_koi,⚫,Singularity Koi,Mythic,🌌 Astral Trench,0.4,100,5000,400,1500
+121,solar_dragon,☀️,Solar Dragon,Mythic,🌟 Celestial Ocean,0.4,100,5000,400,1500
+122,soul_devourer,👻,Soul Devourer,Mythic,👁️ The Abyss,0.4,100,5000,400,1500
+123,world_eater,🌀,World Eater,Mythic,🕳️ Void Rift,0.4,100,5000,400,1500
+124,archaeo_shark,🦷,Archaeo Shark,Secret,💀 Primordial Depths,0.2,500,9999,1000,5000
+125,archangel_ray,👼,Archangel Ray,Secret,👑 God Realm,0.2,500,9999,1000,5000
+126,celestial_phoenix,🦅,Celestial Phoenix,Secret,🌟 Celestial Ocean,0.2,500,9999,1000,5000
+127,cosmos_angler,🔦,Cosmos Angler,Secret,🌌 Astral Trench,0.2,500,9999,1000,5000
+128,divine_koi,🐟,Divine Koi,Secret,👑 God Realm,0.2,500,9999,1000,5000
+129,entropy_serpent,🌀,Entropy Serpent,Secret,💀 Primordial Depths,0.2,500,9999,1000,5000
+130,genesis_whale,🌊,Genesis Whale,Secret,💀 Primordial Depths,0.2,500,9999,1000,5000
+131,holy_dragon_fish,🐉,Holy Dragon Fish,Secret,👑 God Realm,0.2,500,9999,1000,5000
+132,horizon_leviathan,🌅,Horizon Leviathan,Secret,🌌 Astral Trench,0.2,500,9999,1000,5000
+133,quasar_marlin,💠,Quasar Marlin,Secret,🌟 Celestial Ocean,0.2,500,9999,1000,5000
+134,reality_breaker,💫,Reality Breaker,Secret,🕳️ Void Rift,0.2,500,9999,1000,5000
+135,star_eater,🌟,Star Eater,Secret,🌟 Celestial Ocean,0.2,500,9999,1000,5000
+136,the_forgotten_one,👁️,The Forgotten One,Secret,👁️ The Abyss,0.2,500,9999,1000,5000
+137,god_fish,🔮,The God Fish,Secret,🕳️ Void Rift,0.2,500,9999,1000,5000
+138,time_fish,⏳,Time Fish,Secret,💀 Primordial Depths,0.2,500,9999,1000,5000
+139,universe_fish,🌠,Universe Fish,Secret,👁️ The Abyss,0.2,500,9999,1000,5000
+140,aether_god_fish,🌟,Aether God Fish,God,🌌 Astral Trench,0.02,2000,50000,5000,25000
+141,alpha_leviathan,⚡,Alpha Leviathan,God,👑 God Realm,0.02,2000,50000,5000,25000
+142,astral_leviathan,🐉,Astral Leviathan,God,🌟 Celestial Ocean,0.02,2000,50000,5000,25000
+143,creator_fish,✝️,Creator Fish,God,💀 Primordial Depths,0.02,2000,50000,5000,25000
+144,destroyer_of_worlds,💥,Destroyer of Worlds,God,💀 Primordial Depths,0.02,2000,50000,5000,25000
+145,heaven_whale,🐋,Heaven Whale,God,🌟 Celestial Ocean,0.02,2000,50000,5000,25000
+146,omega_fish,🔱,Omega Fish,God,👑 God Realm,0.02,2000,50000,5000,25000
+147,origin_fish,🌌,Origin Fish,God,👑 God Realm,0.02,2000,50000,5000,25000
+148,parallax_whale,🐋,Parallax Whale,God,🌌 Astral Trench,0.02,2000,50000,5000,25000
+149,primordial_god,🔱,Primordial God,God,💀 Primordial Depths,0.02,2000,50000,5000,25000
+150,supreme_deity,👑,Supreme Deity,God,👑 God Realm,0.02,2000,50000,5000,25000
+151,eternal_one,♾️,The Eternal One,God,👑 God Realm,0.02,2000,50000,5000,25000
+152,throne_whale,🪑,Throne Whale,God,👑 God Realm,0.02,2000,50000,5000,25000

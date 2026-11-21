@@ -19,16 +19,15 @@ const { db } = require('../database');
 // Stat keys that contribute to the seasonal score, with their weights.
 // `divide: true` means the delta is divided by the weight (used for money).
 const SEASON_STAT_WEIGHTS = [
-    { key: 'total_fish_caught', weight: 3 },
-    { key: 'total_harvests',    weight: 4 },
-    { key: 'total_crafts',      weight: 8 },
-    { key: 'dungeon_clears',    weight: 6 },
-    { key: 'boss_kills',        weight: 15 },
-    { key: 'pvp_wins',          weight: 10 },
+    { key: 'total_chats',       weight: 2 },
+    { key: 'total_voice_mins',  weight: 1 },
+    { key: 'event_wins',        weight: 15 },
+    { key: 'total_dailies',     weight: 20 },
+    { key: 'total_gifts_sent',  weight: 10 },
     { key: 'slot_wins',         weight: 2 },
     { key: 'coinflip_wins',     weight: 2 },
     { key: 'roulette_wins',     weight: 2 },
-    { key: 'total_earned',      weight: 20, divide: true }, // money earned this season / 20
+    { key: 'total_earned',      weight: 50, divide: true }, // money earned this season / 50
 ];
 const SEASON_STAT_KEYS = SEASON_STAT_WEIGHTS.map(s => s.key);
 

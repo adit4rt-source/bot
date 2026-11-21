@@ -67,6 +67,52 @@ module.exports = function register() {
     });
   });
 
+  // ---- P0: atomic balance helpers ----
+  test('atomic: subtractUserBalance refuses overdraft (no negative)', () => {
+    const U = '200000000000000021';
+    db.getOrCreateUser(G, U);
+    db.db.prepare('UPDATE users SET balance=100 WHERE userId=?').run(U);
+    const ok = db.subtractUserBalance(G, U, 500);
+    if (ok !== false) throw new Error('expected false for overdraft');
+    const bal = db.getOrCreateUser(G, U).balance;
+    if (bal !== 100) throw new Error('balance changed on failed debit: ' + bal);
+  });
+
+  test('atomic: subtractUserBalance succeeds when enough funds', () => {
+    const U = '200000000000000022';
+    db.getOrCreateUser(G, U);
+    db.db.prepare('UPDATE users SET balance=1000 WHERE userId=?').run(U);
+    const ok = db.subtractUserBalance(G, U, 400);
+    if (ok !== true) throw new Error('expected true');
+    const bal = db.getOrCreateUser(G, U).balance;
+    if (bal !== 600) throw new Error('expected 600 got ' + bal);
+  });
+
+  test('atomic: transferBalance moves money and burns tax', () => {
+    const A = '200000000000000023', B = '200000000000000024';
+    db.getOrCreateUser(G, A); db.getOrCreateUser(G, B);
+    db.db.prepare('UPDATE users SET balance=10000 WHERE userId=?').run(A);
+    db.db.prepare('UPDATE users SET balance=0 WHERE userId=?').run(B);
+    // debit 1000, credit 900 (10% tax burned)
+    const r = db.transferBalance(G, A, B, 1000, 900);
+    if (!r.ok) throw new Error('transfer failed: ' + r.error);
+    const a = db.getOrCreateUser(G, A).balance;
+    const b = db.getOrCreateUser(G, B).balance;
+    if (a !== 9000) throw new Error('sender expected 9000 got ' + a);
+    if (b !== 900) throw new Error('target expected 900 got ' + b);
+  });
+
+  test('atomic: transferBalance fails cleanly when sender broke', () => {
+    const A = '200000000000000025', B = '200000000000000026';
+    db.getOrCreateUser(G, A); db.getOrCreateUser(G, B);
+    db.db.prepare('UPDATE users SET balance=50 WHERE userId=?').run(A);
+    db.db.prepare('UPDATE users SET balance=0 WHERE userId=?').run(B);
+    const r = db.transferBalance(G, A, B, 1000, 900);
+    if (r.ok) throw new Error('should have failed');
+    if (db.getOrCreateUser(G, A).balance !== 50) throw new Error('sender balance mutated');
+    if (db.getOrCreateUser(G, B).balance !== 0) throw new Error('target balance mutated');
+  });
+
   // Admin flexible target resolver (mention / id / username) via streak modal
   const admin = botRequire('systems/adminPanel.js');
   function adminStreakModal(rawTarget) {
@@ -112,5 +158,86 @@ module.exports = function register() {
     return Promise.resolve(admin.handleAdminModal(it)).then(() => {
       if (!it._cap.reply || !/tidak ketemu/i.test(it._cap.reply.content)) throw new Error('unknown not rejected');
     });
+  });
+
+  // ---- Dynamic Economy & Weather tests ----
+  const farmSeason = botRequire('systems/farmSeason.js');
+  const farmWeather = botRequire('systems/farmWeather.js');
+  const fishing = botRequire('systems/fishing.js');
+
+  test('dynamic price: winter increases seed cost 20% and crop sell price 30%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'winter', name: 'Winter' });
+    farmWeather.getTodayWeather = () => ({ id: 'cloudy', name: 'Cloudy' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const buyPrice = farmSeason.getDynamicPrice(crop, 'buy');
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (buyPrice !== 120) throw new Error('expected buy price 120, got ' + buyPrice);
+      if (sellPrice !== 130) throw new Error('expected sell price 130, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('dynamic price: spring decreases seed cost 20%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const buyPrice = farmSeason.getDynamicPrice(crop, 'buy');
+      if (buyPrice !== 80) throw new Error('expected buy price 80, got ' + buyPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+    }
+  });
+
+  test('dynamic price: sunny/rainbow weather decreases crop sell price 10%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'sunny', name: 'Sunny' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (sellPrice !== 90) throw new Error('expected sell price 90, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('dynamic price: stormy/drought weather increases crop sell price 20%', () => {
+    const origSeason = farmSeason.getTodaySeason;
+    const origWeather = farmWeather.getTodayWeather;
+    farmSeason.getTodaySeason = () => ({ id: 'spring', name: 'Spring' });
+    farmWeather.getTodayWeather = () => ({ id: 'stormy', name: 'Stormy' });
+
+    try {
+      const crop = { cost: 100, sellPrice: 100 };
+      const sellPrice = farmSeason.getDynamicPrice(crop, 'sell');
+      if (sellPrice !== 120) throw new Error('expected sell price 120, got ' + sellPrice);
+    } finally {
+      farmSeason.getTodaySeason = origSeason;
+      farmWeather.getTodayWeather = origWeather;
+    }
+  });
+
+  test('weather fishing: rainy/stormy reduces fishing cooldown by 15%', () => {
+    const origWeather = farmWeather.getTodayWeather;
+    farmWeather.getTodayWeather = () => ({ id: 'rainy', name: 'Rainy' });
+
+    try {
+      const rod = { cooldown: 10 };
+      const cd = fishing.getFishingCooldown('user1', rod);
+      if (cd !== 9) throw new Error('expected cooldown 9 (15% reduction of 10), got ' + cd);
+    } finally {
+      farmWeather.getTodayWeather = origWeather;
+    }
   });
 };

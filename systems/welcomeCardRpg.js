@@ -3,6 +3,7 @@
 // and a fantasy panel frame. Uses @napi-rs/canvas with bundled Poppins fonts.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { getCachedImage } = require('./welcomeCardCache');
 
 // ---- Register bundled fonts once ----
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
@@ -169,7 +170,8 @@ async function generateRpgCard(o) {
     let drewBg = false;
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
-            const bg = await loadImage(bgURL);
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
             ctx.save();
             try { ctx.filter = 'blur(8px)'; } catch (_) {}
             drawCover(ctx, bg, W, H, 1.12);

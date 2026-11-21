@@ -4,6 +4,7 @@
 // tagline, and a decorative hanging telephone. Uses @napi-rs/canvas + bundled fonts.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { getCachedImage } = require('./welcomeCardCache');
 
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
 let FONTS_OK = false;
@@ -150,7 +151,8 @@ async function generateGlitchCard(o) {
     ctx.fillRect(0, 0, W, H);
     if (bgURL && /^https?:\/\//i.test(bgURL)) {
         try {
-            const bg = await loadImage(bgURL);
+            const cachedPath = await getCachedImage(bgURL);
+            const bg = await loadImage(cachedPath);
             ctx.save();
             try { ctx.filter = 'blur(10px)'; } catch (_) {}
             drawCover(ctx, bg, -20, -20, W + 40, H + 40);

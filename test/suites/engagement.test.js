@@ -58,25 +58,25 @@ module.exports = function register() {
   });
 
   // ============ DAILY: full claim (DB, uses chat streak) ============
-  test('daily claim: uses chat streak, sets lastDaily, credits balance', () => {
+  test('daily claim: uses chat streak, sets lastDaily, credits balance', async () => {
     const G = 'engG_daily', U = '910000000000000001';
     D.getOrCreateUser(G, U);
     D.db.prepare('UPDATE users SET lastDaily = ? WHERE userId = ?').run('2030-05-31', U);
     // Seed chat streak in the streaks table (same one used for 🔥 nickname)
     try { D.db.prepare('INSERT OR REPLACE INTO streaks (guildId, userId, count, last_date) VALUES (?, ?, 10, ?)').run(G, U, '2030-06-01'); } catch(_){}
     const before = D.getOrCreateUser(G, U).balance;
-    const r = dr.claimDaily(G, U, { today: '2030-06-01' });
+    const r = await dr.claimDaily(G, U, { today: '2030-06-01' });
     if (r.alreadyClaimed) throw new Error('should not be alreadyClaimed');
     if (r.streak !== 10) throw new Error('streak should be 10 (from chat streak), got ' + r.streak);
     const after = D.getOrCreateUser(G, U);
     if (after.lastDaily !== '2030-06-01') throw new Error('lastDaily not updated');
     if (after.balance < before + 6600) throw new Error('balance should grow by >= base for streak 10 (6600)');
   });
-  test('daily claim: blocks a second claim the same day', () => {
+  test('daily claim: blocks a second claim the same day', async () => {
     const G = 'engG_daily2', U = '910000000000000002';
     D.getOrCreateUser(G, U);
-    dr.claimDaily(G, U, { today: '2030-06-02' });
-    const r2 = dr.claimDaily(G, U, { today: '2030-06-02' });
+    await dr.claimDaily(G, U, { today: '2030-06-02' });
+    const r2 = await dr.claimDaily(G, U, { today: '2030-06-02' });
     if (!r2.alreadyClaimed) throw new Error('second same-day claim should be blocked');
   });
 
@@ -122,10 +122,10 @@ module.exports = function register() {
   });
 
   // ============ ONBOARDING ============
-  test('onboarding: embed guides newcomers to /daily and /fish', () => {
+  test('onboarding: embed guides newcomers to /daily and /streak', () => {
     const embed = ob.buildOnboardingEmbed({ user: { username: 'Newbie' }, guild: { name: 'EngageGuild' } }, 'EngageGuild');
     const d = embed.data.description || '';
-    if (!d.includes('/daily') || !d.includes('/fish')) throw new Error('onboarding should mention /daily and /fish');
+    if (!d.includes('/daily') || !d.includes('/streak')) throw new Error('onboarding should mention /daily and /streak');
     if (!/Selamat datang/i.test(embed.data.title || '')) throw new Error('missing welcome title');
   });
   test('onboarding: sends a DM when enabled (default)', () => {
@@ -144,19 +144,13 @@ module.exports = function register() {
     });
   });
 
-  // ============ DAILY REMINDER TRIGGER ============
-  test('daily reminder: sent on first non-spam message, skipped for spam message and subsequent messages', async () => {
+  // ============ DAILY REMINDER TRIGGER (DISABLED) ============
+  test('daily reminder: disabled, no reminder sent on valid message', async () => {
     const G = 'engG_daily_rem', U = '910000000000000009';
     D.getOrCreateUser(G, U);
     D.db.prepare('UPDATE users SET lastDaily = ? WHERE userId = ?').run('2030-05-31', U);
 
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    const state = botRequire('state.js');
     const handleMessageCreate = botRequire('events/messageCreate.js');
-
-    // Clean up state
-    const reminderKey = `${U}_${today}`;
-    state.dailyRemindedUsers.delete(reminderKey);
 
     let sentMessage = null;
     const mockChannel = {
@@ -186,7 +180,7 @@ module.exports = function register() {
       roles: { size: 0 }
     };
 
-    // 1. Send a spam message (length < 2)
+    // 1. Send a spam message
     const msgSpam = {
       author: { id: U, bot: false },
       guild: mockGuild,
@@ -202,7 +196,7 @@ module.exports = function register() {
       throw new Error('daily reminder should not be sent for spam messages');
     }
 
-    // 2. Send a valid message
+    // 2. Send a valid message - should still NOT send reminder (feature disabled)
     const msgValid1 = {
       author: { id: U, bot: false },
       guild: mockGuild,
@@ -214,29 +208,8 @@ module.exports = function register() {
     };
 
     await handleMessageCreate(msgValid1);
-    if (sentMessage === null) {
-      throw new Error('daily reminder should be sent on the first valid (non-spam) message');
-    }
-    if (!sentMessage.content.includes('Kamu belum claim')) {
-      throw new Error('daily reminder message should contain reward claim prompt');
-    }
-    sentMessage = null; // reset
-
-    // 3. Send another valid message on the same day
-    const msgValid2 = {
-      author: { id: U, bot: false },
-      guild: mockGuild,
-      member: mockMember,
-      channel: mockChannel,
-      content: 'halo pesan kedua',
-      mentions: mockMentions,
-      reply: async () => ({ delete: async () => {} })
-    };
-
-
-    await handleMessageCreate(msgValid2);
     if (sentMessage !== null) {
-      throw new Error('daily reminder should not be sent again on subsequent messages');
+      throw new Error('daily reminder should be disabled and not sent');
     }
   });
 };

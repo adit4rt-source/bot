@@ -5,10 +5,10 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, addItem } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getPetData, getRelicBonus } = require('./pets');
+const { getPetData, getRelicBonus, getEffectiveStats } = require('./pets');
 const { PET_DATA } = require('../data/pets');
 const { checkAchievements } = require('./achievements');
-const { updateQuestProgress } = require('./quests');
+
 
 // ==================== WORLD BOSS DATA ====================
 const WORLD_BOSSES = [
@@ -136,9 +136,9 @@ function attackWorldBoss(guildId, userId, username) {
     const bossDef = getBossDefinition(boss.bossId);
 
     // Calculate damage
-    const relicBonus = getRelicBonus(userId, pet.id); // equipped relic bonus applies here too
-    const baseAtk = pet.atk + (pet.level * 2) + relicBonus.atk;
-    const critChance = pet.crit + Math.floor(pet.level / 10) + relicBonus.crit;
+    const eff = getEffectiveStats(pet);
+    const baseAtk = eff.atk;
+    const critChance = eff.crit;
     const isCrit = Math.random() * 100 < critChance;
     
     let damage = Math.max(10, baseAtk - Math.floor(bossDef.def * 0.3));
@@ -178,7 +178,7 @@ function attackWorldBoss(guildId, userId, username) {
     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(attackReward, guildId, userId);
     addIncome(guildId, userId, 'battle', attackReward);
     incrementUserStat(guildId, userId, 'world_boss_attacks');
-    updateQuestProgress(guildId, userId, 'worldboss', 1);
+    
 
     // Pet XP from attacking
     const { addPetExp } = require('./pets');
@@ -310,7 +310,7 @@ function buildWorldBossPanel(guildId, userId, username) {
         .setTitle(`🗺️ WORLD BOSS — Weekly`)
         .setColor(boss.status === 'defeated' ? '#2ECC71' : '#E74C3C')
         .setDescription(desc)
-        .setFooter({ text: boss.status === 'defeated' ? 'Boss dikalahkan! Klaim reward!' : `Pet: ${pet ? pet.name + ' Lv.' + pet.level : 'Tidak ada'} | CD: 30 detik/attack` })
+        .setFooter({ text: boss.status === 'defeated' ? 'Boss dikalahkan! Klaim reward!' : `Pet: ${pet ? pet.name + ' Lv.' + pet.level : 'Tidak ada'} | CD: 5 detik/attack` })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -490,6 +490,7 @@ function isWorldBossButton(customId) {
 module.exports = {
     WORLD_BOSSES,
     getCurrentBoss,
+    getWeekId,
     claimWorldBossRewards,
     buildWorldBossPanel,
     handleWorldBossButton,

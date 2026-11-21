@@ -189,30 +189,42 @@ function returnListingItem(listing, toUserId, guildId, unequip) {
 
 // ============ HELPER: Execute a purchase (returns result for caller to reply) ============
 function executePurchase(guildId, userId, listingId) {
-    const listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND status = ?').get(listingId, guildId, 'active');
-    if (!listing) return { ok: false, error: '❌ Listing tidak ditemukan atau sudah tidak aktif!' };
-    if (listing.sellerId === userId) return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
+    try {
+        let listing;
+        const runTx = db.transaction(() => {
+            listing = db.prepare('SELECT * FROM market_listings WHERE id = ? AND guildId = ? AND status = ?').get(listingId, guildId, 'active');
+            if (!listing) throw new Error('NOT_ACTIVE');
+            if (listing.sellerId === userId) throw new Error('SELF_BUY');
 
-    if (Date.now() - listing.listedAt > LISTING_EXPIRY_MS) {
-        returnListingItem(listing, listing.sellerId, guildId, false);
-        db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listingId);
-        return { ok: false, error: '❌ Listing sudah expired!' };
+            if (Date.now() - listing.listedAt > LISTING_EXPIRY_MS) {
+                returnListingItem(listing, listing.sellerId, guildId, false);
+                db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('expired', listingId);
+                throw new Error('EXPIRED');
+            }
+
+            const { subtractUserBalance, addUserBalance } = require('../database');
+            if (!subtractUserBalance(guildId, userId, listing.price)) {
+                throw new Error('INSUFFICIENT_BALANCE');
+            }
+            addUserBalance(guildId, listing.sellerId, listing.price);
+
+            // Transfer item to buyer
+            returnListingItem(listing, userId, guildId, true);
+
+            db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('sold', listingId);
+        });
+        runTx();
+        return { ok: true, listing };
+    } catch (e) {
+        if (e.message === 'NOT_ACTIVE') return { ok: false, error: '❌ Listing tidak ditemukan atau sudah tidak aktif!' };
+        if (e.message === 'SELF_BUY') return { ok: false, error: '❌ Tidak bisa membeli listing sendiri!' };
+        if (e.message === 'EXPIRED') return { ok: false, error: '❌ Listing sudah expired!' };
+        if (e.message === 'INSUFFICIENT_BALANCE') {
+            const bal = getOrCreateUser(guildId, userId).balance;
+            return { ok: false, error: "❌ Saldo kurang! Kamu punya 🪙 " + bal.toLocaleString('id-ID') + ", butuh 🪙 " + listing.price.toLocaleString('id-ID') };
+        }
+        return { ok: false, error: "❌ Gagal memproses pembelian: " + e.message };
     }
-
-    const buyerData = getOrCreateUser(guildId, userId);
-    if (buyerData.balance < listing.price) {
-        return { ok: false, error: `❌ Saldo kurang! Kamu punya 🪙 ${buyerData.balance.toLocaleString('id-ID')}, butuh 🪙 ${listing.price.toLocaleString('id-ID')}` };
-    }
-
-    // Money transfer
-    db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, userId);
-    db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(listing.price, guildId, listing.sellerId);
-
-    // Transfer item to buyer
-    returnListingItem(listing, userId, guildId, true);
-
-    db.prepare('UPDATE market_listings SET status = ? WHERE id = ?').run('sold', listingId);
-    return { ok: true, listing };
 }
 
 

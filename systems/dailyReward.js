@@ -64,16 +64,20 @@ function computeDailyStreak(prevStreak, lastDaily, today, hasShield = false) {
 // ==================== PURE: REWARD CURVE ====================
 // Exact-day jackpots layered on top of the base escalation + recurring weekly bonus.
 const MILESTONES = {
-    7:   { money: 10000,  items: [{ id: 'mystery_box', qty: 3 }],                                    label: '1 Minggu Beruntun!' },
-    14:  { money: 25000,  items: [{ id: 'xp_booster_2x', qty: 2 }],                                 label: '2 Minggu Beruntun!' },
-    30:  { money: 75000,  items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }],  label: '30 Hari Beruntun!' },
-    60:  { money: 200000, items: [{ id: 'money_magnet', qty: 2 }],                                   label: '60 Hari — Dewa Login!' },
-    100: { money: 500000, items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — LEGENDA!' },
+    7:   { money: 10000,   items: [{ id: 'mystery_box', qty: 3 }], label: '1 Minggu Beruntun!' },
+    14:  { money: 25000,   items: [{ id: 'xp_booster_2x', qty: 2 }], label: '2 Minggu Beruntun!' },
+    30:  { money: 75000,   items: [{ id: 'lucky_charm', qty: 2 }, { id: 'daily_doubler', qty: 1 }], label: '30 Hari Beruntun!' },
+    60:  { money: 200000,  items: [{ id: 'money_magnet', qty: 2 }], label: '60 Hari — Tempest!' },
+    100: { money: 500000,  items: [{ id: 'streak_shield', qty: 3 }, { id: 'xp_booster_3x', qty: 2 }], label: '100 HARI — SOVEREIGN LOUNGE UNLOCKED!' },
+    150: { money: 1000000, items: [{ id: 'mystery_box', qty: 5 }, { id: 'lucky_charm', qty: 3 }], label: '150 HARI — LUMINARY ELITE!' },
+    200: { money: 2500000, items: [{ id: 'streak_shield', qty: 5 }, { id: 'daily_doubler', qty: 2 }], label: '200 HARI — ETERNAL IMMORTAL!' },
+    250: { money: 5000000, items: [{ id: 'mystery_box', qty: 10 }, { id: 'money_magnet', qty: 5 }], label: '250 HARI — GRAND MASTER OF TIME!' },
+    365: { money: 10000000, items: [{ id: 'streak_shield', qty: 10 }, { id: 'xp_booster_3x', qty: 5 }], label: '365 HARI — 1 YEAR MYTHOS LEGEND!' },
 };
 
 const BASE = 3000;
 const PER_DAY = 400;     // +400 money per consecutive day
-const CAP_DAYS = 60;     // escalation caps at day 60
+const CAP_DAYS = 365;    // escalation continues up to 1 full year
 const WEEKLY_BONUS = 5000;
 
 function baseMoneyFor(streak) {
@@ -90,7 +94,6 @@ function computeDailyReward(streak, opts = {}) {
     const hasDoubler = !!opts.hasDoubler;
 
     let money = baseMoneyFor(streak);
-    const petExp = 10 + Math.min(Math.floor(streak / 7) * 5, 40);
     const items = [];
     let milestoneLabel = null;
 
@@ -117,10 +120,10 @@ function computeDailyReward(streak, opts = {}) {
     if (next % 7 === 0) nextMoney += WEEKLY_BONUS;
     if (MILESTONES[next]) nextMoney += MILESTONES[next].money;
 
-    return { money, baseMoney: baseMoneyFor(streak), petExp, items, milestoneLabel, isWeeklyBonus, nextMoney };
+    return { money, baseMoney: baseMoneyFor(streak), items, milestoneLabel, isWeeklyBonus, nextMoney };
 }
 
-// ==================== DB: FULL CLAIM ====================
+// ============ DB: FULL CLAIM ============
 /**
  * Perform a full /daily claim. The reward escalates off the user's CHAT streak 🔥
  * (the `streaks` table), so there is no separate login streak. Caller should already
@@ -128,7 +131,7 @@ function computeDailyReward(streak, opts = {}) {
  * under races.
  * @returns full result object used to build the reply embed.
  */
-function claimDaily(guildId, userId, opts = {}) {
+async function claimDaily(guildId, userId, opts = {}) {
     const today = opts.today || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const user = getOrCreateUser(guildId, userId);
 
@@ -143,48 +146,40 @@ function claimDaily(guildId, userId, opts = {}) {
     const reward = computeDailyReward(streak, { hasDoubler });
     if (hasDoubler) incrementUserStat(guildId, userId, 'daily_doubler_active', -1);
 
-    // Random surprise bonus (kept from the original handler).
-    let randomMoney = 0, randomItem = null, randomPetExp = 0;
+    // Random surprise bonus
+    let randomMoney = 0, randomItem = null;
     const roll = Math.random();
-    if (roll < 0.15) {
+    if (roll < 0.20) {
         const pool = ['mystery_box', 'lucky_charm', 'xp_booster_2x'];
         randomItem = pool[Math.floor(Math.random() * pool.length)];
-    } else if (roll < 0.35) {
-        randomMoney = Math.floor(Math.random() * 401) + 100; // 100..500
     } else if (roll < 0.50) {
-        randomPetExp = 15;
+        randomMoney = Math.floor(Math.random() * 401) + 100; // 100..500
     }
 
     const totalMoney = reward.money + randomMoney;
-    const totalPetExp = reward.petExp + randomPetExp;
 
     // ----- Persist -----
     db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ? WHERE guildId = ? AND userId = ?').run(totalMoney, today, guildId, userId);
-    try { incrementUserStat(guildId, userId, 'total_dailies'); } catch (_) {}
-    try { addIncome(guildId, userId, 'daily', totalMoney); } catch (_) {}
+    try { incrementUserStat(guildId, userId, 'total_dailies'); } catch (_) { }
+    try { addIncome(guildId, userId, 'daily', totalMoney); } catch (_) { }
 
     for (const it of reward.items) {
-        try { addItem(guildId, userId, it.id, it.qty); } catch (_) {}
+        try { addItem(guildId, userId, it.id, it.qty); } catch (_) { }
     }
-    if (randomItem) { try { addItem(guildId, userId, randomItem, 1); } catch (_) {} }
+    if (randomItem) { try { addItem(guildId, userId, randomItem, 1); } catch (_) { } }
 
     // Bonus XP (matches old +15).
-    try { db.prepare('UPDATE users SET xp = xp + 15 WHERE guildId = ? AND userId = ?').run(guildId, userId); } catch (_) {}
-
-    // Pet exp via pets module (best-effort).
-    try { require('./pets').addPetExp(guildId, userId, totalPetExp); } catch (_) {}
+    try { db.prepare('UPDATE users SET xp = xp + 15 WHERE guildId = ? AND userId = ?').run(guildId, userId); } catch (_) { }
 
     return {
         alreadyClaimed: false,
         streak,
         money: totalMoney,
         baseMoney: reward.baseMoney,
-        petExp: totalPetExp,
         xp: 15,
         items: reward.items,
         randomItem,
         randomMoney,
-        randomPetExp,
         milestoneLabel: reward.milestoneLabel,
         isWeeklyBonus: reward.isWeeklyBonus,
         hasDoubler,

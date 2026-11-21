@@ -26,6 +26,11 @@ async function generateProfileCard(opts) {
     return renderImage('profile', opts);
 }
 
+// ---- Level Up Card ----
+async function generateLevelUpCard(opts) {
+    return renderImage('levelUp', opts);
+}
+
 // ---- Card Game Images ----
 async function generateCardImage(cards) {
     return renderImage('gacha', cards);
@@ -40,6 +45,7 @@ module.exports = {
     generateGlitchCard,
     generateRpgCard,
     generateProfileCard,
+    generateLevelUpCard,
     generateCardImage,
     generateGalleryImage,
     // Re-export pool utilities

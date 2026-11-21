@@ -28,7 +28,8 @@ const GLOBAL_TABLES = new Set([
     'farm_plots', 'farm_storage', 'farm_data', 'farm_decorations',
     'auto_harvest', 'combo_tracker', 'trades', 'market_listings',
     'command_summary', 'pet_evolution_history',
-    'giant_fish_encounters', 'giant_fish_active', 'secret_locations_unlocked', 'fishing_combo'
+    'giant_fish_encounters', 'giant_fish_active', 'secret_locations_unlocked', 'fishing_combo',
+    'belajar_progress', 'belajar_done', 'belajar_weak', 'blacklist'
 ]);
 
 function isGlobalTable(sql) {
@@ -260,6 +261,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS streak_history (guildId TEXT, userId TEXT, lost_count INTEGER, PRIMARY KEY(guildId, userId));
   CREATE TABLE IF NOT EXISTS daily_quests (guildId TEXT, userId TEXT, date TEXT, data TEXT, PRIMARY KEY(guildId, userId));
   CREATE TABLE IF NOT EXISTS temp_voices (channelId TEXT PRIMARY KEY, guildId TEXT, ownerId TEXT);
+  CREATE TABLE IF NOT EXISTS private_spaces (guildId TEXT, ownerId TEXT, categoryId TEXT UNIQUE, textChannelId TEXT UNIQUE, voiceChannelId TEXT UNIQUE, hidden INTEGER DEFAULT 0, PRIMARY KEY(guildId, ownerId));
   CREATE TABLE IF NOT EXISTS achievements (guildId TEXT, userId TEXT, achievementId TEXT, unlockedAt INTEGER, PRIMARY KEY(guildId, userId, achievementId));
   CREATE TABLE IF NOT EXISTS user_stats (guildId TEXT, userId TEXT, stat_key TEXT, stat_value INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, stat_key));
   CREATE TABLE IF NOT EXISTS fish_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, fishId TEXT, weight REAL, caughtAt INTEGER, locked INTEGER DEFAULT 0);
@@ -278,6 +280,8 @@ try {
 
 // ================= MIGRATIONS =================
 try { db.exec(`ALTER TABLE fish_inventory ADD COLUMN locked INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN locale TEXT DEFAULT 'id'"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN game_consent INTEGER DEFAULT 0"); } catch(e) {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS fish_collection (guildId TEXT, userId TEXT, fishId TEXT, PRIMARY KEY(guildId, userId, fishId))`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS item_inventory (guildId TEXT, userId TEXT, itemId TEXT, quantity INTEGER DEFAULT 0, PRIMARY KEY(guildId, userId, itemId))`);
@@ -302,7 +306,8 @@ try { db.exec(`ALTER TABLE pets ADD COLUMN atk INTEGER DEFAULT 20`); } catch(e) 
 try { db.exec(`ALTER TABLE pets ADD COLUMN def INTEGER DEFAULT 10`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN spd INTEGER DEFAULT 10`); } catch(e) {}
 try { db.exec(`ALTER TABLE pets ADD COLUMN crit INTEGER DEFAULT 5`); } catch(e) {}
-db.exec(`CREATE TABLE IF NOT EXISTS relics (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, name TEXT, slot TEXT, rarity TEXT, stat_type TEXT, stat_value INTEGER, refine_level INTEGER DEFAULT 0, equipped_pet_id INTEGER DEFAULT 0)`);
+db.exec(`CREATE TABLE IF NOT EXISTS relics (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, userId TEXT, name TEXT, slot TEXT, rarity TEXT, stat_type TEXT, stat_value INTEGER, refine_level INTEGER DEFAULT 0, equipped_pet_id INTEGER DEFAULT 0, gems TEXT DEFAULT '[]')`);
+try { db.exec(`ALTER TABLE relics ADD COLUMN gems TEXT DEFAULT '[]'`); } catch(e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, guildId TEXT, senderId TEXT, receiverId TEXT, status TEXT DEFAULT 'pending', createdAt INTEGER, senderOffer TEXT, receiverOffer TEXT)`);
 db.exec(`CREATE TABLE IF NOT EXISTS command_summary (guildId TEXT, command TEXT, count INTEGER DEFAULT 0, lastUsed INTEGER, PRIMARY KEY(guildId, command))`);
@@ -366,21 +371,50 @@ try {
         FROM pets GROUP BY userId, petId`);
 } catch(e) { /* safe to ignore on first run */ }
 
+// ================= BLACKLIST TABLE =================
+db.exec(`CREATE TABLE IF NOT EXISTS blacklist (
+    userId TEXT PRIMARY KEY,
+    reason TEXT,
+    addedAt INTEGER,
+    addedBy TEXT
+)`);
+
 // ================= HELPER FUNCTIONS =================
 
+let _stmtGetUserGlobal = null;
+let _stmtInsertUserGlobal = null;
+let _stmtGetUserGuild = null;
+let _stmtInsertUserGuild = null;
+let _cachedDb = null;
+
 function getOrCreateUser(guildId, userId) {
+    if (_cachedDb !== db) {
+        _cachedDb = db;
+        _stmtGetUserGlobal = null;
+        _stmtInsertUserGlobal = null;
+        _stmtGetUserGuild = null;
+        _stmtInsertUserGuild = null;
+    }
     if (checkGlobalMode()) {
-        let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
+        if (!_stmtGetUserGlobal) {
+            _stmtGetUserGlobal = db.prepare('SELECT * FROM users WHERE userId = ?');
+            _stmtInsertUserGlobal = db.prepare('INSERT INTO users (userId) VALUES (?)');
+        }
+        let user = _stmtGetUserGlobal.get(userId);
         if (!user) {
-            db.prepare('INSERT INTO users (userId) VALUES (?)').run(userId);
-            user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
+            _stmtInsertUserGlobal.run(userId);
+            user = _stmtGetUserGlobal.get(userId);
         }
         return user;
     }
-    let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!_stmtGetUserGuild) {
+        _stmtGetUserGuild = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?');
+        _stmtInsertUserGuild = db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)');
+    }
+    let user = _stmtGetUserGuild.get(guildId, userId);
     if (!user) {
-        db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId);
-        user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        _stmtInsertUserGuild.run(guildId, userId);
+        user = _stmtGetUserGuild.get(guildId, userId);
     }
     return user;
 }
@@ -609,6 +643,7 @@ function getUsersForDailyReminder(today, cutoff) {
 }
 
 function updateUserBalance(guildId, userId, newBalance) {
+    newBalance = Math.max(0, Math.floor(Number(newBalance) || 0));
     if (checkGlobalMode()) {
         db.prepare('UPDATE users SET balance = ? WHERE userId = ?').run(newBalance, userId);
     } else {
@@ -616,20 +651,99 @@ function updateUserBalance(guildId, userId, newBalance) {
     }
 }
 
+/**
+ * Credit money atomically (SQL expression). Safe under concurrent rewards.
+ * Returns true if a user row was updated.
+ */
 function addUserBalance(guildId, userId, amount) {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount === 0) return true;
+    if (amount < 0) return subtractUserBalance(guildId, userId, -amount);
+    // Ensure user row exists before credit
+    getOrCreateUser(guildId, userId);
+    let info;
     if (checkGlobalMode()) {
-        db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(amount, userId);
+        info = db.prepare('UPDATE users SET balance = balance + ? WHERE userId = ?').run(amount, userId);
     } else {
-        db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+        info = db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+    }
+    return info.changes > 0;
+}
+
+/**
+ * Debit money atomically — only succeeds if balance >= amount.
+ * NEVER allows negative balance. Returns true on success, false if insufficient.
+ */
+function subtractUserBalance(guildId, userId, amount) {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount <= 0) return false;
+    getOrCreateUser(guildId, userId);
+    let info;
+    if (checkGlobalMode()) {
+        info = db.prepare(
+            'UPDATE users SET balance = balance - ? WHERE userId = ? AND balance >= ?'
+        ).run(amount, userId, amount);
+    } else {
+        info = db.prepare(
+            'UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ? AND balance >= ?'
+        ).run(amount, guildId, userId, amount);
+    }
+    return info.changes > 0;
+}
+
+/**
+ * Transfer money from one user to another in a single SQLite transaction.
+ * debitAmount is taken from `fromUserId`; creditAmount is given to `toUserId`
+ * (difference = tax burned / fees). Returns { ok, error? }.
+ */
+function transferBalance(guildId, fromUserId, toUserId, debitAmount, creditAmount) {
+    debitAmount = Math.floor(Number(debitAmount) || 0);
+    creditAmount = Math.floor(Number(creditAmount) || 0);
+    if (debitAmount <= 0) return { ok: false, error: 'invalid_amount' };
+    if (creditAmount < 0 || creditAmount > debitAmount) return { ok: false, error: 'invalid_credit' };
+    if (fromUserId === toUserId) return { ok: false, error: 'self_transfer' };
+
+    getOrCreateUser(guildId, fromUserId);
+    getOrCreateUser(guildId, toUserId);
+
+    try {
+        const run = _rawDb.transaction(() => {
+            // Use the same atomic helpers (they go through the global-mode proxy when active)
+            if (!subtractUserBalance(guildId, fromUserId, debitAmount)) {
+                throw new Error('INSUFFICIENT');
+            }
+            if (creditAmount > 0) {
+                if (!addUserBalance(guildId, toUserId, creditAmount)) {
+                    throw new Error('CREDIT_FAILED');
+                }
+            }
+        });
+        run();
+        return { ok: true };
+    } catch (e) {
+        if (e && e.message === 'INSUFFICIENT') return { ok: false, error: 'insufficient' };
+        return { ok: false, error: e.message || 'transfer_failed' };
     }
 }
 
-function subtractUserBalance(guildId, userId, amount) {
-    if (checkGlobalMode()) {
-        db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(amount, userId);
-    } else {
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(amount, guildId, userId);
+/**
+ * Consistent online backup (respects WAL). Prefer this over fs.copyFileSync.
+ * Returns a Promise that resolves when the backup file is fully written.
+ */
+function backupDatabaseTo(destPath) {
+    // better-sqlite3: db.backup(destination) → Promise
+    // node:sqlite mock may not implement backup — fall back to copy after checkpoint
+    if (typeof _rawDb.backup === 'function') {
+        return Promise.resolve(_rawDb.backup(destPath));
     }
+    return new Promise((resolve, reject) => {
+        try {
+            try { _rawDb.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+            const fs = require('fs');
+            fs.copyFileSync('economy.sqlite', destPath);
+            resolve();
+        } catch (e) { reject(e); }
+    });
 }
 
 function getActivePetsHungry(hungerThreshold) {
@@ -745,6 +859,28 @@ function upgradeFarmLevel(guildId, userId, newLevel) {
     if (created > 0) console.log(`⚡ Performance indexes ready (${created}/${indexes.length})`);
 })();
 
+
+// ================= AUDIT FIX: EARLY TABLE CREATIONS =================
+db.exec(`CREATE TABLE IF NOT EXISTS pokemon_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT,
+    cardApiId TEXT,
+    name TEXT,
+    setName TEXT,
+    rarity TEXT,
+    imageUrl TEXT,
+    types TEXT,
+    hp TEXT,
+    artist TEXT,
+    obtainedAt INTEGER,
+    locked INTEGER DEFAULT 0
+)`);
+try { db.exec(`ALTER TABLE pokemon_cards ADD COLUMN marketPrice REAL DEFAULT 0`); } catch(_) {}
+
+db.exec(`CREATE TABLE IF NOT EXISTS rod_enchants (
+    userId TEXT, rodId TEXT, affix1 TEXT, affix2 TEXT, PRIMARY KEY(userId, rodId)
+)`);
+
 // ================= PET DISCOVERY (Pokédex) =================
 function registerPetDiscovery(userId, petId) {
     try {
@@ -770,7 +906,7 @@ module.exports = {
     getSeedCount, addSeed, removeSeed, getAllSeeds,
     getFertCount, addFert, removeFert, getAllFerts,
     getUsersForDailyReminder,
-    updateUserBalance, addUserBalance, subtractUserBalance,
+    updateUserBalance, addUserBalance, subtractUserBalance, transferBalance, backupDatabaseTo,
     getActivePetsHungry,
     getFarmDecorations, hasFarmDecoration, addFarmDecoration,
     getFarmPlot, insertFarmPlot, deleteDeadFarmPlots,

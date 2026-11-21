@@ -121,7 +121,7 @@ function verifyCaptchaMessage(message) {
         return true;
     } else if (input.length >= 4 && input.length <= 6) {
         // Wrong code attempt (looks like they tried)
-        message.reply({ content: `❌ Kode salah! Yang benar: \`${pending.code}\`. Coba lagi (${Math.ceil((pending.expires - Date.now()) / 1000)}s tersisa)` }).then(msg => {
+        message.reply({ content: `❌ Kode salah! Coba lagi — ketik kode yang ada di gambar. (${Math.ceil((pending.expires - Date.now()) / 1000)}s tersisa)` }).then(msg => {
             setTimeout(() => msg.delete().catch(() => {}), 5000);
         }).catch(() => {});
         try { message.delete().catch(() => {}); } catch (e) {}

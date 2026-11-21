@@ -2,11 +2,11 @@
 // Classic card game. Hit/Stand/Double Down. Bet money, try to beat the dealer.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, addSpending } = require('../database');
+const { db, getOrCreateUser, getUserStat, incrementUserStat, addIncome, addSpending, subtractUserBalance, addUserBalance } = require('../database');
 const { getRandomInt } = require('../utils');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
-const { updateQuestProgress } = require('./quests');
+
 
 // ==================== CARD DATA ====================
 const SUITS = ['♠️', '♥️', '♦️', '♣️'];
@@ -155,11 +155,11 @@ function buildGameEmbed(game, showDealer = false, result = null) {
     }
 
     let color = '#3498DB';
-    let title = '🃏 Blackjack';
+    let title = '✧ BLACKJACK ✧';
     if (result) {
-        if (result.result === 'blackjack' || result.result === 'win') { color = '#2ECC71'; title = '🃏 Blackjack — Menang!'; }
-        else if (result.result === 'bust' || result.result === 'lose') { color = '#E74C3C'; title = '🃏 Blackjack — Kalah!'; }
-        else { color = '#F1C40F'; title = '🃏 Blackjack — Seri!'; }
+        if (result.result === 'blackjack' || result.result === 'win') { color = '#2ECC71'; title = '✧ VICTORY ✧'; }
+        else if (result.result === 'bust' || result.result === 'lose') { color = '#E74C3C'; title = '✧ DEFEAT ✧'; }
+        else { color = '#F1C40F'; title = '✧ PUSH ✧'; }
     }
 
     let desc = `━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -229,11 +229,19 @@ function startBlackjack(guildId, userId, bet) {
     // Check if already in a game
     const existing = getGame(guildId, userId);
     if (existing) {
-        return { success: false, error: '❌ Kamu masih dalam game! Selesaikan dulu.' };
+        if (Date.now() - existing.startedAt > 300000) {
+            // Stale game (> 5 minutes). Auto-cleanup and record loss
+            endGame(guildId, userId);
+            recordBlackjackLoss(guildId, userId, existing.bet);
+        } else {
+            return { success: false, error: '❌ Kamu masih dalam game! Selesaikan dulu.' };
+        }
     }
 
-    // Deduct bet
-    db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(bet, guildId, userId);
+    // Atomic debit — never go negative
+    if (!subtractUserBalance(guildId, userId, bet)) {
+        return { success: false, error: `❌ Saldo kurang! Punya 🪙 ${getOrCreateUser(guildId, userId).balance.toLocaleString('id-ID')}` };
+    }
     addSpending(guildId, userId, 'gambling', bet);
 
     const game = createGame(guildId, userId, bet);
@@ -250,7 +258,7 @@ function startBlackjack(guildId, userId, bet) {
             incrementUserStat(guildId, userId, 'blackjack_pairs');
         }
         if (totalPayout > 0) {
-            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalPayout, guildId, userId);
+            addUserBalance(guildId, userId, totalPayout);
             if (result.result === 'blackjack' || result.result === 'win') {
                 addIncome(guildId, userId, 'gambling', totalPayout - bet);
                 incrementUserStat(guildId, userId, 'blackjack_wins');
@@ -266,6 +274,14 @@ function startBlackjack(guildId, userId, bet) {
 }
 
 // ==================== HANDLER: Button Clicks ====================
+function recordBlackjackLoss(guildId, userId, bet) {
+    incrementUserStat(guildId, userId, 'blackjack_losses');
+    try {
+        const { collectCasinoLoss } = require('./vault');
+        collectCasinoLoss(guildId, bet);
+    } catch (_) {}
+}
+
 async function handleBlackjackButton(interaction) {
     const guildId = interaction.guild.id;
     const customId = interaction.customId;
@@ -352,12 +368,12 @@ async function handleBlackjackButton(interaction) {
             incrementUserStat(guildId, userId, 'blackjack_pairs');
         }
         if (totalPayout > 0) {
-            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalPayout, guildId, userId);
+            addUserBalance(guildId, userId, totalPayout);
         }
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
         if (result.result === 'win') incrementUserStat(guildId, userId, 'blackjack_wins');
-        if (result.result === 'lose' || result.result === 'bust') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose' || result.result === 'bust') recordBlackjackLoss(guildId, userId, game.bet);
         return interaction.update({ embeds: [buildGameEmbed(game, true, result)], components: [buildGameButtons(userId, game, true)] });
     }
 
@@ -372,12 +388,12 @@ async function handleBlackjackButton(interaction) {
             const result = determineResult(game);
             // Side bet still pays even on bust
             if (game.sideBetPayout > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(game.sideBetPayout, guildId, userId);
+                addUserBalance(guildId, userId, game.sideBetPayout);
                 incrementUserStat(guildId, userId, 'blackjack_pairs');
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            incrementUserStat(guildId, userId, 'blackjack_losses');
+            recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -394,7 +410,7 @@ async function handleBlackjackButton(interaction) {
                 incrementUserStat(guildId, userId, 'blackjack_pairs');
             }
             if (totalPayout > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalPayout, guildId, userId);
+                addUserBalance(guildId, userId, totalPayout);
                 if (result.result === 'win') {
                     addIncome(guildId, userId, 'gambling', totalPayout - game.bet);
                     incrementUserStat(guildId, userId, 'blackjack_wins');
@@ -403,7 +419,7 @@ async function handleBlackjackButton(interaction) {
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+            if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -427,18 +443,17 @@ async function handleBlackjackButton(interaction) {
             incrementUserStat(guildId, userId, 'blackjack_pairs');
         }
         if (totalPayout > 0) {
-            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalPayout, guildId, userId);
+            addUserBalance(guildId, userId, totalPayout);
             if (result.result === 'win') {
                 addIncome(guildId, userId, 'gambling', totalPayout - game.bet);
                 incrementUserStat(guildId, userId, 'blackjack_wins');
                 incrementUserStat(guildId, userId, 'total_gambling_wins', totalPayout - game.bet);
             }
         }
-        if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
-        updateQuestProgress(guildId, userId, 'coinflip', 1); // counts as gambling activity
-
+        
         const embed = buildGameEmbed(game, true, result);
         const row = buildGameButtons(userId, game, true);
         activeBlackjackGames.set(`${guildId}_${userId}_lastbet`, game.bet);
@@ -452,13 +467,9 @@ async function handleBlackjackButton(interaction) {
             return interaction.reply({ content: '❌ Double hanya bisa di awal (2 kartu)!', ephemeral: true });
         }
 
-        const userData = getOrCreateUser(guildId, userId);
-        if (userData.balance < game.bet) {
+        if (!subtractUserBalance(guildId, userId, game.bet)) {
             return interaction.reply({ content: '❌ Saldo kurang untuk double!', ephemeral: true });
         }
-
-        // Deduct additional bet
-        db.prepare('UPDATE users SET balance = balance - ? WHERE guildId = ? AND userId = ?').run(game.bet, guildId, userId);
         addSpending(guildId, userId, 'gambling', game.bet);
         game.bet *= 2;
         game.doubled = true;
@@ -472,12 +483,12 @@ async function handleBlackjackButton(interaction) {
             const result = determineResult(game);
             // Side bet still pays even on bust
             if (game.sideBetPayout > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(game.sideBetPayout, guildId, userId);
+                addUserBalance(guildId, userId, game.sideBetPayout);
                 incrementUserStat(guildId, userId, 'blackjack_pairs');
             }
             endGame(guildId, userId);
             incrementUserStat(guildId, userId, 'blackjack_games');
-            incrementUserStat(guildId, userId, 'blackjack_losses');
+            recordBlackjackLoss(guildId, userId, game.bet);
 
             const embed = buildGameEmbed(game, true, result);
             const row = buildGameButtons(userId, game, true);
@@ -494,14 +505,14 @@ async function handleBlackjackButton(interaction) {
             incrementUserStat(guildId, userId, 'blackjack_pairs');
         }
         if (totalPayout > 0) {
-            db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(totalPayout, guildId, userId);
+            addUserBalance(guildId, userId, totalPayout);
             if (result.result === 'win') {
                 addIncome(guildId, userId, 'gambling', totalPayout - game.bet);
                 incrementUserStat(guildId, userId, 'blackjack_wins');
                 incrementUserStat(guildId, userId, 'total_gambling_wins', totalPayout - game.bet);
             }
         }
-        if (result.result === 'lose') incrementUserStat(guildId, userId, 'blackjack_losses');
+        if (result.result === 'lose') recordBlackjackLoss(guildId, userId, game.bet);
         endGame(guildId, userId);
         incrementUserStat(guildId, userId, 'blackjack_games');
         incrementUserStat(guildId, userId, 'blackjack_doubles');

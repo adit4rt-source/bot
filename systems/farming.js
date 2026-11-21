@@ -4,7 +4,7 @@ const { FARM_LEVELS } = require('../data/farming');
 
 function getFarmData(guildId, userId) {
     let data = db.prepare('SELECT * FROM farm_data WHERE userId = ?').get(userId);
-    if (!data) { db.prepare('INSERT INTO farm_data (userId) VALUES (?)').run(userId); data = { farm_level: 1 }; }
+    if (!data) { db.prepare('INSERT OR IGNORE INTO farm_data (guildId, userId, farm_level) VALUES (?, ?, 1)').run(guildId, userId); data = { farm_level: 1 }; }
     return data;
 }
 

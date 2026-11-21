@@ -133,46 +133,6 @@ function start(client) {
     // ===== REMINDERS (from systems/reminders.js) =====
     const reminders = require('./reminders');
 
-    // Startup cleanup (synchronous, runs once)
-    try {
-        const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
-        const { db } = require('../database');
-        const now = Date.now();
-        const orphanedPlots = db.prepare("SELECT * FROM farm_plots WHERE status = 'growing' AND notified = 0").all();
-        for (const plot of orphanedPlots) {
-            const crop = FARM_CROPS.find(c => c.id === plot.cropId);
-            if (!crop) { db.prepare('UPDATE farm_plots SET notified = 1 WHERE id = ?').run(plot.id); continue; }
-            const fert = FARM_FERTILIZERS.find(f => f.id === plot.fertilizer);
-            const speedBonus = fert ? (fert.speedBonus || 0) : 0;
-            const growTimeMs = crop.time * (1 - speedBonus) * 60 * 1000;
-            const dryTime = now - (plot.wateredAt || plot.plantedAt);
-            const deadThreshold = growTimeMs * 2.5;
-            if (dryTime > deadThreshold) {
-                db.prepare("UPDATE farm_plots SET notified = 1, status = 'dead' WHERE id = ?").run(plot.id);
-            }
-        }
-        console.log('🌾 Farm plots cleanup done on startup');
-    } catch (_) { /* non-critical */ }
-
-    registerJob('daily-reminder',      reminders.DAILY_INTERVAL_MS,           () => reminders.runDailyReminderCheck(client),      { startupDelay: 45000 });
-    registerJob('pet-hungry',          reminders.PET_INTERVAL_MS,             () => reminders.runPetHungryCheck(client),           { startupDelay: 45000 });
-    registerJob('expedition-check',    reminders.EXPEDITION_INTERVAL_MS,      () => reminders.runExpeditionCheck(client),          { startupDelay: 45000 });
-    registerJob('quest-reminder',      reminders.QUEST_CHECK_INTERVAL_MS,     () => reminders.runQuestReminderCheck(client));
-    registerJob('streak-reminder',     reminders.STREAK_CHECK_INTERVAL_MS,    () => reminders.runStreakReminderCheck(client));
-    registerJob('farm-ready',          reminders.FARM_CHECK_INTERVAL_MS,      () => reminders.runFarmReadyCheck(client),           { startupDelay: 45000 });
-    registerJob('world-boss-reminder', 3600000,                               () => reminders.runWorldBossReminderCheck(client));
-    registerJob('ability-tick',        reminders.ABILITY_TICK_INTERVAL_MS,    () => reminders.runAbilityTickAll(client));
-    registerJob('pest-tick',           1800000,                               () => reminders.runPestTick());
-
-    console.log('⏰ Reminder System v2 started (9 jobs via scheduler)');
-
-    // ===== AUTO-HARVEST (from systems/autoHarvest.js) =====
-    try {
-        const { runAutoHarvestCheck } = require('./autoHarvest');
-        registerJob('auto-harvest', 120000, () => runAutoHarvestCheck(client)); // every 2 min
-        console.log('🌾 Auto-harvest notifier: cek setiap 2 menit');
-    } catch (e) { console.error('Auto-harvest scheduler error:', e.message); }
-
     // ===== PANEL REFRESH (from systems/panelRefresh.js) =====
     try {
         const panelRefresh = require('./panelRefresh');
@@ -180,13 +140,11 @@ function start(client) {
         console.log('🔄 Panel auto-refresh: progress panel update tiap 30 detik');
     } catch (e) { console.error('Panel refresh scheduler error:', e.message); }
 
-    // ===== VOICE TICK (from events/voiceStateUpdate.js) =====
-    // voiceStateUpdate exports startVoiceTickInterval which uses setInterval internally.
-    // We call it directly since it has its own internal state management.
+    // ===== VOICE TICK & REWARDS (from events/voiceStateUpdate.js) =====
     try {
         const { startVoiceTickInterval } = require('../events/voiceStateUpdate');
-        startVoiceTickInterval();
-        console.log('🎙️ Voice tick: quest progress setiap 1 menit');
+        startVoiceTickInterval(client);
+        console.log('🎙️ Voice rewards: progression & anti-AFK setiap 1 menit');
     } catch (e) { console.error('Voice tick scheduler error:', e.message); }
 
     // ===== GIVEAWAY (from systems/giveaway.js) =====
@@ -205,13 +163,6 @@ function start(client) {
         console.log('🎟️ Lottery scheduler: undian togel otomatis tiap 1 jam');
     } catch (e) { console.error('Lottery scheduler error:', e.message); }
 
-    // ===== LIVESTOCK (from systems/livestock.js) =====
-    try {
-        const { startLivestockDailySchedule } = require('./livestock');
-        startLivestockDailySchedule();
-        console.log('🐔 Livestock daily tick: cek pergantian hari WIB tiap 30 menit');
-    } catch (e) { console.error('Livestock scheduler error:', e.message); }
-
     // ===== BACKUP (from systems/backup.js) =====
     // backup.startBackupSchedule has its own internal setInterval
     try {
@@ -219,6 +170,58 @@ function start(client) {
         startBackupSchedule(client);
         console.log('💾 Auto-backup: setiap 6 jam → Discord channel');
     } catch (e) { console.error('Backup scheduler error:', e.message); }
+
+    // ===== DAILY RAMALAN ORACLE (07:00 AM WIB) =====
+    try {
+        const { checkAndSendDailyRamalan } = require('./dailyRamalan');
+        registerJob('daily-ramalan', 60000, () => checkAndSendDailyRamalan(client), { startupDelay: 10000 });
+        console.log('🔮 Daily Ramalan Oracle: cek jadwal kirim jam 07:00 WIB tiap 1 menit');
+    } catch (e) { console.error('Daily ramalan scheduler error:', e.message); }
+
+    // ===== WEALTH TAX (Every Sunday 00:00 WIB) =====
+    try {
+        const { runWealthTax } = require('./vault');
+        const { getSetting, setSetting } = require('../database');
+        registerJob('weekly-wealth-tax', 60 * 60000, () => {
+            const now = new Date();
+            const jktDateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+            const jktDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' }).format(now);
+            if (jktDay === 'Sun') {
+                const lastRun = getSetting('GLOBAL', 'last_wealth_tax_date', '');
+                if (lastRun !== jktDateStr) {
+                    const res = runWealthTax('GLOBAL');
+                    setSetting('GLOBAL', 'last_wealth_tax_date', jktDateStr);
+                    if (res && res.affectedUsers > 0) {
+                        console.log(`🏦 [WealthTax] Dipungut: ${res.affectedUsers} user, total 🪙${res.totalTaxCollected.toLocaleString('id-ID')} masuk server vault.`);
+                    }
+                }
+            }
+        }, { startupDelay: 30000 });
+        console.log('🏦 Wealth Tax: evaluasi pajak mingguan hari Minggu (2% untuk saldo >= 500k)');
+    } catch (e) { console.error('Wealth tax scheduler error:', e.message); }
+
+    // ===== ORPHAN TEMP VOICE CLEANUP (Every 5 minutes) =====
+    try {
+        const { db } = require('../database');
+        registerJob('orphan-tempvoice-cleanup', 5 * 60000, async () => {
+            const tempVoices = db.prepare('SELECT channelId, guildId FROM temp_voices').all();
+            for (const tv of tempVoices) {
+                const guild = client.guilds.cache.get(tv.guildId);
+                if (!guild) {
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                    continue;
+                }
+                const ch = guild.channels.cache.get(tv.channelId);
+                if (!ch) {
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                } else if (ch.members && ch.members.size === 0) {
+                    await ch.delete().catch(() => {});
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                }
+            }
+        }, { startupDelay: 60000 });
+        console.log('🎙️ Orphan TempVoice cleanup: bersihkan room kosong tiap 5 menit');
+    } catch (e) { console.error('Orphan temp voice cleaner error:', e.message); }
 
     // ===== PRESENCE UPDATE =====
     const { ActivityType } = require('discord.js');
@@ -229,7 +232,7 @@ function start(client) {
         });
     });
 
-    console.log(`📋 Scheduler started: ${jobs.size} managed jobs + ${['voice-tick', 'giveaway', 'lottery', 'livestock', 'backup'].length} self-managed modules`);
+    console.log(`📋 Scheduler started: ${jobs.size} managed jobs + ${['voice-tick', 'giveaway', 'lottery', 'backup'].length} self-managed modules`);
 }
 
 module.exports = { start, stop: stopAll, stopJob, getStats, registerJob };

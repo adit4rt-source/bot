@@ -7,7 +7,7 @@ const ACHIEVEMENT_MILESTONES = [
     { count: 25, reward: { money: 15000, item: 'lucky_charm', title: '🏅 Veteran' }, desc: '25 Badge' },
     { count: 50, reward: { money: 50000, item: 'xp_booster_3x', title: '🎗️ Elite' }, desc: '50 Badge' },
     { count: 75, reward: { money: 100000, item: 'streak_shield', title: '🎪 Master' }, desc: '75 Badge' },
-    { count: 129, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
+    { count: 122, reward: { money: 250000, item: null, title: '👑 Completionist' }, desc: 'ALL Badge' },
 ];
 
 const ACHIEVEMENTS = [
@@ -53,15 +53,9 @@ const ACHIEVEMENTS = [
     { id: 'voice_10h', name: 'Voice Addict', emoji: '🎧', desc: 'Total 10 jam di voice chat', category: 'Voice', reward: 500 },
     { id: 'voice_50h', name: 'Voice Legend', emoji: '🎶', desc: 'Total 50 jam di voice chat', category: 'Voice', reward: 1500 },
     { id: 'voice_100h', name: 'Living in VC', emoji: '🏠', desc: 'Total 100 jam di voice chat', category: 'Voice', reward: 3000 },
-    // --- QUEST ---
-    { id: 'quest_first', name: 'Misi Pertama', emoji: '📜', desc: 'Selesaikan quest pertama', category: 'Quest', reward: 100 },
-    { id: 'quest_10', name: 'Quest Warrior', emoji: '⚔️', desc: 'Selesaikan 10 quest', category: 'Quest', reward: 400 },
-    { id: 'quest_50', name: 'Quest Master', emoji: '🎖️', desc: 'Selesaikan 50 quest', category: 'Quest', reward: 1500 },
-    { id: 'quest_100', name: 'Quiz Champion', emoji: '🧠', desc: 'Selesaikan 100 quest', category: 'Quest', reward: 3000 },
     // --- SPECIAL ---
     { id: 'redeem_first', name: 'Voucher Hunter', emoji: '🎟️', desc: 'Pertama kali redeem voucher', category: 'Special', reward: 50 },
     { id: 'custom_role', name: 'Fashionista', emoji: '🎨', desc: 'Membuat Custom Role', category: 'Special', reward: 200 },
-    { id: 'all_quest_day', name: 'Perfect Day', emoji: '✨', desc: 'Selesaikan semua quest dalam 1 hari', category: 'Special', reward: 500 },
     // --- FISHING ---
     { id: 'fish_first', name: 'Pemancing Pemula', emoji: '🎣', desc: 'Pertama kali memancing', category: 'Fishing', reward: 50 },
     { id: 'fish_10', name: 'Nelayan', emoji: '🚣', desc: 'Tangkap 10 ikan', category: 'Fishing', reward: 200 },
@@ -155,23 +149,133 @@ const ACHIEVEMENTS = [
     { id: 'expedition_25', name: 'Master Ekspedisi', emoji: '🗺️', desc: 'Selesaikan 25 ekspedisi', category: 'Pet', reward: 2000 },
     // --- AWAKENING ---
     { id: 'awakening_first', name: 'Awakened', emoji: '⚡', desc: 'Awakening pertama kali', category: 'Pet', reward: 5000 },
-    // --- CARD COLLECTION ---
-    { id: 'card_first', name: 'Card Collector', emoji: '🃏', desc: 'Buka gacha kartu pertama kali', category: 'Card', reward: 100 },
-    { id: 'card_25', name: 'Card Enthusiast', emoji: '📚', desc: 'Kumpulkan 25 kartu', category: 'Card', reward: 500 },
-    { id: 'card_100', name: 'Card Master', emoji: '🏆', desc: 'Kumpulkan 100 kartu', category: 'Card', reward: 2000 },
-    { id: 'card_rare_holo', name: 'Rare Pull', emoji: '⭐', desc: 'Dapatkan kartu Rare Holo pertama', category: 'Card', reward: 300 },
-    { id: 'card_ultra', name: 'Ultra Pull', emoji: '💎', desc: 'Dapatkan kartu Rare Ultra pertama', category: 'Card', reward: 1000 },
     // --- ARENA ---
     { id: 'arena_first', name: 'Arena Debut', emoji: '🏟️', desc: 'Pertama kali bertarung di Arena', category: 'Battle', reward: 200 },
     { id: 'arena_win_10', name: 'Arena Fighter', emoji: '⚔️', desc: 'Menang 10 pertarungan Arena', category: 'Battle', reward: 1000 },
     { id: 'arena_win_50', name: 'Arena Champion', emoji: '🏆', desc: 'Menang 50 pertarungan Arena', category: 'Battle', reward: 3000 },
     // --- LIVESTOCK ---
     { id: 'livestock_first', name: 'Peternak Pemula', emoji: '🐄', desc: 'Punya ternak pertama', category: 'Farming', reward: 100 },
-
+    // --- COOKING & RELIC SOCKET ---
+    { id: 'cook_first', name: 'Asisten Dapur', emoji: '🍳', desc: 'Pertama kali memasak hidangan di Cooking Hub', category: 'Farming', reward: 200 },
+    { id: 'cook_10', name: 'Kopi & Roti', emoji: '👨‍🍳', desc: 'Masak 10 hidangan di Cooking Hub', category: 'Farming', reward: 1000 },
+    { id: 'relic_socket_first', name: 'Relic Artificer', emoji: '💠', desc: 'Soket permata pertama ke Relic', category: 'Battle', reward: 500 },
 ];
 
 function hasAchievement(guildId, userId, achievementId) {
     return !!db.prepare('SELECT 1 FROM achievements WHERE guildId = ? AND userId = ? AND achievementId = ?').get(guildId, userId, achievementId);
+}
+
+const pendingNotifications = new Map();
+const coalesceDelay = process.env.NODE_ENV === 'test' ? 10 : 4000;
+
+function queueNotification(guild, userId, achChannelId, item) {
+    const key = `${guild.id}_${userId}`;
+    if (!pendingNotifications.has(key)) {
+        pendingNotifications.set(key, {
+            guild,
+            userId,
+            achChannelId,
+            items: [],
+            timer: null
+        });
+    }
+    const record = pendingNotifications.get(key);
+    
+    // Avoid duplicate achievements in the same batch
+    if (item.type === 'achievement' && record.items.some(x => x.type === 'achievement' && x.id === item.id)) {
+        return;
+    }
+    
+    record.items.push(item);
+
+    if (record.timer) {
+        clearTimeout(record.timer);
+    }
+
+    record.timer = setTimeout(() => {
+        dispatchNotifications(key).catch(() => {});
+    }, coalesceDelay);
+}
+
+async function dispatchNotifications(key) {
+    const record = pendingNotifications.get(key);
+    if (!record) return;
+    pendingNotifications.delete(key);
+
+    const { guild, userId, achChannelId, items } = record;
+    const channel = guild.channels.cache.get(achChannelId);
+    if (!channel) return;
+
+    const achievements = items.filter(i => i.type === 'achievement');
+    const milestones = items.filter(i => i.type === 'milestone');
+
+    if (achievements.length === 0 && milestones.length === 0) return;
+
+    if (achievements.length === 1 && milestones.length === 0) {
+        const ach = achievements[0];
+        const embed = new EmbedBuilder()
+            .setColor('#FFD700')
+            .setTitle('🏆 ACHIEVEMENT UNLOCKED!')
+            .setDescription(`<@${userId}> mendapatkan badge baru!\n\n${ach.emoji} **${ach.name}**\n> *${ach.desc}*\n\n🎁 Hadiah: 🪙 **${ach.reward.toLocaleString('id-ID')} Money**`)
+            .setFooter({ text: `Kategori: ${ach.category}` })
+            .setTimestamp();
+        channel.send({ embeds: [embed] }).catch(() => {});
+        return;
+    }
+
+    if (milestones.length === 1 && achievements.length === 0) {
+        const m = milestones[0];
+        const embed = new EmbedBuilder()
+            .setColor('#FF69B4')
+            .setTitle('🌟 MILESTONE REWARD!')
+            .setDescription(
+                `<@${userId}> mencapai **${m.desc}** milestone!\n\n` +
+                `🏆 Title: **${m.title}**\n` +
+                `💰 Money: **+${m.money.toLocaleString('id-ID')}**\n` +
+                (m.item ? `🎁 Item: **${m.item}**\n` : '') +
+                `\n*Selamat! Terus kumpulkan badge!*`
+            )
+            .setTimestamp();
+        channel.send({ embeds: [embed] }).catch(() => {});
+        return;
+    }
+
+    // Coalesced / Batched message for multiple achievements/milestones
+    const embed = new EmbedBuilder()
+        .setColor('#FFD700')
+        .setTitle('🏆 MULTIPLE ACHIEVEMENTS UNLOCKED!')
+        .setTimestamp();
+
+    let descriptionText = `<@${userId}> telah membuka beberapa pencapaian baru secara bersamaan! 🎉\n\n`;
+    let totalMoneyReward = 0;
+    const itemsGained = [];
+    const titlesGained = [];
+
+    achievements.forEach((ach, index) => {
+        descriptionText += `**${index + 1}. ${ach.emoji} ${ach.name}**\n> *${ach.desc}*\n`;
+        totalMoneyReward += ach.reward;
+    });
+
+    if (milestones.length > 0) {
+        descriptionText += `\n🌟 **Milestone Tercapai:**\n`;
+        milestones.forEach(m => {
+            descriptionText += `> • **${m.desc}**\n`;
+            totalMoneyReward += m.money;
+            if (m.item) itemsGained.push(m.item);
+            if (m.title) titlesGained.push(m.title);
+        });
+    }
+
+    descriptionText += `\n🎁 **Total Hadiah Akumulatif:**\n> 💰 Money: **🪙 ${totalMoneyReward.toLocaleString('id-ID')}**`;
+    if (itemsGained.length > 0) {
+        descriptionText += `\n> 📦 Item: **${itemsGained.join(', ')}**`;
+    }
+    if (titlesGained.length > 0) {
+        descriptionText += `\n> 👑 Gelar/Title: **${titlesGained.join(', ')}**`;
+    }
+
+    embed.setDescription(descriptionText);
+    channel.send({ embeds: [embed] }).catch(() => {});
 }
 
 async function grantAchievement(guild, userId, achievementId) {
@@ -183,18 +287,18 @@ async function grantAchievement(guild, userId, achievementId) {
     const user = getOrCreateUser(guildId, userId);
     user.balance += achDef.reward;
     updateUserBalance(guildId, userId, user.balance);
+    
     const achChannelId = getSetting(guildId, 'achievement_channel', null);
     if (achChannelId) {
-        const channel = guild.channels.cache.get(achChannelId);
-        if (channel) {
-            const embed = new EmbedBuilder()
-                .setColor('#FFD700')
-                .setTitle('🏆 ACHIEVEMENT UNLOCKED!')
-                .setDescription(`<@${userId}> mendapatkan badge baru!\n\n${achDef.emoji} **${achDef.name}**\n> *${achDef.desc}*\n\n🎁 Hadiah: 🪙 **${achDef.reward.toLocaleString('id-ID')} Money**`)
-                .setFooter({ text: `Kategori: ${achDef.category}` })
-                .setTimestamp();
-            channel.send({ embeds: [embed] }).catch(() => {});
-        }
+        queueNotification(guild, userId, achChannelId, {
+            type: 'achievement',
+            id: achievementId,
+            emoji: achDef.emoji,
+            name: achDef.name,
+            desc: achDef.desc,
+            reward: achDef.reward,
+            category: achDef.category
+        });
     }
 
     // Check milestone rewards
@@ -227,21 +331,13 @@ async function checkMilestoneRewards(guild, userId) {
             // Send notification
             const achChannelId = getSetting(guildId, 'achievement_channel', null);
             if (achChannelId) {
-                const channel = guild.channels.cache.get(achChannelId);
-                if (channel) {
-                    const embed = new EmbedBuilder()
-                        .setColor('#FF69B4')
-                        .setTitle('🌟 MILESTONE REWARD!')
-                        .setDescription(
-                            `<@${userId}> mencapai **${milestone.desc}** milestone!\n\n` +
-                            `🏆 Title: **${milestone.reward.title}**\n` +
-                            `💰 Money: **+${milestone.reward.money.toLocaleString('id-ID')}**\n` +
-                            (milestone.reward.item ? `🎁 Item: **${milestone.reward.item}**\n` : '') +
-                            `\n*Selamat! Terus kumpulkan badge!*`
-                        )
-                        .setTimestamp();
-                    channel.send({ embeds: [embed] }).catch(() => {});
-                }
+                queueNotification(guild, userId, achChannelId, {
+                    type: 'milestone',
+                    desc: milestone.desc,
+                    title: milestone.reward.title,
+                    money: milestone.reward.money,
+                    item: milestone.reward.item
+                });
             }
         }
     }
@@ -343,8 +439,7 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'coinflip') { const t = getUserStat(guildId, userId, 'total_coinflips'); const w = getUserStat(guildId, userId, 'coinflip_wins'); if (t >= 1) checks.push('coinflip_first'); if (w >= 5) checks.push('coinflip_win_5'); if (w >= 20) checks.push('coinflip_win_20'); if (w >= 50) checks.push('coinflip_win_50'); }
     if (context.type === 'event_win') { const c = getUserStat(guildId, userId, 'event_wins'); if (c >= 1) checks.push('event_first'); if (c >= 10) checks.push('event_10'); if (c >= 50) checks.push('event_50'); }
     if (context.type === 'voice') { const c = getUserStat(guildId, userId, 'total_voice_mins'); if (c >= 60) checks.push('voice_1h'); if (c >= 600) checks.push('voice_10h'); if (c >= 3000) checks.push('voice_50h'); if (c >= 6000) checks.push('voice_100h'); }
-    if (context.type === 'quest') { const c = getUserStat(guildId, userId, 'total_quests_done'); if (c >= 1) checks.push('quest_first'); if (c >= 10) checks.push('quest_10'); if (c >= 50) checks.push('quest_50'); if (c >= 100) checks.push('quest_100'); }
-    if (context.type === 'redeem') checks.push('redeem_first'); if (context.type === 'custom_role') checks.push('custom_role'); if (context.type === 'all_quest_day') checks.push('all_quest_day');
+    if (context.type === 'redeem') checks.push('redeem_first'); if (context.type === 'custom_role') checks.push('custom_role');
     if (context.type === 'fishing') { const c = getUserStat(guildId, userId, 'total_fish_caught'); if (c >= 1) checks.push('fish_first'); if (c >= 10) checks.push('fish_10'); if (c >= 50) checks.push('fish_50'); if (c >= 100) checks.push('fish_100'); if (c >= 500) checks.push('fish_500'); if (context.tier === 'Rare') checks.push('fish_rare'); if (context.tier === 'Epic') checks.push('fish_epic'); if (context.tier === 'Legendary') checks.push('fish_legendary'); if (context.tier === 'Mythic') checks.push('fish_mythic'); if (context.tier === 'Secret') checks.push('fish_secret'); if (context.tier === 'God') checks.push('fish_god'); if (context.weight > 500) checks.push('fish_heavy'); const godCount = getUserStat(guildId, userId, 'fish_caught_god_tier'); if (godCount >= 5) checks.push('fish_god_5'); if (context.fishId === 'omega_fish') checks.push('fish_omega'); if (context.fishId === 'eternal_one') checks.push('fish_eternal'); }
     if (context.type === 'giant_fish') { const c = getUserStat(guildId, userId, 'giant_fish_defeated'); if (c >= 1) checks.push('giant_fish_first'); if (c >= 5) checks.push('giant_fish_5'); if (c >= 15) checks.push('giant_fish_15'); if (context.giantFishId === 'giant_void_titan') checks.push('giant_fish_void_titan'); }
     if (context.type === 'secret_location_unlock') { checks.push('secret_location_unlock'); }
@@ -385,12 +480,21 @@ async function checkAchievements(guild, userId, context = {}) {
     if (context.type === 'expedition') { const c = getUserStat(guildId, userId, 'total_expeditions'); if (c >= 1) checks.push('expedition_first'); if (c >= 25) checks.push('expedition_25'); }
     // --- AWAKENING ---
     if (context.type === 'awakening') { const c = getUserStat(guildId, userId, 'total_awakenings'); if (c >= 1) checks.push('awakening_first'); }
-    // --- CARD COLLECTION ---
-    if (context.type === 'card_gacha') { const c = getUserStat(guildId, userId, 'cards_grabbed'); if (c >= 1) checks.push('card_first'); const total = context.totalCards || 0; if (total >= 25) checks.push('card_25'); if (total >= 100) checks.push('card_100'); if (context.hasRareHolo) checks.push('card_rare_holo'); if (context.hasUltra) checks.push('card_ultra'); }
     // --- ARENA ---
     if (context.type === 'arena') { const w = getUserStat(guildId, userId, 'arena_wins'); const t = (getUserStat(guildId, userId, 'arena_wins') || 0) + (getUserStat(guildId, userId, 'arena_losses') || 0); if (t >= 1) checks.push('arena_first'); if (w >= 10) checks.push('arena_win_10'); if (w >= 50) checks.push('arena_win_50'); }
     // --- LIVESTOCK ---
     if (context.type === 'livestock') { checks.push('livestock_first'); }
+    // --- COOKING ---
+    if (context.type === 'cook') {
+        const c = getUserStat(guildId, userId, 'total_cooked');
+        if (c >= 1) checks.push('cook_first');
+        if (c >= 10) checks.push('cook_10');
+    }
+    // --- RELIC SOCKET ---
+    if (context.type === 'relic_socket') {
+        const c = getUserStat(guildId, userId, 'relic_gems_socketed');
+        if (c >= 1) checks.push('relic_socket_first');
+    }
     for (const achId of checks) { await grantAchievement(guild, userId, achId); }
 }
 
@@ -406,7 +510,6 @@ const ACH_PROGRESS = {
     coinflip_first: { stat: 'total_coinflips', target: 1 }, coinflip_win_5: { stat: 'coinflip_wins', target: 5 }, coinflip_win_20: { stat: 'coinflip_wins', target: 20 }, coinflip_win_50: { stat: 'coinflip_wins', target: 50 },
     event_first: { stat: 'event_wins', target: 1 }, event_10: { stat: 'event_wins', target: 10 }, event_50: { stat: 'event_wins', target: 50 },
     voice_1h: { stat: 'total_voice_mins', target: 60 }, voice_10h: { stat: 'total_voice_mins', target: 600 }, voice_50h: { stat: 'total_voice_mins', target: 3000 }, voice_100h: { stat: 'total_voice_mins', target: 6000 },
-    quest_first: { stat: 'total_quests_done', target: 1 }, quest_10: { stat: 'total_quests_done', target: 10 }, quest_50: { stat: 'total_quests_done', target: 50 }, quest_100: { stat: 'total_quests_done', target: 100 },
     fish_first: { stat: 'total_fish_caught', target: 1 }, fish_10: { stat: 'total_fish_caught', target: 10 }, fish_50: { stat: 'total_fish_caught', target: 50 }, fish_100: { stat: 'total_fish_caught', target: 100 }, fish_500: { stat: 'total_fish_caught', target: 500 },
     fish_god_5: { stat: 'fish_caught_god_tier', target: 5 },
     giant_fish_first: { stat: 'giant_fish_defeated', target: 1 }, giant_fish_5: { stat: 'giant_fish_defeated', target: 5 }, giant_fish_15: { stat: 'giant_fish_defeated', target: 15 },
@@ -430,9 +533,10 @@ const ACH_PROGRESS = {
     relic_melt_first: { stat: 'relic_melts', target: 1 },
     expedition_first: { stat: 'total_expeditions', target: 1 }, expedition_25: { stat: 'total_expeditions', target: 25 },
     awakening_first: { stat: 'total_awakenings', target: 1 },
-    card_first: { stat: 'cards_grabbed', target: 1 }, card_25: { special: 'totalCards', target: 25 }, card_100: { special: 'totalCards', target: 100 },
     arena_first: { special: 'arenaFights', target: 1 }, arena_win_10: { stat: 'arena_wins', target: 10 }, arena_win_50: { stat: 'arena_wins', target: 50 },
     livestock_first: { special: 'livestock', target: 1 },
+    cook_first: { stat: 'total_cooked', target: 1 }, cook_10: { stat: 'total_cooked', target: 10 },
+    relic_socket_first: { stat: 'relic_gems_socketed', target: 1 },
 };
 
 // Returns { raw, current, target } for a countable achievement, or null.
@@ -445,7 +549,6 @@ function getAchievementProgress(guildId, userId, achId) {
         else if (p.special === 'level') current = getOrCreateUser(guildId, userId).level;
         else if (p.special === 'streak') { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); current = s ? s.count : 0; }
         else if (p.special === 'distinctPets') { const r = db.prepare('SELECT COUNT(*) AS c FROM pet_discovery WHERE userId = ?').get(userId); current = r ? r.c : 0; }
-        else if (p.special === 'totalCards') { const r = db.prepare('SELECT COUNT(*) AS c FROM pokemon_cards WHERE userId = ?').get(userId); current = r ? r.c : 0; }
         else if (p.special === 'arenaFights') { current = (getUserStat(guildId, userId, 'arena_wins') || 0) + (getUserStat(guildId, userId, 'arena_losses') || 0); }
         else if (p.special === 'livestock') { try { const r = db.prepare('SELECT COUNT(*) AS c FROM livestock WHERE userId = ?').get(userId); current = r ? r.c : 0; } catch (_) { current = 0; } }
         else current = getUserStat(guildId, userId, p.stat) || 0;
