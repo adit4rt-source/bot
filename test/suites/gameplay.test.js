@@ -29,7 +29,9 @@ module.exports = function register() {
     const orig = Math.random;
     const fw = botRequire('systems/farmWeather.js');
     const origWeather = fw.getCurrentWeather;
+    const origBonus = fw.getWeatherMutationBonus;
     fw.getCurrentWeather = () => ({ id: 'sunny', mutationBonus: 0 });
+    fw.getWeatherMutationBonus = () => 0;
     try {
       let hits = 0; const N = 300000;
       for (let i=0;i<N;i++) if (mut.rollMutation(G, U, 0)) hits++;
@@ -38,6 +40,7 @@ module.exports = function register() {
     } finally {
       Math.random = orig;
       fw.getCurrentWeather = origWeather;
+      fw.getWeatherMutationBonus = origBonus;
     }
   });
   test('mutation: yield is positive integer', () => {

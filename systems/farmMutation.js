@@ -3,7 +3,7 @@
 
 const { db, getUserStat, incrementUserStat } = require('../database');
 const { getRandomInt } = require('../utils');
-const { getWeatherMutationBonus } = require('./farmWeather');
+const farmWeather = require('./farmWeather');
 
 // ==================== MUTATION DATA ====================
 // Every crop can mutate into a "Golden" or "Crystal" version worth 10x-25x.
@@ -62,7 +62,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS crop_rotation (
 
 // ==================== ROLL MUTATION ====================
 function rollMutation(guildId, userId, seedLevel = 0) {
-    const weatherBonus = getWeatherMutationBonus();      // e.g. 0.05 (foggy) / 0.10 (rainbow)
+    const weatherBonus = farmWeather.getWeatherMutationBonus ? farmWeather.getWeatherMutationBonus() : 0;      // e.g. 0.05 (foggy) / 0.10 (rainbow)
     const seedUpgrade = SEED_UPGRADES[seedLevel] || SEED_UPGRADES[0];
     const seedBonus = seedUpgrade.mutationBonus;          // e.g. 0.02 .. 0.10
     const extra = weatherBonus + seedBonus;               // flat bonus to the TOTAL chance

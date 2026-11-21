@@ -143,10 +143,16 @@ async function handleProfileButton(interaction) {
 
         const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
         const customBannerRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_banner');
-        const cardTitle = customTitleRow ? `📛 ${customTitleRow.stat_value}` : (rankTitle ? `${rankTitle.emoji || ''} ${rankTitle.name || ''}` : '');
+        let titleProgress = null;
+        try { titleProgress = getTitleProgress(guildId, userId); } catch (_) {}
+        const cardTitle = customTitleRow ? customTitleRow.stat_value : (rankTitle ? rankTitle.name : 'Silver');
+
+        const member = interaction.member || (await interaction.guild.members.fetch(userId).catch(() => null));
+        const highestRole = member && member.roles.highest && member.roles.highest.name !== '@everyone' ? member.roles.highest.name : 'Member';
 
         const buffer = await generateProfileCard({
             username: interaction.user.username,
+            userId: interaction.user.id,
             avatarURL,
             bgURL: customBannerRow ? customBannerRow.stat_value : null,
             level: userData.level,
@@ -154,11 +160,16 @@ async function handleProfileButton(interaction) {
             xpNeeded: (userData.level + 1) * 100,
             balance: userData.balance,
             rankName: cardTitle,
+            rankTier: rankTitle ? rankTitle.id : 'silver',
+            score: titleProgress ? titleProgress.score : userData.balance,
             badges,
             streak,
             rankPosition: rankPos,
+            joinedServerAt: member ? member.joinedAt : null,
+            createdDiscordAt: interaction.user.createdAt,
+            specialRole: highestRole,
             accent: (rankTitle && rankTitle.color) || '#5865F2',
-            footerTag: (interaction.guild && interaction.guild.name) ? interaction.guild.name : '',
+            footerTag: (interaction.guild && interaction.guild.name) ? interaction.guild.name : 'ID Community',
         });
         const file = new AttachmentBuilder(buffer, { name: 'profile.png' });
         return interaction.reply({ content: `📤 **Kartu profil ${interaction.user.username}** — pamerin ke teman-temanmu! 🔥`, files: [file] });

@@ -1,6 +1,6 @@
-// systems/profileCard.js — Generate a profile card PNG (avatar + level + XP bar + stats).
-// Uses @napi-rs/canvas with the same bundled Poppins fonts as welcomeCard.
-// NOTE: Poppins has no emoji glyphs, so all on-canvas text is sanitized (emoji stripped).
+// systems/profileCard.js — Member Card Canvas Generator (1080x580)
+// High-fidelity Discord Community Member Card with Avatar, Profile Info,
+// Dynamic Winged Rank Shield, and Badges Showcase.
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
@@ -11,25 +11,25 @@ try {
     GlobalFonts.registerFromPath(path.join(FONT_DIR, 'Poppins-SemiBold.ttf'), 'PoppinsSemiBold');
     FONTS_OK = true;
 } catch (e) {
-    console.error('[profileCard] Gagal register font, pakai font sistem:', e.message);
+    // Fonts not available — fallback to sans-serif
 }
-const BOLD = FONTS_OK ? 'PoppinsBold' : 'sans-serif';
-const SEMI = FONTS_OK ? 'PoppinsSemiBold' : 'sans-serif';
+const BOLD = FONTS_OK ? 'PoppinsBold, sans-serif' : 'sans-serif';
+const SEMI = FONTS_OK ? 'PoppinsSemiBold, sans-serif' : 'sans-serif';
 
-const W = 1024, H = 420, CORNER = 34;
+const W = 1080, H = 580;
 
-function roundRectPath(ctx, x, y, w, h, r) {
-    const rr = Math.min(r, w / 2, h / 2);
+function roundRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
     ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y + x + w, y, r);
     ctx.closePath();
 }
 
-// Remove emoji / symbol characters that Poppins cannot render.
 function clean(str) {
     return String(str || '')
         .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{20E3}\u{2122}\u{2139}]/gu, '')
@@ -37,7 +37,6 @@ function clean(str) {
         .trim();
 }
 
-// Compact number formatter: 1234 -> "1.2K", 3_400_000 -> "3.4M".
 function compact(n) {
     n = Number(n) || 0;
     if (n >= 1e12) return (n / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
@@ -47,59 +46,99 @@ function compact(n) {
     return String(Math.floor(n));
 }
 
-function fitText(ctx, text, font, basePx, maxWidth, minPx = 16) {
-    let px = basePx;
-    while (px > minPx) {
-        ctx.font = `${px}px ${font}`;
-        if (ctx.measureText(text).width <= maxWidth) return px;
-        px -= 2;
+function formatDate(val) {
+    if (!val) return '29/04/2024';
+    try {
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return '29/04/2024';
+        const day = String(d.getDate()).padStart(2, '0');
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const yr = d.getFullYear();
+        return `${day}/${mo}/${yr}`;
+    } catch (_) {
+        return '29/04/2024';
     }
-    ctx.font = `${minPx}px ${font}`;
-    return minPx;
 }
 
-// Parse "#rrggbb" -> {r,g,b}; falls back to blurple.
-function hexToRgb(hex) {
-    const m = String(hex || '').replace('#', '').match(/^([0-9a-fA-F]{6})$/);
-    if (!m) return { r: 88, g: 101, b: 242 };
-    const int = parseInt(m[1], 16);
-    return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
+function formatDuration(since) {
+    if (!since) return '1 Tahun 1 Bulan';
+    try {
+        const d = new Date(since);
+        if (isNaN(d.getTime())) return '1 Tahun 1 Bulan';
+        const diffMs = Math.max(0, Date.now() - d.getTime());
+        const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (totalDays >= 365) {
+            const yrs = Math.floor(totalDays / 365);
+            const mos = Math.floor((totalDays % 365) / 30);
+            return mos > 0 ? `${yrs} Tahun ${mos} Bulan` : `${yrs} Tahun`;
+        }
+        if (totalDays >= 30) {
+            const mos = Math.floor(totalDays / 30);
+            const days = totalDays % 30;
+            return days > 0 ? `${mos} Bulan ${days} Hari` : `${mos} Bulan`;
+        }
+        return `${Math.max(1, totalDays)} Hari`;
+    } catch (_) {
+        return '1 Tahun 1 Bulan';
+    }
 }
-function rgba({ r, g, b }, a) { return `rgba(${r},${g},${b},${a})`; }
-// Mix a color toward black by `f` (0..1).
-function darken({ r, g, b }, f) {
-    return { r: Math.round(r * (1 - f)), g: Math.round(g * (1 - f)), b: Math.round(b * (1 - f)) };
+
+function drawSparkle(ctx, x, y, r, color = '#FFFFFF') {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.quadraticCurveTo(x, y, x, y + r);
+    ctx.quadraticCurveTo(x, y, x - r, y);
+    ctx.quadraticCurveTo(x, y, x, y - r);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawCardBox(ctx, x, y, w, h, r = 24) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(79, 70, 229, 0.08)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    roundRect(ctx, x, y, w, h, r);
+    ctx.strokeStyle = 'rgba(224, 231, 255, 0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+}
+
+function getRankColorConfig(rankTier = 'silver') {
+    const key = String(rankTier || '').toLowerCase();
+    if (key.includes('bronze')) return { primary: '#CD7F32', dark: '#8C501E', ribbon: '#B45309', label: 'BRONZE' };
+    if (key.includes('gold')) return { primary: '#F59E0B', dark: '#B45309', ribbon: '#D97706', label: 'GOLD' };
+    if (key.includes('platinum')) return { primary: '#38BDF8', dark: '#0284C7', ribbon: '#0284C7', label: 'PLATINUM' };
+    if (key.includes('diamond')) return { primary: '#06B6D4', dark: '#0891B2', ribbon: '#0284C7', label: 'DIAMOND' };
+    if (key.includes('master')) return { primary: '#A855F7', dark: '#7E22CE', ribbon: '#7E22CE', label: 'MASTER' };
+    if (key.includes('grandmaster')) return { primary: '#F97316', dark: '#C2410C', ribbon: '#EA580C', label: 'GRANDMASTER' };
+    if (key.includes('mythic')) return { primary: '#EC4899', dark: '#BE185D', ribbon: '#DB2777', label: 'MYTHIC' };
+    if (key.includes('legend')) return { primary: '#EAB308', dark: '#A16207', ribbon: '#CA8A04', label: 'LEGEND' };
+    if (key.includes('immortal')) return { primary: '#EF4444', dark: '#B91C1C', ribbon: '#DC2626', label: 'IMMORTAL' };
+    return { primary: '#CBD5E1', dark: '#64748B', ribbon: '#2563EB', label: 'SILVER' };
 }
 
 /**
- * Generate a profile card PNG buffer.
- * @param {Object} o
- * @param {string} o.username
- * @param {string} [o.avatarURL]
- * @param {number} o.level
- * @param {number} o.xp
- * @param {number} o.xpNeeded
- * @param {number} o.balance
- * @param {string} [o.rankName]
- * @param {number} [o.badges]
- * @param {number} [o.streak]
- * @param {number} [o.rankPosition]
- * @param {string} [o.accent] hex accent color
- * @param {string} [o.footerTag] small watermark line (e.g. server name) for shareable flex
- * @returns {Promise<Buffer>}
+ * Generate a Community Member Card PNG buffer (1080x580).
  */
 async function generateProfileCard(o = {}) {
-    const accentHex = /^#?[0-9a-fA-F]{6}$/.test(String(o.accent || '').replace('#', '')) ? (o.accent[0] === '#' ? o.accent : '#' + o.accent) : '#5865F2';
-    const acc = hexToRgb(accentHex);
-    const accDark = darken(acc, 0.45);
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // Rounded clip for the whole card
-    roundRectPath(ctx, 0, 0, W, H, CORNER);
+    // 1. Base Card Outline & Background
+    roundRect(ctx, 0, 0, W, H, 32);
     ctx.clip();
 
-    // ---- Background: custom banner image or deep gradient tinted toward accent ----
     let customBg = null;
     if (o.bgURL) {
         try { customBg = await loadImage(o.bgURL); } catch (_) {}
@@ -107,231 +146,413 @@ async function generateProfileCard(o = {}) {
 
     if (customBg) {
         ctx.drawImage(customBg, 0, 0, W, H);
-        ctx.fillStyle = 'rgba(12, 13, 22, 0.72)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
         ctx.fillRect(0, 0, W, H);
     } else {
-        const g = ctx.createLinearGradient(0, 0, W, H);
-        g.addColorStop(0, `rgb(${Math.round(20 + acc.r * 0.10)},${Math.round(22 + acc.g * 0.10)},${Math.round(38 + acc.b * 0.12)})`);
-        g.addColorStop(0.55, '#16182a');
-        g.addColorStop(1, '#0c0d16');
-        ctx.fillStyle = g;
+        const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+        bgGrad.addColorStop(0, '#C2D9FC');
+        bgGrad.addColorStop(0.3, '#DBE8FF');
+        bgGrad.addColorStop(1, '#E8F0FE');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, W, H);
     }
 
-    // Subtle diagonal stripe texture
+    // Sparkles and Cloud Accents
     ctx.save();
-    ctx.globalAlpha = 0.04;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    for (let x = -H; x < W; x += 26) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x + H, H);
-        ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.50)';
+    ctx.beginPath();
+    ctx.arc(880, 50, 60, 0, Math.PI * 2);
+    ctx.arc(960, 30, 80, 0, Math.PI * 2);
+    ctx.arc(1040, 60, 70, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawSparkle(ctx, 450, 45, 10, '#FFF59D');
+    drawSparkle(ctx, 720, 30, 8, '#FFFFFF');
+    drawSparkle(ctx, 780, 65, 12, '#FFFFFF');
+    drawSparkle(ctx, 1030, 110, 9, '#FFFFFF');
+    drawSparkle(ctx, 50, 240, 8, '#FBCFE8');
+    drawSparkle(ctx, 290, 260, 7, '#FBCFE8');
+    ctx.restore();
+
+    // 2. Header: Server Logo & Member Card Subtitle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(80, 58, 38, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(79, 70, 229, 0.2)';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    const logoGrad = ctx.createLinearGradient(50, 30, 110, 90);
+    logoGrad.addColorStop(0, '#6366F1');
+    logoGrad.addColorStop(1, '#3B82F6');
+    ctx.beginPath();
+    ctx.arc(80, 58, 32, 0, Math.PI * 2);
+    ctx.fillStyle = logoGrad;
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `28px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎲', 80, 60);
+    ctx.restore();
+
+    // Header Text
+    const sName = clean(o.footerTag) || 'ID Community';
+    ctx.fillStyle = '#1E1B4B';
+    ctx.font = `34px ${BOLD}`;
+    ctx.textAlign = 'left';
+    ctx.fillText(sName, 135, 52);
+
+    drawSparkle(ctx, 142, 78, 6, '#F59E0B');
+    ctx.fillStyle = '#6366F1';
+    ctx.font = `17px ${SEMI}`;
+    ctx.fillText('Member Card', 158, 83);
+    drawSparkle(ctx, 278, 78, 6, '#F59E0B');
+
+    // ---------------- BOX A: Avatar & Username (Left) ----------------
+    const bxA = 40, byA = 115, bwA = 260, bhA = 330;
+    drawCardBox(ctx, bxA, byA, bwA, bhA);
+
+    const avCx = bxA + bwA / 2;
+    const avCy = byA + 105;
+    const avR = 68;
+
+    // Avatar Frame Halo
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avCx, avCy, avR + 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#EEF2FF';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(avCx, avCy, avR + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = '#C7D2FE';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Avatar Image or Fallback
+    let avatarImg = null;
+    if (o.avatarURL) {
+        try { avatarImg = await loadImage(o.avatarURL); } catch (_) {}
+    }
+
+    ctx.beginPath();
+    ctx.arc(avCx, avCy, avR, 0, Math.PI * 2);
+    ctx.clip();
+    if (avatarImg) {
+        ctx.drawImage(avatarImg, avCx - avR, avCy - avR, avR * 2, avR * 2);
+    } else {
+        const ph = ctx.createLinearGradient(avCx - avR, avCy - avR, avCx + avR, avCy + avR);
+        ph.addColorStop(0, '#4F46E5');
+        ph.addColorStop(1, '#6366F1');
+        ctx.fillStyle = ph;
+        ctx.fillRect(avCx - avR, avCy - avR, avR * 2, avR * 2);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `56px ${BOLD}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText((clean(o.username)[0] || '?').toUpperCase(), avCx, avCy);
     }
     ctx.restore();
 
-    // Accent glow blobs
-    const blob = ctx.createRadialGradient(170, 210, 20, 170, 210, 420);
-    blob.addColorStop(0, rgba(acc, 0.38));
-    blob.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = blob;
-    ctx.fillRect(0, 0, W, H);
-    const blob2 = ctx.createRadialGradient(W - 60, H, 10, W - 60, H, 360);
-    blob2.addColorStop(0, rgba(accDark, 0.30));
-    blob2.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = blob2;
-    ctx.fillRect(0, 0, W, H);
-
-    // Accent top bar
+    // Mini Heart Sticker on top-right of avatar
     ctx.save();
-    const topbar = ctx.createLinearGradient(0, 0, W, 0);
-    topbar.addColorStop(0, rgba(acc, 0.0));
-    topbar.addColorStop(0.5, rgba(acc, 0.9));
-    topbar.addColorStop(1, rgba(acc, 0.0));
-    ctx.fillStyle = topbar;
-    ctx.fillRect(0, 0, W, 6);
+    ctx.beginPath();
+    ctx.arc(avCx + 54, avCy - 48, 18, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.25)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('❤️', avCx + 54, avCy - 47);
     ctx.restore();
 
-    // Outer border
+    // Username Pill
+    const unPillW = 190, unPillH = 38;
+    const unPillX = bxA + (bwA - unPillW) / 2;
+    const unPillY = byA + 205;
+
     ctx.save();
-    roundRectPath(ctx, 5, 5, W - 10, H - 10, CORNER - 5);
+    roundRect(ctx, unPillX, unPillY, unPillW, unPillH, 19);
+    const unGrad = ctx.createLinearGradient(unPillX, 0, unPillX + unPillW, 0);
+    unGrad.addColorStop(0, '#4F46E5');
+    unGrad.addColorStop(1, '#6366F1');
+    ctx.fillStyle = unGrad;
+    ctx.fill();
+
+    const uNameText = clean(o.username) || 'Player';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `18px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(uNameText.slice(0, 13), unPillX + unPillW / 2 - 8, unPillY + unPillH / 2);
+
+    // Online Green Dot
+    ctx.beginPath();
+    ctx.arc(unPillX + unPillW - 20, unPillY + unPillH / 2, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#22C55E';
+    ctx.fill();
+    ctx.restore();
+
+    // User ID Pill
+    const idPillW = 210, idPillH = 34;
+    const idPillX = bxA + (bwA - idPillW) / 2;
+    const idPillY = byA + 260;
+
+    ctx.save();
+    roundRect(ctx, idPillX, idPillY, idPillW, idPillH, 12);
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fill();
+    roundRect(ctx, idPillX, idPillY, idPillW, idPillH, 12);
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const uIdText = String(o.userId || '765898304345079820');
+    ctx.fillStyle = '#64748B';
+    ctx.font = `13px ${SEMI}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`ID: ${uIdText.slice(0, 18)}`, idPillX + idPillW / 2, idPillY + idPillH / 2);
+    ctx.restore();
+
+    // ---------------- BOX B: Member Information (Center) ----------------
+    const bxB = 325, byB = 115, bwB = 410, bhB = 330;
+    drawCardBox(ctx, bxB, byB, bwB, bhB);
+
+    // Ribbon Header Pill
+    const ribW = 240, ribH = 32;
+    const ribX = bxB + (bwB - ribW) / 2;
+    const ribY = byB + 16;
+
+    ctx.save();
+    roundRect(ctx, ribX, ribY, ribW, ribH, 10);
+    const ribGrad = ctx.createLinearGradient(ribX, 0, ribX + ribW, 0);
+    ribGrad.addColorStop(0, '#4338CA');
+    ribGrad.addColorStop(1, '#6366F1');
+    ctx.fillStyle = ribGrad;
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `14px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('•  INFORMASI MEMBER  •', ribX + ribW / 2, ribY + ribH / 2);
+    ctx.restore();
+
+    const xpTarget = Math.max(1, Math.floor(o.xpNeeded || 100));
+    const curXp = Math.floor(o.xp || 0);
+
+    const infoRows = [
+        { iconBg: '#60A5FA', icon: '👤', label: 'Join Discord', val: formatDate(o.createdDiscordAt) },
+        { iconBg: '#818CF8', icon: '💬', label: 'Join Server', val: formatDate(o.joinedServerAt) },
+        { iconBg: '#F87171', icon: '📅', label: 'Member Since', val: formatDuration(o.joinedServerAt) },
+        { iconBg: '#34D399', icon: '⭐', label: 'Level & EXP', val: `Lv. ${o.level || 1} (${compact(curXp)}/${compact(xpTarget)})` },
+        { iconBg: '#A78BFA', icon: '👑', label: 'Special Role', val: clean(o.specialRole) || 'Member', valColor: '#7C3AED' }
+    ];
+
+    const rowStartY = byB + 74;
+    infoRows.forEach((r, idx) => {
+        const curY = rowStartY + idx * 48;
+
+        ctx.save();
+        roundRect(ctx, bxB + 24, curY - 14, 30, 30, 8);
+        ctx.fillStyle = r.iconBg;
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(r.icon, bxB + 39, curY + 1);
+        ctx.restore();
+
+        ctx.fillStyle = '#1E293B';
+        ctx.font = `14px ${BOLD}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(r.label, bxB + 66, curY + 1);
+
+        ctx.fillStyle = '#94A3B8';
+        ctx.fillText(':', bxB + 195, curY + 1);
+
+        ctx.fillStyle = r.valColor || '#334155';
+        ctx.font = `14px ${SEMI}`;
+        ctx.fillText(r.val.slice(0, 20), bxB + 215, curY + 1);
+    });
+
+    // ---------------- BOX C: Rank Role (Right) ----------------
+    const bxC = 755, byC = 115, bwC = 285, bhC = 330;
+    drawCardBox(ctx, bxC, byC, bwC, bhC);
+
+    ctx.fillStyle = '#D97706';
+    ctx.font = `16px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    drawSparkle(ctx, bxC + 60, byC + 28, 6, '#F59E0B');
+    ctx.fillText('RANK ROLE', bxC + bwC / 2, byC + 28);
+    drawSparkle(ctx, bxC + bwC - 60, byC + 28, 6, '#F59E0B');
+
+    const shCx = bxC + bwC / 2;
+    const shCy = byC + 125;
+
+    // Winged Emblem
+    ctx.save();
+    ctx.fillStyle = '#E2E8F0';
+    ctx.strokeStyle = '#CBD5E1';
     ctx.lineWidth = 2;
-    ctx.strokeStyle = rgba(acc, 0.35);
+
+    // Left Wing
+    ctx.beginPath();
+    ctx.moveTo(shCx - 38, shCy);
+    ctx.bezierCurveTo(shCx - 75, shCy - 35, shCx - 105, shCy - 10, shCx - 95, shCy + 25);
+    ctx.bezierCurveTo(shCx - 85, shCy + 45, shCx - 55, shCy + 30, shCx - 38, shCy + 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Right Wing
+    ctx.beginPath();
+    ctx.moveTo(shCx + 38, shCy);
+    ctx.bezierCurveTo(shCx + 75, shCy - 35, shCx + 105, shCy - 10, shCx + 95, shCy + 25);
+    ctx.bezierCurveTo(shCx + 85, shCy + 45, shCx + 55, shCy + 30, shCx + 38, shCy + 20);
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // ---- Avatar with gradient accent ring (left) ----
-    const aCx = 170, aCy = 180, aR = 108;
-    ctx.save();
-    ctx.shadowColor = rgba(acc, 0.9);
-    ctx.shadowBlur = 38;
-    const ring = ctx.createLinearGradient(aCx - aR, aCy - aR, aCx + aR, aCy + aR);
-    ring.addColorStop(0, accentHex);
-    ring.addColorStop(1, `rgb(${accDark.r},${accDark.g},${accDark.b})`);
-    ctx.beginPath();
-    ctx.arc(aCx, aCy, aR + 9, 0, Math.PI * 2);
-    ctx.fillStyle = ring;
-    ctx.fill();
-    ctx.restore();
-    // dark gap
+    // Shield Emblem with Dynamic Rank Color
+    const rConfig = getRankColorConfig(o.rankTier || o.rankName || 'silver');
+    const sw = 48, sh = 56;
     ctx.save();
     ctx.beginPath();
-    ctx.arc(aCx, aCy, aR + 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.moveTo(shCx, shCy - sh);
+    ctx.lineTo(shCx + sw, shCy - sh + 15);
+    ctx.lineTo(shCx + sw, shCy + 15);
+    ctx.bezierCurveTo(shCx + sw, shCy + 45, shCx, shCy + 65, shCx, shCy + 72);
+    ctx.bezierCurveTo(shCx, shCy + 65, shCx - sw, shCy + 45, shCx - sw, shCy + 15);
+    ctx.lineTo(shCx - sw, shCy - sh + 15);
+    ctx.closePath();
+
+    const shGrad = ctx.createLinearGradient(shCx - sw, shCy - sh, shCx + sw, shCy + 72);
+    shGrad.addColorStop(0, rConfig.primary);
+    shGrad.addColorStop(1, rConfig.dark);
+    ctx.fillStyle = shGrad;
     ctx.fill();
+    ctx.strokeStyle = '#F8FAFC';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Star inside shield
+    drawSparkle(ctx, shCx, shCy + 8, 20, '#FFFFFF');
     ctx.restore();
 
-    let avatar = null;
-    if (o.avatarURL) { try { avatar = await loadImage(o.avatarURL); } catch (_) { /* skip */ } }
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(aCx, aCy, aR, 0, Math.PI * 2);
-    ctx.clip();
-    if (avatar) ctx.drawImage(avatar, aCx - aR, aCy - aR, aR * 2, aR * 2);
-    else {
-        const ph = ctx.createLinearGradient(aCx - aR, aCy - aR, aCx + aR, aCy + aR);
-        ph.addColorStop(0, '#3a3d52'); ph.addColorStop(1, '#22242f');
-        ctx.fillStyle = ph; ctx.fillRect(aCx - aR, aCy - aR, aR * 2, aR * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = `${aR}px ${BOLD}`; ctx.textAlign = 'center';
-        ctx.fillText((clean(o.username)[0] || '?').toUpperCase(), aCx, aCy + aR * 0.36);
-    }
-    ctx.restore();
+    // Rank Banner Ribbon below shield
+    const rbnW = 160, rbnH = 34;
+    const rbnX = shCx - rbnW / 2;
+    const rbnY = shCy + 45;
 
-    // Level pill under avatar
-    const pillW = 168, pillH = 46, pillX = aCx - pillW / 2, pillY = aCy + aR + 16;
     ctx.save();
-    ctx.shadowColor = rgba(acc, 0.6); ctx.shadowBlur = 16; ctx.shadowOffsetY = 3;
-    roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-    const pillG = ctx.createLinearGradient(pillX, 0, pillX + pillW, 0);
-    pillG.addColorStop(0, accentHex);
-    pillG.addColorStop(1, `rgb(${accDark.r},${accDark.g},${accDark.b})`);
-    ctx.fillStyle = pillG;
+    roundRect(ctx, rbnX, rbnY, rbnW, rbnH, 8);
+    ctx.fillStyle = rConfig.ribbon;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = 10;
     ctx.fill();
-    ctx.restore();
+
+    const rankLabel = clean(o.rankName) || rConfig.label;
     ctx.fillStyle = '#FFFFFF';
+    ctx.font = `18px ${BOLD}`;
     ctx.textAlign = 'center';
-    ctx.font = `27px ${BOLD}`;
-    ctx.fillText(`LEVEL ${Math.floor(o.level || 0)}`, aCx, pillY + 31);
-
-    // ---- Right text block ----
-    const LX = 326;            // left edge of text block
-    const RX = W - 50;         // right edge
-    const blockW = RX - LX;
-    ctx.textAlign = 'left';
-
-    // Rank position chip (top-right)
-    if (o.rankPosition) {
-        const chip = `#${o.rankPosition}`;
-        ctx.font = `24px ${BOLD}`;
-        const cw = ctx.measureText(chip).width + 34;
-        const chX = RX - cw, chY = 40, chH = 40;
-        ctx.save();
-        roundRectPath(ctx, chX, chY, cw, chH, chH / 2);
-        ctx.fillStyle = rgba(acc, 0.18);
-        ctx.fill();
-        ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(acc, 0.7); ctx.stroke();
-        ctx.restore();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.textAlign = 'center';
-        ctx.fillText(chip, chX + cw / 2, chY + 28);
-        ctx.textAlign = 'left';
-    }
-
-    // Username
-    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
-    const uname = clean(o.username) || 'Player';
-    const unameMax = blockW - (o.rankPosition ? 90 : 0);
-    const upx = fitText(ctx, uname, BOLD, 56, unameMax, 26);
-    ctx.font = `${upx}px ${BOLD}`;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(uname, LX, 92);
-
-    // Rank title line
-    const rankName = clean(o.rankName);
-    if (rankName) {
-        const rpx = fitText(ctx, rankName, SEMI, 28, blockW, 16);
-        ctx.font = `${rpx}px ${SEMI}`;
-        ctx.fillStyle = `rgb(${Math.min(255, acc.r + 60)},${Math.min(255, acc.g + 60)},${Math.min(255, acc.b + 60)})`;
-        ctx.fillText(rankName, LX, 130);
-    }
-    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-
-    // XP progress bar
-    const xpNeeded = Math.max(1, Math.floor(o.xpNeeded || 1));
-    const xp = Math.max(0, Math.floor(o.xp || 0));
-    const ratio = Math.max(0, Math.min(1, xp / xpNeeded));
-    const barX = LX, barY = 166, barW = blockW, barH = 32;
-    ctx.save();
-    roundRectPath(ctx, barX, barY, barW, barH, barH / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    ctx.fill();
+    ctx.textBaseline = 'middle';
+    ctx.fillText(rankLabel.toUpperCase().slice(0, 14), shCx, rbnY + rbnH / 2 + 1);
     ctx.restore();
-    if (ratio > 0) {
-        ctx.save();
-        roundRectPath(ctx, barX, barY, Math.max(barH, barW * ratio), barH, barH / 2);
-        const bg = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-        bg.addColorStop(0, `rgb(${accDark.r},${accDark.g},${accDark.b})`);
-        bg.addColorStop(1, accentHex);
-        ctx.fillStyle = bg;
-        ctx.fill();
-        // glossy highlight
-        ctx.globalAlpha = 0.25;
-        roundRectPath(ctx, barX, barY, Math.max(barH, barW * ratio), barH / 2, barH / 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.restore();
-    }
-    ctx.font = `16px ${SEMI}`;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${xp.toLocaleString('en-US')} / ${xpNeeded.toLocaleString('en-US')} XP  •  ${Math.round(ratio * 100)}%`, barX + barW / 2, barY + 22);
 
-    // ---- Stats row (4 columns): COINS | BADGES | STREAK | RANK ----
-    const stats = [
-        { label: 'COINS', value: compact(o.balance) },
-        { label: 'BADGES', value: String(Math.floor(o.badges || 0)) },
-        { label: 'STREAK', value: `${Math.floor(o.streak || 0)}d` },
-        { label: 'RANK', value: o.rankPosition ? `#${o.rankPosition}` : '-' },
+    // Score / Streak Pill
+    const scPillW = 230, scPillH = 50;
+    const scPillX = bxC + (bwC - scPillW) / 2;
+    const scPillY = byC + 250;
+
+    ctx.save();
+    roundRect(ctx, scPillX, scPillY, scPillW, scPillH, 14);
+    ctx.fillStyle = '#FFFBEB';
+    ctx.fill();
+    roundRect(ctx, scPillX, scPillY, scPillW, scPillH, 14);
+    ctx.strokeStyle = '#FDE68A';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#B45309';
+    ctx.font = `12px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('OVERALL SCORE', scPillX + scPillW / 2, scPillY + 18);
+
+    const scoreNum = Math.floor(o.score || o.balance || 0);
+    ctx.fillStyle = '#D97706';
+    ctx.font = `17px ${BOLD}`;
+    ctx.fillText(`⭐ ${scoreNum.toLocaleString('id-ID')} Pts`, scPillX + scPillW / 2, scPillY + 38);
+    ctx.restore();
+
+    // ---------------- BOX D: Badges Row (Bottom Strip) ----------------
+    const bxD = 40, byD = 465, bwD = 1000, bhD = 90;
+    drawCardBox(ctx, bxD, byD, bwD, bhD, 20);
+
+    const bLblW = 160, bLblH = 46;
+    const bLblX = bxD + 20;
+    const bLblY = byD + (bhD - bLblH) / 2;
+
+    ctx.save();
+    roundRect(ctx, bLblX, bLblY, bLblW, bLblH, 14);
+    const bLblGrad = ctx.createLinearGradient(bLblX, 0, bLblX + bLblW, 0);
+    bLblGrad.addColorStop(0, '#4F46E5');
+    bLblGrad.addColorStop(1, '#6366F1');
+    ctx.fillStyle = bLblGrad;
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `16px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🏆  BADGES ✦', bLblX + bLblW / 2, bLblY + bLblH / 2);
+    ctx.restore();
+
+    const badgeIcons = [
+        { bg: '#FEF3C7', border: '#F59E0B', icon: '👑' },
+        { bg: '#E0E7FF', border: '#6366F1', icon: '💎' },
+        { bg: '#CCFBF1', border: '#14B8A6', icon: '💬' },
+        { bg: '#FFE4E6', border: '#F43F5E', icon: '💖' },
+        { bg: '#DBEAFE', border: '#3B82F6', icon: '🛡️' },
+        { bg: '#FEF9C3', border: '#EAB308', icon: '🏆' }
     ];
-    const colW = blockW / 4;
-    const rowY = 250;
-    const cardH = 96;
-    for (let i = 0; i < stats.length; i++) {
-        const colX = LX + i * colW;
-        // mini panel
-        ctx.save();
-        roundRectPath(ctx, colX + 6, rowY, colW - 12, cardH, 16);
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.stroke();
-        ctx.restore();
-        // accent top border
-        ctx.save();
-        roundRectPath(ctx, colX + 6, rowY, colW - 12, 5, 3);
-        ctx.fillStyle = rgba(acc, 0.85);
-        ctx.fill();
-        ctx.restore();
-        const midX = colX + colW / 2;
-        ctx.textAlign = 'center';
-        const vpx = fitText(ctx, stats[i].value, BOLD, 33, colW - 24, 16);
-        ctx.font = `${vpx}px ${BOLD}`;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(stats[i].value, midX, rowY + 50);
-        ctx.font = `15px ${SEMI}`;
-        ctx.fillStyle = 'rgba(220,224,235,0.6)';
-        ctx.fillText(stats[i].label, midX, rowY + 76);
-    }
 
-    // ---- Footer watermark (shareable flex) ----
-    const tag = clean(o.footerTag);
-    if (tag) {
-        ctx.textAlign = 'left';
-        ctx.font = `15px ${SEMI}`;
-        ctx.fillStyle = 'rgba(255,255,255,0.30)';
-        ctx.fillText(tag.toUpperCase().slice(0, 60), LX, H - 22);
-    }
+    const badgeStartX = bLblX + bLblW + 45;
+    const badgeGap = (bwD - (badgeStartX - bxD) - 40) / badgeIcons.length;
+
+    badgeIcons.forEach((b, i) => {
+        const cx = badgeStartX + i * badgeGap + 30;
+        const cy = byD + bhD / 2;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        ctx.fillStyle = b.bg;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        ctx.strokeStyle = b.border;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.font = '26px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(b.icon, cx, cy + 2);
+        ctx.restore();
+    });
 
     return canvas.toBuffer('image/png');
 }
