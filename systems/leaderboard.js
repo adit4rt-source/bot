@@ -1,7 +1,6 @@
 // systems/leaderboard.js — /leaderboard Panel (Button-based navigation)
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getUserStat } = require('../database');
-const { PET_DATA } = require('../data/pets');
 const { getTitleFromScore, computeScore } = require('./titles');
 
 const ui = require('./ui');
@@ -100,6 +99,25 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
             });
             break;
         }
+        case 'voice': {
+            title = `${scopePrefix}🎙️ Top 10 — Voice Champions`;
+            color = '#1ABC9C';
+            let query = "SELECT userId, stat_value FROM user_stats WHERE stat_key = 'total_voice_mins'";
+            if (!isGlobal) query += ' AND guildId = ?';
+            query += ' ORDER BY CAST(stat_value AS INTEGER) DESC LIMIT 10';
+            const data = isGlobal ? db.prepare(query).all() : db.prepare(query).all(guildId);
+            const maxVoice = Number(data[0]?.stat_value) || 60;
+
+            desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
+            data.forEach((u, i) => {
+                const mins = Number(u.stat_value) || 0;
+                const hours = (mins / 60).toFixed(1);
+                const bar = progressBar(mins, maxVoice);
+                desc += `${medal(i)} <@${u.userId}>\n`;
+                desc += `> 🎙️ **${hours}** jam voice (\`${mins.toLocaleString('id-ID')}\` menit) \`${bar}\`\n\n`;
+            });
+            break;
+        }
         case 'gambling': {
             title = `${scopePrefix}🎰 Top 10 — Lucky Players`;
             color = '#F39C12';
@@ -145,7 +163,7 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
             desc += `> 🔄 Reset otomatis tiap awal bulan (skor = aktivitas bulan ini)\n\n`;
 
             if (entries.length === 0) {
-                desc += '*Belum ada aktivitas musim ini. Mulai mancing, farming, atau battle!*\n\n';
+                desc += '*Belum ada aktivitas musim ini. Mulai chat, voice, kuis, atau daily!*\n\n';
             } else {
                 const maxScore = entries[0]?.score || 1;
                 entries.forEach((e, i) => {
@@ -184,52 +202,42 @@ function computeLeaderboardContent(guildId, kategori, isGlobal = false) {
                     const streakRow = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, u.userId);
                     streak = streakRow ? streakRow.count : 0;
                 }
-                const petRow = isGlobal
-                    ? db.prepare('SELECT level FROM pets WHERE userId = ? ORDER BY level DESC LIMIT 1').get(u.userId)
-                    : db.prepare('SELECT level FROM pets WHERE guildId = ? AND userId = ? ORDER BY level DESC LIMIT 1').get(guildId, u.userId);
-                const petLv = petRow ? petRow.level : 0;
                 const badges = isGlobal
                     ? db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(u.userId).c
                     : db.prepare('SELECT COUNT(*) as c FROM achievements WHERE guildId = ? AND userId = ?').get(guildId, u.userId).c;
 
+                const chats = st('total_chats');
+                const voice = st('total_voice_mins');
+                const eventWins = st('event_wins');
+                const gifts = st('total_gifts_sent');
+                const gambling = st('slot_wins') + st('coinflip_wins') + st('roulette_wins');
+                const togelWins = st('togel_wins');
+
                 const { score } = computeScore({
-                    level: u.level, balance: u.balance, badges, streak, petLv,
-                    fish: st('total_fish_caught'), giantFish: st('giant_fish_defeated'), seaMonsters: st('sea_monster_encounters'),
-                    godFish: st('fish_caught_god_tier'), secretFish: st('fish_caught_secret_tier'), voidFish: st('fish_caught_void_rift'),
-                    abyssFish: st('fish_caught_abyss'), secretLocs: st('secret_locations_unlocked'), treasures: st('fishing_treasures_found'),
-                    farm: st('total_harvests'), craft: st('total_crafts'),
-                    dungeon: st('dungeon_clears'), boss: st('boss_kills'), pvp: st('pvp_wins'),
-                    worldBossHits: st('world_boss_attacks'), worldBossKills: st('world_boss_last_hit'),
-                    expeditions: st('total_expeditions'), refines: st('refine_successes'), relicMelts: st('relic_melts'),
-                    fusions: st('fusion_success'), awakenings: st('total_awakenings'),
-                    quests: st('total_quests_done'), weeklyQuests: st('total_weekly_quests_done'),
-                    gifts: st('total_gifts_sent'), trades: st('trades_completed'),
-                    chats: st('total_chats'), reactions: st('total_reactions'), voice: st('total_voice_mins'),
-                    gambling: st('slot_wins') + st('coinflip_wins') + st('roulette_wins'), togelWins: st('togel_wins'),
+                    level: u.level, balance: u.balance, badges, streak,
+                    chats, voice, eventWins, gifts, gambling, togelWins,
                 });
 
-                return { userId: u.userId, score, level: u.level, balance: u.balance, fish: st('total_fish_caught'), farm: st('total_harvests'), streak, petLv, battle: st('dungeon_clears') + st('boss_kills') + st('pvp_wins'), badges };
+                return { userId: u.userId, score, level: u.level, balance: u.balance, streak, badges, chats, voice, eventWins };
             }).sort((a, b) => b.score - a.score).slice(0, 10);
 
             desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
             scored.forEach((u, i) => {
                 const rankTitle = getTitleFromScore(u.score);
                 desc += `${medal(i)} <@${u.userId}> ${rankTitle.emoji} — ⭐ **${u.score.toLocaleString('id-ID')}** pts\n`;
-                desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)} | 🐟${u.fish} | 🌾${u.farm}`;
+                desc += `> Lv.${u.level} | 🪙${shortNum(u.balance)}`;
                 if (!isGlobal) desc += ` | 🔥${u.streak}`;
-                desc += ` | 🐾${u.petLv} | ⚔️${u.battle} | 🏅${u.badges}\n\n`;
+                desc += ` | 💬${shortNum(u.chats)} | 🎙️${Math.floor(u.voice / 60)}j | 🏆${u.badges}\n\n`;
             });
 
             desc += `\`━━━━━━━━━━━━━━━━━━━━━━━━\`\n`;
             if (isGlobal) {
-                desc += `> 📐 **Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
-                desc += `> Craft×8 + Pet×5 + Dungeon×6 + Boss×15\n`;
-                desc += `> PvP×10 + Badge×20 + Gambling×2\n`;
+                desc += `> 📐 **Scoring:** Level×150 + Saldo/500 + Badge×50\n`;
+                desc += `> Chat/Voice/Gift + Kuis/Event + Gambling\n`;
                 desc += `> ⚠️ *Streak tidak dihitung di Global (anti-abuse)*`;
             } else {
-                desc += `> 📐 **Scoring:** Level×150 + Money/20 + Fish×3 + Farm×4\n`;
-                desc += `> Craft×8 + Streak×12 + Pet×5 + Dungeon×6 + Boss×15\n`;
-                desc += `> PvP×10 + Badge×20 + Gambling×2`;
+                desc += `> 📐 **Scoring:** Level×150 + Saldo/500 + Streak×20 + Badge×50\n`;
+                desc += `> Chat/Voice/Gift + Kuis/Event + Gambling`;
             }
             break;
         }
@@ -262,6 +270,7 @@ function renderLeaderboard(content, kategori, userId, isGlobal = false) {
     );
 
     const row2 = new ActionRowBuilder().addComponents(
+        btn(`${modePrefix}_voice_${userId}`, '🎙️ Voice', kategori === 'voice'),
         btn(`${modePrefix}_gambling_${userId}`, '🎰 Gamble', kategori === 'gambling'),
         btn(`lb_season_${userId}`, '🗓️ Seasonal', kategori === 'season'),
         btn(`lb_server_${userId}`, '📍 Server', !isGlobal && kategori !== 'season'),

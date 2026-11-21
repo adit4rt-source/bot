@@ -364,6 +364,13 @@ module.exports = function register() {
     });
   });
 
+  test('levelup card: generates a PNG buffer', () => {
+    const luc = botRequire('systems/levelUpCard.js');
+    return luc.generateLevelUpCard({ username: 'Winner 🔥', level: 10, oldLevel: 9, streak: 5, rewardMoney: 10000, rewardRole: 'VIP' }).then(buf => {
+      if (!Buffer.isBuffer(buf) || buf.length < 500) throw new Error('expected a PNG buffer');
+    });
+  });
+
   // ---- Pet PvP ranked arena (ELO) ----
   const arena = botRequire('systems/arena.js');
   test('arena: rating defaults to 1000 and tiers map correctly', () => {
@@ -455,5 +462,22 @@ module.exports = function register() {
   test('ui: helpers produce expected output', () => {
     if (ui.progressLine(6,10).indexOf('60%') < 0) throw new Error('progressLine');
     if (ui.money(1000) !== '🪙 1.000') throw new Error('money: ' + ui.money(1000));
+  });
+
+  // ---- Blackjack Stale Game Recovery ----
+  const bj = botRequire('systems/blackjack.js');
+  test('blackjack: stale game (>5 min) is cleared when starting new game', () => {
+    const bg = 'BJ_G', bu = 'BJ_U';
+    db.getOrCreateUser(bg, bu);
+    db.addUserBalance(bg, bu, 5000);
+    const g1 = bj.startBlackjack(bg, bu, 500);
+    if (!g1.success && !g1.immediate) throw new Error('game 1 should start');
+    const active = bj.activeBlackjackGames.get(`${bg}_${bu}`);
+    if (active) {
+      active.startedAt = Date.now() - 600000;
+      const g2 = bj.startBlackjack(bg, bu, 500);
+      if (!g2.success) throw new Error('stale game was not cleared: ' + g2.error);
+      bj.activeBlackjackGames.delete(`${bg}_${bu}`);
+    }
   });
 };

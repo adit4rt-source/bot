@@ -3,10 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { db, getOrCreateUser, getUserStat, incrementUserStat, getSetting, getItemCount, addItem, removeItem } = require('../database');
 const { getRandomInt } = require('../utils');
 const { ACHIEVEMENTS, syncAchievements } = require('./achievements');
-const { getPetData } = require('./pets');
-const { PET_DATA } = require('../data/pets');
 const { ITEMS, CRAFT_RECIPES } = require('../data/items');
-const { BAIT_TYPES } = require('../data/fish');
 const { getNotifSettings, buildNotifPanel } = require('./notifications');
 const { getUserTitle, getTitleProgress, formatTitle, formatProgressBar, getAllTitles, getScoreBreakdown } = require('./titles');
 const ui = require('./ui');
@@ -500,24 +497,6 @@ async function handleProfileSelectMenu(interaction) {
             addItem(guildId, userId, recipe.result.id, recipe.result.qty);
             const resDef = ITEMS.find(i => i.id === recipe.result.id);
             resultMsg = `${resDef ? resDef.emoji : '📦'} **${resDef ? resDef.name : recipe.result.id}** x${recipe.result.qty}`;
-        } else if (recipe.result.type === 'bait') {
-            // Add bait to fish equipment
-            const eq = db.prepare('SELECT * FROM fish_equipment WHERE guildId = ? AND userId = ?').get(guildId, userId);
-            if (eq && eq.bait === recipe.result.id) {
-                db.prepare('UPDATE fish_equipment SET bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.qty, guildId, userId);
-            } else {
-                // Store as item for now (bait tokens)
-                const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
-                resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty} (pasang di Fishing Panel)`;
-                // Add to bait count directly
-                if (!eq) {
-                    db.prepare('INSERT INTO fish_equipment (guildId, userId, bait, bait_count) VALUES (?, ?, ?, ?)').run(guildId, userId, recipe.result.id, recipe.result.qty);
-                } else {
-                    db.prepare('UPDATE fish_equipment SET bait = ?, bait_count = bait_count + ? WHERE guildId = ? AND userId = ?').run(recipe.result.id, recipe.result.qty, guildId, userId);
-                }
-            }
-            const baitDef = BAIT_TYPES ? BAIT_TYPES.find(b => b.id === recipe.result.id) : null;
-            resultMsg = `🎣 **${baitDef ? baitDef.name : recipe.result.id}** x${recipe.result.qty}`;
         } else if (recipe.result.type === 'money') {
             db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(recipe.result.amount, guildId, userId);
             resultMsg = `🪙 **${recipe.result.amount.toLocaleString('id-ID')}** money`;
@@ -550,11 +529,6 @@ async function handleProfileSelectMenu(interaction) {
     const qty = getItemCount(guildId, userId, selectedItemId);
     if (qty <= 0) {
         return interaction.reply({ content: '\u274c Kamu tidak memiliki item ini!', ephemeral: true });
-    }
-
-    // Items that cannot be used directly
-    if (['refine_stone', 'protection_stone'].includes(selectedItemId)) {
-        return interaction.reply({ content: '\u26a0\ufe0f Item ini **tidak bisa digunakan langsung**.\n> Digunakan otomatis saat refine di `/pet` \u2192 Refine.', ephemeral: true });
     }
 
     let resultMsg = '';
@@ -609,37 +583,6 @@ async function handleProfileSelectMenu(interaction) {
             resultMsg = `🧲 **Money Magnet** aktif!\n> +50% money dari semua sumber selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
             break;
         }
-        case 'grilled_fish': {
-            const until = Date.now() + 3600000;
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'fishing_luck_buff_until', until);
-            resultMsg = `🐟 **Grilled Fish** dimakan!\n> +15% Rare Fish chance selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
-            break;
-        }
-        case 'sushi_roll': {
-            const until = Date.now() + 3600000;
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'pet_atk_def_buff_until', until);
-            resultMsg = `🍣 **Sushi Roll** dimakan!\n> Pet ATK & DEF +15% selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
-            break;
-        }
-        case 'seafood_paella': {
-            const until = Date.now() + 3600000;
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'money_magnet_until', until);
-            resultMsg = `🍛 **Seafood Paella** dimakan!\n> +50% Money Magnet selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
-            break;
-        }
-        case 'abyssal_stew': {
-            const until = Date.now() + 3600000;
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'xp_boost_2x_until', until);
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'pet_xp_boost_2x_until', until);
-            resultMsg = `🥣 **Abyssal Stew** dimakan!\n> Double Player & Pet XP booster selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
-            break;
-        }
-        case 'fisherman_feast': {
-            const until = Date.now() + 3600000;
-            db.prepare('INSERT OR REPLACE INTO user_stats (guildId, userId, stat_key, stat_value) VALUES (?, ?, ?, ?)').run(guildId, userId, 'fishing_cd_buff_until', until);
-            resultMsg = `🍤 **Fisherman's Feast** dimakan!\n> Cooldown mancing berkurang 3 detik selama **1 jam** (sampai <t:${Math.floor(until / 1000)}:T>)`;
-            break;
-        }
         case 'daily_doubler': {
             incrementUserStat(guildId, userId, 'daily_doubler_active', 1);
             resultMsg = `\ud83d\udcc5 **Daily Doubler** aktif!\n> /daily reward berikutnya akan digandakan.`;
@@ -683,12 +626,6 @@ async function handleProfileSelectMenu(interaction) {
             resultMsg = `\ud83d\udce6 **Mystery Box** dibuka!\n> ${tierEmoji} Kamu mendapat \ud83e\ude99 **${money.toLocaleString('id-ID')}** money!\n> Limit hari ini: ${mboxUsed + 1}/5`;
             break;
         }
-        case 'auto_harvest_pass': {
-            // Set auto_harvest table
-            db.prepare('INSERT OR REPLACE INTO auto_harvest (guildId, userId, purchased, enabled) VALUES (?, ?, 1, 1)').run(guildId, userId);
-            resultMsg = `\ud83d\udd14 **Auto-Harvest Pass** diaktifkan!\n> Kamu akan mendapat notifikasi saat tanaman siap panen.`;
-            break;
-        }
         default:
             return interaction.reply({ content: '\u274c Item ini tidak bisa digunakan dari sini.', ephemeral: true });
     }
@@ -728,7 +665,6 @@ async function handleProfileSelectMenu(interaction) {
     const usableItems = ownedItems.filter(inv => {
         const def = ITEMS.find(i => i.id === inv.itemId);
         if (!def) return false;
-        if (['refine_stone', 'protection_stone'].includes(def.id)) return false;
         return true;
     });
 

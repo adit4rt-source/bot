@@ -140,13 +140,11 @@ function start(client) {
         console.log('🔄 Panel auto-refresh: progress panel update tiap 30 detik');
     } catch (e) { console.error('Panel refresh scheduler error:', e.message); }
 
-    // ===== VOICE TICK (from events/voiceStateUpdate.js) =====
-    // voiceStateUpdate exports startVoiceTickInterval which uses setInterval internally.
-    // We call it directly since it has its own internal state management.
+    // ===== VOICE TICK & REWARDS (from events/voiceStateUpdate.js) =====
     try {
         const { startVoiceTickInterval } = require('../events/voiceStateUpdate');
-        startVoiceTickInterval();
-        console.log('🎙️ Voice tick: quest progress setiap 1 menit');
+        startVoiceTickInterval(client);
+        console.log('🎙️ Voice rewards: progression & anti-AFK setiap 1 menit');
     } catch (e) { console.error('Voice tick scheduler error:', e.message); }
 
     // ===== GIVEAWAY (from systems/giveaway.js) =====
@@ -202,6 +200,29 @@ function start(client) {
         console.log('🏦 Wealth Tax: evaluasi pajak mingguan hari Minggu (2% untuk saldo >= 500k)');
     } catch (e) { console.error('Wealth tax scheduler error:', e.message); }
 
+    // ===== ORPHAN TEMP VOICE CLEANUP (Every 5 minutes) =====
+    try {
+        const { db } = require('../database');
+        registerJob('orphan-tempvoice-cleanup', 5 * 60000, async () => {
+            const tempVoices = db.prepare('SELECT channelId, guildId FROM temp_voices').all();
+            for (const tv of tempVoices) {
+                const guild = client.guilds.cache.get(tv.guildId);
+                if (!guild) {
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                    continue;
+                }
+                const ch = guild.channels.cache.get(tv.channelId);
+                if (!ch) {
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                } else if (ch.members && ch.members.size === 0) {
+                    await ch.delete().catch(() => {});
+                    db.prepare('DELETE FROM temp_voices WHERE channelId = ?').run(tv.channelId);
+                }
+            }
+        }, { startupDelay: 60000 });
+        console.log('🎙️ Orphan TempVoice cleanup: bersihkan room kosong tiap 5 menit');
+    } catch (e) { console.error('Orphan temp voice cleaner error:', e.message); }
+
     // ===== PRESENCE UPDATE =====
     const { ActivityType } = require('discord.js');
     registerJob('presence-update', 10 * 60000, () => {
@@ -211,7 +232,7 @@ function start(client) {
         });
     });
 
-    console.log(`📋 Scheduler started: ${jobs.size} managed jobs + ${['voice-tick', 'giveaway', 'lottery', 'livestock', 'backup'].length} self-managed modules`);
+    console.log(`📋 Scheduler started: ${jobs.size} managed jobs + ${['voice-tick', 'giveaway', 'lottery', 'backup'].length} self-managed modules`);
 }
 
 module.exports = { start, stop: stopAll, stopJob, getStats, registerJob };

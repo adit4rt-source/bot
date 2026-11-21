@@ -45,6 +45,9 @@ function getRenderer(type) {
             case 'profile':
                 renderers[type] = require('./profileCard');
                 break;
+            case 'levelUp':
+                renderers[type] = require('./levelUpCard');
+                break;
             default:
                 throw new Error(`Unknown render type: ${type}`);
         }
@@ -58,6 +61,7 @@ const TYPE_TO_FN = {
     welcomeGlitch: 'generateGlitchCard',
     welcomeRpg:    'generateRpgCard',
     profile:       'generateProfileCard',
+    levelUp:       'generateLevelUpCard',
 };
 
 // ---- Message handler ----

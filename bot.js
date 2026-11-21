@@ -244,41 +244,42 @@ client.once(Events.ClientReady, async c => {
     const { EmbedBuilder: ChangelogEmbed } = require('discord.js');
     await postUpdateLog(client, BOT_VERSION, [
         new ChangelogEmbed()
-            .setColor('#FF6B35')
-            .setTitle(`🎉 MEGA UPDATE — v${BOT_VERSION}`)
+            .setColor('#5865F2')
+            .setTitle(`🎉 COMMUNITY UPDATE — v${BOT_VERSION}`)
             .setDescription(
                 `**Release v${BOT_VERSION}** — ${BUILD_DATE}\n\n` +
-                `Update besar endgame: **Pet · Fishing · Farming**!\n` +
+                `Fokus penuh ke fitur **Komunitas & Ekonomi** ID COMMUNITY!\n` +
+                `Semua fitur RPG/Pet/Fishing/Farming lama telah dibersihkan total.\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
             )
             .setTimestamp(),
         new ChangelogEmbed()
-            .setColor('#9B59B6')
-            .setTitle('🐾 PET — Ascendant')
+            .setColor('#E67E22')
+            .setTitle('🔥 STREAK PRESTIGE & VVIP LOUNGE')
             .setDescription(
-                `> Skill **T5** (Lv.150) · Ability **T4/Slot4** (★2+)\n` +
-                `> 🌑 **Nightmare Dungeon** + Token Shop + 📖 Skill Tome\n` +
-                `> Pet baru + multi-bonus + 15+ tipe bonus pasif`
+                `> 🔥 **Streak Role Sync** otomatis tiap aktif chat\n` +
+                `> 🏛️ **VVIP Lounge** eksklusif member streak 100+ hari\n` +
+                `> 🏆 **Streak Leaderboard** & Hall of Fame`
             )
             .setTimestamp(),
         new ChangelogEmbed()
-            .setColor('#1ABC9C')
-            .setTitle('🎣 FISHING — Full Hub')
+            .setColor('#F1C40F')
+            .setTitle('💰 EKONOMI & COMMUNITY SHOP')
             .setDescription(
-                `> \`/fishing\` → **🧭 Hub**\n` +
-                `> Astral Trench · Trophy Catch · Mastery · Contracts\n` +
-                `> Rod Enchant · Aquarium · Season · Co-op Giant · Perfect Cast`
+                `> 💳 \`/wallet\` — Panel saldo, gift & voucher\n` +
+                `> 🛒 \`/shop\` — Role eksklusif, color role & booster\n` +
+                `> 🎰 \`/casino\` & \`/blackjack\` — Mini-games hiburan seru`
             )
             .setTimestamp(),
         new ChangelogEmbed()
             .setColor('#2ECC71')
-            .setTitle('🌾 FARMING — Full Hub')
+            .setTitle('🎮 QUIZ 14 KATEGORI & RAMALAN 365')
             .setDescription(
-                `> \`/farm\` → **🧭 More**\n` +
-                `> Mastery · Contracts · Soil Affix · Showcase\n` +
-                `> Season crop · Co-op Contest · Deco efek nyata`
+                `> 🎮 \`/games\` — Quiz asah otak, tebak gambar & kata\n` +
+                `> 🔮 \`/ramalan\` — Ramalan harian, angka & warna hoki\n` +
+                `> 🎙️ \`/tempvoice\` — Private Space otomatis`
             )
-            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Global Economy & RPG` })
+            .setFooter({ text: `idcommunity Bot v${BOT_VERSION} — Economy & Community` })
             .setTimestamp()
     ]);
 });

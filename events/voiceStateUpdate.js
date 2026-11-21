@@ -148,11 +148,17 @@ async function handleVoiceStateUpdate(oldState, newState) {
     }
 }
 
+function hasActivePeers(voiceChannel) {
+    if (!voiceChannel || !voiceChannel.members) return true; // if cannot inspect, allow
+    const active = voiceChannel.members.filter(m => !m.user?.bot && !m.voice?.selfDeaf);
+    return active.size >= 2;
+}
+
 // === PERIODIC VOICE TICK ===
-// Every 1 minute, update quest progress for users currently in VC
-// This ensures quest updates even if user stays in VC without leaving
-function startVoiceTickInterval() {
-    setInterval(() => {
+// Every 1 minute, award voice progression & periodic XP/Money for active users in VC
+function startVoiceTickInterval(client) {
+    if (global._voiceTickInterval) return;
+    global._voiceTickInterval = setInterval(async () => {
         const now = Date.now();
         for (const [cdKey, startTime] of state.voiceSessions.entries()) {
             const durationMins = Math.floor((now - startTime) / 60000);
@@ -160,7 +166,33 @@ function startVoiceTickInterval() {
                 const idx = cdKey.indexOf('_');
                 const guildId = cdKey.substring(0, idx);
                 const userId = cdKey.substring(idx + 1);
-                incrementUserStat(guildId, userId, 'total_voice_mins', durationMins);
+
+                let isEligible = true;
+                let targetMember = null;
+                let targetGuild = null;
+
+                if (client && client.guilds) {
+                    targetGuild = client.guilds.cache.get(guildId);
+                    if (targetGuild) {
+                        targetMember = targetGuild.members.cache.get(userId) || null;
+                        if (targetMember && targetMember.voice?.channel) {
+                            isEligible = hasActivePeers(targetMember.voice.channel);
+                        }
+                    }
+                }
+
+                if (isEligible) {
+                    incrementUserStat(guildId, userId, 'total_voice_mins', durationMins);
+                    const totalMins = getUserStat(guildId, userId, 'total_voice_mins') || 0;
+                    // Periodic Voice XP & Money every 5 minutes
+                    if (totalMins % 5 === 0 && targetMember) {
+                        try {
+                            await addXpAndMoney(targetMember, 'voice', 1);
+                            await checkAchievements(targetGuild, userId, { type: 'voice' });
+                        } catch (_) {}
+                    }
+                }
+
                 // Reset start time so we don't double-count
                 state.voiceSessions.set(cdKey, now);
             }

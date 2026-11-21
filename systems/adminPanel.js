@@ -133,7 +133,6 @@ function buildAdminPanel(guildId) {
             `> 🛒 Shop — Tambah role/item/voucher\n` +
             `> 💰 Money — Kelola saldo user\n` +
             `> ${streakEmoji} Streak — Set/reset streak\n` +
-            `> 🏆 Contest — Fishing tournament\n` +
             `> 🎁 Giveaway — Mulai/akhiri giveaway\n\n` +
             `**🔧 SERVER TOOLS**\n` +
             `> 📢 Announce — Kirim embed ke channel\n` +
@@ -152,12 +151,11 @@ function buildAdminPanel(guildId) {
         new ButtonBuilder().setCustomId('admpnl_features').setLabel('🎛️ Features').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('admpnl_cleanlayout').setLabel('🧹 Rapihkan Server').setStyle(ButtonStyle.Primary)
     );
-    // Row 2: Economy & Game
+    // Row 2: Economy & Community
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('admpnl_shop').setLabel('🛒 Shop').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_money').setLabel('💰 Money').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_streak').setLabel(`${streakEmoji} Streak`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admpnl_contest').setLabel('🏆 Contest').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('admpnl_giveaway').setLabel('🎁 Giveaway').setStyle(ButtonStyle.Primary)
     );
     // Row 3: Server Tools
@@ -353,8 +351,8 @@ function buildBlacklistSubPanel(guildId) {
         .setDescription(
             `User yang di-blacklist tidak bisa di **semua server**:\n` +
             `> ❌ Earn XP & Money dari chat\n` +
-            `> ❌ Claim /daily, /fish, /farm\n` +
-            `> ❌ Ikut giveaway & tournament\n\n` +
+            `> ❌ Claim /daily\n` +
+            `> ❌ Ikut giveaway & mini-event\n\n` +
             `**Daftar Blacklist (${list.length}):**\n${listText}`
         );
 
@@ -548,7 +546,7 @@ async function handleAdminButton(interaction) {
     if (customId === 'admpnl_money') return interaction.update(buildMoneySubPanel(interaction.user.id));
     if (customId === 'admpnl_streak') return interaction.update(buildStreakSubPanel());
     if (customId === 'admpnl_setting') return interaction.update(buildSettingSubPanel(guildId));
-    if (customId === 'admpnl_contest') return interaction.update(buildContestSubPanel(guildId));
+    if (customId === 'admpnl_contest') return interaction.reply({ content: '❌ Fitur contest telah dinonaktifkan.', ephemeral: true });
     if (customId === 'admpnl_set_channels') return interaction.update(buildChannelsSubPanel(guildId));
     if (customId === 'admpnl_features') return interaction.update(buildFeatureTogglePanel(guildId, 0));
     if (customId === 'admpnl_tempvoice') return interaction.update(buildTempVoiceSubPanel());
@@ -940,47 +938,9 @@ async function handleAdminButton(interaction) {
     }
 
 
-    // === CONTEST: Start/End ===
-    if (customId === 'admpnl_contest_start') {
-        const { getContestState, startFishContest } = require('./contest');
-        const state = getContestState(guildId);
-        if (state && state.active) {
-            return interaction.reply({ content: '\u274c Sudah ada kontes aktif! Akhiri dulu.', flags: 1 << 6 });
-        }
-        startFishContest(guildId, interaction.channelId, 60);
-        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Started!').setColor('#FFD700')
-            .setDescription('\u2705 Fishing contest dimulai! Durasi: **60 menit**\n\nPlayer ikut dengan memancing & cek ranking via `/fishing` → 🏆 Contest.');
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    if (customId === 'admpnl_contest_end') {
-        const { getContestState } = require('./contest');
-        const state = getContestState(guildId);
-        if (!state || !state.active) {
-            return interaction.reply({ content: '\u274c Tidak ada kontes aktif!', flags: 1 << 6 });
-        }
-        const { getContestLeaderboard } = require('./contest');
-        const { FISH_DATA } = require('../data/fish');
-        const { addIncome } = require('../database');
-        db.prepare('UPDATE fish_contest_state SET active = 0 WHERE guildId = ? AND active = 1').run(guildId);
-        const top = getContestLeaderboard(guildId, 3);
-        const prizes = [3000, 1500, 800];
-        let desc = '\u2705 **Kontes diakhiri!** Hadiah dibagikan ke Top 3:\n\n';
-        top.forEach((e, i) => {
-            const fishDef = FISH_DATA.find(f => f.id === e.fishId);
-            const prize = prizes[i] || 0;
-            desc += `${['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'][i]} <@${e.oderId}> \u2014 ${fishDef ? fishDef.emoji : '\ud83d\udc1f'} **${e.weight} kg** \u2192 \ud83e\ude99 +${prize.toLocaleString('id-ID')}\n`;
-            if (prize > 0) {
-                db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(prize, guildId, e.oderId);
-                addIncome(guildId, e.oderId, 'event', prize);
-            }
-        });
-        if (top.length === 0) desc += '*Tidak ada peserta.*';
-        const embed = new EmbedBuilder().setTitle('\ud83c\udfc6 Contest Ended!').setColor('#FFD700')
-            .setDescription(desc).setFooter({ text: 'Hadiah sudah dibagikan otomatis!' });
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admpnl_contest').setLabel('\ud83d\udd19 Kembali').setStyle(ButtonStyle.Secondary));
-        return interaction.update({ embeds: [embed], components: [row] });
+    // === CONTEST: Start/End (Disabled) ===
+    if (customId === 'admpnl_contest_start' || customId === 'admpnl_contest_end') {
+        return interaction.reply({ content: '❌ Fitur contest telah dinonaktifkan.', ephemeral: true });
     }
 }
 
@@ -1250,9 +1210,7 @@ async function handleAdminModal(interaction) {
         const totalDailies = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_dailies'").get(guildId, targetId)?.stat_value || 0;
         const totalEarned = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_earned'").get(guildId, targetId)?.stat_value || 0;
         const totalSpent = db.prepare("SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = 'total_spent'").get(guildId, targetId)?.stat_value || 0;
-        const petCount = db.prepare('SELECT COUNT(*) as c FROM pets WHERE userId = ?').get(targetId)?.c || 0;
         const achCount = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE userId = ?').get(targetId)?.c || 0;
-        const fishCount = db.prepare('SELECT COUNT(*) as c FROM fish_inventory WHERE userId = ?').get(targetId)?.c || 0;
         // Check blacklist
         let blacklisted = false;
         try { blacklisted = !!db.prepare('SELECT 1 FROM blacklist WHERE userId = ?').get(targetId); } catch (_) {}
@@ -1269,11 +1227,8 @@ async function handleAdminModal(interaction) {
                 `**📊 Progress:**\n` +
                 `> Level: **${user.level || 0}** (XP: ${user.xp || 0})\n` +
                 `> 🔥 Streak: **${streakRow.count}** hari (last: ${streakRow.last_date})\n` +
-                `> 📅 Daily Claims: **${totalDailies}**\n\n` +
-                `**🎮 Collection:**\n` +
-                `> 🐾 Pets: **${petCount}**\n` +
-                `> 🏆 Achievements: **${achCount}**\n` +
-                `> 🐟 Fish: **${fishCount}**\n\n` +
+                `> 📅 Daily Claims: **${totalDailies}**\n` +
+                `> 🏆 Achievements: **${achCount}**\n\n` +
                 `> Last Daily: ${user.lastDaily || 'Never'}`
             )
             .setFooter({ text: `ID: ${targetId}` })
@@ -1465,8 +1420,6 @@ function buildDbToolsPanel(userId) {
         .setDescription(
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             (!isOwner ? `> ⛔ *Hanya pemilik bot yang bisa menggunakan fitur ini.*\n` :
-            `> 🔍 **Pet Lookup** — Cek semua pet milik user\n` +
-            `> 🔄 **Restore Pet** — Restore pet dari backup ke akun user\n` +
             `> 💾 **List Backup** — Lihat daftar backup tersedia\n` +
             `> 🛠️ **Force Backup** — Buat backup manual sekarang\n`) +
             `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1482,10 +1435,7 @@ function buildDbToolsPanel(userId) {
         .setFooter({ text: '⚠️ Fitur ini hanya untuk Bot Owner' });
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admpnl_dbtools_petlookup').setLabel('🔍 Pet Lookup').setStyle(ButtonStyle.Primary).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_restorepet').setLabel('🔄 Restore Pet').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_restoreall').setLabel('🔄 Restore ALL Pets').setStyle(ButtonStyle.Danger).setDisabled(!isOwner),
-        new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Secondary).setDisabled(!isOwner),
+        new ButtonBuilder().setCustomId('admpnl_dbtools_forcebackup').setLabel('💾 Force Backup').setStyle(ButtonStyle.Success).setDisabled(!isOwner),
         new ButtonBuilder().setCustomId('admpnl_back').setLabel('🔙 Kembali').setStyle(ButtonStyle.Secondary)
     );
 

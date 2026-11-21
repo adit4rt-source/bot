@@ -229,7 +229,13 @@ function startBlackjack(guildId, userId, bet) {
     // Check if already in a game
     const existing = getGame(guildId, userId);
     if (existing) {
-        return { success: false, error: '❌ Kamu masih dalam game! Selesaikan dulu.' };
+        if (Date.now() - existing.startedAt > 300000) {
+            // Stale game (> 5 minutes). Auto-cleanup and record loss
+            endGame(guildId, userId);
+            recordBlackjackLoss(guildId, userId, existing.bet);
+        } else {
+            return { success: false, error: '❌ Kamu masih dalam game! Selesaikan dulu.' };
+        }
     }
 
     // Atomic debit — never go negative

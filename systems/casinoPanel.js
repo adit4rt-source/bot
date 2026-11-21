@@ -6,8 +6,6 @@ const { spinSlot, getSlotResult } = require('./slots');
 const { checkAchievements } = require('./achievements');
 const { addComboFeature } = require('./combo');
 
-const state = require('../state');
-const { fishCooldowns, activeCoinflips } = state;
 const ui = require('./ui');
 
 // Roulette constants
@@ -361,10 +359,10 @@ async function handleCasinoButton(interaction) {
         setTimeout(async () => {
             let winChance = 0.5;
             try {
-                const { getTotalPetBonus } = require('./pets');
-                // gamble_luck: +1% win chance per 5 effective points, soft cap +8%
-                const gl = getTotalPetBonus(guildId, userId, 'gamble_luck') || 0;
-                winChance = Math.min(0.58, 0.5 + (gl / 500));
+                const { getItemCount } = require('../database');
+                if (getItemCount(guildId, userId, 'lucky_charm') > 0) {
+                    winChance = 0.53; // +3% luck boost from Lucky Charm
+                }
             } catch (_) {}
             const won = Math.random() < winChance;
             // Align coin face with outcome for consistent UI

@@ -290,14 +290,18 @@ async function addXpAndMoney(member, type, multiplier = 1) {
     }
 
     if (leveledUp) {
-        // Auto-grant level rewards (roles/money) if configured
+        let rewardMoneyGained = 0;
+        let rewardRoleName = null;
         try {
             const rewardRow = db.prepare('SELECT roleId, money FROM rewards WHERE guildId = ? AND level = ?').get(guildId, currentLevel);
             if (rewardRow) {
                 if (rewardRow.money > 0) {
                     db.prepare('UPDATE users SET balance = balance + ? WHERE guildId = ? AND userId = ?').run(rewardRow.money, guildId, member.id);
+                    rewardMoneyGained = rewardRow.money;
                 }
                 if (rewardRow.roleId && member.guild.roles?.cache?.has(rewardRow.roleId)) {
+                    const rObj = member.guild.roles.cache.get(rewardRow.roleId);
+                    rewardRoleName = rObj ? rObj.name : null;
                     await member.roles.add(rewardRow.roleId, `Level ${currentLevel} reward`).catch(() => {});
                 }
             }
@@ -310,15 +314,37 @@ async function addXpAndMoney(member, type, multiplier = 1) {
 
         await checkAchievements(member.guild, member.id, { type: 'level', level: currentLevel });
 
-        const levelUpChannelId = getSetting(guildId, 'levelup_channel', '');
+        const levelUpChannelId = getSetting(guildId, 'level_channel', '') || getSetting(guildId, 'levelup_channel', '');
         const targetChannel = levelUpChannelId ? member.guild.channels.cache.get(levelUpChannelId) : null;
         if (targetChannel) {
-            const embed = new EmbedBuilder()
-                .setColor('#2ECC71')
-                .setTitle('🎉 LEVEL UP!')
-                .setDescription(`Selamat <@${member.id}>! Kamu naik ke **Level ${currentLevel}**! ⭐`)
-                .setTimestamp();
-            targetChannel.send({ embeds: [embed] }).catch(() => {});
+            try {
+                const { generateLevelUpCard } = require('./imageRenderer');
+                const { AttachmentBuilder } = require('discord.js');
+                const avatarURL = member.user?.displayAvatarURL ? member.user.displayAvatarURL({ extension: 'png', size: 256 }) : null;
+                const buffer = await generateLevelUpCard({
+                    username: member.user?.username || member.displayName || 'Player',
+                    avatarURL,
+                    level: currentLevel,
+                    oldLevel: user.level,
+                    streak: streakCount,
+                    rewardMoney: rewardMoneyGained,
+                    rewardRole: rewardRoleName,
+                    accent: '#2ECC71',
+                    serverName: member.guild?.name || 'ID COMMUNITY',
+                });
+                const file = new AttachmentBuilder(buffer, { name: 'levelup.png' });
+                targetChannel.send({
+                    content: `🎉 Selamat <@${member.id}>! Kamu naik ke **Level ${currentLevel}**! ⭐`,
+                    files: [file]
+                }).catch(() => {});
+            } catch (err) {
+                const embed = new EmbedBuilder()
+                    .setColor('#2ECC71')
+                    .setTitle('🎉 LEVEL UP!')
+                    .setDescription(`Selamat <@${member.id}>! Kamu naik ke **Level ${currentLevel}**! ⭐`)
+                    .setTimestamp();
+                targetChannel.send({ embeds: [embed] }).catch(() => {});
+            }
         }
     }
 }

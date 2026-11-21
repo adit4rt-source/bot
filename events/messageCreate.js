@@ -1,15 +1,12 @@
 // events/messageCreate.js - Message event handler
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getOrCreateUser, getConf, getSetting, incrementUserStat, addItem } = require('../database');
-const { FARM_CROPS, FARM_FERTILIZERS } = require('../data/farming');
+const { db, getOrCreateUser, getConf, getSetting, incrementUserStat, addItem, addIncome } = require('../database');
 const { checkAchievements } = require('../systems/achievements');
 const { checkAndUpdateStreak, addXpAndMoney } = require('../systems/activity');
-const { addPetExp } = require('../systems/pets');
 const { getRandomInt, shuffleString } = require('../utils');
 const state = require('../state');
 
 const MINI_EVENT_TARGET = 30;
-const FISH_EVENT_TARGET = 100;
 const ANTISPAM_DUP_WINDOW = 60000; // ms — an identical message repeated within this window earns nothing
 const poolAcakKata = ["DISCORD", "KOMPUTER", "INTERNET", "PROGRAMMER", "INDONESIA", "KEYBOARD", "LAPTOP", "MONITOR", "EKONOMI", "SERVER", "DATABASE", "JAVASCRIPT", "DEVELOPER", "APLIKASI", "INTERAKSI", "KOMUNITAS", "GAMER", "STREAMING", "MODERATOR", "ADMINISTRATOR", "HADIAH", "VOUCHER", "DOMPET", "SAHABAT", "KONTRIBUTOR"];
 const poolTrivia = [
@@ -116,6 +113,7 @@ module.exports = async function handleMessageCreate(message) {
                 const userData = getOrCreateUser(guildId, message.author.id); userData.balance += reward;
                 db.prepare('UPDATE users SET balance = ? WHERE guildId = ? AND userId = ?').run(userData.balance, guildId, message.author.id);
                 incrementUserStat(guildId, message.author.id, 'event_wins');
+                addIncome(guildId, message.author.id, 'event', reward);
                 await checkAchievements(message.guild, message.author.id, { type: 'event_win' });
                 return message.reply(`${game.winPrefix} <@${message.author.id}> ${game.winVerb} **${game.display}**!\n🎁 Mendapatkan 🪙 **${reward.toLocaleString('id-ID')} Money**!`);
             }

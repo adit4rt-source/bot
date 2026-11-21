@@ -27,6 +27,7 @@ const commands = [
                 { name: '📈 Level', value: 'level' },
                 { name: '💰 Money', value: 'money' },
                 { name: '🔥 Streak', value: 'streak' },
+                { name: '🎙️ Voice', value: 'voice' },
                 { name: '🎰 Gambling', value: 'gambling' },
                 { name: '🏆 Achievement', value: 'achievement' }
             )),
@@ -81,7 +82,7 @@ const commands = [
     // ================= UTILITY =================
     new SlashCommandBuilder().setName('menu').setDescription('📱 Buka panel navigasi utama'),
     new SlashCommandBuilder().setName('help').setDescription('📖 Panduan lengkap command'),
-    new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan mekanik fitur (Pet, dll) — interaktif di Discord'),
+    new SlashCommandBuilder().setName('guide').setDescription('📚 Panduan lengkap fitur bot — interaktif di Discord'),
     new SlashCommandBuilder().setName('games').setDescription('🎮 Quiz Game — Jawab soal, dapet Money!')
         .addStringOption(opt => opt.setName('kategori').setDescription('Pilih kategori quiz').setRequired(false)
             .addChoices(

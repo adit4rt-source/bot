@@ -381,19 +381,40 @@ db.exec(`CREATE TABLE IF NOT EXISTS blacklist (
 
 // ================= HELPER FUNCTIONS =================
 
+let _stmtGetUserGlobal = null;
+let _stmtInsertUserGlobal = null;
+let _stmtGetUserGuild = null;
+let _stmtInsertUserGuild = null;
+let _cachedDb = null;
+
 function getOrCreateUser(guildId, userId) {
+    if (_cachedDb !== db) {
+        _cachedDb = db;
+        _stmtGetUserGlobal = null;
+        _stmtInsertUserGlobal = null;
+        _stmtGetUserGuild = null;
+        _stmtInsertUserGuild = null;
+    }
     if (checkGlobalMode()) {
-        let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
+        if (!_stmtGetUserGlobal) {
+            _stmtGetUserGlobal = db.prepare('SELECT * FROM users WHERE userId = ?');
+            _stmtInsertUserGlobal = db.prepare('INSERT INTO users (userId) VALUES (?)');
+        }
+        let user = _stmtGetUserGlobal.get(userId);
         if (!user) {
-            db.prepare('INSERT INTO users (userId) VALUES (?)').run(userId);
-            user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
+            _stmtInsertUserGlobal.run(userId);
+            user = _stmtGetUserGlobal.get(userId);
         }
         return user;
     }
-    let user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
+    if (!_stmtGetUserGuild) {
+        _stmtGetUserGuild = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?');
+        _stmtInsertUserGuild = db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)');
+    }
+    let user = _stmtGetUserGuild.get(guildId, userId);
     if (!user) {
-        db.prepare('INSERT INTO users (guildId, userId) VALUES (?, ?)').run(guildId, userId);
-        user = db.prepare('SELECT * FROM users WHERE guildId = ? AND userId = ?').get(guildId, userId);
+        _stmtInsertUserGuild.run(guildId, userId);
+        user = _stmtGetUserGuild.get(guildId, userId);
     }
     return user;
 }
