@@ -78,67 +78,116 @@ function buildRamalanEmbed(ramalan, date = new Date()) {
  * Kirim ramalan harian otomatis ke setiap server (dipanggil tiap menit oleh scheduler)
  * Hanya dieksekusi jika jam sekarang >= 7 WIB dan hari ini belum dikirim.
  */
+let _isSendingRamalan = false;
+const _sentDatesThisProcess = new Set();
+
 async function checkAndSendDailyRamalan(client) {
     if (!client || !client.guilds) return;
+    if (_isSendingRamalan) return;
 
-    const nowWib = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const currentHour = nowWib.getHours();
-    const todayStr = nowWib.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
+    _isSendingRamalan = true;
+    try {
+        const nowWib = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+        const currentHour = nowWib.getHours();
+        const todayStr = nowWib.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
 
-    // Hanya kirim pada atau setelah jam 7 pagi WIB
-    if (currentHour < 7) return;
+        // Hanya kirim pada atau setelah jam 7 pagi WIB
+        if (currentHour < 7) return;
 
-    const todayRamalan = getTodayRamalan(nowWib);
-    const embed = buildRamalanEmbed(todayRamalan, nowWib);
+        const todayRamalan = getTodayRamalan(nowWib);
+        const embed = buildRamalanEmbed(todayRamalan, nowWib);
+        const sentChannelsThisRun = new Set();
 
-    for (const [guildId, guild] of client.guilds.cache) {
-        try {
-            // Cek toggle enable & tanggal kirim terakhir
-            const isEnabled = getSetting(guildId, 'ramalan_enabled', '1') !== '0';
-            if (!isEnabled) continue;
+        for (const [guildId, guild] of client.guilds.cache) {
+            try {
+                // Cek toggle enable & tanggal kirim terakhir
+                const isEnabled = getSetting(guildId, 'ramalan_enabled', '1') !== '0';
+                if (!isEnabled) continue;
 
-            const lastDate = getSetting(guildId, 'ramalan_last_date', '');
-            if (lastDate === todayStr) continue; // Sudah dikirim hari ini
+                // Cek in-memory set & database setting
+                if (_sentDatesThisProcess.has(`${todayStr}:${guildId}`)) continue;
 
-            // Cari channel tujuan
-            const channelId = getSetting(guildId, 'ramalan_channel', null);
-            let targetChannel = null;
+                const lastDate = getSetting(guildId, 'ramalan_last_date', '') || getSetting('GLOBAL', 'ramalan_last_date', '');
+                if (lastDate === todayStr) {
+                    _sentDatesThisProcess.add(`${todayStr}:${guildId}`);
+                    continue; // Sudah dikirim hari ini
+                }
 
-            if (channelId && guild.channels?.cache) {
-                targetChannel = typeof guild.channels.cache.get === 'function' ? guild.channels.cache.get(channelId) : null;
-            }
+                // Cari channel tujuan
+                const channelId = getSetting(guildId, 'ramalan_channel', null);
+                let targetChannel = null;
 
-            // Fallback: cari channel chat publik (contoh: 'chat' atau text channel pertama)
-            if (!targetChannel && guild.channels?.cache) {
-                if (typeof guild.channels.cache.find === 'function') {
-                    targetChannel = guild.channels.cache.find(c =>
-                        (c.type === ChannelType.GuildText || c.type === 0) &&
-                        c.name && (c.name.includes('chat') || c.name.includes('general') || c.name.includes('publik') || c.name.includes('public'))
-                    );
-                } else {
-                    for (const [, c] of guild.channels.cache) {
-                        if (c.name && (c.name.includes('chat') || c.name.includes('general') || c.name.includes('publik') || c.name.includes('public'))) {
-                            targetChannel = c;
-                            break;
+                if (channelId && guild.channels?.cache) {
+                    targetChannel = typeof guild.channels.cache.get === 'function' ? guild.channels.cache.get(channelId) : null;
+                }
+
+                // Fallback: cari channel chat publik (contoh: 'chat' atau text channel pertama)
+                if (!targetChannel && guild.channels?.cache) {
+                    if (typeof guild.channels.cache.find === 'function') {
+                        targetChannel = guild.channels.cache.find(c =>
+                            (c.type === ChannelType.GuildText || c.type === 0) &&
+                            c.name && (c.name.includes('chat') || c.name.includes('general') || c.name.includes('publik') || c.name.includes('public'))
+                        );
+                    } else {
+                        for (const [, c] of guild.channels.cache) {
+                            if (c.name && (c.name.includes('chat') || c.name.includes('general') || c.name.includes('publik') || c.name.includes('public'))) {
+                                targetChannel = c;
+                                break;
+                            }
                         }
                     }
                 }
+
+                if (!targetChannel) continue;
+
+                // Cegah duplikasi ke channel yang sama dalam run yang sama
+                if (sentChannelsThisRun.has(targetChannel.id)) continue;
+                sentChannelsThisRun.add(targetChannel.id);
+
+                // Cek permission kirim
+                const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
+                if (!me || !targetChannel.permissionsFor(me)?.has(PermissionsBitField.Flags.SendMessages)) {
+                    continue;
+                }
+
+                // Cek pesan terakhir channel: jika bot sudah kirim ramalan hari ini, skip & kunci
+                if (targetChannel.messages && typeof targetChannel.messages.fetch === 'function') {
+                    try {
+                        const recent = await targetChannel.messages.fetch({ limit: 5 }).catch(() => null);
+                        if (recent && recent.size > 0) {
+                            const todayIndo = formatIndoDate(nowWib);
+                            const alreadySent = recent.some(m =>
+                                m.author?.id === client.user?.id &&
+                                m.embeds && m.embeds.some(e => e.title && e.title.includes('RAMALAN HARI INI') && e.title.includes(todayIndo))
+                            );
+                            if (alreadySent) {
+                                setSetting(guildId, 'ramalan_last_date', todayStr);
+                                _sentDatesThisProcess.add(`${todayStr}:${guildId}`);
+                                log('INFO', `[dailyRamalan] Skip: ramalan hari ini sudah ada di #${targetChannel.name}`);
+                                continue;
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                // KUNCI SEBELUM KIRIM (Mencegah race condition & double send jika Discord API retry)
+                setSetting(guildId, 'ramalan_last_date', todayStr);
+                _sentDatesThisProcess.add(`${todayStr}:${guildId}`);
+
+                await targetChannel.send({ embeds: [embed] }).catch((err) => {
+                    // Jika gagal kirim sama sekali, rollback kunci agar bisa retry
+                    setSetting(guildId, 'ramalan_last_date', '');
+                    _sentDatesThisProcess.delete(`${todayStr}:${guildId}`);
+                    throw err;
+                });
+
+                log('INFO', `[dailyRamalan] Terkirim ke #${targetChannel.name} di ${guild.name} (Day ${todayRamalan.id}/365)`);
+            } catch (e) {
+                log('ERROR', `[dailyRamalan] Gagal kirim di guild ${guildId}: ${e.message}`);
             }
-
-            if (!targetChannel) continue;
-
-            // Cek permission kirim
-            const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
-            if (!me || !targetChannel.permissionsFor(me)?.has(PermissionsBitField.Flags.SendMessages)) {
-                continue;
-            }
-
-            await targetChannel.send({ embeds: [embed] }).catch(() => {});
-            setSetting(guildId, 'ramalan_last_date', todayStr);
-            log('INFO', `[dailyRamalan] Terkirim ke #${targetChannel.name} di ${guild.name} (Day ${todayRamalan.id}/365)`);
-        } catch (e) {
-            log('ERROR', `[dailyRamalan] Gagal kirim di guild ${guildId}: ${e.message}`);
         }
+    } finally {
+        _isSendingRamalan = false;
     }
 }
 
