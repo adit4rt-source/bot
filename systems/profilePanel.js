@@ -140,6 +140,7 @@ async function handleProfileButton(interaction) {
         try { const s = db.prepare('SELECT count FROM streaks WHERE guildId = ? AND userId = ?').get(guildId, userId); streak = s ? s.count : 0; } catch (_) {}
         try { rankPos = (db.prepare('SELECT COUNT(*) AS c FROM users WHERE level > ? OR (level = ? AND xp > ?)').get(userData.level, userData.level, userData.xp)?.c || 0) + 1; } catch (_) {}
         const avatarURL = (interaction.user && interaction.user.displayAvatarURL) ? interaction.user.displayAvatarURL({ extension: 'png', size: 256 }) : null;
+        const guildIconURL = (interaction.guild && interaction.guild.iconURL) ? interaction.guild.iconURL({ extension: 'png', size: 128 }) : null;
 
         const customTitleRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_title');
         const customBannerRow = db.prepare('SELECT stat_value FROM user_stats WHERE guildId = ? AND userId = ? AND stat_key = ?').get(guildId, userId, 'custom_profile_banner');
@@ -154,6 +155,7 @@ async function handleProfileButton(interaction) {
             username: interaction.user.username,
             userId: interaction.user.id,
             avatarURL,
+            guildIconURL,
             bgURL: customBannerRow ? customBannerRow.stat_value : null,
             level: userData.level,
             xp: userData.xp,

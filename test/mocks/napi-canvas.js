@@ -13,6 +13,7 @@ class Context2D {
   fillRect() {}
   strokeRect() {}
   clearRect() {}
+  rect() {}
   drawImage() {}
   measureText(t) { return { width: (t || '').length * 8 }; }
   get fillStyle() { return '#000'; }
@@ -40,6 +41,11 @@ class Context2D {
   stroke() {}
   save() {}
   restore() {}
+  translate() {}
+  rotate() {}
+  scale() {}
+  setLineDash() {}
+  getLineDash() { return []; }
   fillText() {}
   strokeText() {}
   createLinearGradient() { return { addColorStop() {} }; }
